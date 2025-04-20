@@ -1,0 +1,255 @@
+{
+  "Version": 1,
+  "WorkspaceRootPath": "D:\\pertamina\\e-Pas_CMS\\",
+  "Documents": [
+    {
+      "AbsoluteMoniker": "D:0:0:{02C8F886-7BBE-4BDC-A559-2C9B08D3458D}|e-Pas_CMS\\e-Pas_CMS.csproj|d:\\pertamina\\e-pas_cms\\e-pas_cms\\views\\spbu\\index.cshtml||{40D31677-CBC0-4297-A9EF-89D907823A98}",
+      "RelativeMoniker": "D:0:0:{02C8F886-7BBE-4BDC-A559-2C9B08D3458D}|e-Pas_CMS\\e-Pas_CMS.csproj|solutionrelative:e-pas_cms\\views\\spbu\\index.cshtml||{40D31677-CBC0-4297-A9EF-89D907823A98}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{02C8F886-7BBE-4BDC-A559-2C9B08D3458D}|e-Pas_CMS\\e-Pas_CMS.csproj|d:\\pertamina\\e-pas_cms\\e-pas_cms\\controllers\\spbucontroller.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{02C8F886-7BBE-4BDC-A559-2C9B08D3458D}|e-Pas_CMS\\e-Pas_CMS.csproj|solutionrelative:e-pas_cms\\controllers\\spbucontroller.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{02C8F886-7BBE-4BDC-A559-2C9B08D3458D}|e-Pas_CMS\\e-Pas_CMS.csproj|d:\\pertamina\\e-pas_cms\\e-pas_cms\\viewmodels\\spbuviewmodel.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{02C8F886-7BBE-4BDC-A559-2C9B08D3458D}|e-Pas_CMS\\e-Pas_CMS.csproj|solutionrelative:e-pas_cms\\viewmodels\\spbuviewmodel.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{02C8F886-7BBE-4BDC-A559-2C9B08D3458D}|e-Pas_CMS\\e-Pas_CMS.csproj|d:\\pertamina\\e-pas_cms\\e-pas_cms\\controllers\\auditcontroller.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{02C8F886-7BBE-4BDC-A559-2C9B08D3458D}|e-Pas_CMS\\e-Pas_CMS.csproj|solutionrelative:e-pas_cms\\controllers\\auditcontroller.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{02C8F886-7BBE-4BDC-A559-2C9B08D3458D}|e-Pas_CMS\\e-Pas_CMS.csproj|d:\\pertamina\\e-pas_cms\\e-pas_cms\\views\\audit\\detail.cshtml||{40D31677-CBC0-4297-A9EF-89D907823A98}",
+      "RelativeMoniker": "D:0:0:{02C8F886-7BBE-4BDC-A559-2C9B08D3458D}|e-Pas_CMS\\e-Pas_CMS.csproj|solutionrelative:e-pas_cms\\views\\audit\\detail.cshtml||{40D31677-CBC0-4297-A9EF-89D907823A98}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{02C8F886-7BBE-4BDC-A559-2C9B08D3458D}|e-Pas_CMS\\e-Pas_CMS.csproj|d:\\pertamina\\e-pas_cms\\e-pas_cms\\viewmodels\\detailauditviewmodel.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{02C8F886-7BBE-4BDC-A559-2C9B08D3458D}|e-Pas_CMS\\e-Pas_CMS.csproj|solutionrelative:e-pas_cms\\viewmodels\\detailauditviewmodel.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{02C8F886-7BBE-4BDC-A559-2C9B08D3458D}|e-Pas_CMS\\e-Pas_CMS.csproj|d:\\pertamina\\e-pas_cms\\e-pas_cms\\viewmodels\\auditchecklistnode.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{02C8F886-7BBE-4BDC-A559-2C9B08D3458D}|e-Pas_CMS\\e-Pas_CMS.csproj|solutionrelative:e-pas_cms\\viewmodels\\auditchecklistnode.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{02C8F886-7BBE-4BDC-A559-2C9B08D3458D}|e-Pas_CMS\\e-Pas_CMS.csproj|d:\\pertamina\\e-pas_cms\\e-pas_cms\\viewmodels\\checklistflatitem.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{02C8F886-7BBE-4BDC-A559-2C9B08D3458D}|e-Pas_CMS\\e-Pas_CMS.csproj|solutionrelative:e-pas_cms\\viewmodels\\checklistflatitem.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{02C8F886-7BBE-4BDC-A559-2C9B08D3458D}|e-Pas_CMS\\e-Pas_CMS.csproj|d:\\pertamina\\e-pas_cms\\e-pas_cms\\views\\home\\privacy.cshtml||{40D31677-CBC0-4297-A9EF-89D907823A98}",
+      "RelativeMoniker": "D:0:0:{02C8F886-7BBE-4BDC-A559-2C9B08D3458D}|e-Pas_CMS\\e-Pas_CMS.csproj|solutionrelative:e-pas_cms\\views\\home\\privacy.cshtml||{40D31677-CBC0-4297-A9EF-89D907823A98}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{02C8F886-7BBE-4BDC-A559-2C9B08D3458D}|e-Pas_CMS\\e-Pas_CMS.csproj|d:\\pertamina\\e-pas_cms\\e-pas_cms\\views\\shared\\_sidebar.cshtml||{40D31677-CBC0-4297-A9EF-89D907823A98}",
+      "RelativeMoniker": "D:0:0:{02C8F886-7BBE-4BDC-A559-2C9B08D3458D}|e-Pas_CMS\\e-Pas_CMS.csproj|solutionrelative:e-pas_cms\\views\\shared\\_sidebar.cshtml||{40D31677-CBC0-4297-A9EF-89D907823A98}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{02C8F886-7BBE-4BDC-A559-2C9B08D3458D}|e-Pas_CMS\\e-Pas_CMS.csproj|d:\\pertamina\\e-pas_cms\\e-pas_cms\\views\\shared\\_layout.cshtml||{40D31677-CBC0-4297-A9EF-89D907823A98}",
+      "RelativeMoniker": "D:0:0:{02C8F886-7BBE-4BDC-A559-2C9B08D3458D}|e-Pas_CMS\\e-Pas_CMS.csproj|solutionrelative:e-pas_cms\\views\\shared\\_layout.cshtml||{40D31677-CBC0-4297-A9EF-89D907823A98}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{02C8F886-7BBE-4BDC-A559-2C9B08D3458D}|e-Pas_CMS\\e-Pas_CMS.csproj|d:\\pertamina\\e-pas_cms\\e-pas_cms\\e-pas_cms.csproj||{FA3CD31E-987B-443A-9B81-186104E8DAC1}|",
+      "RelativeMoniker": "D:0:0:{02C8F886-7BBE-4BDC-A559-2C9B08D3458D}|e-Pas_CMS\\e-Pas_CMS.csproj|solutionrelative:e-pas_cms\\e-pas_cms.csproj||{FA3CD31E-987B-443A-9B81-186104E8DAC1}|"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{02C8F886-7BBE-4BDC-A559-2C9B08D3458D}|e-Pas_CMS\\e-Pas_CMS.csproj|d:\\pertamina\\e-pas_cms\\e-pas_cms\\program.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{02C8F886-7BBE-4BDC-A559-2C9B08D3458D}|e-Pas_CMS\\e-Pas_CMS.csproj|solutionrelative:e-pas_cms\\program.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{02C8F886-7BBE-4BDC-A559-2C9B08D3458D}|e-Pas_CMS\\e-Pas_CMS.csproj|d:\\pertamina\\e-pas_cms\\e-pas_cms\\appsettings.json||{90A6B3A7-C1A3-4009-A288-E2FF89E96FA0}",
+      "RelativeMoniker": "D:0:0:{02C8F886-7BBE-4BDC-A559-2C9B08D3458D}|e-Pas_CMS\\e-Pas_CMS.csproj|solutionrelative:e-pas_cms\\appsettings.json||{90A6B3A7-C1A3-4009-A288-E2FF89E96FA0}"
+    }
+  ],
+  "DocumentGroupContainers": [
+    {
+      "Orientation": 0,
+      "VerticalTabListWidth": 256,
+      "DocumentGroups": [
+        {
+          "DockedWidth": 200,
+          "SelectedChildIndex": 7,
+          "Children": [
+            {
+              "$type": "Document",
+              "DocumentIndex": 6,
+              "Title": "AuditChecklistNode.cs",
+              "DocumentMoniker": "D:\\pertamina\\e-Pas_CMS\\e-Pas_CMS\\ViewModels\\AuditChecklistNode.cs",
+              "RelativeDocumentMoniker": "e-Pas_CMS\\ViewModels\\AuditChecklistNode.cs",
+              "ToolTip": "D:\\pertamina\\e-Pas_CMS\\e-Pas_CMS\\ViewModels\\AuditChecklistNode.cs",
+              "RelativeToolTip": "e-Pas_CMS\\ViewModels\\AuditChecklistNode.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAA0AAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-04-20T17:00:03.558Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 5,
+              "Title": "DetailAuditViewModel.cs",
+              "DocumentMoniker": "D:\\pertamina\\e-Pas_CMS\\e-Pas_CMS\\ViewModels\\DetailAuditViewModel.cs",
+              "RelativeDocumentMoniker": "e-Pas_CMS\\ViewModels\\DetailAuditViewModel.cs",
+              "ToolTip": "D:\\pertamina\\e-Pas_CMS\\e-Pas_CMS\\ViewModels\\DetailAuditViewModel.cs",
+              "RelativeToolTip": "e-Pas_CMS\\ViewModels\\DetailAuditViewModel.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAABEAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-04-20T16:58:22.559Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 7,
+              "Title": "ChecklistFlatItem.cs",
+              "DocumentMoniker": "D:\\pertamina\\e-Pas_CMS\\e-Pas_CMS\\ViewModels\\ChecklistFlatItem.cs",
+              "RelativeDocumentMoniker": "e-Pas_CMS\\ViewModels\\ChecklistFlatItem.cs",
+              "ToolTip": "D:\\pertamina\\e-Pas_CMS\\e-Pas_CMS\\ViewModels\\ChecklistFlatItem.cs",
+              "RelativeToolTip": "e-Pas_CMS\\ViewModels\\ChecklistFlatItem.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAkAAAAvAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-04-20T16:38:20.876Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 4,
+              "Title": "Detail.cshtml",
+              "DocumentMoniker": "D:\\pertamina\\e-Pas_CMS\\e-Pas_CMS\\Views\\Audit\\Detail.cshtml",
+              "RelativeDocumentMoniker": "e-Pas_CMS\\Views\\Audit\\Detail.cshtml",
+              "ToolTip": "D:\\pertamina\\e-Pas_CMS\\e-Pas_CMS\\Views\\Audit\\Detail.cshtml",
+              "RelativeToolTip": "e-Pas_CMS\\Views\\Audit\\Detail.cshtml",
+              "ViewState": "AgIAAEUAAAAAAAAAAAAqwGgAAAAVAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000759|",
+              "WhenOpened": "2025-04-20T15:24:58.29Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 3,
+              "Title": "AuditController.cs",
+              "DocumentMoniker": "D:\\pertamina\\e-Pas_CMS\\e-Pas_CMS\\Controllers\\AuditController.cs",
+              "RelativeDocumentMoniker": "e-Pas_CMS\\Controllers\\AuditController.cs",
+              "ToolTip": "D:\\pertamina\\e-Pas_CMS\\e-Pas_CMS\\Controllers\\AuditController.cs",
+              "RelativeToolTip": "e-Pas_CMS\\Controllers\\AuditController.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAcwA8AAAAOAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-04-20T15:21:38.497Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 8,
+              "Title": "Privacy.cshtml",
+              "DocumentMoniker": "D:\\pertamina\\e-Pas_CMS\\e-Pas_CMS\\Views\\Home\\Privacy.cshtml",
+              "RelativeDocumentMoniker": "e-Pas_CMS\\Views\\Home\\Privacy.cshtml",
+              "ToolTip": "D:\\pertamina\\e-Pas_CMS\\e-Pas_CMS\\Views\\Home\\Privacy.cshtml",
+              "RelativeToolTip": "e-Pas_CMS\\Views\\Home\\Privacy.cshtml",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAEAAAAZAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000759|",
+              "WhenOpened": "2025-04-20T14:53:33.219Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 2,
+              "Title": "SpbuViewModel.cs",
+              "DocumentMoniker": "D:\\pertamina\\e-Pas_CMS\\e-Pas_CMS\\ViewModels\\SpbuViewModel.cs",
+              "RelativeDocumentMoniker": "e-Pas_CMS\\ViewModels\\SpbuViewModel.cs",
+              "ToolTip": "D:\\pertamina\\e-Pas_CMS\\e-Pas_CMS\\ViewModels\\SpbuViewModel.cs",
+              "RelativeToolTip": "e-Pas_CMS\\ViewModels\\SpbuViewModel.cs",
+              "ViewState": "AgIAAAMAAAAAAAAAAAAAAA4AAAAaAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-04-20T14:45:31.057Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 0,
+              "Title": "Index.cshtml",
+              "DocumentMoniker": "D:\\pertamina\\e-Pas_CMS\\e-Pas_CMS\\Views\\Spbu\\Index.cshtml",
+              "RelativeDocumentMoniker": "e-Pas_CMS\\Views\\Spbu\\Index.cshtml",
+              "ToolTip": "D:\\pertamina\\e-Pas_CMS\\e-Pas_CMS\\Views\\Spbu\\Index.cshtml",
+              "RelativeToolTip": "e-Pas_CMS\\Views\\Spbu\\Index.cshtml",
+              "ViewState": "AgIAAAYAAAAAAAAAAAAqwBMAAAAhAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000759|",
+              "WhenOpened": "2025-04-20T13:32:10.732Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 1,
+              "Title": "SpbuController.cs",
+              "DocumentMoniker": "D:\\pertamina\\e-Pas_CMS\\e-Pas_CMS\\Controllers\\SpbuController.cs",
+              "RelativeDocumentMoniker": "e-Pas_CMS\\Controllers\\SpbuController.cs",
+              "ToolTip": "D:\\pertamina\\e-Pas_CMS\\e-Pas_CMS\\Controllers\\SpbuController.cs",
+              "RelativeToolTip": "e-Pas_CMS\\Controllers\\SpbuController.cs",
+              "ViewState": "AgIAAAUAAAAAAAAAAAAuwCAAAAAxAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-04-20T13:31:11.345Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 12,
+              "Title": "Program.cs",
+              "DocumentMoniker": "D:\\pertamina\\e-Pas_CMS\\e-Pas_CMS\\Program.cs",
+              "RelativeDocumentMoniker": "e-Pas_CMS\\Program.cs",
+              "ToolTip": "D:\\pertamina\\e-Pas_CMS\\e-Pas_CMS\\Program.cs",
+              "RelativeToolTip": "e-Pas_CMS\\Program.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAoAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-04-20T13:14:19.716Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 11,
+              "Title": "e-Pas_CMS.csproj",
+              "DocumentMoniker": "D:\\pertamina\\e-Pas_CMS\\e-Pas_CMS\\e-Pas_CMS.csproj",
+              "RelativeDocumentMoniker": "e-Pas_CMS\\e-Pas_CMS.csproj",
+              "ToolTip": "D:\\pertamina\\e-Pas_CMS\\e-Pas_CMS\\e-Pas_CMS.csproj",
+              "RelativeToolTip": "e-Pas_CMS\\e-Pas_CMS.csproj",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAA8AAAAOAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000758|",
+              "WhenOpened": "2025-04-20T13:13:26.154Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 13,
+              "Title": "appsettings.json",
+              "DocumentMoniker": "D:\\pertamina\\e-Pas_CMS\\e-Pas_CMS\\appsettings.json",
+              "RelativeDocumentMoniker": "e-Pas_CMS\\appsettings.json",
+              "ToolTip": "D:\\pertamina\\e-Pas_CMS\\e-Pas_CMS\\appsettings.json",
+              "RelativeToolTip": "e-Pas_CMS\\appsettings.json",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAMAAAAGAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001642|",
+              "WhenOpened": "2025-04-20T13:11:19.715Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 10,
+              "Title": "_Layout.cshtml",
+              "DocumentMoniker": "D:\\pertamina\\e-Pas_CMS\\e-Pas_CMS\\Views\\Shared\\_Layout.cshtml",
+              "RelativeDocumentMoniker": "e-Pas_CMS\\Views\\Shared\\_Layout.cshtml",
+              "ToolTip": "D:\\pertamina\\e-Pas_CMS\\e-Pas_CMS\\Views\\Shared\\_Layout.cshtml",
+              "RelativeToolTip": "e-Pas_CMS\\Views\\Shared\\_Layout.cshtml",
+              "ViewState": "AgIAAA0AAAAAAAAAAAAewCEAAABnAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000759|",
+              "WhenOpened": "2025-04-20T12:59:11.099Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 9,
+              "Title": "_Sidebar.cshtml",
+              "DocumentMoniker": "D:\\pertamina\\e-Pas_CMS\\e-Pas_CMS\\Views\\Shared\\_Sidebar.cshtml",
+              "RelativeDocumentMoniker": "e-Pas_CMS\\Views\\Shared\\_Sidebar.cshtml",
+              "ToolTip": "D:\\pertamina\\e-Pas_CMS\\e-Pas_CMS\\Views\\Shared\\_Sidebar.cshtml",
+              "RelativeToolTip": "e-Pas_CMS\\Views\\Shared\\_Sidebar.cshtml",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAIAAAAEAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000759|",
+              "WhenOpened": "2025-04-20T13:02:17.953Z",
+              "EditorCaption": ""
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
