@@ -13,6 +13,38 @@ public class AuditController : Controller
         _context = context;
     }
 
+    public async Task<IActionResult> Index()
+    {
+        var list = await (from s in _context.spbus
+                          join a in _context.trx_audits on s.id equals a.spbu_id
+                          join u in _context.app_users on a.app_user_id equals u.id into aud
+                          from u in aud.DefaultIfEmpty()
+                          where a.status == "UNDER_REVIEW" || a.status == "VERIFIED"
+                          select new SpbuViewModel
+                          {
+                              Id = a.id,
+                              NoSpbu = s.spbu_no,
+                              Rayon = "I",
+                              Alamat = s.address,
+                              TipeSpbu = s.type,
+                              Tahun = "2022",
+                              Audit = "DAE",
+                              Score = 0,
+                              Good = "certified",
+                              Excelent = "certified",
+                              Provinsi = s.province_name,
+                              Kota = s.city_name,
+                              NamaAuditor = u.name,
+                              Report = a.report_no,
+                              TanggalSubmit = (DateTime)a.audit_execution_time,
+                              Status = a.status,
+                              Komplain = a.status == "FAIL" ? "ADA" : "Tidak Ada",
+                              Banding = a.audit_level == "Re-Audit" ? "ADA" : "Tidak Ada",
+                              Type = a.audit_type
+                          }).Distinct().ToListAsync();
+        return View(list);
+    }
+
     [HttpGet("audit/detail/{id}")]
     public async Task<IActionResult> Detail(string id)
     {
@@ -38,6 +70,7 @@ public class AuditController : Controller
         SELECT 
             mqd.id,
             mqd.title,
+            mqd.description,
             mqd.parent_id,
             mqd.type,
             mqd.weight,
@@ -66,23 +99,30 @@ public class AuditController : Controller
         return View(audit);
     }
 
-    private List<AuditChecklistNode> BuildHierarchy(List<ChecklistFlatItem> items, string parentId = null)
+    private List<AuditChecklistNode> BuildHierarchy(List<ChecklistFlatItem> flatList)
     {
-        return items
-            .Where(x => (string.IsNullOrEmpty(parentId) && string.IsNullOrEmpty(x.parent_id)) ||
-                        (!string.IsNullOrEmpty(parentId) && x.parent_id?.Trim() == parentId.Trim()))
-            .OrderBy(x => x.weight)
-            .Select(x => new AuditChecklistNode
-            {
-                Id = x.id,
-                Title = x.title,
-                Type = x.type,
-                ScoreInput = x.score_input,
-                ScoreAF = x.score_af,
-                Weight = x.weight,
-                Children = BuildHierarchy(items, x.id)
-            })
-            .ToList();
+        var lookup = flatList.ToLookup(x => x.parent_id);
+
+        List<AuditChecklistNode> BuildChildren(string parentId)
+        {
+            return lookup[parentId]
+                .OrderBy(x => x.weight)
+                .Select(item => new AuditChecklistNode
+                {
+                    Id = item.id,
+                    Title = item.title,
+                    Description = item.description,
+                    Type = item.type,
+                    Weight = item.weight,
+                    ScoreInput = item.score_input,
+                    ScoreAF = item.score_af,
+                    ScoreX = item.score_x,
+                    Children = BuildChildren(item.id)
+                })
+                .ToList();
+        }
+
+        return BuildChildren(flatList.Any(x => x.parent_id == null) ? null : "");
     }
 
     [HttpPost("audit/approve/{id}")]
