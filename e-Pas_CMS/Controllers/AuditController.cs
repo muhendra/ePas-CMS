@@ -27,25 +27,25 @@ public class AuditController : Controller
                                 AuditorName = u.name
                             }).ToListAsync();
 
+        var conn = _context.Database.GetDbConnection();
+        if (conn.State != System.Data.ConnectionState.Open)
+            await conn.OpenAsync();
+
         var result = new List<SpbuViewModel>();
 
         foreach (var item in audits)
         {
             var sql = @"
-            SELECT mqd.weight, tac.score_input
-            FROM master_questioner_detail mqd
-            LEFT JOIN trx_audit_checklist tac 
-                ON tac.master_questioner_detail_id = mqd.id 
-                AND tac.trx_audit_id = @id
-            WHERE mqd.master_questioner_id = (
-                SELECT master_questioner_checklist_id 
-                FROM trx_audit 
-                WHERE id = @id
-            ) AND mqd.type = 'QUESTION'";
-
-            using var conn = _context.Database.GetDbConnection();
-            if (conn.State != System.Data.ConnectionState.Open)
-                await conn.OpenAsync();
+        SELECT mqd.weight, tac.score_input
+        FROM master_questioner_detail mqd
+        LEFT JOIN trx_audit_checklist tac 
+            ON tac.master_questioner_detail_id = mqd.id 
+            AND tac.trx_audit_id = @id
+        WHERE mqd.master_questioner_id = (
+            SELECT master_questioner_checklist_id 
+            FROM trx_audit 
+            WHERE id = @id
+        ) AND mqd.type = 'QUESTION'";
 
             var checklist = (await conn.QueryAsync<(decimal? weight, string score_input)>(sql, new { id = item.Audit.id })).ToList();
 
@@ -97,6 +97,7 @@ public class AuditController : Controller
 
         return View(result);
     }
+
 
 
     [HttpGet("audit/detail/{id}")]
