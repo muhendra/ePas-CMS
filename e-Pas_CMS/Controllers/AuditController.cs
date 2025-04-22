@@ -15,35 +15,89 @@ public class AuditController : Controller
 
     public async Task<IActionResult> Index()
     {
-        var list = await (from s in _context.spbus
-                          join a in _context.trx_audits on s.id equals a.spbu_id
-                          join u in _context.app_users on a.app_user_id equals u.id into aud
-                          from u in aud.DefaultIfEmpty()
-                          where a.status == "UNDER_REVIEW" || a.status == "VERIFIED"
-                          select new SpbuViewModel
-                          {
-                              Id = a.id,
-                              NoSpbu = s.spbu_no,
-                              Rayon = "I",
-                              Alamat = s.address,
-                              TipeSpbu = s.type,
-                              Tahun = "2022",
-                              Audit = "DAE",
-                              Score = 0,
-                              Good = "certified",
-                              Excelent = "certified",
-                              Provinsi = s.province_name,
-                              Kota = s.city_name,
-                              NamaAuditor = u.name,
-                              Report = a.report_no,
-                              TanggalSubmit = (DateTime)a.audit_execution_time,
-                              Status = a.status,
-                              Komplain = a.status == "FAIL" ? "ADA" : "Tidak Ada",
-                              Banding = a.audit_level == "Re-Audit" ? "ADA" : "Tidak Ada",
-                              Type = a.audit_type
-                          }).Distinct().ToListAsync();
-        return View(list);
+        var audits = await (from s in _context.spbus
+                            join a in _context.trx_audits on s.id equals a.spbu_id
+                            join u in _context.app_users on a.app_user_id equals u.id into aud
+                            from u in aud.DefaultIfEmpty()
+                            where a.status == "UNDER_REVIEW" || a.status == "VERIFIED"
+                            select new
+                            {
+                                Audit = a,
+                                Spbu = s,
+                                AuditorName = u.name
+                            }).ToListAsync();
+
+        var result = new List<SpbuViewModel>();
+
+        foreach (var item in audits)
+        {
+            var sql = @"
+            SELECT mqd.weight, tac.score_input
+            FROM master_questioner_detail mqd
+            LEFT JOIN trx_audit_checklist tac 
+                ON tac.master_questioner_detail_id = mqd.id 
+                AND tac.trx_audit_id = @id
+            WHERE mqd.master_questioner_id = (
+                SELECT master_questioner_checklist_id 
+                FROM trx_audit 
+                WHERE id = @id
+            ) AND mqd.type = 'QUESTION'";
+
+            using var conn = _context.Database.GetDbConnection();
+            if (conn.State != System.Data.ConnectionState.Open)
+                await conn.OpenAsync();
+
+            var checklist = (await conn.QueryAsync<(decimal? weight, string score_input)>(sql, new { id = item.Audit.id })).ToList();
+
+            decimal totalScore = 0, maxScore = 0;
+
+            foreach (var q in checklist)
+            {
+                decimal weight = q.weight ?? 0;
+                decimal scoreValue = q.score_input switch
+                {
+                    "A" => 1.00m,
+                    "B" => 0.80m,
+                    "C" => 0.60m,
+                    "D" => 0.40m,
+                    "E" => 0.20m,
+                    "F" => 0.00m,
+                    _ => 0.00m
+                };
+
+                totalScore += scoreValue * weight;
+                maxScore += weight;
+            }
+
+            decimal finalScore = maxScore > 0 ? totalScore / maxScore * 100 : 0;
+
+            result.Add(new SpbuViewModel
+            {
+                Id = item.Audit.id,
+                NoSpbu = item.Spbu.spbu_no,
+                Rayon = "I",
+                Alamat = item.Spbu.address,
+                TipeSpbu = item.Spbu.type,
+                Tahun = "2022",
+                Audit = "DAE",
+                Score = finalScore,
+                Good = "certified",
+                Excelent = "certified",
+                Provinsi = item.Spbu.province_name,
+                Kota = item.Spbu.city_name,
+                NamaAuditor = item.AuditorName,
+                Report = item.Audit.report_no,
+                TanggalSubmit = (DateTime)item.Audit.audit_execution_time,
+                Status = item.Audit.status,
+                Komplain = item.Audit.status == "FAIL" ? "ADA" : "Tidak Ada",
+                Banding = item.Audit.audit_level == "Re-Audit" ? "ADA" : "Tidak Ada",
+                Type = item.Audit.audit_type
+            });
+        }
+
+        return View(result);
     }
+
 
     [HttpGet("audit/detail/{id}")]
     public async Task<IActionResult> Detail(string id)
@@ -96,6 +150,32 @@ public class AuditController : Controller
 
         audit.Elements = BuildHierarchy(checklistData);
 
+        var questions = checklistData.Where(x => x.type == "QUESTION" && !string.IsNullOrWhiteSpace(x.score_input));
+        decimal totalScore = 0;
+        decimal maxScore = 0;
+
+        foreach (var q in questions)
+        {
+            decimal weight = q.weight ?? 0;
+            decimal scoreValue = q.score_input switch
+            {
+                "A" => 1.00m,
+                "B" => 0.80m,
+                "C" => 0.60m,
+                "D" => 0.40m,
+                "E" => 0.20m,
+                "F" => 0.00m,
+                _ => 0.00m
+            };
+
+            totalScore += scoreValue * weight;
+            maxScore += weight;
+        }
+
+        audit.TotalScore = totalScore;
+        audit.MaxScore = maxScore;
+        audit.FinalScore = maxScore > 0 ? totalScore / maxScore * 100 : 0;
+
         return View(audit);
     }
 
@@ -139,107 +219,4 @@ public class AuditController : Controller
         TempData["Success"] = "Laporan audit telah disetujui.";
         return RedirectToAction("Detail", new { id });
     }
-
-    //public async Task<IActionResult> Detail(string id)
-    //{
-    //    var audit = await (from ta in _context.trx_audits
-    //                       join au in _context.app_users on ta.app_user_id equals au.id
-    //                       join s in _context.spbus on ta.spbu_id equals s.id
-    //                       where ta.id == id
-    //                       select new DetailAuditViewModel
-    //                       {
-    //                           ReportNo = ta.report_prefix + ta.report_no,
-    //                           NamaAuditor = au.name,
-    //                           TanggalSubmit = ta.audit_execution_time,
-    //                           Status = ta.status,
-    //                           SpbuNo = s.spbu_no,
-    //                           Provinsi = s.province_name,
-    //                           Kota = s.city_name,
-    //                           Alamat = s.address
-    //                       }).FirstOrDefaultAsync();
-
-    //    if (audit == null) return NotFound();
-
-    //    var checklistData = await (from mqd in _context.master_questioner_details
-    //                               join tac in _context.trx_audit_checklists
-    //                                   on new { K1 = mqd.id, K2 = id } equals new { K1 = tac.master_questioner_detail_id, K2 = tac.trx_audit_id } into checklistJoin
-    //                               from tac in checklistJoin.DefaultIfEmpty()
-    //                               where mqd.master_questioner_id == (
-    //                                   _context.trx_audits
-    //                                       .Where(ta => ta.id == id)
-    //                                       .Select(ta => ta.master_questioner_checklist_id)
-    //                                       .FirstOrDefault())
-    //                               orderby mqd.order_no
-    //                               select new
-    //                               {
-    //                                   mqd.id,
-    //                                   mqd.title,
-    //                                   mqd.parent_id,
-    //                                   mqd.type,
-    //                                   mqd.weight,
-    //                                   tac.score_input,
-    //                                   tac.score_af
-    //                               }).ToListAsync();
-
-    //    var detailMap = checklistData
-    //    .GroupBy(x => x.id)
-    //    .Select(g => g.First()) // ambil 1 per id
-    //    .ToDictionary(x => x.id);
-
-    //    //foreach (var item in checklistData)
-    //    //{
-    //    //    Console.WriteLine($"id={item.id}, parent_id={(item.parent_id == null ? "NULL" : item.parent_id)}, title={item.title}, type={item.type}");
-    //    //}
-
-    //    foreach (var x in checklistData)
-    //    {
-    //        Console.WriteLine($"id={x.id}, parent_id={(x.parent_id == null ? "NULL" : $"'{x.parent_id}'")}, title='{x.title}', type='{x.type}', weight={x.weight}");
-    //    }
-
-
-    //    var elements = checklistData
-    //.Where(x => string.IsNullOrWhiteSpace(x.parent_id) &&
-    //            !string.IsNullOrWhiteSpace(x.title) &&
-    //            x.title.Trim().ToUpper().Contains("ELEMENT"))
-    //.OrderBy(x => x.weight)
-    //.Select(elem => new AuditElementViewModel
-    //{
-    //    Title = elem.title,
-    //    TotalScore = elem.score_af ?? 0,
-    //    SubElements = checklistData
-    //        .Where(sub =>
-    //            !string.IsNullOrWhiteSpace(sub.parent_id) &&
-    //            sub.parent_id.Trim() == elem.id.Trim() &&
-    //            !string.IsNullOrWhiteSpace(sub.title) &&
-    //            sub.title.Trim().ToUpper().StartsWith("SUB-ELEMEN"))
-    //        .OrderBy(sub => sub.weight)
-    //        .Select(sub => new AuditSubElementViewModel
-    //        {
-    //            Title = sub.title,
-    //            TotalScore = sub.score_af ?? 0,
-    //            Questions = checklistData
-    //                .Where(q =>
-    //                    q.parent_id?.Trim() == sub.id?.Trim() &&
-    //                    q.type != null &&
-    //                    q.type.Trim().ToUpper() == "QUESTION")
-    //                .OrderBy(q => q.weight)
-    //                .Select(q => new AuditQuestionViewModel
-    //                {
-    //                    Title = q.title,
-    //                    Score = q.score_af ?? 0,
-    //                    Answer = 0,
-    //                    Options = new List<string> { "A (2,00)", "B (1,50)", "C (1,00)", "D (0,50)", "F (0,00)" },
-    //                    MediaUrl = "/upload/sample.jpg"
-    //                })
-    //                .ToList()
-    //        })
-    //        .ToList()
-    //})
-    //.ToList();
-
-
-    //    audit.Elements = elements;
-
-    //    return View(audit);
-    //}
 }

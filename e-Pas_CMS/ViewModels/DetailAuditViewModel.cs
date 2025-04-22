@@ -12,6 +12,10 @@
         public string Kota { get; set; }
         public string Alamat { get; set; }
 
+        public decimal TotalScore { get; set; }
+        public decimal MaxScore { get; set; }
+        public decimal FinalScore { get; set; }
+
         public List<AuditChecklistNode> Elements { get; set; } = new(); // ✅ versi rekursif
     }
 }

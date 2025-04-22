@@ -126,70 +126,91 @@
         return match.Success && decimal.TryParse(match.Groups[1].Value, out var val) ? val : 0;
     }
 
+    decimal GetNodeScore(AuditChecklistNode node)
+    {
+        // Jika ada ScoreAF langsung pakai
+        if (node.ScoreAF.HasValue)
+            return node.ScoreAF.Value;
+
+        // Jika tidak ada ScoreAF, ambil dari ScoreInput * Weight
+        if (!string.IsNullOrWhiteSpace(node.ScoreInput))
+            return ExtractDecimalFromOption(node.ScoreInput) * (node.Weight ?? 0);
+
+        // Jika masih tidak ada, cek apakah ada anak
+        if (node.Children != null && node.Children.Any())
+            return node.Children.Sum(GetNodeScore);
+
+        return 0;
+    }
+
     void RenderChecklistNode(AuditChecklistNode node, int level)
     {
         var collapseId = $"collapse-{node.Id}";
-        <li class="mb-3 ps-@(level * 3)">
-            <div class="card border-secondary">
-                <div class="card-header bg-light d-flex justify-content-between align-items-center">
-                    <a class="fw-bold text-dark text-decoration-none d-flex justify-content-between align-items-center w-100"
-                       data-bs-toggle="collapse"
-                       href="#@collapseId"
-                       role="button" aria-expanded="false" aria-controls="@collapseId">
-                        <div>
-                            <span>@node.Title</span><br />
-                            @if (!string.IsNullOrWhiteSpace(node.Description))
+        var displayScore = GetNodeScore(node);
+
+        <text>
+            <li class="mb-3 ps-@(level * 3)">
+                <div class="card border-secondary">
+                    <div class="card-header bg-light d-flex justify-content-between align-items-center">
+                        <a class="fw-bold text-dark text-decoration-none d-flex justify-content-between align-items-center w-100"
+                           data-bs-toggle="collapse"
+                           href="#@collapseId"
+                           role="button" aria-expanded="false" aria-controls="@collapseId">
+                            <div>
+                                <span>@node.Title</span><br />
+                                @if (!string.IsNullOrWhiteSpace(node.Description))
+                                {
+                                    <small class="text-muted">@node.Description</small>
+                                }
+                            </div>
+                            <div class="text-end">
+                                <div class="small">Skor:</div>
+                                <strong>@displayScore.ToString("0.00")</strong>
+                                <i class="bi bi-chevron-right rotate-arrow ms-2"></i>
+                            </div>
+                        </a>
+                    </div>
+                    <div class="collapse" id="@collapseId">
+                        <div class="card-body">
+                            @if (!string.IsNullOrWhiteSpace(node.ScoreInput))
                             {
-                                <small class="text-muted">@node.Description</small>
+                                <div class="mb-2">
+                                    <div class="mb-1 fw-semibold">Jawaban:</div>
+                                    @foreach (var opt in new List<string> { "A (2,00)", "B (1,50)", "C (1,00)", "D (0,50)", "F (0,00)" })
+                                    {
+                                        var optionValue = ExtractDecimalFromOption(opt);
+                                        var isActive = decimal.TryParse(node.ScoreInput, out var actual) && optionValue == actual;
+                                        <button class="btn btn-outline-secondary btn-sm me-2 @(isActive ? "active bg-success text-white" : "")">
+                                            @opt
+                                        </button>
+                                    }
+                                </div>
+                                <div>
+                                    <button class="btn btn-light btn-sm me-2">Batal</button>
+                                    <button class="btn btn-primary btn-sm">Update Nilai</button>
+                                </div>
+                            }
+
+                            @if (!string.IsNullOrWhiteSpace(node.MediaUrl))
+                            {
+                                <div class="mt-3">
+                                    <a href="@node.MediaUrl" target="_blank" class="btn btn-sm btn-link">📷 Lihat Dokumentasi Foto</a>
+                                </div>
+                            }
+
+                            @if (node.Children.Any())
+                            {
+                                <ul class="list-unstyled mt-3">
+                                    @foreach (var child in node.Children)
+                                    {
+                                        RenderChecklistNode(child, level + 1);
+                                    }
+                                </ul>
                             }
                         </div>
-                        <div class="text-end">
-                            <div class="small">Skor:</div>
-                            <strong>@(node.ScoreAF?.ToString("0.00") ?? "0.00")</strong>
-                            <i class="bi bi-chevron-right rotate-arrow ms-2"></i>
-                        </div>
-                    </a>
-                </div>
-                <div class="collapse" id="@collapseId">
-                    <div class="card-body">
-                        @if (!string.IsNullOrWhiteSpace(node.ScoreInput))
-                        {
-                            <div class="mb-2">
-                                <div class="mb-1 fw-semibold">Jawaban:</div>
-                                @foreach (var opt in new List<string> { "A (2,00)", "B (1,50)", "C (1,00)", "D (0,50)", "F (0,00)" })
-                                {
-                                    var optionValue = ExtractDecimalFromOption(opt);
-                                    var isActive = decimal.TryParse(node.ScoreInput, out var actual) && optionValue == actual;
-                                    <button class="btn btn-outline-secondary btn-sm me-2 @(isActive ? "active bg-success text-white" : "")">
-                                        @opt
-                                    </button>
-                                }
-                            </div>
-                            <div>
-                                <button class="btn btn-light btn-sm me-2">Batal</button>
-                                <button class="btn btn-primary btn-sm">Update Nilai</button>
-                            </div>
-                        }
-
-                        @if (!string.IsNullOrWhiteSpace(node.MediaUrl))
-                        {
-                            <div class="mt-3">
-                                <a href="@node.MediaUrl" target="_blank" class="btn btn-sm btn-link">📷 Lihat Dokumentasi Foto</a>
-                            </div>
-                        }
-
-                        @if (node.Children.Any())
-                        {
-                            <ul class="list-unstyled mt-3">
-                                @foreach (var child in node.Children)
-                                {
-                                    RenderChecklistNode(child, level + 1);
-                                }
-                            </ul>
-                        }
                     </div>
                 </div>
-            </div>
-        </li>
+            </li>
+        </text>
     }
 }
