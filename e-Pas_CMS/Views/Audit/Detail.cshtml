@@ -176,7 +176,7 @@
                             {
                                 <div class="mb-2">
                                     <div class="mb-1 fw-semibold">Jawaban:</div>
-                                    @foreach (var opt in new List<string> { "A (2,00)", "B (1,50)", "C (1,00)", "D (0,50)", "F (0,00)" })
+                                    @foreach (var opt in new List<string> { "A (1,00)", "B (0,80)", "C (0,60)", "D (0,40)", "F (0,00)" })
                                     {
                                         var optionValue = ExtractDecimalFromOption(opt);
                                         var isActive = decimal.TryParse(node.ScoreInput, out var actual) && optionValue == actual;

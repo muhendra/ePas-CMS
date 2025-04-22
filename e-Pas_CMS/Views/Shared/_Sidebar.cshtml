@@ -6,6 +6,9 @@
         width: 250px;
         position: fixed;
         box-shadow: 0 0 20px rgba(0, 0, 0, 0.3);
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
     }
 
         .sidebar .nav-link {
@@ -25,59 +28,67 @@
             letter-spacing: 0.05em;
             opacity: 0.85;
         }
+
+    .sidebar-bottom {
+        margin-bottom: 1rem;
+        text-align: center;
+    }
 </style>
 
 <div class="sidebar p-3">
-    <h4 class="fw-bold mb-4">E-PAS Pertamina</h4>
-    <ul class="nav flex-column">
+    <div>
+        <h4 class="fw-bold mb-4">E-PAS Pertamina</h4>
+        <ul class="nav flex-column">
 
-        <li class="nav-item mb-2">
-            <a class="nav-link text-white d-flex align-items-center" asp-controller="Home" asp-action="Index">
-                <i class="bi bi-speedometer2 me-2"></i> Dashboard
-            </a>
-        </li>
+            <li class="nav-item mb-2">
+                <a class="nav-link text-white d-flex align-items-center" asp-controller="Home" asp-action="Index">
+                    <i class="bi bi-speedometer2 me-2"></i> Dashboard
+                </a>
+            </li>
 
-        <!-- Menu Audit -->
-        <li class="nav-item mt-3">
-            <a class="nav-link text-white d-flex justify-content-between align-items-center" data-bs-toggle="collapse" href="#menu-audit" role="button" aria-expanded="false" aria-controls="menu-audit">
-                <strong>Audit</strong>
-                <i class="bi bi-caret-down-fill"></i>
-            </a>
-            <div class="collapse" id="menu-audit">
-                <ul class="nav flex-column ms-3 mt-2">
-                    <li class="nav-item">
-                        <a class="nav-link text-white" asp-controller="Audit" asp-action="Index">Review Audit</a>
-                    </li>
-                </ul>
-            </div>
-        </li>
+            <!-- Menu Audit -->
+            <li class="nav-item mt-3">
+                <a class="nav-link text-white d-flex justify-content-between align-items-center" data-bs-toggle="collapse" href="#menu-audit" role="button" aria-expanded="false" aria-controls="menu-audit">
+                    <strong>Audit</strong>
+                    <i class="bi bi-caret-down-fill"></i>
+                </a>
+                <div class="collapse" id="menu-audit">
+                    <ul class="nav flex-column ms-3 mt-2">
+                        <li class="nav-item">
+                            <a class="nav-link text-white" asp-controller="Audit" asp-action="Index">Review Audit</a>
+                        </li>
+                    </ul>
+                </div>
+            </li>
 
-        <!-- Menu Report -->
-        <li class="nav-item mt-3">
-            <a class="nav-link text-white d-flex justify-content-between align-items-center" data-bs-toggle="collapse" href="#menu-report" role="button" aria-expanded="false" aria-controls="menu-report">
-                <strong>Report</strong>
-                <i class="bi bi-caret-down-fill"></i>
-            </a>
-            <div class="collapse" id="menu-report">
-                <ul class="nav flex-column ms-3 mt-2">
-                    <li class="nav-item"><a class="nav-link text-white" href="#">Pasti Prima</a></li>
-                    <li class="nav-item"><a class="nav-link text-white" href="#">Pasti Pas</a></li>
-                    <li class="nav-item"><a class="nav-link text-white" href="#">Mystery Guest</a></li>
-                    <li class="nav-item"><a class="nav-link text-white" href="#">HSSE</a></li>
-                </ul>
-            </div>
-        </li>
+            <!-- Menu Report -->
+            <li class="nav-item mt-3">
+                <a class="nav-link text-white d-flex justify-content-between align-items-center" data-bs-toggle="collapse" href="#menu-report" role="button" aria-expanded="false" aria-controls="menu-report">
+                    <strong>Report</strong>
+                    <i class="bi bi-caret-down-fill"></i>
+                </a>
+                <div class="collapse" id="menu-report">
+                    <ul class="nav flex-column ms-3 mt-2">
+                        <li class="nav-item"><a class="nav-link text-white" href="#">Pasti Prima</a></li>
+                        <li class="nav-item"><a class="nav-link text-white" href="#">Pasti Pas</a></li>
+                        <li class="nav-item"><a class="nav-link text-white" href="#">Mystery Guest</a></li>
+                        <li class="nav-item"><a class="nav-link text-white" href="#">HSSE</a></li>
+                    </ul>
+                </div>
+            </li>
 
-        <!-- Static menu -->
-        <li class="nav-item mt-4"><strong class="text-white-50">Access</strong></li>
-        <li class="nav-item mt-2"><strong class="text-white-50">Master Data</strong></li>
-        <li class="nav-item mt-2"><strong class="text-white-50">Content</strong></li>
-        <li class="nav-item mt-2"><strong class="text-white-50">Upload</strong></li>
+            <!-- Static menu -->
+            <li class="nav-item mt-4"><strong class="text-white-50">Access</strong></li>
+            <li class="nav-item mt-2"><strong class="text-white-50">Master Data</strong></li>
+            <li class="nav-item mt-2"><strong class="text-white-50">Content</strong></li>
+            <li class="nav-item mt-2"><strong class="text-white-50">Upload</strong></li>
+        </ul>
+    </div>
 
-        <li class="nav-item mt-4">
-            <a class="nav-link text-white d-flex align-items-center" href="#">
-                <i class="bi bi-box-arrow-right me-2"></i> Logout
-            </a>
-        </li>
-    </ul>
+    <!-- Logout at bottom -->
+    <div class="sidebar-bottom">
+        <a class="nav-link text-white d-flex justify-content-center align-items-center" asp-controller="Auth" asp-action="Logout">
+            <i class="bi bi-box-arrow-right me-2"></i> Logout
+        </a>
+    </div>
 </div>

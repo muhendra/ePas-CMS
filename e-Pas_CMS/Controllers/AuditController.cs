@@ -78,7 +78,7 @@ public class AuditController : Controller
                 Rayon = "I",
                 Alamat = item.Spbu.address,
                 TipeSpbu = item.Spbu.type,
-                Tahun = "2022",
+                Tahun = item.Audit.created_date.ToString("yyyy"),
                 Audit = "DAE",
                 Score = finalScore,
                 Good = "certified",
@@ -98,11 +98,48 @@ public class AuditController : Controller
         return View(result);
     }
 
-
-
-    [HttpGet("audit/detail/{id}")]
+    [HttpGet("Audit/Detail/{id}")]
     public async Task<IActionResult> Detail(string id)
     {
+        using var conn = _context.Database.GetDbConnection();
+        if (conn.State != System.Data.ConnectionState.Open)
+            await conn.OpenAsync();
+
+        // Cek apakah ada data score_af IS NULL dan mqd.type != 'TITLE'
+        var checkSql = @"
+        SELECT COUNT(*) 
+        FROM master_questioner_detail mqd 
+        INNER JOIN trx_audit_checklist tac2 
+            ON mqd.id = tac2.master_questioner_detail_id
+        WHERE tac2.trx_audit_id = @id
+            AND tac2.score_af IS NULL
+            AND mqd.type != 'TITLE'";
+
+        var needsUpdate = await conn.ExecuteScalarAsync<int>(checkSql, new { id });
+
+        if (needsUpdate > 0)
+        {
+            var updateSql = @"
+            UPDATE trx_audit_checklist tac
+            SET score_af = CASE tac.score_input
+                WHEN 'A' THEN 1.00
+                WHEN 'B' THEN 0.80
+                WHEN 'C' THEN 0.60
+                WHEN 'D' THEN 0.40
+                WHEN 'E' THEN 0.20
+                WHEN 'F' THEN 0.00
+                ELSE NULL
+            END
+            FROM master_questioner_detail mqd
+            WHERE tac.master_questioner_detail_id = mqd.id
+              AND tac.trx_audit_id = @id
+              AND tac.score_af IS NULL
+              AND mqd.type != 'TITLE'";
+
+            await conn.ExecuteAsync(updateSql, new { id });
+        }
+
+        // Ambil data utama audit
         var audit = await (from ta in _context.trx_audits
                            join au in _context.app_users on ta.app_user_id equals au.id
                            join s in _context.spbus on ta.spbu_id equals s.id
@@ -143,12 +180,7 @@ public class AuditController : Controller
             )
         ORDER BY mqd.order_no";
 
-        using var conn = _context.Database.GetDbConnection();
-        if (conn.State != System.Data.ConnectionState.Open)
-            await conn.OpenAsync();
-
         var checklistData = (await conn.QueryAsync<ChecklistFlatItem>(sql, new { id })).ToList();
-
         audit.Elements = BuildHierarchy(checklistData);
 
         var questions = checklistData.Where(x => x.type == "QUESTION" && !string.IsNullOrWhiteSpace(x.score_input));
@@ -179,6 +211,7 @@ public class AuditController : Controller
 
         return View(audit);
     }
+
 
     private List<AuditChecklistNode> BuildHierarchy(List<ChecklistFlatItem> flatList)
     {
