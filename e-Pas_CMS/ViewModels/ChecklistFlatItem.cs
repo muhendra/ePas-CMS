@@ -11,6 +11,8 @@
         public string score_input { get; set; }
         public decimal? score_af { get; set; }
         public decimal? score_x { get; set; }
+        public string media_path { get; set; }
+        public string tacid { get; set; }
 
     }
 

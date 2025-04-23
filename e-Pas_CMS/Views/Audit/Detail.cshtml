@@ -96,12 +96,44 @@
             .rotate-arrow.rotate {
                 transform: rotate(90deg);
             }
+        .option-btn:hover {
+            background-color: #e0f2f1; /* warna hover */
+            border-color: #10b981;
+            color: #0f766e;
+        }
+
+        .option-btn.active:hover {
+            background-color: #059669; /* tetap hijau saat hover + active */
+            color: white;
+        }
+
+        .rotate-arrow {
+            transition: transform 0.3s ease;
+        }
+
+            .rotate-arrow.rotate {
+                transform: rotate(90deg);
+            }
+
+        .option-btn:hover {
+            background-color: #e0f2f1 !important;
+            border-color: #10b981;
+            color: #0f766e;
+        }
+
+        .option-btn.active:hover {
+            background-color: #059669 !important;
+            color: white;
+        }
     </style>
+
+
 }
 
 @section Scripts {
     <script>
         document.addEventListener('DOMContentLoaded', function () {
+            // ROTASI PANAH
             document.querySelectorAll('[data-bs-toggle="collapse"]').forEach(function (toggle) {
                 var targetId = toggle.getAttribute('href') || toggle.dataset.bsTarget;
                 var target = document.querySelector(targetId);
@@ -115,8 +147,27 @@
                     arrow.classList.remove('rotate');
                 });
             });
+
+            // HIGHLIGHT NILAI TERPILIH
+            document.querySelectorAll('.option-btn').forEach(function (btn) {
+                btn.addEventListener('click', function () {
+                    const nodeId = this.dataset.nodeId;
+
+                    // Hapus active dari semua tombol dalam node yang sama
+                    document.querySelectorAll('.option-btn[data-node-id="' + nodeId + '"]').forEach(function (el) {
+                        el.classList.remove('active', 'bg-success', 'text-white');
+                    });
+
+                    // Tambahkan class active ke tombol yang diklik
+                    this.classList.add('active', 'bg-success', 'text-white');
+
+                    // Optional: console log nilai
+                    console.log(`Node ID: ${nodeId}, Nilai: ${this.dataset.score}`);
+                });
+            });
         });
     </script>
+
 }
 
 @functions {
@@ -178,12 +229,17 @@
                                     <div class="mb-1 fw-semibold">Jawaban:</div>
                                     @foreach (var opt in new List<string> { "A (1,00)", "B (0,80)", "C (0,60)", "D (0,40)", "F (0,00)" })
                                     {
-                                        var optionValue = ExtractDecimalFromOption(opt);
-                                        var isActive = decimal.TryParse(node.ScoreInput, out var actual) && optionValue == actual;
-                                        <button class="btn btn-outline-secondary btn-sm me-2 @(isActive ? "active bg-success text-white" : "")">
+                                        var optKey = opt.Split(' ')[0];
+                                        var isActive = node.ScoreInput?.Trim().Equals(optKey, StringComparison.OrdinalIgnoreCase) ?? false;
+
+                                        <button type="button"
+                                                class="btn btn-outline-secondary btn-sm me-2 option-btn @(isActive ? "active bg-success text-white" : "")"
+                                                data-node-id="@node.Id"
+                                                data-score="@optKey">
                                             @opt
                                         </button>
                                     }
+
                                 </div>
                                 <div>
                                     <button class="btn btn-light btn-sm me-2">Batal</button>
@@ -191,10 +247,16 @@
                                 </div>
                             }
 
-                            @if (!string.IsNullOrWhiteSpace(node.MediaUrl))
+                            @if (!string.IsNullOrWhiteSpace(node.media_path))
                             {
                                 <div class="mt-3">
-                                    <a href="@node.MediaUrl" target="_blank" class="btn btn-sm btn-link">📷 Lihat Dokumentasi Foto</a>
+                                    <a href="@node.media_path" target="_blank" class="d-inline-flex align-items-center text-decoration-none text-primary fw-semibold">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" class="bi bi-image me-2" viewBox="0 0 16 16">
+                                            <path d="M14.002 3a1 1 0 0 1 1 1v8.002a1 1 0 0 1-1 1H2a1 1 0 0 1-1-1V4.002a1 1 0 0 1 1-1h12.002zM2 2a2 2 0 0 0-2 2v8.002a2 2 0 0 0 2 2h12.002a2 2 0 0 0 2-2V4.002a2 2 0 0 0-2-2H2z" />
+                                            <path d="M10.648 8.646a.5.5 0 0 1 .704.036l2.148 2.497a.5.5 0 0 1-.388.82H2.5a.5.5 0 0 1-.4-.8l3.1-4.2a.5.5 0 0 1 .8 0l2.15 2.678 1.998-2.231z" />
+                                        </svg>
+                                        Lihat Dokumentasi Foto / Video
+                                    </a>
                                 </div>
                             }
 

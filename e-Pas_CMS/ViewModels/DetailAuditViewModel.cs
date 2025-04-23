@@ -18,4 +18,10 @@
 
         public List<AuditChecklistNode> Elements { get; set; } = new(); // ✅ versi rekursif
     }
+
+    public class UpdateScoreRequest
+    {
+        public string TacId { get; set; }
+        public string ScoreInput { get; set; }
+    }
 }

@@ -11,7 +11,8 @@
         public decimal? ScoreAF { get; set; }
         public decimal? ScoreX { get; set; }
         public decimal? Weight { get; set; }
-        public string MediaUrl { get; set; }   
+        public string media_path { get; set; }
+        public string tacid { get; set; }
         public List<AuditChecklistNode> Children { get; set; } = new();
     }
 }

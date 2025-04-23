@@ -35,6 +35,39 @@ public class AuditController : Controller
 
         foreach (var item in audits)
         {
+            // Cek dan update score_af untuk audit ini saja
+            var checkSql = @"
+        SELECT COUNT(*) 
+        FROM master_questioner_detail mqd 
+        INNER JOIN trx_audit_checklist tac2 
+            ON mqd.id = tac2.master_questioner_detail_id
+        WHERE tac2.score_af IS NULL
+          AND mqd.type != 'TITLE'";
+
+            var needsUpdate = await conn.ExecuteScalarAsync<int>(checkSql, new { id = item.Audit.id });
+
+            if (needsUpdate > 0)
+            {
+                var updateSql = @"
+            UPDATE trx_audit_checklist tac
+            SET score_af = CASE tac.score_input
+                WHEN 'A' THEN 1.00
+                WHEN 'B' THEN 0.80
+                WHEN 'C' THEN 0.60
+                WHEN 'D' THEN 0.40
+                WHEN 'E' THEN 0.20
+                WHEN 'F' THEN 0.00
+                ELSE NULL
+            END
+            FROM master_questioner_detail mqd
+            WHERE tac.master_questioner_detail_id = mqd.id
+              AND tac.score_af IS NULL
+              AND mqd.type != 'TITLE'";
+
+                await conn.ExecuteAsync(updateSql, new { id = item.Audit.id });
+            }
+
+            // Hitung skor final
             var sql = @"
         SELECT mqd.weight, tac.score_input
         FROM master_questioner_detail mqd
@@ -102,42 +135,6 @@ public class AuditController : Controller
     public async Task<IActionResult> Detail(string id)
     {
         using var conn = _context.Database.GetDbConnection();
-        if (conn.State != System.Data.ConnectionState.Open)
-            await conn.OpenAsync();
-
-        // Cek apakah ada data score_af IS NULL dan mqd.type != 'TITLE'
-        var checkSql = @"
-        SELECT COUNT(*) 
-        FROM master_questioner_detail mqd 
-        INNER JOIN trx_audit_checklist tac2 
-            ON mqd.id = tac2.master_questioner_detail_id
-        WHERE tac2.trx_audit_id = @id
-            AND tac2.score_af IS NULL
-            AND mqd.type != 'TITLE'";
-
-        var needsUpdate = await conn.ExecuteScalarAsync<int>(checkSql, new { id });
-
-        if (needsUpdate > 0)
-        {
-            var updateSql = @"
-            UPDATE trx_audit_checklist tac
-            SET score_af = CASE tac.score_input
-                WHEN 'A' THEN 1.00
-                WHEN 'B' THEN 0.80
-                WHEN 'C' THEN 0.60
-                WHEN 'D' THEN 0.40
-                WHEN 'E' THEN 0.20
-                WHEN 'F' THEN 0.00
-                ELSE NULL
-            END
-            FROM master_questioner_detail mqd
-            WHERE tac.master_questioner_detail_id = mqd.id
-              AND tac.trx_audit_id = @id
-              AND tac.score_af IS NULL
-              AND mqd.type != 'TITLE'";
-
-            await conn.ExecuteAsync(updateSql, new { id });
-        }
 
         // Ambil data utama audit
         var audit = await (from ta in _context.trx_audits
@@ -158,6 +155,7 @@ public class AuditController : Controller
 
         if (audit == null) return NotFound();
 
+        // Query dengan tambahan media_path
         var sql = @"
         SELECT 
             mqd.id,
@@ -167,7 +165,14 @@ public class AuditController : Controller
             mqd.type,
             mqd.weight,
             tac.score_input,
-            tac.score_af
+            tac.score_af,
+            (
+                SELECT tam.media_path
+                FROM trx_audit_media tam
+                WHERE tam.master_questioner_detail_id = mqd.id
+                  AND tam.trx_audit_id = @id
+                LIMIT 1
+            ) AS media_path
         FROM master_questioner_detail mqd
         LEFT JOIN trx_audit_checklist tac 
             ON tac.master_questioner_detail_id = mqd.id 
@@ -183,6 +188,7 @@ public class AuditController : Controller
         var checklistData = (await conn.QueryAsync<ChecklistFlatItem>(sql, new { id })).ToList();
         audit.Elements = BuildHierarchy(checklistData);
 
+        // Hitung skor akhir
         var questions = checklistData.Where(x => x.type == "QUESTION" && !string.IsNullOrWhiteSpace(x.score_input));
         decimal totalScore = 0;
         decimal maxScore = 0;
@@ -212,7 +218,6 @@ public class AuditController : Controller
         return View(audit);
     }
 
-
     private List<AuditChecklistNode> BuildHierarchy(List<ChecklistFlatItem> flatList)
     {
         var lookup = flatList.ToLookup(x => x.parent_id);
@@ -231,6 +236,7 @@ public class AuditController : Controller
                     ScoreInput = item.score_input,
                     ScoreAF = item.score_af,
                     ScoreX = item.score_x,
+                    media_path = string.IsNullOrWhiteSpace(item.media_path) ? "" : $"https://epas.zarata.co.id/{item.media_path}",
                     Children = BuildChildren(item.id)
                 })
                 .ToList();

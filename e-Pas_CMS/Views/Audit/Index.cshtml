@@ -78,6 +78,14 @@
                 fixedHeight: true,
                 perPage: 10
             });
+
+            // Sinkronkan input search custom
+            const searchInput = document.getElementById("search-input");
+            if (searchInput) {
+                searchInput.addEventListener("input", function () {
+                    dataTable.search(this.value);
+                });
+            }
         });
     </script>
 }
