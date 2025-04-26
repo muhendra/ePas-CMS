@@ -27,7 +27,7 @@ public class AuditController : Controller
                                 AuditorName = u.name
                             }).ToListAsync();
 
-        var conn = _context.Database.GetDbConnection();
+        using var conn = _context.Database.GetDbConnection();
         if (conn.State != System.Data.ConnectionState.Open)
             await conn.OpenAsync();
 
@@ -35,50 +35,49 @@ public class AuditController : Controller
 
         foreach (var item in audits)
         {
-            // Cek dan update score_af untuk audit ini saja
             var checkSql = @"
-        SELECT COUNT(*) 
-        FROM master_questioner_detail mqd 
-        INNER JOIN trx_audit_checklist tac2 
-            ON mqd.id = tac2.master_questioner_detail_id
-        WHERE tac2.score_af IS NULL
-          AND mqd.type != 'TITLE'";
+                SELECT COUNT(*) 
+                FROM master_questioner_detail mqd 
+                INNER JOIN trx_audit_checklist tac2 
+                    ON mqd.id = tac2.master_questioner_detail_id
+                WHERE tac2.score_af IS NULL
+                  AND mqd.type != 'TITLE'";
 
             var needsUpdate = await conn.ExecuteScalarAsync<int>(checkSql, new { id = item.Audit.id });
 
             if (needsUpdate > 0)
             {
                 var updateSql = @"
-            UPDATE trx_audit_checklist tac
-            SET score_af = CASE tac.score_input
-                WHEN 'A' THEN 1.00
-                WHEN 'B' THEN 0.80
-                WHEN 'C' THEN 0.60
-                WHEN 'D' THEN 0.40
-                WHEN 'E' THEN 0.20
-                WHEN 'F' THEN 0.00
-                ELSE NULL
-            END
-            FROM master_questioner_detail mqd
-            WHERE tac.master_questioner_detail_id = mqd.id
-              AND tac.score_af IS NULL
-              AND mqd.type != 'TITLE'";
+                    UPDATE trx_audit_checklist tac
+                    SET score_af = CASE tac.score_input
+                        WHEN 'A' THEN 1.00
+                        WHEN 'B' THEN 0.80
+                        WHEN 'C' THEN 0.60
+                        WHEN 'D' THEN 0.40
+                        WHEN 'E' THEN 0.20
+                        WHEN 'F' THEN 0.00
+                        ELSE NULL
+                    END
+                    FROM master_questioner_detail mqd
+                    WHERE tac.master_questioner_detail_id = mqd.id
+                      AND tac.score_af IS NULL
+                      AND mqd.type != 'TITLE'";
 
                 await conn.ExecuteAsync(updateSql, new { id = item.Audit.id });
             }
 
-            // Hitung skor final
             var sql = @"
-        SELECT mqd.weight, tac.score_input
-        FROM master_questioner_detail mqd
-        LEFT JOIN trx_audit_checklist tac 
-            ON tac.master_questioner_detail_id = mqd.id 
-            AND tac.trx_audit_id = @id
-        WHERE mqd.master_questioner_id = (
-            SELECT master_questioner_checklist_id 
-            FROM trx_audit 
-            WHERE id = @id
-        ) AND mqd.type = 'QUESTION'";
+                SELECT mqd.weight, tac.score_input
+                FROM master_questioner_detail mqd
+                LEFT JOIN trx_audit_checklist tac 
+                    ON tac.master_questioner_detail_id = mqd.id 
+                    AND tac.trx_audit_id = @id
+                WHERE mqd.master_questioner_id = (
+                    SELECT master_questioner_checklist_id 
+                    FROM trx_audit 
+                    WHERE id = @id
+                )
+                AND mqd.type = 'QUESTION'";
 
             var checklist = (await conn.QueryAsync<(decimal? weight, string score_input)>(sql, new { id = item.Audit.id })).ToList();
 
@@ -135,8 +134,9 @@ public class AuditController : Controller
     public async Task<IActionResult> Detail(string id)
     {
         using var conn = _context.Database.GetDbConnection();
+        if (conn.State != System.Data.ConnectionState.Open)
+            await conn.OpenAsync();
 
-        // Ambil data utama audit
         var audit = await (from ta in _context.trx_audits
                            join au in _context.app_users on ta.app_user_id equals au.id
                            join s in _context.spbus on ta.spbu_id equals s.id
@@ -155,43 +155,54 @@ public class AuditController : Controller
 
         if (audit == null) return NotFound();
 
-        // Query dengan tambahan media_path
-        var sql = @"
-        SELECT 
-            mqd.id,
-            mqd.title,
-            mqd.description,
-            mqd.parent_id,
-            mqd.type,
-            mqd.weight,
-            tac.score_input,
-            tac.score_af,
-            (
-                SELECT tam.media_path
-                FROM trx_audit_media tam
-                WHERE tam.master_questioner_detail_id = mqd.id
-                  AND tam.trx_audit_id = @id
-                LIMIT 1
-            ) AS media_path
-        FROM master_questioner_detail mqd
-        LEFT JOIN trx_audit_checklist tac 
-            ON tac.master_questioner_detail_id = mqd.id 
-            AND tac.trx_audit_id = @id
-        WHERE 
-            mqd.master_questioner_id = (
-                SELECT ta.master_questioner_checklist_id 
-                FROM trx_audit ta 
-                WHERE ta.id = @id
-            )
-        ORDER BY mqd.order_no";
+        var checklistSql = @"
+            SELECT 
+                mqd.id,
+                mqd.title,
+                mqd.description,
+                mqd.parent_id,
+                mqd.type,
+                mqd.weight,
+                tac.score_input,
+                tac.score_af
+            FROM master_questioner_detail mqd
+            LEFT JOIN trx_audit_checklist tac 
+                ON tac.master_questioner_detail_id = mqd.id 
+                AND tac.trx_audit_id = @id
+            WHERE 
+                mqd.master_questioner_id = (
+                    SELECT master_questioner_checklist_id 
+                    FROM trx_audit 
+                    WHERE id = @id
+                )
+            ORDER BY mqd.order_no";
 
-        var checklistData = (await conn.QueryAsync<ChecklistFlatItem>(sql, new { id })).ToList();
-        audit.Elements = BuildHierarchy(checklistData);
+        var checklistData = (await conn.QueryAsync<ChecklistFlatItem>(checklistSql, new { id })).ToList();
 
-        // Hitung skor akhir
+        var mediaSql = @"
+            SELECT 
+                master_questioner_detail_id,
+                media_type,
+                media_path
+            FROM trx_audit_media
+            WHERE trx_audit_id = @id
+              AND master_questioner_detail_id IS NOT NULL";
+
+         var mediaList = (await conn.QueryAsync<(string master_questioner_detail_id, string media_type, string media_path)>(mediaSql, new { id }))
+            .GroupBy(m => m.master_questioner_detail_id)
+            .ToDictionary(
+                g => g.Key,
+                g => g.Select(m => new MediaItem
+                {
+                    MediaType = m.media_type,
+                    MediaPath = $"https://epas.zarata.co.id{m.media_path}"
+                }).ToList()
+            );
+
+        audit.Elements = BuildHierarchy(checklistData, mediaList);
+
         var questions = checklistData.Where(x => x.type == "QUESTION" && !string.IsNullOrWhiteSpace(x.score_input));
-        decimal totalScore = 0;
-        decimal maxScore = 0;
+        decimal totalScore = 0, maxScore = 0;
 
         foreach (var q in questions)
         {
@@ -218,7 +229,8 @@ public class AuditController : Controller
         return View(audit);
     }
 
-    private List<AuditChecklistNode> BuildHierarchy(List<ChecklistFlatItem> flatList)
+
+    private List<AuditChecklistNode> BuildHierarchy(List<ChecklistFlatItem> flatList, Dictionary<string, List<MediaItem>> mediaList)
     {
         var lookup = flatList.ToLookup(x => x.parent_id);
 
@@ -236,7 +248,7 @@ public class AuditController : Controller
                     ScoreInput = item.score_input,
                     ScoreAF = item.score_af,
                     ScoreX = item.score_x,
-                    media_path = string.IsNullOrWhiteSpace(item.media_path) ? "" : $"https://epas.zarata.co.id/{item.media_path}",
+                    MediaItems = mediaList.ContainsKey(item.id) ? mediaList[item.id] : new List<MediaItem>(), // << disini bro tempelin
                     Children = BuildChildren(item.id)
                 })
                 .ToList();

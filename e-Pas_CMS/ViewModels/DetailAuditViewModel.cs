@@ -24,4 +24,11 @@
         public string TacId { get; set; }
         public string ScoreInput { get; set; }
     }
+
+    public class MediaItem
+    {
+        public string MediaType { get; set; } // "IMAGE" or "VIDEO"
+        public string MediaPath { get; set; }
+    }
+
 }

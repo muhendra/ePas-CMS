@@ -1,4 +1,5 @@
 ﻿@using e_Pas_CMS.ViewModels
+@using Newtonsoft
 @model DetailAuditViewModel
 
 @{
@@ -86,27 +87,24 @@
     </div>
 </div>
 
+<!-- Modal Media -->
+<div class="modal fade" id="mediaModal" tabindex="-1" aria-labelledby="mediaModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="mediaModalLabel">Dokumentasi Foto / Video</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Tutup"></button>
+            </div>
+            <div class="modal-body" id="mediaModalBody">
+                <!-- Media akan dimasukkan disini -->
+            </div>
+        </div>
+    </div>
+</div>
+
 @section Styles {
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
     <style>
-        .rotate-arrow {
-            transition: transform 0.3s ease;
-        }
-
-            .rotate-arrow.rotate {
-                transform: rotate(90deg);
-            }
-        .option-btn:hover {
-            background-color: #e0f2f1; /* warna hover */
-            border-color: #10b981;
-            color: #0f766e;
-        }
-
-        .option-btn.active:hover {
-            background-color: #059669; /* tetap hijau saat hover + active */
-            color: white;
-        }
-
         .rotate-arrow {
             transition: transform 0.3s ease;
         }
@@ -125,15 +123,29 @@
             background-color: #059669 !important;
             color: white;
         }
+
+        .carousel-item img, .carousel-item video {
+            max-height: 70vh; /* 70% dari tinggi layar */
+            width: auto;
+            height: auto;
+            object-fit: contain;
+            display: block;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        .modal-body {
+            overflow-y: auto;
+            max-height: 80vh;
+        }
+
     </style>
-
-
 }
 
 @section Scripts {
     <script>
         document.addEventListener('DOMContentLoaded', function () {
-            // ROTASI PANAH
+            // Rotasi panah collapse
             document.querySelectorAll('[data-bs-toggle="collapse"]').forEach(function (toggle) {
                 var targetId = toggle.getAttribute('href') || toggle.dataset.bsTarget;
                 var target = document.querySelector(targetId);
@@ -148,49 +160,99 @@
                 });
             });
 
-            // HIGHLIGHT NILAI TERPILIH
+            // Highlight opsi nilai terpilih
             document.querySelectorAll('.option-btn').forEach(function (btn) {
                 btn.addEventListener('click', function () {
                     const nodeId = this.dataset.nodeId;
-
-                    // Hapus active dari semua tombol dalam node yang sama
                     document.querySelectorAll('.option-btn[data-node-id="' + nodeId + '"]').forEach(function (el) {
                         el.classList.remove('active', 'bg-success', 'text-white');
                     });
-
-                    // Tambahkan class active ke tombol yang diklik
                     this.classList.add('active', 'bg-success', 'text-white');
-
-                    // Optional: console log nilai
-                    console.log(`Node ID: ${nodeId}, Nilai: ${this.dataset.score}`);
                 });
             });
         });
-    </script>
 
+                function showMediaPopup(mediaItems) {
+            const container = document.getElementById('mediaModalBody');
+            container.innerHTML = '';
+
+            if (!mediaItems || mediaItems.length === 0) {
+                container.innerHTML = '<p class="text-muted">Tidak ada media tersedia.</p>';
+            } else if (mediaItems.length === 1) {
+                const item = mediaItems[0];
+                if (item.MediaType === 'IMAGE') {
+                    const img = document.createElement('img');
+                    img.src = item.MediaPath;
+                    img.alt = "Gambar Dokumentasi";
+                    img.className = 'img-fluid mb-3 rounded shadow-sm';
+                    container.appendChild(img);
+                } else if (item.MediaType === 'VIDEO') {
+                    const video = document.createElement('video');
+                    video.src = item.MediaPath;
+                    video.controls = true;
+                    video.className = 'img-fluid mb-3 rounded shadow-sm';
+                    container.appendChild(video);
+                }
+            } else {
+                // Build Carousel dengan Progress Indicator
+                let carouselId = 'mediaCarousel';
+                container.innerHTML = `
+                    <div id="${carouselId}" class="carousel slide" data-bs-ride="carousel">
+                        <div class="carousel-indicators">
+                            ${mediaItems.map((item, index) => `
+                                <button type="button" data-bs-target="#${carouselId}" data-bs-slide-to="${index}" class="${index === 0 ? 'active' : ''}" aria-current="${index === 0 ? 'true' : 'false'}" aria-label="Slide ${index + 1}"></button>
+                            `).join('')}
+                        </div>
+                        <div class="carousel-inner">
+                            ${mediaItems.map((item, index) => `
+                                <div class="carousel-item ${index === 0 ? 'active' : ''}">
+                                    ${item.MediaType === 'IMAGE' ? `
+                                        <img src="${item.MediaPath}" class="d-block w-100 img-fluid rounded shadow-sm" alt="Gambar">
+                                    ` : `
+                                        <video class="d-block w-100 img-fluid rounded shadow-sm" controls>
+                                            <source src="${item.MediaPath}" type="video/mp4">
+                                            Your browser does not support the video tag.
+                                        </video>
+                                    `}
+                                </div>
+                            `).join('')}
+                        </div>
+                        <button class="carousel-control-prev" type="button" data-bs-target="#${carouselId}" data-bs-slide="prev">
+                            <span class="carousel-control-prev-icon" aria-hidden="true"></span>
+                            <span class="visually-hidden">Previous</span>
+                        </button>
+                        <button class="carousel-control-next" type="button" data-bs-target="#${carouselId}" data-bs-slide="next">
+                            <span class="carousel-control-next-icon" aria-hidden="true"></span>
+                            <span class="visually-hidden">Next</span>
+                        </button>
+                    </div>
+                `;
+            }
+
+            var myModal = new bootstrap.Modal(document.getElementById('mediaModal'));
+            myModal.show();
+        }
+
+
+
+    </script>
 }
 
 @functions {
     decimal ExtractDecimalFromOption(string opt)
     {
         var match = System.Text.RegularExpressions.Regex.Match(opt, "\\((.*?)\\)");
-        return match.Success && decimal.TryParse(match.Groups[1].Value, out var val) ? val : 0;
+        return match.Success && decimal.TryParse(match.Groups[1].Value.Replace(',', '.'), out var val) ? val : 0;
     }
 
     decimal GetNodeScore(AuditChecklistNode node)
     {
-        // Jika ada ScoreAF langsung pakai
         if (node.ScoreAF.HasValue)
             return node.ScoreAF.Value;
-
-        // Jika tidak ada ScoreAF, ambil dari ScoreInput * Weight
         if (!string.IsNullOrWhiteSpace(node.ScoreInput))
             return ExtractDecimalFromOption(node.ScoreInput) * (node.Weight ?? 0);
-
-        // Jika masih tidak ada, cek apakah ada anak
         if (node.Children != null && node.Children.Any())
             return node.Children.Sum(GetNodeScore);
-
         return 0;
     }
 
@@ -239,7 +301,6 @@
                                             @opt
                                         </button>
                                     }
-
                                 </div>
                                 <div>
                                     <button class="btn btn-light btn-sm me-2">Batal</button>
@@ -247,16 +308,12 @@
                                 </div>
                             }
 
-                            @if (!string.IsNullOrWhiteSpace(node.media_path))
+                            @if (node.MediaItems != null && node.MediaItems.Any())
                             {
                                 <div class="mt-3">
-                                    <a href="@node.media_path" target="_blank" class="d-inline-flex align-items-center text-decoration-none text-primary fw-semibold">
-                                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" class="bi bi-image me-2" viewBox="0 0 16 16">
-                                            <path d="M14.002 3a1 1 0 0 1 1 1v8.002a1 1 0 0 1-1 1H2a1 1 0 0 1-1-1V4.002a1 1 0 0 1 1-1h12.002zM2 2a2 2 0 0 0-2 2v8.002a2 2 0 0 0 2 2h12.002a2 2 0 0 0 2-2V4.002a2 2 0 0 0-2-2H2z" />
-                                            <path d="M10.648 8.646a.5.5 0 0 1 .704.036l2.148 2.497a.5.5 0 0 1-.388.82H2.5a.5.5 0 0 1-.4-.8l3.1-4.2a.5.5 0 0 1 .8 0l2.15 2.678 1.998-2.231z" />
-                                        </svg>
-                                        Lihat Dokumentasi Foto / Video
-                                    </a>
+                                    <button type="button" class="btn btn-outline-primary btn-sm" onclick='showMediaPopup(@Html.Raw(Newtonsoft.Json.JsonConvert.SerializeObject(node.MediaItems)))'>
+                                        <i class="bi bi-image me-1"></i> Lihat Dokumentasi Foto / Video
+                                    </button>
                                 </div>
                             }
 

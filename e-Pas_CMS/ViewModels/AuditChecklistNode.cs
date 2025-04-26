@@ -14,5 +14,6 @@
         public string media_path { get; set; }
         public string tacid { get; set; }
         public List<AuditChecklistNode> Children { get; set; } = new();
+        public List<MediaItem> MediaItems { get; set; }
     }
 }

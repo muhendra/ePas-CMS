@@ -1,0 +1,16 @@
+﻿@using e_Pas_CMS.ViewModels
+@model DetailAuditViewModel
+
+@if (Model.Elements != null && Model.Elements.Any())
+{
+    <ul class="list-unstyled">
+        @foreach (var node in Model.Elements)
+        {
+            <li>@await Html.PartialAsync("_ChecklistNode", node)</li>
+        }
+    </ul>
+}
+else
+{
+    <p class="text-muted">Tidak ada data checklist.</p>
+}
