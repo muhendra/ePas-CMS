@@ -16,7 +16,13 @@
         public decimal MaxScore { get; set; }
         public decimal FinalScore { get; set; }
 
-        public List<AuditChecklistNode> Elements { get; set; } = new(); // ✅ versi rekursif
+        public List<AuditChecklistNode> Elements { get; set; } = new(); // rekursif
+
+        public List<AuditQqCheckItem> QqChecks { get; set; }
+
+        public string Notes { get; set; } // Untuk isi catatan
+        public List<MediaItem> FinalDocuments { get; set; } // Untuk list foto/video FINAL
+
     }
 
     public class UpdateScoreRequest

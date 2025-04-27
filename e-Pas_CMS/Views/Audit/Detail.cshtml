@@ -1,5 +1,6 @@
 ﻿@using e_Pas_CMS.ViewModels
 @using Newtonsoft
+@using Newtonsoft.Json
 @model DetailAuditViewModel
 
 @{
@@ -59,6 +60,97 @@
         RenderChecklistNode(node, 0);
     }
 </ul>
+
+@if (Model.QqChecks != null && Model.QqChecks.Any())
+{
+    <h4 class="mt-5 fw-bold">Q&Q Check</h4>
+    <div class="table-responsive">
+        <table class="table table-bordered table-striped mt-3">
+            <thead class="table-light">
+                <tr>
+                    <th>Nozzle Number</th>
+                    <th>DU Make</th>
+                    <th>DU Serial No</th>
+                    <th>Product</th>
+                    <th>Mode</th>
+                    <th>Quantity Variation (Measure)</th>
+                    <th>Quantity Variation (%)</th>
+                    <th>Observed Density</th>
+                    <th>Observed Temp</th>
+                    <th>Observed Density (15°)</th>
+                    <th>Reference Density (15°)</th>
+                    <th>Tank Number</th>
+                    <th>Density Variation</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var item in Model.QqChecks)
+                {
+                    <tr>
+                        <td>@item.NozzleNumber</td>
+                        <td>@item.DuMake</td>
+                        <td>@item.DuSerialNo</td>
+                        <td>@item.Product</td>
+                        <td>@item.Mode</td>
+                        <td>@item.QuantityVariationWithMeasure?.ToString("0.00")</td>
+                        <td>@item.QuantityVariationInPercentage?.ToString("0.00")</td>
+                        <td>@item.ObservedDensity?.ToString("0.000")</td>
+                        <td>@item.ObservedTemp?.ToString("0.0")</td>
+                        <td>@item.ObservedDensity15Degree?.ToString("0.000")</td>
+                        <td>@item.ReferenceDensity15Degree?.ToString("0.000")</td>
+                        <td>@item.TankNumber</td>
+                        <td>@item.DensityVariation?.ToString("0.000")</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+@if (!string.IsNullOrEmpty(Model.Notes) || (Model.FinalDocuments != null && Model.FinalDocuments.Any()))
+{
+    <div class="card p-4 mb-5 shadow-sm mt-5">
+        <!-- ⬅️ Tambahin mt-5 di sini bro -->
+        <h4 class="fw-bold mb-4">Berita Acara</h4>
+
+        @if (!string.IsNullOrEmpty(Model.Notes))
+        {
+            <div class="mb-3">
+                <label class="fw-semibold">Isi Catatan</label>
+                <div class="border rounded p-3 bg-light">
+                    @Model.Notes
+                </div>
+            </div>
+        }
+
+        @if (Model.FinalDocuments != null && Model.FinalDocuments.Any())
+        {
+            <div class="mb-2 fw-semibold">
+                Bukti Dokumen/Foto Berita Acara
+            </div>
+            <ul class="list-unstyled">
+                <li class="mb-2">
+                    <i class="bi bi-file-earmark-image text-primary"></i>
+                    @* PASANG DI SINI *@
+                    @if (Model.FinalDocuments?.Count == 1)
+                    {
+                        var doc = Model.FinalDocuments.First();
+                        <button type="button" class="btn btn-link ms-2 text-decoration-none p-0" onclick="showFinalMediaPopup('@doc.MediaType', '@doc.MediaPath')">
+                            Lampiran Foto/Dokumen
+                        </button>
+                    }
+                    else if (Model.FinalDocuments?.Count > 1)
+                    {
+                        <button type="button" class="btn btn-link ms-2 text-decoration-none p-0" onclick='showFinalMediaPopup(@Html.Raw(JsonConvert.SerializeObject(Model.FinalDocuments)))'>
+                            Lampiran Foto/Dokumen
+                        </button>
+                    }
+                </li>
+            </ul>
+        }
+
+    </div>
+}
 
 <div class="text-end mt-5">
     <button class="btn btn-primary rounded-pill px-4 py-2" data-bs-toggle="modal" data-bs-target="#confirmModal">
@@ -139,6 +231,42 @@
             max-height: 80vh;
         }
 
+        .rotate-arrow {
+            transition: transform 0.3s ease;
+        }
+
+            .rotate-arrow.rotate {
+                transform: rotate(90deg);
+            }
+
+        .option-btn:hover {
+            background-color: #e0f2f1 !important;
+            border-color: #10b981;
+            color: #0f766e;
+        }
+
+        .option-btn.active:hover {
+            background-color: #059669 !important;
+            color: white;
+        }
+
+        /* 🔥 Fix untuk gambar/video supaya fit modal */
+        .carousel-item img,
+        .carousel-item video,
+        #mediaModalBody img,
+        #mediaModalBody video {
+            max-width: 100%;
+            max-height: 80vh; /* max 80% tinggi layar */
+            object-fit: contain;
+            display: block;
+            margin: 0 auto; /* center */
+        }
+
+        .modal-body {
+            overflow-y: auto;
+            max-height: 90vh;
+            text-align: center;
+        }
     </style>
 }
 
@@ -233,7 +361,68 @@
             myModal.show();
         }
 
+                function showFinalMediaPopup(mediaType, mediaPath) {
+            const container = document.getElementById('mediaModalBody');
+            container.innerHTML = '';
 
+            // Single Media
+            if (Array.isArray(mediaPath)) {
+                let carouselId = 'finalMediaCarousel';
+                container.innerHTML = `
+                    <div id="${carouselId}" class="carousel slide" data-bs-ride="carousel">
+                        <div class="carousel-indicators">
+                            ${mediaPath.map((item, index) => `
+                                <button type="button" data-bs-target="#${carouselId}" data-bs-slide-to="${index}" class="${index === 0 ? 'active' : ''}" aria-current="${index === 0 ? 'true' : 'false'}" aria-label="Slide ${index + 1}"></button>
+                            `).join('')}
+                        </div>
+                        <div class="carousel-inner">
+                            ${mediaPath.map((item, index) => `
+                                <div class="carousel-item ${index === 0 ? 'active' : ''}">
+                                    ${item.MediaType === 'IMAGE' ? `
+                                        <img src="${item.MediaPath}" class="d-block w-100 img-fluid rounded shadow-sm" alt="Lampiran">
+                                    ` : item.MediaType === 'VIDEO' ? `
+                                        <video class="d-block w-100 img-fluid rounded shadow-sm" controls>
+                                            <source src="${item.MediaPath}" type="video/mp4">
+                                            Your browser does not support the video tag.
+                                        </video>
+                                    ` : `
+                                        <p>Format tidak didukung</p>
+                                    `}
+                                </div>
+                            `).join('')}
+                        </div>
+                        <button class="carousel-control-prev" type="button" data-bs-target="#${carouselId}" data-bs-slide="prev">
+                            <span class="carousel-control-prev-icon" aria-hidden="true"></span>
+                            <span class="visually-hidden">Previous</span>
+                        </button>
+                        <button class="carousel-control-next" type="button" data-bs-target="#${carouselId}" data-bs-slide="next">
+                            <span class="carousel-control-next-icon" aria-hidden="true"></span>
+                            <span class="visually-hidden">Next</span>
+                        </button>
+                    </div>
+                `;
+            } else {
+                if (mediaType === 'IMAGE') {
+                    const img = document.createElement('img');
+                    img.src = mediaPath;
+                    img.alt = "Lampiran Gambar";
+                    img.className = 'img-fluid mb-3 rounded shadow-sm w-100'; // Fit ke layar
+                    container.appendChild(img);
+                } else if (mediaType === 'VIDEO') {
+                    const video = document.createElement('video');
+                    video.src = mediaPath;
+                    video.controls = true;
+                    video.className = 'img-fluid mb-3 rounded shadow-sm w-100'; // Fit ke layar
+                    container.appendChild(video);
+                } else {
+                    window.open(mediaPath, '_blank');
+                    return;
+                }
+            }
+
+            var myModal = new bootstrap.Modal(document.getElementById('mediaModal'));
+            myModal.show();
+        }
 
     </script>
 }

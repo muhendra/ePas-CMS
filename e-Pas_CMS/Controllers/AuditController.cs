@@ -150,54 +150,55 @@ public class AuditController : Controller
                                SpbuNo = s.spbu_no,
                                Provinsi = s.province_name,
                                Kota = s.city_name,
-                               Alamat = s.address
+                               Alamat = s.address,
+                               Notes = ta.audit_mom_final // <<=== Tambahin ambil catatan disini
                            }).FirstOrDefaultAsync();
 
         if (audit == null) return NotFound();
 
         var checklistSql = @"
-            SELECT 
-                mqd.id,
-                mqd.title,
-                mqd.description,
-                mqd.parent_id,
-                mqd.type,
-                mqd.weight,
-                tac.score_input,
-                tac.score_af
-            FROM master_questioner_detail mqd
-            LEFT JOIN trx_audit_checklist tac 
-                ON tac.master_questioner_detail_id = mqd.id 
-                AND tac.trx_audit_id = @id
-            WHERE 
-                mqd.master_questioner_id = (
-                    SELECT master_questioner_checklist_id 
-                    FROM trx_audit 
-                    WHERE id = @id
-                )
-            ORDER BY mqd.order_no";
+        SELECT 
+            mqd.id,
+            mqd.title,
+            mqd.description,
+            mqd.parent_id,
+            mqd.type,
+            mqd.weight,
+            tac.score_input,
+            tac.score_af
+        FROM master_questioner_detail mqd
+        LEFT JOIN trx_audit_checklist tac 
+            ON tac.master_questioner_detail_id = mqd.id 
+            AND tac.trx_audit_id = @id
+        WHERE 
+            mqd.master_questioner_id = (
+                SELECT master_questioner_checklist_id 
+                FROM trx_audit 
+                WHERE id = @id
+            )
+        ORDER BY mqd.order_no";
 
         var checklistData = (await conn.QueryAsync<ChecklistFlatItem>(checklistSql, new { id })).ToList();
 
         var mediaSql = @"
-            SELECT 
-                master_questioner_detail_id,
-                media_type,
-                media_path
-            FROM trx_audit_media
-            WHERE trx_audit_id = @id
-              AND master_questioner_detail_id IS NOT NULL";
+        SELECT 
+            master_questioner_detail_id,
+            media_type,
+            media_path
+        FROM trx_audit_media
+        WHERE trx_audit_id = @id
+          AND master_questioner_detail_id IS NOT NULL";
 
-         var mediaList = (await conn.QueryAsync<(string master_questioner_detail_id, string media_type, string media_path)>(mediaSql, new { id }))
-            .GroupBy(m => m.master_questioner_detail_id)
-            .ToDictionary(
-                g => g.Key,
-                g => g.Select(m => new MediaItem
-                {
-                    MediaType = m.media_type,
-                    MediaPath = $"https://epas.zarata.co.id{m.media_path}"
-                }).ToList()
-            );
+        var mediaList = (await conn.QueryAsync<(string master_questioner_detail_id, string media_type, string media_path)>(mediaSql, new { id }))
+           .GroupBy(m => m.master_questioner_detail_id)
+           .ToDictionary(
+               g => g.Key,
+               g => g.Select(m => new MediaItem
+               {
+                   MediaType = m.media_type,
+                   MediaPath = $"https://epas.zarata.co.id{m.media_path}"
+               }).ToList()
+           );
 
         audit.Elements = BuildHierarchy(checklistData, mediaList);
 
@@ -226,9 +227,44 @@ public class AuditController : Controller
         audit.MaxScore = maxScore;
         audit.FinalScore = maxScore > 0 ? totalScore / maxScore * 100 : 0;
 
+        var qqSql = @"
+    SELECT
+        nozzle_number AS NozzleNumber,
+        du_make AS DuMake,
+        du_serial_no AS DuSerialNo,
+        product AS Product,
+        mode AS Mode,
+        quantity_variation_with_measure AS QuantityVariationWithMeasure,
+        quantity_variation_in_percentage AS QuantityVariationInPercentage,
+        observed_density AS ObservedDensity,
+        observed_temp AS ObservedTemp,
+        observed_density_15_degree AS ObservedDensity15Degree,
+        reference_density_15_degree AS ReferenceDensity15Degree,
+        tank_number AS TankNumber,
+        density_variation AS DensityVariation
+    FROM trx_audit_qq
+    WHERE trx_audit_id = @id";
+
+        var qqCheckList = (await conn.QueryAsync<AuditQqCheckItem>(qqSql, new { id })).ToList();
+        audit.QqChecks = qqCheckList;
+
+        var finalMediaSql = @"
+        SELECT 
+            media_type,
+            media_path
+        FROM trx_audit_media
+        WHERE trx_audit_id = @id
+          AND type = 'FINAL'";
+
+        audit.FinalDocuments = (await conn.QueryAsync<(string media_type, string media_path)>(finalMediaSql, new { id }))
+            .Select(m => new MediaItem
+            {
+                MediaType = m.media_type,
+                MediaPath = $"https://epas.zarata.co.id{m.media_path}"
+            }).ToList();
+
         return View(audit);
     }
-
 
     private List<AuditChecklistNode> BuildHierarchy(List<ChecklistFlatItem> flatList, Dictionary<string, List<MediaItem>> mediaList)
     {
