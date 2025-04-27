@@ -15,6 +15,9 @@
         public decimal TotalScore { get; set; }
         public decimal MaxScore { get; set; }
         public decimal FinalScore { get; set; }
+        public string AuditType { get; set; }
+        public List<MediaItem> MediaNotes { get; set; } = new List<MediaItem>();
+
 
         public List<AuditChecklistNode> Elements { get; set; } = new(); // rekursif
 

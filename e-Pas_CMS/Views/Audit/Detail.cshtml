@@ -12,17 +12,10 @@
     <div class="alert alert-success">@TempData["Success"]</div>
 }
 
+<!-- Header Detail -->
 <h3 class="mb-4 fw-bold">Detail Hasil Audit</h3>
 
-<div class="mb-3">
-    <a href="#" class="text-decoration-none">Review Audit /</a>
-    <span class="text-primary fw-semibold">Detail hasil audit - @Model.ReportNo</span>
-</div>
-
-<div class="rounded p-3 mb-4 text-center fw-bold text-white fs-4" style="background-color: #10B981;">
-    @(Model.Status.ToUpper() == "PASS" ? "CERTIFIED" : Model.Status.ToUpper())
-</div>
-
+<!-- HEADER DETAIL -->
 <div class="row g-4 mb-5 p-4 bg-light rounded shadow-sm">
     <div class="col-md-4">
         <strong class="d-block">No. Report</strong>
@@ -54,13 +47,70 @@
     </div>
 </div>
 
-<ul class="list-unstyled">
-    @foreach (var node in Model.Elements)
+<!-- CATATAN AUDIT -->
+@if (Model.AuditType == "Mystery Audit" || Model.AuditType == "Mystery Guest")
+{
+    @if (!string.IsNullOrEmpty(Model.Notes) || (Model.MediaNotes != null && Model.MediaNotes.Any()))
     {
-        RenderChecklistNode(node, 0);
-    }
-</ul>
+        <div class="card p-4 mb-5 shadow-sm">
+            <h4 class="fw-bold mb-4">
+                @(Model.AuditType == "Mystery Guest" ? "Mystery Guest" : Model.AuditType == "Mystery Audit" ? "Mystery Audit" : "Catatan Audit")
+            </h4>
 
+
+            @* Teks Catatan *@
+            @if (!string.IsNullOrEmpty(Model.Notes))
+            {
+                <div class="border rounded p-3 bg-light mb-4">
+                    @Model.Notes
+                </div>
+            }
+
+            @* Gambar/Video Catatan *@
+            @if (Model.MediaNotes != null && Model.MediaNotes.Any())
+            {
+                <div class="row row-cols-1 row-cols-md-2 g-4">
+                    @foreach (var media in Model.MediaNotes)
+                    {
+                        <div class="col d-flex justify-content-center">
+                            <div class="card h-100 p-3 d-flex align-items-center justify-content-center">
+                                @if (media.MediaType?.ToUpper() == "VIDEO" || media.MediaPath.EndsWith(".mp4", StringComparison.OrdinalIgnoreCase))
+                                {
+                                    <video controls class="rounded shadow-sm" style="max-height:800px; height:auto; width:auto; max-width:100%;">
+                                        <source src="@media.MediaPath" type="video/mp4" />
+                                        Your browser does not support the video tag.
+                                    </video>
+                                }
+                                else
+                                {
+                                    <img src="@media.MediaPath" alt="Foto Catatan Audit" class="rounded shadow-sm" style="max-height:800px; height:auto; width:auto; max-width:100%;" />
+                                }
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+    }
+}
+
+
+<!-- CHECKLIST AUDIT -->
+@if (Model.AuditType == "Mystery Audit" || Model.AuditType == "Regular Audit" || Model.AuditType == "Basic Operational")
+{
+    @if (Model.Elements != null && Model.Elements.Any())
+    {
+        <h4 class="mt-5 fw-bold">Checklist Audit</h4>
+        <ul class="list-unstyled">
+            @foreach (var node in Model.Elements)
+            {
+                RenderChecklistNode(node, 0);
+            }
+        </ul>
+    }
+}
+
+<!-- Q&Q CHECK -->
 @if (Model.QqChecks != null && Model.QqChecks.Any())
 {
     <h4 class="mt-5 fw-bold">Q&Q Check</h4>
@@ -107,10 +157,10 @@
     </div>
 }
 
+<!-- BERITA ACARA -->
 @if (!string.IsNullOrEmpty(Model.Notes) || (Model.FinalDocuments != null && Model.FinalDocuments.Any()))
 {
     <div class="card p-4 mb-5 shadow-sm mt-5">
-        <!-- ⬅️ Tambahin mt-5 di sini bro -->
         <h4 class="fw-bold mb-4">Berita Acara</h4>
 
         @if (!string.IsNullOrEmpty(Model.Notes))
@@ -125,38 +175,39 @@
 
         @if (Model.FinalDocuments != null && Model.FinalDocuments.Any())
         {
-            <div class="mb-2 fw-semibold">
+            <div class="mb-2 fw-semibold mt-4">
                 Bukti Dokumen/Foto Berita Acara
             </div>
             <ul class="list-unstyled">
-                <li class="mb-2">
-                    <i class="bi bi-file-earmark-image text-primary"></i>
-                    @* PASANG DI SINI *@
-                    @if (Model.FinalDocuments?.Count == 1)
-                    {
-                        var doc = Model.FinalDocuments.First();
-                        <button type="button" class="btn btn-link ms-2 text-decoration-none p-0" onclick="showFinalMediaPopup('@doc.MediaType', '@doc.MediaPath')">
-                            Lampiran Foto/Dokumen
+                @foreach (var doc in Model.FinalDocuments)
+                {
+                    <li class="mb-2">
+                        <i class="bi bi-file-earmark-image text-primary"></i>
+                        <button type="button" class="btn btn-link text-decoration-none p-0" onclick="showFinalMediaPopup('@doc.MediaType', '@doc.MediaPath')">
+                            Lihat Lampiran
                         </button>
-                    }
-                    else if (Model.FinalDocuments?.Count > 1)
-                    {
-                        <button type="button" class="btn btn-link ms-2 text-decoration-none p-0" onclick='showFinalMediaPopup(@Html.Raw(JsonConvert.SerializeObject(Model.FinalDocuments)))'>
-                            Lampiran Foto/Dokumen
-                        </button>
-                    }
-                </li>
+                    </li>
+                }
             </ul>
         }
-
     </div>
 }
 
 <div class="text-end mt-5">
-    <button class="btn btn-primary rounded-pill px-4 py-2" data-bs-toggle="modal" data-bs-target="#confirmModal">
-        Setujui Laporan Audit
-    </button>
+    @if (Model.Status != null && Model.Status.ToUpper() != "VERIFIED")
+    {
+        <button class="btn btn-primary rounded-pill px-4 py-2" data-bs-toggle="modal" data-bs-target="#confirmModal">
+            Setujui Laporan Audit
+        </button>
+    }
+    else
+    {
+        <a asp-action="Index" class="btn btn-secondary rounded-pill px-4 py-2">
+            Back
+        </a>
+    }
 </div>
+
 
 <!-- Modal Konfirmasi -->
 <div class="modal fade" id="confirmModal" tabindex="-1" aria-labelledby="confirmModalLabel" aria-hidden="true">
@@ -423,6 +474,81 @@
             var myModal = new bootstrap.Modal(document.getElementById('mediaModal'));
             myModal.show();
         }
+
+                function showFinalMediaPopup(mediaType, mediaPath) {
+            const container = document.getElementById('mediaModalBody');
+            container.innerHTML = '';
+
+            let mediaList = [];
+
+            // Kalau mediaPath array (multi file)
+            if (Array.isArray(mediaPath)) {
+                mediaList = mediaPath;
+            } else {
+                // Kalau satuan, bungkus ke array
+                mediaList = [{
+                    MediaType: mediaType,
+                    MediaPath: mediaPath
+                }];
+            }
+
+            if (mediaList.length === 0) {
+                container.innerHTML = '<p class="text-muted">Tidak ada media tersedia.</p>';
+                return;
+            }
+
+            if (mediaList.length === 1) {
+                const media = mediaList[0];
+                if (media.MediaType.toUpperCase() === 'IMAGE' || media.MediaPath.endsWith('.jpg') || media.MediaPath.endsWith('.jpeg') || media.MediaPath.endsWith('.png')) {
+                    const img = document.createElement('img');
+                    img.src = media.MediaPath;
+                    img.alt = "Lampiran Gambar";
+                    img.className = 'img-fluid rounded shadow-sm';
+                    img.style.maxHeight = "80vh";
+                    img.style.objectFit = "contain";
+                    container.appendChild(img);
+                } else if (media.MediaType.toUpperCase() === 'VIDEO' || media.MediaPath.endsWith('.mp4')) {
+                    const video = document.createElement('video');
+                    video.src = media.MediaPath;
+                    video.controls = true;
+                    video.className = 'img-fluid rounded shadow-sm';
+                    video.style.maxHeight = "80vh";
+                    video.style.objectFit = "contain";
+                    container.appendChild(video);
+                }
+            } else {
+                let carouselId = 'finalMediaCarousel';
+                container.innerHTML = `
+                    <div id="${carouselId}" class="carousel slide" data-bs-ride="carousel">
+                        <div class="carousel-inner">
+                            ${mediaList.map((media, index) => `
+                                <div class="carousel-item ${index === 0 ? 'active' : ''}">
+                                    ${media.MediaType.toUpperCase() === 'IMAGE' || media.MediaPath.endsWith('.jpg') || media.MediaPath.endsWith('.jpeg') || media.MediaPath.endsWith('.png')
+                                        ? `<img src="${media.MediaPath}" class="d-block rounded shadow-sm mx-auto" style="max-height:80vh; object-fit:contain;" alt="Lampiran">`
+                                        : `<video class="d-block rounded shadow-sm mx-auto" style="max-height:80vh; object-fit:contain;" controls>
+                                            <source src="${media.MediaPath}" type="video/mp4">
+                                           Your browser does not support the video tag.
+                                           </video>`
+                                    }
+                                </div>
+                            `).join('')}
+                        </div>
+                        <button class="carousel-control-prev" type="button" data-bs-target="#${carouselId}" data-bs-slide="prev">
+                            <span class="carousel-control-prev-icon" aria-hidden="true"></span>
+                            <span class="visually-hidden">Previous</span>
+                        </button>
+                        <button class="carousel-control-next" type="button" data-bs-target="#${carouselId}" data-bs-slide="next">
+                            <span class="carousel-control-next-icon" aria-hidden="true"></span>
+                            <span class="visually-hidden">Next</span>
+                        </button>
+                    </div>
+                `;
+            }
+
+            var myModal = new bootstrap.Modal(document.getElementById('mediaModal'));
+            myModal.show();
+        }
+
 
     </script>
 }

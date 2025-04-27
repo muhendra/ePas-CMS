@@ -151,11 +151,32 @@ public class AuditController : Controller
                                Provinsi = s.province_name,
                                Kota = s.city_name,
                                Alamat = s.address,
-                               Notes = ta.audit_mom_final // <<=== Tambahin ambil catatan disini
+                               Notes = ta.audit_mom_intro,
+                               AuditType = ta.audit_type
                            }).FirstOrDefaultAsync();
 
         if (audit == null) return NotFound();
 
+        // --- Ambil media untuk Catatan Audit (QUESTION)
+        var mediaQuestionSql = @"
+        SELECT tam.media_path, tam.media_type
+        FROM trx_audit_media tam
+        WHERE tam.trx_audit_id = @id
+          AND tam.type = 'QUESTION'
+    ";
+
+        var mediaQuestionList = (await conn.QueryAsync<(string media_path, string media_type)>(mediaQuestionSql, new { id })).ToList();
+
+        if ((audit.AuditType == "Mystery Audit" || audit.AuditType == "Mystery Guest") && mediaQuestionList.Any())
+        {
+            audit.MediaNotes = mediaQuestionList.Select(m => new MediaItem
+            {
+                MediaType = m.media_type,
+                MediaPath = $"https://epas.zarata.co.id{m.media_path}"
+            }).ToList();
+        }
+
+        // --- Ambil checklist
         var checklistSql = @"
         SELECT 
             mqd.id,
@@ -176,10 +197,12 @@ public class AuditController : Controller
                 FROM trx_audit 
                 WHERE id = @id
             )
-        ORDER BY mqd.order_no";
+        ORDER BY mqd.order_no
+    ";
 
         var checklistData = (await conn.QueryAsync<ChecklistFlatItem>(checklistSql, new { id })).ToList();
 
+        // --- Ambil media per checklist node
         var mediaSql = @"
         SELECT 
             master_questioner_detail_id,
@@ -187,23 +210,26 @@ public class AuditController : Controller
             media_path
         FROM trx_audit_media
         WHERE trx_audit_id = @id
-          AND master_questioner_detail_id IS NOT NULL";
+          AND master_questioner_detail_id IS NOT NULL
+    ";
 
         var mediaList = (await conn.QueryAsync<(string master_questioner_detail_id, string media_type, string media_path)>(mediaSql, new { id }))
-           .GroupBy(m => m.master_questioner_detail_id)
-           .ToDictionary(
-               g => g.Key,
-               g => g.Select(m => new MediaItem
-               {
-                   MediaType = m.media_type,
-                   MediaPath = $"https://epas.zarata.co.id{m.media_path}"
-               }).ToList()
-           );
+            .GroupBy(m => m.master_questioner_detail_id)
+            .ToDictionary(
+                g => g.Key,
+                g => g.Select(m => new MediaItem
+                {
+                    MediaType = m.media_type,
+                    MediaPath = $"https://epas.zarata.co.id{m.media_path}"
+                }).ToList()
+            );
 
         audit.Elements = BuildHierarchy(checklistData, mediaList);
 
+        // --- Hitung skor audit
         var questions = checklistData.Where(x => x.type == "QUESTION" && !string.IsNullOrWhiteSpace(x.score_input));
-        decimal totalScore = 0, maxScore = 0;
+        decimal totalScore = 0;
+        decimal maxScore = 0;
 
         foreach (var q in questions)
         {
@@ -227,34 +253,38 @@ public class AuditController : Controller
         audit.MaxScore = maxScore;
         audit.FinalScore = maxScore > 0 ? totalScore / maxScore * 100 : 0;
 
+        // --- Ambil data Q&Q
         var qqSql = @"
-    SELECT
-        nozzle_number AS NozzleNumber,
-        du_make AS DuMake,
-        du_serial_no AS DuSerialNo,
-        product AS Product,
-        mode AS Mode,
-        quantity_variation_with_measure AS QuantityVariationWithMeasure,
-        quantity_variation_in_percentage AS QuantityVariationInPercentage,
-        observed_density AS ObservedDensity,
-        observed_temp AS ObservedTemp,
-        observed_density_15_degree AS ObservedDensity15Degree,
-        reference_density_15_degree AS ReferenceDensity15Degree,
-        tank_number AS TankNumber,
-        density_variation AS DensityVariation
-    FROM trx_audit_qq
-    WHERE trx_audit_id = @id";
+        SELECT
+            nozzle_number AS NozzleNumber,
+            du_make AS DuMake,
+            du_serial_no AS DuSerialNo,
+            product AS Product,
+            mode AS Mode,
+            quantity_variation_with_measure AS QuantityVariationWithMeasure,
+            quantity_variation_in_percentage AS QuantityVariationInPercentage,
+            observed_density AS ObservedDensity,
+            observed_temp AS ObservedTemp,
+            observed_density_15_degree AS ObservedDensity15Degree,
+            reference_density_15_degree AS ReferenceDensity15Degree,
+            tank_number AS TankNumber,
+            density_variation AS DensityVariation
+        FROM trx_audit_qq
+        WHERE trx_audit_id = @id
+    ";
 
         var qqCheckList = (await conn.QueryAsync<AuditQqCheckItem>(qqSql, new { id })).ToList();
         audit.QqChecks = qqCheckList;
 
+        // --- Ambil media FINAL (Berita Acara)
         var finalMediaSql = @"
         SELECT 
             media_type,
             media_path
         FROM trx_audit_media
         WHERE trx_audit_id = @id
-          AND type = 'FINAL'";
+          AND type = 'FINAL'
+    ";
 
         audit.FinalDocuments = (await conn.QueryAsync<(string media_type, string media_path)>(finalMediaSql, new { id }))
             .Select(m => new MediaItem
@@ -265,6 +295,7 @@ public class AuditController : Controller
 
         return View(audit);
     }
+
 
     private List<AuditChecklistNode> BuildHierarchy(List<ChecklistFlatItem> flatList, Dictionary<string, List<MediaItem>> mediaList)
     {
