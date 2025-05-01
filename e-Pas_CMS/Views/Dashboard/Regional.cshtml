@@ -1,0 +1,79 @@
+﻿@model List<e_Pas_CMS.ViewModels.SpbuViewModel>
+@{
+    ViewBag.Title = "Dashboard Audit Regional";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+}
+
+<div class="container-fluid px-4 py-5">
+    <h4 class="fw-bold mb-4">
+        Audit SPBU Berdasarkan Regional @if (ViewBag.SelectedRegion != null)
+        {
+            <span class="text-primary">(@ViewBag.SelectedRegion)</span>
+        }
+    </h4>
+
+    <form method="get" class="row g-3 mb-4">
+        <div class="col-md-6">
+            <select name="region" class="form-select">
+                <option value="">-- Semua Regional --</option>
+                @foreach (var reg in (List<string>)ViewBag.RegionList)
+                {
+                    if (ViewBag.SelectedRegion == reg)
+                    {
+                        <option value="@reg" selected>@reg</option>
+                    }
+                    else
+                    {
+                        <option value="@reg">@reg</option>
+                    }
+                }
+            </select>
+        </div>
+        <div class="col-md-3">
+            <button type="submit" class="btn btn-primary w-100">Filter</button>
+        </div>
+    </form>
+
+    <div class="table-responsive">
+        <table class="table table-striped table-hover text-nowrap align-middle text-center">
+            <thead class="table-light">
+                <tr>
+                    <th>No</th>
+                    <th>No. SPBU</th>
+                    <th>Rayon</th>
+                    <th>Provinsi</th>
+                    <th>Kabupaten/Kota</th>
+                    <th>Alamat</th>
+                    <th>Tipe SPBU</th>
+                    <th>Tahun</th>
+                    <th>Audit</th>
+                    <th>Tipe Audit</th>
+                    <th>Tanggal Audit</th>
+                    <th>Score</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                @for (int i = 0; i < Model.Count; i++)
+                {
+                    var item = Model[i];
+                    <tr>
+                        <td>@(i + 1)</td>
+                        <td>@item.NoSpbu</td>
+                        <td>@item.Rayon</td>
+                        <td>@item.Provinsi</td>
+                        <td>@item.Kota</td>
+                        <td>@item.Alamat</td>
+                        <td>@item.TipeSpbu</td>
+                        <td>@item.Tahun</td>
+                        <td>@item.Audit</td>
+                        <td>@item.Type</td>
+                        <td>@item.TanggalSubmit.ToString("dd/MM/yyyy HH:mm")</td>
+                        <td>@item.Score</td>
+                        <td class="fw-bold text-@((item.Status == "PASS") ? "success" : "danger")">@item.Status</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>

@@ -24,7 +24,7 @@ namespace e_Pas_CMS.Controllers
         {
             // Redirect kalau udah login
             if (User.Identity != null && User.Identity.IsAuthenticated)
-                return RedirectToAction("Index", "Home");
+                return RedirectToAction("Index", "Dashboard");
 
             return View();
         }
@@ -61,7 +61,7 @@ namespace e_Pas_CMS.Controllers
             HttpContext.Session.SetString("UserId", user.id);
             HttpContext.Session.SetString("UserName", user.name);
 
-            return RedirectToAction("Index", "Home");
+            return RedirectToAction("Index", "Dashboard");
         }
 
         public async Task<IActionResult> Logout()

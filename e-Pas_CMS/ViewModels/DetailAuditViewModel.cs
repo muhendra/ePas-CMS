@@ -28,16 +28,17 @@
 
     }
 
-    public class UpdateScoreRequest
-    {
-        public string TacId { get; set; }
-        public string ScoreInput { get; set; }
-    }
-
     public class MediaItem
     {
         public string MediaType { get; set; } // "IMAGE" or "VIDEO"
         public string MediaPath { get; set; }
+    }
+
+    public class UpdateScoreRequest
+    {
+        public string NodeId { get; set; }
+        public string AuditId { get; set; }
+        public string Score { get; set; }
     }
 
 }

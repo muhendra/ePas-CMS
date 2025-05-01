@@ -1,0 +1,63 @@
+﻿@model List<e_Pas_CMS.ViewModels.SpbuSimpleViewModel>
+@{
+    ViewBag.Title = "Data Master SPBU";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+}
+
+<form method="get" class="row mb-4">
+    <div class="col-md-6">
+        <input type="text" name="search" class="form-control" placeholder="Cari SPBU, provinsi, kota, pemilik, pengelola..."
+               value="@ViewBag.Search" />
+    </div>
+    <div class="col-md-2">
+        <button type="submit" class="btn btn-primary w-100">Cari</button>
+    </div>
+</form>
+
+
+<div class="container-fluid px-4 py-5">
+    <h4 class="fw-bold mb-4">Data Master SPBU</h4>
+
+    <div class="table-responsive">
+        <table class="table table-striped table-hover text-nowrap align-middle">
+            <thead class="table-light text-center">
+                <tr>
+                    <th>No</th>
+                    <th>No. SPBU</th>
+                    <th>Region</th>
+                    <th>Provinsi</th>
+                    <th>Kab/Kota</th>
+                    <th>Alamat</th>
+                    <th>Pemilik</th>
+                    <th>Pengelola</th>
+                    <th>Jenis Pemilik</th>
+                    <th>Tipe</th>
+                    <th>Level</th>
+                    <th>Kontak</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                @for (int i = 0; i < Model.Count; i++)
+                {
+                    var item = Model[i];
+                    <tr class="text-center">
+                        <td>@(i + 1)</td>
+                        <td>@item.SpbuNo</td>
+                        <td>@item.Region</td>
+                        <td>@item.Provinsi</td>
+                        <td>@item.Kota</td>
+                        <td>@item.Alamat</td>
+                        <td>@item.Pemilik</td>
+                        <td>@item.Pengelola</td>
+                        <td>@item.JenisPemilik</td>
+                        <td>@item.Tipe</td>
+                        <td>@item.Level</td>
+                        <td>@item.Kontak</td>
+                        <td class="fw-bold text-@((item.Status == "ACTIVE") ? "success" : "danger")">@item.Status</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>

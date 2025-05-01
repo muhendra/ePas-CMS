@@ -549,6 +549,37 @@
             myModal.show();
         }
 
+            function updateScore(nodeId) {
+            const selectedBtn = document.querySelector(`.option-btn[data-node-id="${nodeId}"].active`);
+            if (!selectedBtn) {
+                alert("Pilih dulu nilainya bro.");
+                return;
+            }
+
+            const score = selectedBtn.getAttribute("data-score");
+
+            fetch(`/Audit/UpdateScore`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'RequestVerificationToken': document.querySelector('input[name="__RequestVerificationToken"]')?.value
+                },
+                body: JSON.stringify({
+                    nodeId: nodeId,
+                    score: score,
+                    auditId: '@Context.Request.RouteValues["id"]'
+                })
+            })
+            .then(response => {
+                if (response.ok) {
+                    alert("Berhasil update nilai!");
+                    location.reload(); // reload biar skor langsung kelihatan update
+                } else {
+                    alert("Gagal update nilai!");
+                }
+            });
+        }
+
 
     </script>
 }
@@ -619,7 +650,10 @@
                                 </div>
                                 <div>
                                     <button class="btn btn-light btn-sm me-2">Batal</button>
-                                    <button class="btn btn-primary btn-sm">Update Nilai</button>
+                                    <button class="btn btn-primary btn-sm"
+                                            onclick="updateScore('@node.Id')">
+                                        Update Nilai
+                                    </button>
                                 </div>
                             }
 

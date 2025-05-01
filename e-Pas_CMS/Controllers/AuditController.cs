@@ -338,4 +338,27 @@ public class AuditController : Controller
         TempData["Success"] = "Laporan audit telah disetujui.";
         return RedirectToAction("Detail", new { id });
     }
+
+    [HttpPost]
+    public async Task<IActionResult> UpdateScore([FromBody] UpdateScoreRequest request)
+    {
+        using var conn = _context.Database.GetDbConnection();
+        if (conn.State != System.Data.ConnectionState.Open)
+            await conn.OpenAsync();
+
+        var sql = @"
+        UPDATE trx_audit_checklist
+        SET score_input = @score
+        WHERE master_questioner_detail_id = @nodeId
+          AND trx_audit_id = @auditId";
+
+        var affected = await conn.ExecuteAsync(sql, new
+        {
+            score = request.Score,
+            nodeId = request.NodeId,
+            auditId = request.AuditId
+        });
+
+        return affected > 0 ? Ok() : BadRequest("Tidak berhasil update");
+    }
 }
