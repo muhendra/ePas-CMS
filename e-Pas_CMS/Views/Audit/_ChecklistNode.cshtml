@@ -1,15 +1,15 @@
 ﻿@using e_Pas_CMS.ViewModels
+@using Newtonsoft.Json
 @model AuditChecklistNode
 
 @{
-    bool hasChildren = Model.Children != null && Model.Children.Any();
-    bool isQuestion = Model.Type == "QUESTION";
+    var hasChildren = Model.Children?.Any() ?? false;
+    var isQuestion = Model.Type == "QUESTION";
     var collapseId = $"collapse-{Model.Id}";
-    decimal? score = Model.ScoreAF ?? 0;
-    decimal? scoreX = Model.ScoreX ?? score;
+    var displayScore = Model.ScoreX ?? Model.ScoreAF ?? 0m;
 }
 
-<li class="mb-3">
+<li id="node-@Model.Id" class="mb-3" data-weight="@(Model.Weight ?? 0)">
     <div class="p-3 border bg-light rounded shadow-sm">
         <div class="d-flex justify-content-between align-items-center">
             <a class="text-decoration-none fw-bold d-flex align-items-center gap-2"
@@ -20,26 +20,26 @@
                aria-controls="@collapseId">
                 <i class="bi bi-chevron-down rotate-arrow"></i> @Model.Title
             </a>
-
-            @if (scoreX.HasValue)
-            {
-                <span class="text-end text-muted fw-normal">Skor: <strong>@scoreX.Value.ToString("0.00")</strong></span>
-            }
+            <span class="text-end text-muted fw-normal score-x" data-node-id="@Model.Id">
+                Skor: <strong>@displayScore.ToString("0.00")</strong>
+            </span>
         </div>
 
+        @* Deskripsi *@
         @if (!string.IsNullOrWhiteSpace(Model.Description))
         {
             <div class="text-muted mt-1">@Model.Description</div>
         }
 
+        @* Opsi Jawaban (QUESTION) *@
         @if (isQuestion)
         {
             <div class="mt-3">
                 <div class="mb-2"><strong>Jawaban:</strong></div>
-                <div class="d-flex gap-2 flex-wrap">
+                <div class="option-group d-flex gap-2 flex-wrap" data-node-id="@Model.Id">
                     @foreach (var opt in new[] { "A", "B", "C", "D", "E", "F" })
                     {
-                        var value = opt switch
+                        var val = opt switch
                         {
                             "A" => 1.00m,
                             "B" => 0.80m,
@@ -47,39 +47,45 @@
                             "D" => 0.40m,
                             "E" => 0.20m,
                             "F" => 0.00m,
-                            _ => 0.00m
+                            _ => 0m
                         };
-
-                        bool active = Model.ScoreInput == opt;
+                        var active = Model.ScoreInput == opt;
                         <button type="button"
-                                class="btn option-btn @(active ? "btn-success text-white" : "btn-outline-secondary")"
+                                class="btn option-btn btn-sm @(active ? "active bg-success text-white":"btn-outline-secondary")"
                                 data-node-id="@Model.Id"
                                 data-score="@opt">
-                            @($"{opt} ({value:0.00})")
+                            @($"{opt} ({val:0.00})")
                         </button>
                     }
                 </div>
 
                 <div class="mt-2">
-                    <button class="btn btn-sm btn-secondary me-2 cancel-score-btn">Batal</button>
+                    <button class="btn btn-sm btn-secondary me-2 cancel-score-btn"
+                            data-node-id="@Model.Id">
+                        Batal
+                    </button>
                     <button class="btn btn-sm btn-primary update-score-btn"
                             data-node-id="@Model.Id"
                             data-audit-id="@ViewBag.AuditId">
                         Update Nilai
                     </button>
                 </div>
-
-                @if (!string.IsNullOrWhiteSpace(Model.media_path))
-                {
-                    <div class="mt-2">
-                        <a class="text-decoration-none text-primary" target="_blank" href="@Model.media_path">
-                            <i class="bi bi-link-45deg"></i> Lihat Dokumentasi Foto / Video
-                        </a>
-                    </div>
-                }
             </div>
         }
 
+        @* Media Items per Node *@
+        @if (Model.MediaItems?.Any() ?? false)
+        {
+            <div class="mt-3">
+                <button type="button"
+                        class="btn btn-outline-primary btn-sm"
+                        onclick='showMediaPopup(@Html.Raw(JsonConvert.SerializeObject(Model.MediaItems)))'>
+                    <i class="bi bi-image me-1"></i> Lihat Dokumentasi Foto / Video
+                </button>
+            </div>
+        }
+
+        @* Children *@
         @if (hasChildren)
         {
             <div class="collapse mt-3" id="@collapseId">

@@ -1,7 +1,4 @@
-﻿@model e_Pas_CMS.ViewModels.LoginViewModel
-
-@{
-    ViewData["Title"] = "Login";
+﻿@{
     Layout = null;
 }
 
@@ -9,85 +6,132 @@
 <html lang="id">
 <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Login - E-PAS PERTAMINA</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css" rel="stylesheet">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" />
     <style>
-        body {
-            background: linear-gradient(to right, #d1001f, #0072bc);
+        body, html {
+            height: 100%;
+            margin: 0;
             font-family: 'Segoe UI', sans-serif;
         }
 
-        .card-login {
-            background-color: #ffffff;
-            border-radius: 12px;
-            padding: 2rem;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
-            max-width: 420px;
-            width: 100%;
+        .login-container {
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
         }
 
-        .logo-epas {
-            font-size: 1.8rem;
-            font-weight: bold;
-            color: #d1001f;
+        .login-left {
+            background-color: #ffc700;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 3rem;
         }
 
-        .btn-gradient {
-            background: linear-gradient(to right, #d1001f, #0072bc);
-            color: white;
-            border: none;
-            border-radius: 8px;
-            transition: all 0.3s ease-in-out;
-        }
-
-            .btn-gradient:hover {
-                opacity: 0.9;
-                transform: scale(1.02);
+            .login-left .logo img {
+                max-height: 120px;
+                margin-bottom: 2rem;
             }
+
+        .form-box {
+            width: 100%;
+            max-width: 360px;
+        }
+
+            .form-box h2 {
+                font-size: 1.3rem;
+                font-weight: 600;
+                margin-bottom: 1.5rem;
+            }
+
+        .form-control {
+            border-radius: 10px;
+            border: none;
+            margin-bottom: 1rem;
+            padding: 0.85rem 1rem;
+            font-size: 1rem;
+            box-shadow: 0 0 0 1px #ced4da;
+        }
+
+        .btn-login {
+            background-color: #007bff;
+            color: #fff;
+            font-weight: 600;
+            padding: 0.75rem;
+            font-size: 1rem;
+            border-radius: 999px;
+            border: none;
+        }
+
+            .btn-login:hover {
+                background-color: #0069d9;
+            }
+
+        .forgot-password {
+            font-size: 0.9rem;
+            text-align: right;
+            margin-bottom: 1.5rem;
+        }
+
+        .login-right {
+            background-color: #f8f9fa;
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 2rem;
+        }
+
+            .login-right img {
+                max-width: 500px;
+                width: 100%;
+                height: auto;
+            }
+
+        @@media (max-width: 768px) {
+            .login-container {
+                flex-direction: column;
+            }
+
+            .login-left, .login-right {
+                width: 100%;
+                height: auto;
+            }
+
+                .login-right img {
+                    max-width: 80%;
+                }
+        }
     </style>
 </head>
 <body>
-    <div class="container d-flex justify-content-center align-items-center vh-100">
-        <div class="card-login">
-            <div class="text-center mb-4">
-                <div class="logo-epas">E-PAS PERTAMINA</div>
-                <div class="text-muted small">Silakan login untuk melanjutkan</div>
+    <div class="login-container">
+        <!-- Kiri: Form -->
+        <div class="login-left">
+            <div class="logo">
+                <img src="@Url.Content("~/images/logo.png")" alt="Logo E-PAS Pertamina" />
             </div>
-
-            <form asp-controller="Auth" asp-action="Login" method="post" novalidate>
-                @* Menampilkan error umum *@
-                <div asp-validation-summary="All" class="text-danger small mb-3"></div>
-
-                <div class="mb-4">
-                    <label class="form-label text-uppercase small text-secondary">Username</label>
-                    <div class="input-group">
-                        <span class="input-group-text bg-light"><i class="bi bi-person"></i></span>
-                        <input asp-for="Username" class="form-control" placeholder="username" />
+            <div class="form-box text-start">
+                <h2>Salam,<br />Silakan login ke akun kamu</h2>
+                <form method="post" action="/Auth/Login">
+                    <input type="text" name="username" class="form-control" placeholder="Email" required />
+                    <input type="password" name="password" class="form-control" placeholder="Password" required />
+                    <div class="forgot-password">
+                        <a href="#">Lupa kata sandi</a>
                     </div>
-                    <span asp-validation-for="Username" class="text-danger small"></span>
-                </div>
+                    <button type="submit" class="btn btn-login w-100">Login</button>
+                </form>
+            </div>
+        </div>
 
-                <div class="mb-4">
-                    <label class="form-label text-uppercase small text-secondary">Password</label>
-                    <div class="input-group">
-                        <span class="input-group-text bg-light"><i class="bi bi-lock"></i></span>
-                        <input asp-for="Password" type="password" class="form-control" placeholder="••••••••" />
-                    </div>
-                    <span asp-validation-for="Password" class="text-danger small"></span>
-                </div>
-
-                <button type="submit" class="btn btn-gradient btn-lg w-100 shadow-sm">
-                    <i class="bi bi-box-arrow-in-right me-2"></i> Masuk
-                </button>
-            </form>
+        <!-- Kanan: Ilustrasi -->
+        <div class="login-right">
+            <img src="@Url.Content("~/images/orang-duduk.png")" alt="Ilustrasi Orang dengan Laptop" />
         </div>
     </div>
-
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/jquery@3.6.0/dist/jquery.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/jquery-validation@1.19.5/dist/jquery.validate.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/jquery-validation-unobtrusive@3.2.12/dist/jquery.validate.unobtrusive.min.js"></script>
 </body>
 </html>

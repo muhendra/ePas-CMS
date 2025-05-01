@@ -1,11 +1,13 @@
 ﻿@using e_Pas_CMS.ViewModels
-@using Newtonsoft
 @using Newtonsoft.Json
 @model DetailAuditViewModel
 
 @{
     ViewData["Title"] = "Detail Hasil Audit";
+    bool isVerified = Model.Status == "VERIFIED";
 }
+
+@Html.AntiForgeryToken()
 
 @if (TempData["Success"] != null)
 {
@@ -57,7 +59,6 @@
                 @(Model.AuditType == "Mystery Guest" ? "Mystery Guest" : Model.AuditType == "Mystery Audit" ? "Mystery Audit" : "Catatan Audit")
             </h4>
 
-
             @* Teks Catatan *@
             @if (!string.IsNullOrEmpty(Model.Notes))
             {
@@ -76,14 +77,14 @@
                             <div class="card h-100 p-3 d-flex align-items-center justify-content-center">
                                 @if (media.MediaType?.ToUpper() == "VIDEO" || media.MediaPath.EndsWith(".mp4", StringComparison.OrdinalIgnoreCase))
                                 {
-                                    <video controls class="rounded shadow-sm" style="max-height:800px; height:auto; width:auto; max-width:100%;">
+                                    <video controls class="rounded shadow-sm" style="max-height:800px; width:auto; max-width:100%;">
                                         <source src="@media.MediaPath" type="video/mp4" />
                                         Your browser does not support the video tag.
                                     </video>
                                 }
                                 else
                                 {
-                                    <img src="@media.MediaPath" alt="Foto Catatan Audit" class="rounded shadow-sm" style="max-height:800px; height:auto; width:auto; max-width:100%;" />
+                                    <img src="@media.MediaPath" alt="Foto Catatan Audit" class="rounded shadow-sm" style="max-height:800px; width:auto; max-width:100%;" />
                                 }
                             </div>
                         </div>
@@ -94,7 +95,6 @@
     }
 }
 
-
 <!-- CHECKLIST AUDIT -->
 @if (Model.AuditType == "Mystery Audit" || Model.AuditType == "Regular Audit" || Model.AuditType == "Basic Operational")
 {
@@ -104,8 +104,9 @@
         <ul class="list-unstyled">
             @foreach (var node in Model.Elements)
             {
-                RenderChecklistNode(node, 0);
+                RenderChecklistNode(node, 0, isVerified);
             }
+
         </ul>
     }
 }
@@ -208,7 +209,6 @@
     }
 </div>
 
-
 <!-- Modal Konfirmasi -->
 <div class="modal fade" id="confirmModal" tabindex="-1" aria-labelledby="confirmModalLabel" aria-hidden="true">
     <div class="modal-dialog">
@@ -239,42 +239,39 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Tutup"></button>
             </div>
             <div class="modal-body" id="mediaModalBody">
-                <!-- Media akan dimasukkan disini -->
+                <!-- Media akan dimasukkan di sini -->
             </div>
         </div>
     </div>
 </div>
 
 @section Styles {
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css" />
     <style>
         .rotate-arrow {
-            transition: transform 0.3s ease;
+            transition: transform .3s ease;
         }
-
-            .rotate-arrow.rotate {
-                transform: rotate(90deg);
-            }
+        .rotate-arrow.rotate {
+            transform: rotate(90deg);
+        }
 
         .option-btn:hover {
             background-color: #e0f2f1 !important;
             border-color: #10b981;
             color: #0f766e;
         }
-
-        .option-btn.active:hover {
+        .option-btn.active, .option-btn.active:hover {
             background-color: #059669 !important;
-            color: white;
+            color: #fff;
         }
 
         .carousel-item img, .carousel-item video {
-            max-height: 70vh; /* 70% dari tinggi layar */
+            max-height: 70vh;
             width: auto;
             height: auto;
             object-fit: contain;
             display: block;
-            margin-left: auto;
-            margin-right: auto;
+            margin: 0 auto;
         }
 
         .modal-body {
@@ -323,35 +320,75 @@
 
 @section Scripts {
     <script>
-        document.addEventListener('DOMContentLoaded', function () {
-            // Rotasi panah collapse
-            document.querySelectorAll('[data-bs-toggle="collapse"]').forEach(function (toggle) {
-                var targetId = toggle.getAttribute('href') || toggle.dataset.bsTarget;
-                var target = document.querySelector(targetId);
-                const arrow = toggle.querySelector('.rotate-arrow');
-                if (!target || !arrow) return;
-
-                target.addEventListener('show.bs.collapse', function () {
-                    arrow.classList.add('rotate');
-                });
-                target.addEventListener('hide.bs.collapse', function () {
-                    arrow.classList.remove('rotate');
-                });
+        $(function() {
+            // Toggle pilihan jawaban
+            $(document).on('click', '.option-btn', function() {
+                var nodeId = $(this).data('node-id');
+                $('.option-btn[data-node-id="'+nodeId+'"]')
+                    .removeClass('active bg-success text-white')
+                    .addClass('btn-outline-secondary');
+                $(this)
+                    .removeClass('btn-outline-secondary')
+                    .addClass('active bg-success text-white');
             });
 
-            // Highlight opsi nilai terpilih
-            document.querySelectorAll('.option-btn').forEach(function (btn) {
-                btn.addEventListener('click', function () {
-                    const nodeId = this.dataset.nodeId;
-                    document.querySelectorAll('.option-btn[data-node-id="' + nodeId + '"]').forEach(function (el) {
-                        el.classList.remove('active', 'bg-success', 'text-white');
+            // Hitung ulang satu node (rekursif)
+            function recalcNode($li) {
+                var nodeId = $li.attr('id').replace('node-','');
+                var weight = parseFloat($li.attr('data-weight')) || 0;
+                var scoreX = 0;
+                var map = { A:1, B:0.8, C:0.6, D:0.4, E:0.2, F:0 };
+                var $grp = $li.find('.option-group[data-node-id="'+nodeId+'"]');
+                if ($grp.length) {
+                    var letter = $grp.find('.option-btn.active').data('score') || '';
+                    scoreX = (map[letter] || 0) * weight;
+                } else {
+                    $li.find('> .card > .collapse > .card-body > ul > li').each(function() {
+                        scoreX += recalcNode($(this));
                     });
-                    this.classList.add('active', 'bg-success', 'text-white');
+                }
+                $li.find('.score-x[data-node-id="'+nodeId+'"] strong').text(scoreX.toFixed(2));
+                return scoreX;
+            }
+
+            // Hitung ulang semua root nodes
+            function recalcAll() {
+                $('ul.list-unstyled > li[id^="node-"]').each(function() {
+                    recalcNode($(this));
+                });
+            }
+
+            // AJAX update + recalc
+            $(document).on('click', '.update-score-btn', function() {
+                var nodeId  = $(this).data('node-id');
+                var auditId = $(this).data('audit-id');
+                var score   = $('.option-btn[data-node-id="'+nodeId+'"].active').data('score');
+                var token   = $('input[name="__RequestVerificationToken"]').val();
+                if (!score) return alert('Pilih jawaban dulu!');
+                fetch('/Audit/UpdateScore', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'RequestVerificationToken': token
+                    },
+                    body: JSON.stringify({ NodeId: nodeId, AuditId: auditId, Score: score })
+                })
+                .then(async res => {
+                    if (!res.ok) throw new Error(await res.text() || res.statusText);
+                })
+                .then(() => recalcAll())
+                .catch(err => {
+                    console.error(err);
+                    alert('Gagal update nilai: ' + err.message);
                 });
             });
+
+            // Inisialisasi pada load
+            recalcAll();
         });
 
-                function showMediaPopup(mediaItems) {
+        // Show carousel/modal untuk MediaNotes atau node media
+        function showMediaPopup(mediaItems) {
             const container = document.getElementById('mediaModalBody');
             container.innerHTML = '';
 
@@ -359,13 +396,13 @@
                 container.innerHTML = '<p class="text-muted">Tidak ada media tersedia.</p>';
             } else if (mediaItems.length === 1) {
                 const item = mediaItems[0];
-                if (item.MediaType === 'IMAGE') {
+                if (item.MediaType.toUpperCase() === 'IMAGE') {
                     const img = document.createElement('img');
                     img.src = item.MediaPath;
                     img.alt = "Gambar Dokumentasi";
                     img.className = 'img-fluid mb-3 rounded shadow-sm';
                     container.appendChild(img);
-                } else if (item.MediaType === 'VIDEO') {
+                } else {
                     const video = document.createElement('video');
                     video.src = item.MediaPath;
                     video.controls = true;
@@ -373,312 +410,156 @@
                     container.appendChild(video);
                 }
             } else {
-                // Build Carousel dengan Progress Indicator
                 let carouselId = 'mediaCarousel';
                 container.innerHTML = `
                     <div id="${carouselId}" class="carousel slide" data-bs-ride="carousel">
                         <div class="carousel-indicators">
-                            ${mediaItems.map((item, index) => `
-                                <button type="button" data-bs-target="#${carouselId}" data-bs-slide-to="${index}" class="${index === 0 ? 'active' : ''}" aria-current="${index === 0 ? 'true' : 'false'}" aria-label="Slide ${index + 1}"></button>
-                            `).join('')}
+                            ${mediaItems.map((_, i) => `<button type="button" data-bs-target="#${carouselId}" data-bs-slide-to="${i}" class="${i===0?'active':''}" aria-label="Slide ${i+1}"></button>`).join('')}
                         </div>
                         <div class="carousel-inner">
-                            ${mediaItems.map((item, index) => `
-                                <div class="carousel-item ${index === 0 ? 'active' : ''}">
-                                    ${item.MediaType === 'IMAGE' ? `
-                                        <img src="${item.MediaPath}" class="d-block w-100 img-fluid rounded shadow-sm" alt="Gambar">
-                                    ` : `
-                                        <video class="d-block w-100 img-fluid rounded shadow-sm" controls>
-                                            <source src="${item.MediaPath}" type="video/mp4">
-                                            Your browser does not support the video tag.
-                                        </video>
-                                    `}
-                                </div>
-                            `).join('')}
-                        </div>
-                        <button class="carousel-control-prev" type="button" data-bs-target="#${carouselId}" data-bs-slide="prev">
-                            <span class="carousel-control-prev-icon" aria-hidden="true"></span>
-                            <span class="visually-hidden">Previous</span>
-                        </button>
-                        <button class="carousel-control-next" type="button" data-bs-target="#${carouselId}" data-bs-slide="next">
-                            <span class="carousel-control-next-icon" aria-hidden="true"></span>
-                            <span class="visually-hidden">Next</span>
-                        </button>
-                    </div>
-                `;
-            }
-
-            var myModal = new bootstrap.Modal(document.getElementById('mediaModal'));
-            myModal.show();
-        }
-
-                function showFinalMediaPopup(mediaType, mediaPath) {
-            const container = document.getElementById('mediaModalBody');
-            container.innerHTML = '';
-
-            // Single Media
-            if (Array.isArray(mediaPath)) {
-                let carouselId = 'finalMediaCarousel';
-                container.innerHTML = `
-                    <div id="${carouselId}" class="carousel slide" data-bs-ride="carousel">
-                        <div class="carousel-indicators">
-                            ${mediaPath.map((item, index) => `
-                                <button type="button" data-bs-target="#${carouselId}" data-bs-slide-to="${index}" class="${index === 0 ? 'active' : ''}" aria-current="${index === 0 ? 'true' : 'false'}" aria-label="Slide ${index + 1}"></button>
-                            `).join('')}
-                        </div>
-                        <div class="carousel-inner">
-                            ${mediaPath.map((item, index) => `
-                                <div class="carousel-item ${index === 0 ? 'active' : ''}">
-                                    ${item.MediaType === 'IMAGE' ? `
-                                        <img src="${item.MediaPath}" class="d-block w-100 img-fluid rounded shadow-sm" alt="Lampiran">
-                                    ` : item.MediaType === 'VIDEO' ? `
-                                        <video class="d-block w-100 img-fluid rounded shadow-sm" controls>
-                                            <source src="${item.MediaPath}" type="video/mp4">
-                                            Your browser does not support the video tag.
-                                        </video>
-                                    ` : `
-                                        <p>Format tidak didukung</p>
-                                    `}
-                                </div>
-                            `).join('')}
-                        </div>
-                        <button class="carousel-control-prev" type="button" data-bs-target="#${carouselId}" data-bs-slide="prev">
-                            <span class="carousel-control-prev-icon" aria-hidden="true"></span>
-                            <span class="visually-hidden">Previous</span>
-                        </button>
-                        <button class="carousel-control-next" type="button" data-bs-target="#${carouselId}" data-bs-slide="next">
-                            <span class="carousel-control-next-icon" aria-hidden="true"></span>
-                            <span class="visually-hidden">Next</span>
-                        </button>
-                    </div>
-                `;
-            } else {
-                if (mediaType === 'IMAGE') {
-                    const img = document.createElement('img');
-                    img.src = mediaPath;
-                    img.alt = "Lampiran Gambar";
-                    img.className = 'img-fluid mb-3 rounded shadow-sm w-100'; // Fit ke layar
-                    container.appendChild(img);
-                } else if (mediaType === 'VIDEO') {
-                    const video = document.createElement('video');
-                    video.src = mediaPath;
-                    video.controls = true;
-                    video.className = 'img-fluid mb-3 rounded shadow-sm w-100'; // Fit ke layar
-                    container.appendChild(video);
-                } else {
-                    window.open(mediaPath, '_blank');
-                    return;
-                }
-            }
-
-            var myModal = new bootstrap.Modal(document.getElementById('mediaModal'));
-            myModal.show();
-        }
-
-                function showFinalMediaPopup(mediaType, mediaPath) {
-            const container = document.getElementById('mediaModalBody');
-            container.innerHTML = '';
-
-            let mediaList = [];
-
-            // Kalau mediaPath array (multi file)
-            if (Array.isArray(mediaPath)) {
-                mediaList = mediaPath;
-            } else {
-                // Kalau satuan, bungkus ke array
-                mediaList = [{
-                    MediaType: mediaType,
-                    MediaPath: mediaPath
-                }];
-            }
-
-            if (mediaList.length === 0) {
-                container.innerHTML = '<p class="text-muted">Tidak ada media tersedia.</p>';
-                return;
-            }
-
-            if (mediaList.length === 1) {
-                const media = mediaList[0];
-                if (media.MediaType.toUpperCase() === 'IMAGE' || media.MediaPath.endsWith('.jpg') || media.MediaPath.endsWith('.jpeg') || media.MediaPath.endsWith('.png')) {
-                    const img = document.createElement('img');
-                    img.src = media.MediaPath;
-                    img.alt = "Lampiran Gambar";
-                    img.className = 'img-fluid rounded shadow-sm';
-                    img.style.maxHeight = "80vh";
-                    img.style.objectFit = "contain";
-                    container.appendChild(img);
-                } else if (media.MediaType.toUpperCase() === 'VIDEO' || media.MediaPath.endsWith('.mp4')) {
-                    const video = document.createElement('video');
-                    video.src = media.MediaPath;
-                    video.controls = true;
-                    video.className = 'img-fluid rounded shadow-sm';
-                    video.style.maxHeight = "80vh";
-                    video.style.objectFit = "contain";
-                    container.appendChild(video);
-                }
-            } else {
-                let carouselId = 'finalMediaCarousel';
-                container.innerHTML = `
-                    <div id="${carouselId}" class="carousel slide" data-bs-ride="carousel">
-                        <div class="carousel-inner">
-                            ${mediaList.map((media, index) => `
-                                <div class="carousel-item ${index === 0 ? 'active' : ''}">
-                                    ${media.MediaType.toUpperCase() === 'IMAGE' || media.MediaPath.endsWith('.jpg') || media.MediaPath.endsWith('.jpeg') || media.MediaPath.endsWith('.png')
-                                        ? `<img src="${media.MediaPath}" class="d-block rounded shadow-sm mx-auto" style="max-height:80vh; object-fit:contain;" alt="Lampiran">`
-                                        : `<video class="d-block rounded shadow-sm mx-auto" style="max-height:80vh; object-fit:contain;" controls>
-                                            <source src="${media.MediaPath}" type="video/mp4">
-                                           Your browser does not support the video tag.
-                                           </video>`
+                            ${mediaItems.map((item, i) => `
+                                <div class="carousel-item ${i===0?'active':''}">
+                                    ${item.MediaType.toUpperCase()==='IMAGE'
+                                        ? `<img src="${item.MediaPath}" class="d-block w-100 rounded shadow-sm" alt="Gambar">`
+                                        : `<video class="d-block w-100 rounded shadow-sm" controls><source src="${item.MediaPath}" type="video/mp4"></video>`
                                     }
                                 </div>
                             `).join('')}
                         </div>
                         <button class="carousel-control-prev" type="button" data-bs-target="#${carouselId}" data-bs-slide="prev">
-                            <span class="carousel-control-prev-icon" aria-hidden="true"></span>
-                            <span class="visually-hidden">Previous</span>
+                            <span class="carousel-control-prev-icon"></span>
                         </button>
                         <button class="carousel-control-next" type="button" data-bs-target="#${carouselId}" data-bs-slide="next">
-                            <span class="carousel-control-next-icon" aria-hidden="true"></span>
-                            <span class="visually-hidden">Next</span>
+                            <span class="carousel-control-next-icon"></span>
                         </button>
                     </div>
                 `;
             }
 
-            var myModal = new bootstrap.Modal(document.getElementById('mediaModal'));
-            myModal.show();
+            new bootstrap.Modal(document.getElementById('mediaModal')).show();
         }
 
-            function updateScore(nodeId) {
-            const selectedBtn = document.querySelector(`.option-btn[data-node-id="${nodeId}"].active`);
-            if (!selectedBtn) {
-                alert("Pilih dulu nilainya bro.");
-                return;
-            }
-
-            const score = selectedBtn.getAttribute("data-score");
-
-            fetch(`/Audit/UpdateScore`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'RequestVerificationToken': document.querySelector('input[name="__RequestVerificationToken"]')?.value
-                },
-                body: JSON.stringify({
-                    nodeId: nodeId,
-                    score: score,
-                    auditId: '@Context.Request.RouteValues["id"]'
-                })
-            })
-            .then(response => {
-                if (response.ok) {
-                    alert("Berhasil update nilai!");
-                    location.reload(); // reload biar skor langsung kelihatan update
-                } else {
-                    alert("Gagal update nilai!");
-                }
-            });
+        // Wrap final documents into carousel sama modal
+        function showFinalMediaPopup(mediaType, mediaPath) {
+            let list = Array.isArray(mediaPath)
+                ? mediaPath
+                : [{ MediaType: mediaType, MediaPath: mediaPath }];
+            showMediaPopup(list);
         }
-
-
     </script>
 }
 
 @functions {
-    decimal ExtractDecimalFromOption(string opt)
-    {
-        var match = System.Text.RegularExpressions.Regex.Match(opt, "\\((.*?)\\)");
-        return match.Success && decimal.TryParse(match.Groups[1].Value.Replace(',', '.'), out var val) ? val : 0;
-    }
-
-    decimal GetNodeScore(AuditChecklistNode node)
-    {
-        if (node.ScoreAF.HasValue)
-            return node.ScoreAF.Value;
-        if (!string.IsNullOrWhiteSpace(node.ScoreInput))
-            return ExtractDecimalFromOption(node.ScoreInput) * (node.Weight ?? 0);
-        if (node.Children != null && node.Children.Any())
-            return node.Children.Sum(GetNodeScore);
-        return 0;
-    }
-
-    void RenderChecklistNode(AuditChecklistNode node, int level)
+    void RenderChecklistNode(AuditChecklistNode node, int level, bool isVerified)
     {
         var collapseId = $"collapse-{node.Id}";
-        var displayScore = GetNodeScore(node);
+        var cardId = $"card-{node.Id}";
+        var paddingClass = $"ps-{level * 3}";
+        var displayScore = node.ScoreX ?? node.ScoreAF ?? 0m;
 
         <text>
-            <li class="mb-3 ps-@(level * 3)">
+            <li id="node-@node.Id" class="mb-3 @paddingClass" data-weight="@(node.Weight ?? 0)">
                 <div class="card border-secondary">
-                    <div class="card-header bg-light d-flex justify-content-between align-items-center">
-                        <a class="fw-bold text-dark text-decoration-none d-flex justify-content-between align-items-center w-100"
+                    <!-- HEADER: judul, deskripsi, skor -->
+                    <div class="card-header bg-light d-flex align-items-center">
+                        <a class="fw-bold text-dark flex-grow-1 text-decoration-none"
                            data-bs-toggle="collapse"
                            href="#@collapseId"
-                           role="button" aria-expanded="false" aria-controls="@collapseId">
-                            <div>
-                                <span>@node.Title</span><br />
-                                @if (!string.IsNullOrWhiteSpace(node.Description))
-                                {
-                                    <small class="text-muted">@node.Description</small>
-                                }
-                            </div>
-                            <div class="text-end">
-                                <div class="small">Skor:</div>
-                                <strong>@displayScore.ToString("0.00")</strong>
-                                <i class="bi bi-chevron-right rotate-arrow ms-2"></i>
-                            </div>
-                        </a>
-                    </div>
-                    <div class="collapse" id="@collapseId">
-                        <div class="card-body">
-                            @if (!string.IsNullOrWhiteSpace(node.ScoreInput))
+                           role="button"
+                           aria-expanded="false"
+                           aria-controls="@collapseId">
+                            @node.Title
+                            @if (!string.IsNullOrWhiteSpace(node.Description))
                             {
-                                <div class="mb-2">
-                                    <div class="mb-1 fw-semibold">Jawaban:</div>
-                                    @foreach (var opt in new List<string> { "A (1,00)", "B (0,80)", "C (0,60)", "D (0,40)", "F (0,00)" })
-                                    {
-                                        var optKey = opt.Split(' ')[0];
-                                        var isActive = node.ScoreInput?.Trim().Equals(optKey, StringComparison.OrdinalIgnoreCase) ?? false;
+                                <small class="text-muted ms-2">@node.Description</small>
+                            }
+                        </a>
+                        <div class="text-end score-x" data-node-id="@node.Id">
+                            <small>Skor:</small>
+                            <strong>@displayScore.ToString("0.00")</strong>
+                            <i class="bi bi-chevron-right rotate-arrow ms-2"></i>
+                        </div>
+                    </div>
 
+                    <!-- COLLAPSE BODY -->
+                    <div id="@collapseId" class="collapse" data-bs-parent="#auditChecklist">
+                        <div class="card-body">
+
+                            @* -- QUESTION TYPE -- *@
+                            @if (node.Type == "QUESTION")
+                            {
+                                <div class="mb-3 option-group d-flex gap-2 flex-wrap" data-node-id="@node.Id">
+                                    @foreach (var opt in new[] { "A", "B", "C", "D", "E", "F" })
+                                    {
+                                        decimal val = opt switch
+                                        {
+                                            "A" => 1.00m,
+                                            "B" => 0.80m,
+                                            "C" => 0.60m,
+                                            "D" => 0.40m,
+                                            "E" => 0.20m,
+                                            "F" => 0.00m,
+                                            _ => 0m
+                                        };
+                                        var isActive = node.ScoreInput == opt;
                                         <button type="button"
-                                                class="btn btn-outline-secondary btn-sm me-2 option-btn @(isActive ? "active bg-success text-white" : "")"
+                                                class="btn option-btn btn-sm
+                                                       @(isActive    ? "active bg-success text-white" : "btn-outline-secondary")
+                                                       @(isVerified ? "disabled" : "")"
                                                 data-node-id="@node.Id"
-                                                data-score="@optKey">
-                                            @opt
+                                                data-score="@opt"
+                                        @(isVerified ? "disabled" : "")>
+                                            @($"{opt} ({val:0.00})")
                                         </button>
                                     }
                                 </div>
-                                <div>
-                                    <button class="btn btn-light btn-sm me-2">Batal</button>
-                                    <button class="btn btn-primary btn-sm"
-                                            onclick="updateScore('@node.Id')">
+                                <div class="mb-3">
+                                    <button type="button"
+                                            class="btn btn-sm btn-secondary cancel-score-btn"
+                                            data-node-id="@node.Id"
+                                    @(isVerified ? "disabled" : "")>
+                                        Batal
+                                    </button>
+                                    <button type="button"
+                                            class="btn btn-sm btn-primary update-score-btn"
+                                            data-node-id="@node.Id"
+                                            data-audit-id="@ViewBag.AuditId"
+                                    @(isVerified ? "disabled" : "")>
                                         Update Nilai
                                     </button>
                                 </div>
                             }
 
-                            @if (node.MediaItems != null && node.MediaItems.Any())
+                            @* -- MEDIA POPUP jika ada -- *@
+                            @if (node.MediaItems?.Any() ?? false)
                             {
-                                <div class="mt-3">
-                                    <button type="button" class="btn btn-outline-primary btn-sm" onclick='showMediaPopup(@Html.Raw(Newtonsoft.Json.JsonConvert.SerializeObject(node.MediaItems)))'>
-                                        <i class="bi bi-image me-1"></i> Lihat Dokumentasi Foto / Video
+                                <div class="mb-3">
+                                    <button type="button"
+                                            class="btn btn-outline-primary btn-sm"
+                                            onclick='showMediaPopup(@Html.Raw(JsonConvert.SerializeObject(node.MediaItems)))'>
+                                        <i class="bi bi-image me-1"></i> Lihat Dokumentasi
                                     </button>
                                 </div>
                             }
 
-                            @if (node.Children.Any())
+                            @* -- CHILDREN RECURSIVE -- *@
+                            @if (node.Children?.Any() ?? false)
                             {
                                 <ul class="list-unstyled mt-3">
                                     @foreach (var child in node.Children)
                                     {
-                                        RenderChecklistNode(child, level + 1);
+                                        RenderChecklistNode(child, level + 1, isVerified);
                                     }
                                 </ul>
                             }
-                        </div>
+
                     </div>
                 </div>
-            </li>
-        </text>
+            </div>
+        </li>
+    </text>
+;
     }
 }
+
+

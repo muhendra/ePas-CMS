@@ -293,6 +293,8 @@ public class AuditController : Controller
                 MediaPath = $"https://epas.zarata.co.id{m.media_path}"
             }).ToList();
 
+        ViewBag.AuditId = id;
+
         return View(audit);
     }
 
