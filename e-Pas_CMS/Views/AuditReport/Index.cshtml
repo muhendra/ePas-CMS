@@ -1,6 +1,6 @@
-﻿@model List<e_Pas_CMS.ViewModels.SpbuViewModel>
+﻿@model List<e_Pas_CMS.ViewModels.AuditReportListViewModel>
 
-<h3 class="mb-4 fw-bold">Review Audit</h3>
+<h3 class="mb-4 fw-bold">Laporan Audit</h3>
 
 <div class="mb-3">
     <input type="text" id="search-input" class="form-control" placeholder="🔍 Cari SPBU, Auditor, Status...">
@@ -17,20 +17,25 @@
             <tr>
                 <th>No</th>
                 <th>No. SPBU</th>
-                <th>Auditor</>
-                <th>Rayon</th>
+                <th>Region</th>
                 <th>Provinsi</th>
-                <th>Kabupaten/Kota</th>
+                <th>Kota</th>
                 <th>Alamat</th>
-                <th>Tipe SPBU</th>
+                <th>SBM</th>
+                <th>SAM</th>
                 <th>Tahun</th>
-                <th>Audit</th>
-                <th>Tipe Audit</th>
                 <th>Tanggal Audit</th>
+                <th>Tanggal Submit</th>
+                <th>Auditor</th>
                 <th>Score</th>
-                <th>Status</th>
-                <th>Komplain</th>
-                <th>Banding</th>
+                <th>Good</th>
+                <th>Excellent</th>
+                <th>WTMS</th>
+                <th>Q&Q</th>
+                <th>WMEF</th>
+                <th>Format Fisik</th>
+                <th>CPO</th>
+                <th>Kelas SPBU</th>
                 <th>Aksi</th>
             </tr>
         </thead>
@@ -40,25 +45,29 @@
                 var item = Model[i];
                 <tr>
                     <td>@(i + 1)</td>
-                    <td>@item.NoSpbu</td>
-                    <td>@item.Rayon</td>
-                    <td>@item.NamaAuditor</td>
-                    <td>@item.Provinsi</td>
-                    <td>@item.Kota</td>
-                    <td>@item.Alamat</td>
-                    <td>@item.TipeSpbu</td>
-                    <td>@item.Tahun</td>
-                    <td>@item.Audit</td>
-                    <td>@item.Type</td>
-                    <td>@item.TanggalSubmit.ToString("dd/MM/yyyy HH:mm")</td>
+                    <td>@item.SpbuNo</td>
+                    <td>@item.Region</td>
+                    <td>@item.Province</td>
+                    <td>@item.City</td>
+                    <td>@item.Address</td>
+                    <td>@item.SBM</td>
+                    <td>@item.SAM</td>
+                    <td>@item.Year</td>
+                    <td>@item.AuditDate?.ToString("dd/MM/yyyy")</td>
+                    <td>@item.SubmitDate?.ToString("dd/MM/yyyy HH:mm")</td>
+                    <td>@item.Auditor</td>
+                    <td>@item.Score</td>
+                    <td class="text-@(item.GoodStatus == "CERTIFIED" ? "success" : "danger")">@item.GoodStatus</td>
+                    <td class="text-@(item.ExcellentStatus == "CERTIFIED" ? "success" : "danger")">@item.ExcellentStatus</td>
+                    <td>@item.WTMS</td>
+                    <td>@item.QQ</td>
+                    <td>@item.WMEF</td>
+                    <td>@item.FormatFisik</td>
+                    <td>@item.CPO</td>
+                    <td>@item.KelasSpbu</td>
                     <td>
-                        @item.Score.ToString("0.00")
-                    </td>
-                    <td class="fw-bold text-@((item.Status == "PASS") ? "success" : "danger")">@item.Status</td>
-                    <td class="text-@((item.Komplain == "ADA") ? "danger" : "success")">@item.Komplain</td>
-                    <td class="text-@((item.Banding == "ADA") ? "danger" : "success")">@item.Banding</td>
-                    <td>
-                        <a class="btn btn-sm btn-outline-primary fw-semibold" asp-controller="Audit" asp-action="Detail" asp-route-id="@item.Id">
+                        <a class="btn btn-sm btn-outline-primary fw-semibold"
+                           asp-controller="AuditReport" asp-action="Detail" asp-route-id="@item.TrxAuditId">
                             <i class="bi bi-eye"></i> Detail
                         </a>
                     </td>
@@ -79,7 +88,7 @@
                 perPage: 10
             });
 
-            // Sinkronkan input search custom
+            // Custom search box
             const searchInput = document.getElementById("search-input");
             if (searchInput) {
                 searchInput.addEventListener("input", function () {

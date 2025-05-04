@@ -98,17 +98,14 @@
 <!-- CHECKLIST AUDIT -->
 @if (Model.AuditType == "Mystery Audit" || Model.AuditType == "Regular Audit" || Model.AuditType == "Basic Operational")
 {
-    @if (Model.Elements != null && Model.Elements.Any())
-    {
-        <h4 class="mt-5 fw-bold">Checklist Audit</h4>
-        <ul class="list-unstyled">
-            @foreach (var node in Model.Elements)
-            {
-                RenderChecklistNode(node, 0, isVerified);
-            }
+    <h4 class="mt-5 fw-bold">Checklist Audit</h4>
+    <ul id="auditChecklist" class="list-unstyled">
+        @foreach (var node in Model.Elements)
+        {
+            await RenderChecklistNode(node, 0, isVerified);
 
-        </ul>
-    }
+        }
+    </ul>
 }
 
 <!-- Q&Q CHECK -->
@@ -180,15 +177,14 @@
                 Bukti Dokumen/Foto Berita Acara
             </div>
             <ul class="list-unstyled">
-                @foreach (var doc in Model.FinalDocuments)
-                {
-                    <li class="mb-2">
-                        <i class="bi bi-file-earmark-image text-primary"></i>
-                        <button type="button" class="btn btn-link text-decoration-none p-0" onclick="showFinalMediaPopup('@doc.MediaType', '@doc.MediaPath')">
-                            Lihat Lampiran
-                        </button>
-                    </li>
-                }
+                <li class="mb-2">
+                    <i class="bi bi-file-earmark-image text-primary"></i>
+                    <button type="button"
+                            class="btn btn-link text-decoration-none p-0"
+                            onclick='showFinalMediaPopup(@Html.Raw(JsonConvert.SerializeObject(Model.FinalDocuments)))'>
+                        Lihat Lampiran
+                    </button>
+                </li>
             </ul>
         }
     </div>
@@ -251,37 +247,6 @@
         .rotate-arrow {
             transition: transform .3s ease;
         }
-        .rotate-arrow.rotate {
-            transform: rotate(90deg);
-        }
-
-        .option-btn:hover {
-            background-color: #e0f2f1 !important;
-            border-color: #10b981;
-            color: #0f766e;
-        }
-        .option-btn.active, .option-btn.active:hover {
-            background-color: #059669 !important;
-            color: #fff;
-        }
-
-        .carousel-item img, .carousel-item video {
-            max-height: 70vh;
-            width: auto;
-            height: auto;
-            object-fit: contain;
-            display: block;
-            margin: 0 auto;
-        }
-
-        .modal-body {
-            overflow-y: auto;
-            max-height: 80vh;
-        }
-
-        .rotate-arrow {
-            transition: transform 0.3s ease;
-        }
 
             .rotate-arrow.rotate {
                 transform: rotate(90deg);
@@ -293,27 +258,20 @@
             color: #0f766e;
         }
 
-        .option-btn.active:hover {
+        .option-btn.active, .option-btn.active:hover {
             background-color: #059669 !important;
-            color: white;
+            color: #fff;
         }
-
-        /* 🔥 Fix untuk gambar/video supaya fit modal */
+        /* Media fit di modal */
         .carousel-item img,
         .carousel-item video,
         #mediaModalBody img,
         #mediaModalBody video {
             max-width: 100%;
-            max-height: 80vh; /* max 80% tinggi layar */
+            max-height: 80vh;
             object-fit: contain;
             display: block;
-            margin: 0 auto; /* center */
-        }
-
-        .modal-body {
-            overflow-y: auto;
-            max-height: 90vh;
-            text-align: center;
+            margin: 0 auto;
         }
     </style>
 }
@@ -333,32 +291,50 @@
             });
 
             // Hitung ulang satu node (rekursif)
-            function recalcNode($li) {
-                var nodeId = $li.attr('id').replace('node-','');
-                var weight = parseFloat($li.attr('data-weight')) || 0;
-                var scoreX = 0;
-                var map = { A:1, B:0.8, C:0.6, D:0.4, E:0.2, F:0 };
-                var $grp = $li.find('.option-group[data-node-id="'+nodeId+'"]');
-                if ($grp.length) {
-                    var letter = $grp.find('.option-btn.active').data('score') || '';
-                    scoreX = (map[letter] || 0) * weight;
-                } else {
-                    $li.find('> .card > .collapse > .card-body > ul > li').each(function() {
-                        scoreX += recalcNode($(this));
-                    });
-                }
-                $li.find('.score-x[data-node-id="'+nodeId+'"] strong').text(scoreX.toFixed(2));
-                return scoreX;
-            }
+                    function recalcNode($li) {
+            var nodeId = $li.attr('id').replace('node-', '');
+            var weight = parseFloat($li.attr('data-weight')) || 0;
+            var sumAF = 0;
+            var sumWeight = 0;
+            var sumX = 0;
 
-            // Hitung ulang semua root nodes
-            function recalcAll() {
-                $('ul.list-unstyled > li[id^="node-"]').each(function() {
-                    recalcNode($(this));
+            var map = { A: 1, B: 0.8, C: 0.6, D: 0.4, E: 0.2, F: 0 };
+
+            var $grp = $li.find('.option-group[data-node-id="' + nodeId + '"]');
+            if ($grp.length) {
+                var letter = $grp.find('.option-btn.active').data('score') || '';
+                if (letter === 'X') {
+                    var scoreX = parseFloat($li.attr('data-score-x')) || 0;
+                    sumX = weight;
+                    sumAF = scoreX;
+                } else {
+                    sumAF = (map[letter] || 0) * weight;
+                }
+                sumWeight = weight;
+            } else {
+                $li.find('> .card > .collapse > .card-body > ul > li').each(function () {
+                    var result = recalcNode($(this));
+                    sumAF += result.af;
+                    sumWeight += result.wt;
+                    sumX += result.x;
                 });
             }
 
-            // AJAX update + recalc
+            var skor = (sumWeight - sumX) > 0
+                ? (sumAF / (sumWeight - sumX)) * sumWeight
+                : 0;
+
+            $li.find('.score-x[data-node-id="' + nodeId + '"]').text(skor.toFixed(2));
+            return { af: sumAF, wt: sumWeight, x: sumX };
+        }
+
+                    function recalcAll() {
+            $('#auditChecklist > li[id^="node-"]').each(function () {
+                recalcNode($(this));
+            });
+        }
+
+            // recalc saat update
             $(document).on('click', '.update-score-btn', function() {
                 var nodeId  = $(this).data('node-id');
                 var auditId = $(this).data('audit-id');
@@ -373,146 +349,165 @@
                     },
                     body: JSON.stringify({ NodeId: nodeId, AuditId: auditId, Score: score })
                 })
-                .then(async res => {
-                    if (!res.ok) throw new Error(await res.text() || res.statusText);
-                })
-                .then(() => recalcAll())
+                .then(res => res.ok ? recalcAll() : res.text().then(t => Promise.reject(t)))
                 .catch(err => {
                     console.error(err);
-                    alert('Gagal update nilai: ' + err.message);
+                    alert('Gagal update nilai: ' + err);
                 });
             });
 
-            // Inisialisasi pada load
+            // Recalc juga setelah collapse toggle (open/close)
+            $('#auditChecklist').on('shown.bs.collapse hidden.bs.collapse', function(){
+                recalcAll();
+            });
+
+            // Inisialisasi pertama
             recalcAll();
         });
-
-        // Show carousel/modal untuk MediaNotes atau node media
-        function showMediaPopup(mediaItems) {
+            function showMediaPopup(mediaItems) {
             const container = document.getElementById('mediaModalBody');
             container.innerHTML = '';
 
             if (!mediaItems || mediaItems.length === 0) {
                 container.innerHTML = '<p class="text-muted">Tidak ada media tersedia.</p>';
-            } else if (mediaItems.length === 1) {
+            }
+            else if (mediaItems.length === 1) {
                 const item = mediaItems[0];
-                if (item.MediaType.toUpperCase() === 'IMAGE') {
-                    const img = document.createElement('img');
-                    img.src = item.MediaPath;
-                    img.alt = "Gambar Dokumentasi";
-                    img.className = 'img-fluid mb-3 rounded shadow-sm';
-                    container.appendChild(img);
+                let el = document.createElement(item.MediaType?.toUpperCase() === 'VIDEO' || item.MediaPath?.endsWith('.mp4')
+                    ? 'video' : 'img');
+
+                if (el.tagName === 'IMG') {
+                    el.src = item.MediaPath;
+                    el.alt = '';
+                    el.className = 'img-fluid rounded';
                 } else {
-                    const video = document.createElement('video');
-                    video.src = item.MediaPath;
-                    video.controls = true;
-                    video.className = 'img-fluid mb-3 rounded shadow-sm';
-                    container.appendChild(video);
+                    el.src = item.MediaPath;
+                    el.controls = true;
+                    el.className = 'w-100 rounded';
                 }
-            } else {
-                let carouselId = 'mediaCarousel';
+                container.appendChild(el);
+            }
+            else {
+                const carouselId = 'mediaCarousel';
+                const indicators = [];
+                const innerItems = [];
+
+                mediaItems.forEach((item, index) => {
+                    const isActive = index === 0 ? 'active' : '';
+                    const mediaTag = item.MediaType?.toUpperCase() === 'VIDEO' || item.MediaPath?.endsWith('.mp4')
+                        ? `<video controls class="d-block w-100 rounded"><source src="${item.MediaPath}" type="video/mp4"></video>`
+                        : `<img src="${item.MediaPath}" class="d-block w-100 rounded" alt="">`;
+
+                    indicators.push(`<button type="button" data-bs-target="#${carouselId}" data-bs-slide-to="${index}" class="${isActive}" aria-current="${isActive ? 'true' : ''}" aria-label="Slide ${index + 1}"></button>`);
+                    innerItems.push(`<div class="carousel-item ${isActive}">${mediaTag}</div>`);
+                });
+
                 container.innerHTML = `
                     <div id="${carouselId}" class="carousel slide" data-bs-ride="carousel">
                         <div class="carousel-indicators">
-                            ${mediaItems.map((_, i) => `<button type="button" data-bs-target="#${carouselId}" data-bs-slide-to="${i}" class="${i===0?'active':''}" aria-label="Slide ${i+1}"></button>`).join('')}
+                            ${indicators.join('')}
                         </div>
                         <div class="carousel-inner">
-                            ${mediaItems.map((item, i) => `
-                                <div class="carousel-item ${i===0?'active':''}">
-                                    ${item.MediaType.toUpperCase()==='IMAGE'
-                                        ? `<img src="${item.MediaPath}" class="d-block w-100 rounded shadow-sm" alt="Gambar">`
-                                        : `<video class="d-block w-100 rounded shadow-sm" controls><source src="${item.MediaPath}" type="video/mp4"></video>`
-                                    }
-                                </div>
-                            `).join('')}
+                            ${innerItems.join('')}
                         </div>
                         <button class="carousel-control-prev" type="button" data-bs-target="#${carouselId}" data-bs-slide="prev">
-                            <span class="carousel-control-prev-icon"></span>
+                            <span class="carousel-control-prev-icon" aria-hidden="true"></span>
+                            <span class="visually-hidden">Previous</span>
                         </button>
                         <button class="carousel-control-next" type="button" data-bs-target="#${carouselId}" data-bs-slide="next">
-                            <span class="carousel-control-next-icon"></span>
+                            <span class="carousel-control-next-icon" aria-hidden="true"></span>
+                            <span class="visually-hidden">Next</span>
                         </button>
-                    </div>
-                `;
+                    </div>`;
             }
 
             new bootstrap.Modal(document.getElementById('mediaModal')).show();
         }
 
-        // Wrap final documents into carousel sama modal
-        function showFinalMediaPopup(mediaType, mediaPath) {
-            let list = Array.isArray(mediaPath)
-                ? mediaPath
-                : [{ MediaType: mediaType, MediaPath: mediaPath }];
-            showMediaPopup(list);
+                function showFinalMediaPopup(mediaItems) {
+            showMediaPopup(mediaItems);
         }
+
     </script>
 }
 
 @functions {
-    void RenderChecklistNode(AuditChecklistNode node, int level, bool isVerified)
-    {
-        var collapseId = $"collapse-{node.Id}";
-        var cardId = $"card-{node.Id}";
-        var paddingClass = $"ps-{level * 3}";
-        var displayScore = node.ScoreX ?? node.ScoreAF ?? 0m;
+    @functions {
+        async Task RenderChecklistNode(AuditChecklistNode node, int level, bool isVerified)
+        {
+            var collapseId = $"collapse-{node.Id}";
+            var paddingClass = $"ps-{level * 3}";
+            <li id="node-@node.Id"
+                class="mb-3 @paddingClass"
+                data-weight="@(node.Weight ?? 0)"
+                data-score-x="@(node.ScoreX?.ToString("0.00") ?? "0")">
 
-        <text>
-            <li id="node-@node.Id" class="mb-3 @paddingClass" data-weight="@(node.Weight ?? 0)">
                 <div class="card border-secondary">
-                    <!-- HEADER: judul, deskripsi, skor -->
+                    <!-- HEADER: toggle + skor -->
                     <div class="card-header bg-light d-flex align-items-center">
-                        <a class="fw-bold text-dark flex-grow-1 text-decoration-none"
-                           data-bs-toggle="collapse"
-                           href="#@collapseId"
-                           role="button"
-                           aria-expanded="false"
-                           aria-controls="@collapseId">
-                            @node.Title
+                        <button class="btn btn-link flex-grow-1 text-start py-0"
+                                type="button"
+                                data-bs-toggle="collapse"
+                                data-bs-target="#@collapseId"
+                                aria-expanded="false"
+                                aria-controls="@collapseId">
+                            <span class="fw-bold text-dark">@node.Title</span>
                             @if (!string.IsNullOrWhiteSpace(node.Description))
                             {
-                                <small class="text-muted ms-2">@node.Description</small>
+                                <span class="fw-bold fs-6 text-muted ms-2">@node.Description</span>
                             }
-                        </a>
-                        <div class="text-end score-x" data-node-id="@node.Id">
-                            <small>Skor:</small>
-                            <strong>@displayScore.ToString("0.00")</strong>
                             <i class="bi bi-chevron-right rotate-arrow ms-2"></i>
-                        </div>
+                        </button>
+                        @if (node.ScoreInput != "X")
+                        {
+                            <div class="ms-auto text-end">
+                                <small>Skor:</small>
+                                <strong class="score-x" data-node-id="@node.Id">0.00</strong>
+                            </div>
+                        }
                     </div>
 
                     <!-- COLLAPSE BODY -->
-                    <div id="@collapseId" class="collapse" data-bs-parent="#auditChecklist">
+                    <div id="@collapseId" class="collapse">
                         <div class="card-body">
 
-                            @* -- QUESTION TYPE -- *@
                             @if (node.Type == "QUESTION")
                             {
-                                <div class="mb-3 option-group d-flex gap-2 flex-wrap" data-node-id="@node.Id">
-                                    @foreach (var opt in new[] { "A", "B", "C", "D", "E", "F" })
+                                <div class="option-group mb-3"
+                                     data-node-id="@node.Id"
+                                     data-score-option="@node.ScoreOption">
+                                    @{
+                                        var opts = (node.ScoreOption ?? "")
+                                        .Split('/', StringSplitOptions.RemoveEmptyEntries)
+                                        .Select(s => s.Trim().ToUpper())
+                                        .SelectMany(o => o == "A-F"
+                                        ? new[] { "A", "B", "C", "D", "E", "F" }
+                                        : new[] { o })
+                                        .Distinct();
+                                    }
+                                    @foreach (var opt in opts)
                                     {
                                         decimal val = opt switch
                                         {
-                                            "A" => 1.00m,
-                                            "B" => 0.80m,
-                                            "C" => 0.60m,
-                                            "D" => 0.40m,
-                                            "E" => 0.20m,
-                                            "F" => 0.00m,
+                                            "A" => 1m,
+                                            "B" => 0.8m,
+                                            "C" => 0.6m,
+                                            "D" => 0.4m,
+                                            "E" => 0.2m,
+                                            "F" => 0m,
                                             _ => 0m
                                         };
-                                        var isActive = node.ScoreInput == opt;
+                                        bool active = node.ScoreInput == opt;
                                         <button type="button"
-                                                class="btn option-btn btn-sm
-                                                       @(isActive    ? "active bg-success text-white" : "btn-outline-secondary")
-                                                       @(isVerified ? "disabled" : "")"
+                                                class="btn btn-sm option-btn @(active?"active bg-success text-white":"btn-outline-secondary")"
                                                 data-node-id="@node.Id"
                                                 data-score="@opt"
                                         @(isVerified ? "disabled" : "")>
-                                            @($"{opt} ({val:0.00})")
+                                            @(opt == "X" ? "X" : $"{opt} ({val:0.00})")
                                         </button>
                                     }
                                 </div>
+
                                 <div class="mb-3">
                                     <button type="button"
                                             class="btn btn-sm btn-secondary cancel-score-btn"
@@ -528,21 +523,30 @@
                                         Update Nilai
                                     </button>
                                 </div>
-                            }
 
-                            @* -- MEDIA POPUP jika ada -- *@
-                            @if (node.MediaItems?.Any() ?? false)
-                            {
-                                <div class="mb-3">
-                                    <button type="button"
-                                            class="btn btn-outline-primary btn-sm"
-                                            onclick='showMediaPopup(@Html.Raw(JsonConvert.SerializeObject(node.MediaItems)))'>
-                                        <i class="bi bi-image me-1"></i> Lihat Dokumentasi
-                                    </button>
+                                <div class="d-flex gap-2 align-items-center mb-3">
+                                    @if (node.MediaItems?.Any() ?? false)
+                                    {
+                                        <button class="btn btn-outline-primary btn-sm"
+                                                onclick='showMediaPopup(@Html.Raw(JsonConvert.SerializeObject(node.MediaItems ?? new List<MediaItem> { })))'>
+                                            <i class="bi bi-image me-1"></i> Lihat Dokumentasi
+                                        </button>
+                                    }
+
+                                    <form asp-controller="Audit" asp-action="UploadDocument" asp-route-nodeId="@node.Id" asp-route-auditId="@ViewBag.AuditId" enctype="multipart/form-data" method="post" class="d-flex align-items-center">
+                                        <input type="file" name="file" class="form-control form-control-sm me-2" required @(isVerified ? "disabled" : "") />
+                                        <button type="submit" class="btn btn-sm btn-primary" @(isVerified ? "disabled" : "")>Upload</button>
+                                    </form>
                                 </div>
                             }
 
-                            @* -- CHILDREN RECURSIVE -- *@
+                            @if (node.ScoreInput == "X" && node.ScoreX.HasValue)
+                            {
+                                <div class="mt-1">
+                                    <span class="badge bg-info text-dark">Nilai X: @node.ScoreX.Value.ToString("0.00")</span>
+                                </div>
+                            }
+
                             @if (node.Children?.Any() ?? false)
                             {
                                 <ul class="list-unstyled mt-3">
@@ -553,13 +557,11 @@
                                 </ul>
                             }
 
+                        </div>
                     </div>
                 </div>
-            </div>
-        </li>
-    </text>
-;
+            </li>
+        }
     }
+
 }
-
-
