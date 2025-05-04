@@ -299,6 +299,21 @@ namespace e_Pas_CMS.Controllers
             return View(audit);
         }
 
+        [HttpPost("audit/approve/{id}")]
+        public async Task<IActionResult> Approve(string id)
+        {
+            var audit = await _context.trx_audits.FirstOrDefaultAsync(x => x.id == id);
+            if (audit == null)
+                return NotFound();
+
+            audit.status = "VERIFIED";
+            _context.trx_audits.Update(audit);
+            await _context.SaveChangesAsync();
+
+            TempData["Success"] = "Laporan audit telah disetujui.";
+            return RedirectToAction("Detail", new { id });
+        }
+
         [HttpPost]
         public async Task<IActionResult> UpdateScore([FromBody] UpdateScoreRequest request)
         {
