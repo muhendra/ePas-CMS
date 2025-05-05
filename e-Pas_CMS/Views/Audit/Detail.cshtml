@@ -5,6 +5,8 @@
 @{
     ViewData["Title"] = "Detail Hasil Audit";
     bool isVerified = Model.Status == "VERIFIED";
+    var currentUser = User.Identity?.Name;
+    bool isReadonlyUser = currentUser == "usermanagement1";
 }
 
 @Html.AntiForgeryToken()
@@ -102,7 +104,7 @@
     <ul id="auditChecklist" class="list-unstyled">
         @foreach (var node in Model.Elements)
         {
-            await RenderChecklistNode(node, 0, isVerified);
+            await RenderChecklistNode(node, 0, isVerified, isReadonlyUser);
 
         }
     </ul>
@@ -180,8 +182,8 @@
                 <li class="mb-2">
                     <i class="bi bi-file-earmark-image text-primary"></i>
                     <button type="button"
-                            class="btn btn-link text-decoration-none p-0"
-                            onclick='showFinalMediaPopup(@Html.Raw(JsonConvert.SerializeObject(Model.FinalDocuments)))'>
+                    class="btn btn-link text-decoration-none p-0"
+                    onclick='showFinalMediaPopup(@Html.Raw(JsonConvert.SerializeObject(Model.FinalDocuments)))'>
                         Lihat Lampiran
                     </button>
                 </li>
@@ -191,7 +193,8 @@
 }
 
 <div class="text-end mt-5">
-    @if (Model.Status != null && Model.Status.ToUpper() != "VERIFIED")
+
+    @if ((Model.Status != null && Model.Status.ToUpper() != "VERIFIED") && currentUser != "usermanagement1")
     {
         <button class="btn btn-primary rounded-pill px-4 py-2" data-bs-toggle="modal" data-bs-target="#confirmModal">
             Setujui Laporan Audit
@@ -203,6 +206,7 @@
             Back
         </a>
     }
+
 </div>
 
 <!-- Modal Konfirmasi -->
@@ -245,33 +249,33 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css" />
     <style>
         .rotate-arrow {
-            transition: transform .3s ease;
+        transition: transform .3s ease;
         }
 
-            .rotate-arrow.rotate {
-                transform: rotate(90deg);
-            }
+        .rotate-arrow.rotate {
+        transform: rotate(90deg);
+        }
 
         .option-btn:hover {
-            background-color: #e0f2f1 !important;
-            border-color: #10b981;
-            color: #0f766e;
+        background-color: #e0f2f1 !important;
+        border-color: #10b981;
+        color: #0f766e;
         }
 
         .option-btn.active, .option-btn.active:hover {
-            background-color: #059669 !important;
-            color: #fff;
+        background-color: #059669 !important;
+        color: #fff;
         }
         /* Media fit di modal */
         .carousel-item img,
         .carousel-item video,
         #mediaModalBody img,
         #mediaModalBody video {
-            max-width: 100%;
-            max-height: 80vh;
-            object-fit: contain;
-            display: block;
-            margin: 0 auto;
+        max-width: 100%;
+        max-height: 80vh;
+        object-fit: contain;
+        display: block;
+        margin: 0 auto;
         }
     </style>
 }
@@ -279,153 +283,153 @@
 @section Scripts {
     <script>
         $(function() {
-            // Toggle pilihan jawaban
-            $(document).on('click', '.option-btn', function() {
-                var nodeId = $(this).data('node-id');
-                $('.option-btn[data-node-id="'+nodeId+'"]')
-                    .removeClass('active bg-success text-white')
-                    .addClass('btn-outline-secondary');
-                $(this)
-                    .removeClass('btn-outline-secondary')
-                    .addClass('active bg-success text-white');
-            });
-
-            // Hitung ulang satu node (rekursif)
-                    function recalcNode($li) {
-            var nodeId = $li.attr('id').replace('node-', '');
-            var weight = parseFloat($li.attr('data-weight')) || 0;
-            var sumAF = 0;
-            var sumWeight = 0;
-            var sumX = 0;
-
-            var map = { A: 1, B: 0.8, C: 0.6, D: 0.4, E: 0.2, F: 0 };
-
-            var $grp = $li.find('.option-group[data-node-id="' + nodeId + '"]');
-            if ($grp.length) {
-                var letter = $grp.find('.option-btn.active').data('score') || '';
-                if (letter === 'X') {
-                    var scoreX = parseFloat($li.attr('data-score-x')) || 0;
-                    sumX = weight;
-                    sumAF = scoreX;
-                } else {
-                    sumAF = (map[letter] || 0) * weight;
-                }
-                sumWeight = weight;
-            } else {
-                $li.find('> .card > .collapse > .card-body > ul > li').each(function () {
-                    var result = recalcNode($(this));
-                    sumAF += result.af;
-                    sumWeight += result.wt;
-                    sumX += result.x;
-                });
-            }
-
-            var skor = (sumWeight - sumX) > 0
-                ? (sumAF / (sumWeight - sumX)) * sumWeight
-                : 0;
-
-            $li.find('.score-x[data-node-id="' + nodeId + '"]').text(skor.toFixed(2));
-            return { af: sumAF, wt: sumWeight, x: sumX };
-        }
-
-                    function recalcAll() {
-            $('#auditChecklist > li[id^="node-"]').each(function () {
-                recalcNode($(this));
-            });
-        }
-
-            // recalc saat update
-            $(document).on('click', '.update-score-btn', function() {
-                var nodeId  = $(this).data('node-id');
-                var auditId = $(this).data('audit-id');
-                var score   = $('.option-btn[data-node-id="'+nodeId+'"].active').data('score');
-                var token   = $('input[name="__RequestVerificationToken"]').val();
-                if (!score) return alert('Pilih jawaban dulu!');
-                fetch('/Audit/UpdateScore', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'RequestVerificationToken': token
-                    },
-                    body: JSON.stringify({ NodeId: nodeId, AuditId: auditId, Score: score })
-                })
-                .then(res => res.ok ? recalcAll() : res.text().then(t => Promise.reject(t)))
-                .catch(err => {
-                    console.error(err);
-                    alert('Gagal update nilai: ' + err);
-                });
-            });
-
-            // Recalc juga setelah collapse toggle (open/close)
-            $('#auditChecklist').on('shown.bs.collapse hidden.bs.collapse', function(){
-                recalcAll();
-            });
-
-            // Inisialisasi pertama
-            recalcAll();
+        // Toggle pilihan jawaban
+        $(document).on('click', '.option-btn', function() {
+        var nodeId = $(this).data('node-id');
+        $('.option-btn[data-node-id="'+nodeId+'"]')
+        .removeClass('active bg-success text-white')
+        .addClass('btn-outline-secondary');
+        $(this)
+        .removeClass('btn-outline-secondary')
+        .addClass('active bg-success text-white');
         });
-            function showMediaPopup(mediaItems) {
-            const container = document.getElementById('mediaModalBody');
-            container.innerHTML = '';
 
-            if (!mediaItems || mediaItems.length === 0) {
-                container.innerHTML = '<p class="text-muted">Tidak ada media tersedia.</p>';
-            }
-            else if (mediaItems.length === 1) {
-                const item = mediaItems[0];
-                let el = document.createElement(item.MediaType?.toUpperCase() === 'VIDEO' || item.MediaPath?.endsWith('.mp4')
-                    ? 'video' : 'img');
+        // Hitung ulang satu node (rekursif)
+        function recalcNode($li) {
+        var nodeId = $li.attr('id').replace('node-', '');
+        var weight = parseFloat($li.attr('data-weight')) || 0;
+        var sumAF = 0;
+        var sumWeight = 0;
+        var sumX = 0;
 
-                if (el.tagName === 'IMG') {
-                    el.src = item.MediaPath;
-                    el.alt = '';
-                    el.className = 'img-fluid rounded';
-                } else {
-                    el.src = item.MediaPath;
-                    el.controls = true;
-                    el.className = 'w-100 rounded';
-                }
-                container.appendChild(el);
-            }
-            else {
-                const carouselId = 'mediaCarousel';
-                const indicators = [];
-                const innerItems = [];
+        var map = { A: 1, B: 0.8, C: 0.6, D: 0.4, E: 0.2, F: 0 };
 
-                mediaItems.forEach((item, index) => {
-                    const isActive = index === 0 ? 'active' : '';
-                    const mediaTag = item.MediaType?.toUpperCase() === 'VIDEO' || item.MediaPath?.endsWith('.mp4')
-                        ? `<video controls class="d-block w-100 rounded"><source src="${item.MediaPath}" type="video/mp4"></video>`
-                        : `<img src="${item.MediaPath}" class="d-block w-100 rounded" alt="">`;
-
-                    indicators.push(`<button type="button" data-bs-target="#${carouselId}" data-bs-slide-to="${index}" class="${isActive}" aria-current="${isActive ? 'true' : ''}" aria-label="Slide ${index + 1}"></button>`);
-                    innerItems.push(`<div class="carousel-item ${isActive}">${mediaTag}</div>`);
-                });
-
-                container.innerHTML = `
-                    <div id="${carouselId}" class="carousel slide" data-bs-ride="carousel">
-                        <div class="carousel-indicators">
-                            ${indicators.join('')}
-                        </div>
-                        <div class="carousel-inner">
-                            ${innerItems.join('')}
-                        </div>
-                        <button class="carousel-control-prev" type="button" data-bs-target="#${carouselId}" data-bs-slide="prev">
-                            <span class="carousel-control-prev-icon" aria-hidden="true"></span>
-                            <span class="visually-hidden">Previous</span>
-                        </button>
-                        <button class="carousel-control-next" type="button" data-bs-target="#${carouselId}" data-bs-slide="next">
-                            <span class="carousel-control-next-icon" aria-hidden="true"></span>
-                            <span class="visually-hidden">Next</span>
-                        </button>
-                    </div>`;
-            }
-
-            new bootstrap.Modal(document.getElementById('mediaModal')).show();
+        var $grp = $li.find('.option-group[data-node-id="' + nodeId + '"]');
+        if ($grp.length) {
+        var letter = $grp.find('.option-btn.active').data('score') || '';
+        if (letter === 'X') {
+        var scoreX = parseFloat($li.attr('data-score-x')) || 0;
+        sumX = weight;
+        sumAF = scoreX;
+        } else {
+        sumAF = (map[letter] || 0) * weight;
+        }
+        sumWeight = weight;
+        } else {
+        $li.find('> .card > .collapse > .card-body > ul > li').each(function () {
+        var result = recalcNode($(this));
+        sumAF += result.af;
+        sumWeight += result.wt;
+        sumX += result.x;
+        });
         }
 
-                function showFinalMediaPopup(mediaItems) {
-            showMediaPopup(mediaItems);
+        var skor = (sumWeight - sumX) > 0
+        ? (sumAF / (sumWeight - sumX)) * sumWeight
+        : 0;
+
+        $li.find('.score-x[data-node-id="' + nodeId + '"]').text(skor.toFixed(2));
+        return { af: sumAF, wt: sumWeight, x: sumX };
+        }
+
+        function recalcAll() {
+        $('#auditChecklist > li[id^="node-"]').each(function () {
+        recalcNode($(this));
+        });
+        }
+
+        // recalc saat update
+        $(document).on('click', '.update-score-btn', function() {
+        var nodeId  = $(this).data('node-id');
+        var auditId = $(this).data('audit-id');
+        var score   = $('.option-btn[data-node-id="'+nodeId+'"].active').data('score');
+        var token   = $('input[name="__RequestVerificationToken"]').val();
+        if (!score) return alert('Pilih jawaban dulu!');
+        fetch('/Audit/UpdateScore', {
+        method: 'POST',
+        headers: {
+        'Content-Type': 'application/json',
+        'RequestVerificationToken': token
+        },
+        body: JSON.stringify({ NodeId: nodeId, AuditId: auditId, Score: score })
+        })
+        .then(res => res.ok ? recalcAll() : res.text().then(t => Promise.reject(t)))
+        .catch(err => {
+        console.error(err);
+        alert('Gagal update nilai: ' + err);
+        });
+        });
+
+        // Recalc juga setelah collapse toggle (open/close)
+        $('#auditChecklist').on('shown.bs.collapse hidden.bs.collapse', function(){
+        recalcAll();
+        });
+
+        // Inisialisasi pertama
+        recalcAll();
+        });
+        function showMediaPopup(mediaItems) {
+        const container = document.getElementById('mediaModalBody');
+        container.innerHTML = '';
+
+        if (!mediaItems || mediaItems.length === 0) {
+        container.innerHTML = '<p class="text-muted">Tidak ada media tersedia.</p>';
+        }
+        else if (mediaItems.length === 1) {
+        const item = mediaItems[0];
+        let el = document.createElement(item.MediaType?.toUpperCase() === 'VIDEO' || item.MediaPath?.endsWith('.mp4')
+        ? 'video' : 'img');
+
+        if (el.tagName === 'IMG') {
+        el.src = item.MediaPath;
+        el.alt = '';
+        el.className = 'img-fluid rounded';
+        } else {
+        el.src = item.MediaPath;
+        el.controls = true;
+        el.className = 'w-100 rounded';
+        }
+        container.appendChild(el);
+        }
+        else {
+        const carouselId = 'mediaCarousel';
+        const indicators = [];
+        const innerItems = [];
+
+        mediaItems.forEach((item, index) => {
+        const isActive = index === 0 ? 'active' : '';
+        const mediaTag = item.MediaType?.toUpperCase() === 'VIDEO' || item.MediaPath?.endsWith('.mp4')
+        ? `<video controls class="d-block w-100 rounded"><source src="${item.MediaPath}" type="video/mp4"></video>`
+        : `<img src="${item.MediaPath}" class="d-block w-100 rounded" alt="">`;
+
+        indicators.push(`<button type="button" data-bs-target="#${carouselId}" data-bs-slide-to="${index}" class="${isActive}" aria-current="${isActive ? 'true' : ''}" aria-label="Slide ${index + 1}"></button>`);
+        innerItems.push(`<div class="carousel-item ${isActive}">${mediaTag}</div>`);
+        });
+
+        container.innerHTML = `
+        <div id="${carouselId}" class="carousel slide" data-bs-ride="carousel">
+        <div class="carousel-indicators">
+        ${indicators.join('')}
+        </div>
+        <div class="carousel-inner">
+        ${innerItems.join('')}
+        </div>
+        <button class="carousel-control-prev" type="button" data-bs-target="#${carouselId}" data-bs-slide="prev">
+        <span class="carousel-control-prev-icon" aria-hidden="true"></span>
+        <span class="visually-hidden">Previous</span>
+        </button>
+        <button class="carousel-control-next" type="button" data-bs-target="#${carouselId}" data-bs-slide="next">
+        <span class="carousel-control-next-icon" aria-hidden="true"></span>
+        <span class="visually-hidden">Next</span>
+        </button>
+        </div>`;
+        }
+
+        new bootstrap.Modal(document.getElementById('mediaModal')).show();
+        }
+
+        function showFinalMediaPopup(mediaItems) {
+        showMediaPopup(mediaItems);
         }
 
     </script>
@@ -433,24 +437,25 @@
 
 @functions {
     @functions {
-        async Task RenderChecklistNode(AuditChecklistNode node, int level, bool isVerified)
+        async Task RenderChecklistNode(AuditChecklistNode node, int level, bool isVerified, bool isReadonlyUser)
+
         {
             var collapseId = $"collapse-{node.Id}";
             var paddingClass = $"ps-{level * 3}";
             <li id="node-@node.Id"
-                class="mb-3 @paddingClass"
-                data-weight="@(node.Weight ?? 0)"
-                data-score-x="@(node.ScoreX?.ToString("0.00") ?? "0")">
+            class="mb-3 @paddingClass"
+            data-weight="@(node.Weight ?? 0)"
+            data-score-x="@(node.ScoreX?.ToString("0.00") ?? "0")">
 
                 <div class="card border-secondary">
                     <!-- HEADER: toggle + skor -->
                     <div class="card-header bg-light d-flex align-items-center">
                         <button class="btn btn-link flex-grow-1 text-start py-0"
-                                type="button"
-                                data-bs-toggle="collapse"
-                                data-bs-target="#@collapseId"
-                                aria-expanded="false"
-                                aria-controls="@collapseId">
+                        type="button"
+                        data-bs-toggle="collapse"
+                        data-bs-target="#@collapseId"
+                        aria-expanded="false"
+                        aria-controls="@collapseId">
                             <span class="fw-bold text-dark">@node.Title</span>
                             @if (!string.IsNullOrWhiteSpace(node.Description))
                             {
@@ -474,8 +479,8 @@
                             @if (node.Type == "QUESTION")
                             {
                                 <div class="option-group mb-3"
-                                     data-node-id="@node.Id"
-                                     data-score-option="@node.ScoreOption">
+                                data-node-id="@node.Id"
+                                data-score-option="@node.ScoreOption">
                                     @{
                                         var opts = (node.ScoreOption ?? "")
                                         .Split('/', StringSplitOptions.RemoveEmptyEntries)
@@ -499,9 +504,9 @@
                                         };
                                         bool active = node.ScoreInput == opt;
                                         <button type="button"
-                                                class="btn btn-sm option-btn @(active?"active bg-success text-white":"btn-outline-secondary")"
-                                                data-node-id="@node.Id"
-                                                data-score="@opt"
+                                        class="btn btn-sm option-btn @(active?"active bg-success text-white":"btn-outline-secondary")"
+                                        data-node-id="@node.Id"
+                                        data-score="@opt"
                                         @(isVerified ? "disabled" : "")>
                                             @(opt == "X" ? "X" : $"{opt} ({val:0.00})")
                                         </button>
@@ -509,34 +514,39 @@
                                 </div>
 
                                 <div class="mb-3">
-                                    <button type="button"
-                                            class="btn btn-sm btn-secondary cancel-score-btn"
-                                            data-node-id="@node.Id"
-                                    @(isVerified ? "disabled" : "")>
-                                        Batal
-                                    </button>
-                                    <button type="button"
-                                            class="btn btn-sm btn-primary update-score-btn"
-                                            data-node-id="@node.Id"
-                                            data-audit-id="@ViewBag.AuditId"
-                                    @(isVerified ? "disabled" : "")>
-                                        Update Nilai
-                                    </button>
+                                    @if (!isReadonlyUser)
+                                    {
+                                        <button type="button"
+                                        class="btn btn-sm btn-secondary cancel-score-btn"
+                                        data-node-id="@node.Id"
+                                        @(isVerified ? "disabled" : "")>
+                                            Batal
+                                        </button>
+                                        <button type="button"
+                                        class="btn btn-sm btn-primary update-score-btn"
+                                        data-node-id="@node.Id"
+                                        data-audit-id="@ViewBag.AuditId"
+                                        @(isVerified ? "disabled" : "")>
+                                            Update Nilai
+                                        </button>
+                                    }
                                 </div>
 
                                 <div class="d-flex gap-2 align-items-center mb-3">
                                     @if (node.MediaItems?.Any() ?? false)
                                     {
                                         <button class="btn btn-outline-primary btn-sm"
-                                                onclick='showMediaPopup(@Html.Raw(JsonConvert.SerializeObject(node.MediaItems ?? new List<MediaItem> { })))'>
+                                        onclick='showMediaPopup(@Html.Raw(JsonConvert.SerializeObject(node.MediaItems ?? new List<MediaItem> { })))'>
                                             <i class="bi bi-image me-1"></i> Lihat Dokumentasi
                                         </button>
                                     }
-
-                                    <form asp-controller="Audit" asp-action="UploadDocument" asp-route-nodeId="@node.Id" asp-route-auditId="@ViewBag.AuditId" enctype="multipart/form-data" method="post" class="d-flex align-items-center">
-                                        <input type="file" name="file" class="form-control form-control-sm me-2" required @(isVerified ? "disabled" : "") />
-                                        <button type="submit" class="btn btn-sm btn-primary" @(isVerified ? "disabled" : "")>Upload</button>
-                                    </form>
+                                    @if (!isReadonlyUser)
+                                    {
+                                        <form asp-controller="Audit" asp-action="UploadDocument" asp-route-nodeId="@node.Id" asp-route-auditId="@ViewBag.AuditId" enctype="multipart/form-data" method="post" class="d-flex align-items-center">
+                                            <input type="file" name="file" class="form-control form-control-sm me-2" required @(isVerified ? "disabled" : "") />
+                                            <button type="submit" class="btn btn-sm btn-primary" @(isVerified ? "disabled" : "")>Upload</button>
+                                        </form>
+                                    }
                                 </div>
                             }
 
@@ -552,7 +562,7 @@
                                 <ul class="list-unstyled mt-3">
                                     @foreach (var child in node.Children)
                                     {
-                                        RenderChecklistNode(child, level + 1, isVerified);
+                                        RenderChecklistNode(child, level + 1, isVerified, isReadonlyUser);
                                     }
                                 </ul>
                             }
