@@ -22,11 +22,15 @@ namespace e_Pas_CMS.Controllers
 
         public async Task<IActionResult> Index()
         {
+            var currentUser = User.Identity?.Name;
+            bool isReadonlyUser = currentUser == "usermanagement1";
+
             var audits = await (from s in _context.spbus
                                 join a in _context.trx_audits on s.id equals a.spbu_id
                                 join u in _context.app_users on a.app_user_id equals u.id into aud
                                 from u in aud.DefaultIfEmpty()
-                                where a.status == "UNDER_REVIEW" || a.status == "VERIFIED"
+                                where (isReadonlyUser ? a.status == "VERIFIED"
+                                                      : a.status == "UNDER_REVIEW" || a.status == "VERIFIED")
                                 select new
                                 {
                                     Audit = a,
