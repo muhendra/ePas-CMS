@@ -8,9 +8,11 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using e_Pas_CMS.Data;
 using e_Pas_CMS.ViewModels;
+using Microsoft.AspNetCore.Authorization;
 
 namespace e_Pas_CMS.Controllers
 {
+    [Authorize]
     public class AuditReportController : Controller
     {
         private readonly EpasDbContext _context;

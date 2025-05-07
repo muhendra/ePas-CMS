@@ -355,8 +355,6 @@ else
     @await Html.PartialAsync("_ChecklistPartial", Model.Elements, checklistViewData)
 }
 
-
-
 <!-- Q&Q CHECK (tabel hasil Quality & Quantity Check jika ada) -->
 @if (Model.QqChecks?.Any() == true)
 {
@@ -366,7 +364,7 @@ else
             <thead class="table-light">
                 <tr>
                     <th>Nozzle Number</th>
-                    <th>DU Make</th>
+                    <th>DU Make</th>''
                     <th>DU Serial No</th>
                     <th>Product</th>
                     <th>Mode</th>

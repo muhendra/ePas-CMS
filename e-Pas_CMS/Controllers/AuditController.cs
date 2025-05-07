@@ -6,11 +6,13 @@ using System.Threading.Tasks;
 using Dapper;
 using e_Pas_CMS.Data;
 using e_Pas_CMS.ViewModels;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
 namespace e_Pas_CMS.Controllers
 {
+    [Authorize]
     public class AuditController : Controller
     {
         private readonly EpasDbContext _context;

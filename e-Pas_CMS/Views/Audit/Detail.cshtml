@@ -51,52 +51,6 @@
     </div>
 </div>
 
-<!-- CATATAN AUDIT -->
-@if (Model.AuditType == "Mystery Audit" || Model.AuditType == "Mystery Guest")
-{
-    @if (!string.IsNullOrEmpty(Model.Notes) || (Model.MediaNotes != null && Model.MediaNotes.Any()))
-    {
-        <div class="card p-4 mb-5 shadow-sm">
-            <h4 class="fw-bold mb-4">
-                @(Model.AuditType == "Mystery Guest" ? "Mystery Guest" : Model.AuditType == "Mystery Audit" ? "Mystery Audit" : "Catatan Audit")
-            </h4>
-
-            @* Teks Catatan *@
-            @if (!string.IsNullOrEmpty(Model.Notes))
-            {
-                <div class="border rounded p-3 bg-light mb-4">
-                    @Model.Notes
-                </div>
-            }
-
-            @* Gambar/Video Catatan *@
-            @if (Model.MediaNotes != null && Model.MediaNotes.Any())
-            {
-                <div class="row row-cols-1 row-cols-md-2 g-4">
-                    @foreach (var media in Model.MediaNotes)
-                    {
-                        <div class="col d-flex justify-content-center">
-                            <div class="card h-100 p-3 d-flex align-items-center justify-content-center">
-                                @if (media.MediaType?.ToUpper() == "VIDEO" || media.MediaPath.EndsWith(".mp4", StringComparison.OrdinalIgnoreCase))
-                                {
-                                    <video controls class="rounded shadow-sm" style="max-height:800px; width:auto; max-width:100%;">
-                                        <source src="@media.MediaPath" type="video/mp4" />
-                                        Your browser does not support the video tag.
-                                    </video>
-                                }
-                                else
-                                {
-                                    <img src="@media.MediaPath" alt="Foto Catatan Audit" class="rounded shadow-sm" style="max-height:800px; width:auto; max-width:100%;" />
-                                }
-                            </div>
-                        </div>
-                    }
-                </div>
-            }
-        </div>
-    }
-}
-
 <!-- CHECKLIST AUDIT -->
 @if (Model.AuditType == "Mystery Audit" || Model.AuditType == "Regular Audit" || Model.AuditType == "Basic Operational")
 {
@@ -157,6 +111,51 @@
     </div>
 }
 
+<!-- CATATAN AUDIT -->
+@if (Model.AuditType == "Mystery Audit" || Model.AuditType == "Mystery Guest")
+{
+    @if (!string.IsNullOrEmpty(Model.Notes) || (Model.MediaNotes != null && Model.MediaNotes.Any()))
+    {
+        <div class="card p-4 mb-5 shadow-sm">
+            <h4 class="fw-bold mb-4">
+                @(Model.AuditType == "Mystery Guest" ? "Mystery Guest" : Model.AuditType == "Mystery Audit" ? "Mystery Audit" : "Catatan Audit")
+            </h4>
+
+            @* Teks Catatan *@
+            @if (!string.IsNullOrEmpty(Model.Notes))
+            {
+                <div class="border rounded p-3 bg-light mb-4">
+                    @Model.Notes
+                </div>
+            }
+
+            @* Gambar/Video Catatan *@
+            @if (Model.MediaNotes != null && Model.MediaNotes.Any())
+            {
+                <div class="row row-cols-1 row-cols-md-2 g-4">
+                    @foreach (var media in Model.MediaNotes)
+                    {
+                        <div class="col d-flex justify-content-center">
+                            <div class="card h-100 p-3 d-flex align-items-center justify-content-center">
+                                @if (media.MediaType?.ToUpper() == "VIDEO" || media.MediaPath.EndsWith(".mp4", StringComparison.OrdinalIgnoreCase))
+                                {
+                                    <video controls class="rounded shadow-sm" style="max-height:800px; width:auto; max-width:100%;">
+                                        <source src="@media.MediaPath" type="video/mp4" />
+                                        Your browser does not support the video tag.
+                                    </video>
+                                }
+                                else
+                                {
+                                    <img src="@media.MediaPath" alt="Foto Catatan Audit" class="rounded shadow-sm" style="max-height:800px; width:auto; max-width:100%;" />
+                                }
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+    }
+}
 <!-- BERITA ACARA -->
 @if (!string.IsNullOrEmpty(Model.Notes) || (Model.FinalDocuments != null && Model.FinalDocuments.Any()))
 {
@@ -248,6 +247,15 @@
 @section Styles {
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css" />
     <style>
+        .card-header .btn-sm {
+            min-width: 70px;
+        }
+
+        .card-header .option-group .btn {
+            min-width: 60px;
+            text-align: center;
+        }
+
         .rotate-arrow {
         transition: transform .3s ease;
         }
@@ -277,6 +285,11 @@
         display: block;
         margin: 0 auto;
         }
+
+        .modal {
+            outline: none !important;
+        }
+
     </style>
 }
 
@@ -425,7 +438,14 @@
         </div>`;
         }
 
-        new bootstrap.Modal(document.getElementById('mediaModal')).show();
+                const modalEl = document.getElementById('mediaModal');
+        const modal = new bootstrap.Modal(modalEl, {
+            backdrop: 'static',
+            keyboard: false,
+            focus: false // <== mencegah scroll auto ke dalam modal
+        });
+        modal.show();
+
         }
 
         function showFinalMediaPopup(mediaItems) {
@@ -436,7 +456,6 @@
 }
 
 @functions {
-    @functions {
         async Task RenderChecklistNode(AuditChecklistNode node, int level, bool isVerified, bool isReadonlyUser)
 
         {
@@ -449,38 +468,28 @@
 
                 <div class="card border-secondary">
                     <!-- HEADER: toggle + skor -->
-                    <div class="card-header bg-light d-flex align-items-center">
-                        <button class="btn btn-link flex-grow-1 text-start py-0"
-                        type="button"
-                        data-bs-toggle="collapse"
-                        data-bs-target="#@collapseId"
-                        aria-expanded="false"
-                        aria-controls="@collapseId">
-                            <span class="fw-bold text-dark">@node.Title</span>
-                            @if (!string.IsNullOrWhiteSpace(node.Description))
-                            {
-                                <span class="fw-bold fs-6 text-muted ms-2">@node.Description</span>
-                            }
-                            <i class="bi bi-chevron-right rotate-arrow ms-2"></i>
-                        </button>
-                        @if (node.ScoreInput != "X")
+                <div class="card-header bg-light d-flex flex-wrap justify-content-between align-items-center gap-2">
+                    <button class="btn btn-link flex-grow-1 text-start py-0"
+                            type="button"
+                            data-bs-toggle="collapse"
+                            data-bs-target="#@collapseId"
+                            aria-expanded="false"
+                            aria-controls="@collapseId">
+                        <span class="fw-bold text-dark">@node.Title</span>
+                        @if (!string.IsNullOrWhiteSpace(node.Description))
                         {
-                            <div class="ms-auto text-end">
-                                <small>Skor:</small>
-                                <strong class="score-x" data-node-id="@node.Id">0.00</strong>
-                            </div>
+                            <span class="fw-bold fs-6 text-muted ms-2">@node.Description</span>
                         }
-                    </div>
-
-                    <!-- COLLAPSE BODY -->
-                    <div id="@collapseId" class="collapse">
-                        <div class="card-body">
-
-                            @if (node.Type == "QUESTION")
-                            {
-                                <div class="option-group mb-3"
-                                data-node-id="@node.Id"
-                                data-score-option="@node.ScoreOption">
+                        <i class="bi bi-chevron-right rotate-arrow ms-2"></i>
+                    </button>
+                    @if (node.Type == "QUESTION")
+                    {
+                        <div class="ms-auto d-flex align-items-center flex-wrap gap-2 w-100 justify-content-between">
+                            <!-- Pilihan A-F -->
+                            <div class="d-flex align-items-center flex-wrap gap-2">
+                                <div class="option-group"
+                                     data-node-id="@node.Id"
+                                     data-score-option="@node.ScoreOption">
                                     @{
                                         var opts = (node.ScoreOption ?? "")
                                         .Split('/', StringSplitOptions.RemoveEmptyEntries)
@@ -504,51 +513,140 @@
                                         };
                                         bool active = node.ScoreInput == opt;
                                         <button type="button"
-                                        class="btn btn-sm option-btn @(active?"active bg-success text-white":"btn-outline-secondary")"
-                                        data-node-id="@node.Id"
-                                        data-score="@opt"
+                                                class="btn btn-sm option-btn @(active ? "active bg-success text-white" : "btn-outline-secondary")"
+                                                data-node-id="@node.Id"
+                                                data-score="@opt"
                                         @(isVerified ? "disabled" : "")>
                                             @(opt == "X" ? "X" : $"{opt} ({val:0.00})")
                                         </button>
                                     }
                                 </div>
 
-                                <div class="mb-3">
-                                    @if (!isReadonlyUser)
-                                    {
-                                        <button type="button"
-                                        class="btn btn-sm btn-secondary cancel-score-btn"
-                                        data-node-id="@node.Id"
-                                        @(isVerified ? "disabled" : "")>
-                                            Batal
-                                        </button>
-                                        <button type="button"
-                                        class="btn btn-sm btn-primary update-score-btn"
-                                        data-node-id="@node.Id"
-                                        data-audit-id="@ViewBag.AuditId"
-                                        @(isVerified ? "disabled" : "")>
-                                            Update Nilai
-                                        </button>
-                                    }
+                                <!-- Skor -->
+                                <div class="text-end">
+                                    <small>Skor:</small><br />
+                                    <strong class="score-x text-primary" data-node-id="@node.Id">
+                                        @(node.ScoreX?.ToString("0.00") ?? "0.00")
+                                    </strong>
                                 </div>
+                            </div>
 
-                                <div class="d-flex gap-2 align-items-center mb-3">
+                            <!-- Tombol Update + Batal -->
+                            @if (!isReadonlyUser)
+                            {
+                                <div class="d-flex gap-2 ms-auto">
+                                    <button type="button"
+                                            class="btn btn-sm btn-primary update-score-btn"
+                                            data-node-id="@node.Id"
+                                            data-audit-id="@ViewBag.AuditId"
+                                    @(isVerified ? "disabled" : "")>
+                                        Update
+                                    </button>
+
+                                    <button type="button"
+                                            class="btn btn-sm btn-secondary cancel-score-btn"
+                                            data-node-id="@node.Id"
+                                    @(isVerified ? "disabled" : "")>
+                                        Batal
+                                    </button>
+                                </div>
+                            }
+                        </div>
+                    }
+
+                    else if (node.ScoreInput != "X")
+                    {
+                        <div class="ms-auto text-end">
+                            <small>Skor:</small>
+                            <strong class="score-x" data-node-id="@node.Id">0.00</strong>
+                        </div>
+                    }
+                </div>
+
+
+                    <!-- COLLAPSE BODY -->
+                    <div id="@collapseId" class="collapse">
+                        <div class="card-body">
+                        @if (node.Type == "QUESTION")
+                        {
+                            // @if (!isReadonlyUser)
+                            // {
+                            //     <div class="mb-2 d-flex gap-2 align-items-center flex-wrap">
+                            //         <button type="button"
+                            //                 class="btn btn-sm btn-primary update-score-btn"
+                            //                 data-node-id="@node.Id"
+                            //                 data-audit-id="@ViewBag.AuditId"
+                            //         @(isVerified ? "disabled" : "")>
+                            //             Update Nilai
+                            //         </button>
+
+                            //         <button type="button"
+                            //                 class="btn btn-sm btn-secondary cancel-score-btn"
+                            //                 data-node-id="@node.Id"
+                            //         @(isVerified ? "disabled" : "")>
+                            //             Batal
+                            //         </button>
+                            //     </div>
+                            // }
+                            @if (node.Type == "QUESTION" && (node.Children == null || !node.Children.Any()))
+                            {
+                                <div class="d-flex gap-2 align-items-center mb-3 flex-wrap">
                                     @if (node.MediaItems?.Any() ?? false)
                                     {
-                                        <button class="btn btn-outline-primary btn-sm"
-                                        onclick='showMediaPopup(@Html.Raw(JsonConvert.SerializeObject(node.MediaItems ?? new List<MediaItem> { })))'>
+                                        <button type="button" class="btn btn-outline-primary btn-sm"
+                                                onclick='showMediaPopup(@Html.Raw(JsonConvert.SerializeObject(node.MediaItems ?? new List<MediaItem> { })))'>
                                             <i class="bi bi-image me-1"></i> Lihat Dokumentasi
                                         </button>
                                     }
+
                                     @if (!isReadonlyUser)
                                     {
-                                        <form asp-controller="Audit" asp-action="UploadDocument" asp-route-nodeId="@node.Id" asp-route-auditId="@ViewBag.AuditId" enctype="multipart/form-data" method="post" class="d-flex align-items-center">
-                                            <input type="file" name="file" class="form-control form-control-sm me-2" required @(isVerified ? "disabled" : "") />
-                                            <button type="submit" class="btn btn-sm btn-primary" @(isVerified ? "disabled" : "")>Upload</button>
+                                        <form asp-controller="Audit"
+                                              asp-action="UploadDocument"
+                                              asp-route-nodeId="@node.Id"
+                                              asp-route-auditId="@ViewBag.AuditId"
+                                              enctype="multipart/form-data"
+                                              method="post"
+                                              class="d-flex align-items-center">
+                                            <input type="file" name="file" class="form-control form-control-sm me-2"
+                                                   required @(isVerified ? "disabled" : "") />
+                                            <button type="submit" class="btn btn-sm btn-secondary" @(isVerified ? "disabled" : "")>
+                                                Upload
+                                            </button>
                                         </form>
                                     }
                                 </div>
+
                             }
+
+                            // <div class="d-flex gap-2 align-items-center mb-3">
+                            //     @if (node.MediaItems?.Any() ?? false)
+                            //     {
+                            //         <button class="btn btn-outline-primary btn-sm"
+                            //                 onclick='showMediaPopup(@Html.Raw(JsonConvert.SerializeObject(node.MediaItems ?? new List<MediaItem> { })))'>
+                            //             <i class="bi bi-image me-1"></i> Lihat Dokumentasi
+                            //         </button>
+                            //     }
+
+                            //     @if (!isReadonlyUser)
+                            //     {
+                            //         <form asp-controller="Audit" asp-action="UploadDocument"
+                            //               asp-route-nodeId="@node.Id"
+                            //               asp-route-auditId="@ViewBag.AuditId"
+                            //               enctype="multipart/form-data"
+                            //               method="post"
+                            //               class="d-flex align-items-center">
+                            //             <input type="file" name="file" class="form-control form-control-sm me-2"
+                            //                    required @(isVerified ? "disabled" : "") />
+                            //             <button type="submit" class="btn btn-sm btn-secondary"
+                            //             @(isVerified ? "disabled" : "")>
+                            //                 Upload
+                            //             </button>
+                            //         </form>
+                            //     }
+                            // </div>
+                        }
+
 
                             @if (node.ScoreInput == "X" && node.ScoreX.HasValue)
                             {
@@ -574,4 +672,3 @@
         }
     }
 
-}
