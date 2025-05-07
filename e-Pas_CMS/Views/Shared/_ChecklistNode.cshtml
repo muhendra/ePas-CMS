@@ -1,0 +1,152 @@
+﻿@using Newtonsoft.Json
+@model e_Pas_CMS.ViewModels.AuditChecklistNode
+
+@{
+    int level = ViewBag.Level ?? 0;
+    bool isVerified = ViewBag.IsVerified ?? false;
+    bool isReadonlyUser = ViewBag.IsReadonlyUser ?? false;
+    string auditId = ViewBag.AuditId ?? "";
+    string collapseId = $"collapse-{Model.Id}";
+    string paddingClass = $"ps-{level * 3}";
+}
+<li id="node-@Model.Id"
+    class="mb-3 @paddingClass"
+    data-weight="@(Model.Weight ?? 0)"
+    data-score-x="@(Model.ScoreX?.ToString("0.00") ?? "0")">
+
+    <div class="card border-secondary">
+        <!-- HEADER -->
+        <div class="card-header bg-light d-flex align-items-center">
+            <button class="btn btn-link flex-grow-1 text-start py-0"
+                    type="button"
+                    data-bs-toggle="collapse"
+                    data-bs-target="#@collapseId"
+                    aria-expanded="false"
+                    aria-controls="@collapseId">
+                <span class="fw-bold text-dark">@Model.Title</span>
+                @if (!string.IsNullOrWhiteSpace(Model.Description))
+                {
+                    <span class="fw-bold fs-6 text-muted ms-2">@Model.Description</span>
+                }
+                <i class="bi bi-chevron-right rotate-arrow ms-2"></i>
+            </button>
+            @if (Model.ScoreInput != "X")
+            {
+                <div class="ms-auto text-end">
+                    <small>Skor:</small>
+                    <strong class="score-x" data-node-id="@Model.Id">0.00</strong>
+                </div>
+            }
+        </div>
+
+        <!-- BODY -->
+        <div id="@collapseId" class="collapse">
+            <div class="card-body">
+
+                @if (Model.Type == "QUESTION")
+                {
+                    <div class="option-group mb-3"
+                         data-node-id="@Model.Id"
+                         data-score-option="@Model.ScoreOption">
+                        @{
+                            var opts = (Model.ScoreOption ?? "")
+                            .Split('/', StringSplitOptions.RemoveEmptyEntries)
+                            .Select(s => s.Trim().ToUpper())
+                            .SelectMany(o => o == "A-F"
+                            ? new[] { "A", "B", "C", "D", "E", "F" }
+                            : new[] { o })
+                            .Distinct();
+                        }
+                        @foreach (var opt in opts)
+                        {
+                            decimal val = opt switch
+                            {
+                                "A" => 1m,
+                                "B" => 0.8m,
+                                "C" => 0.6m,
+                                "D" => 0.4m,
+                                "E" => 0.2m,
+                                "F" => 0m,
+                                _ => 0m
+                            };
+                            bool active = Model.ScoreInput == opt;
+                            <button type="button"
+                                    class="btn btn-sm option-btn @(active ? "active bg-success text-white" : "btn-outline-secondary")"
+                                    data-node-id="@Model.Id"
+                                    data-score="@opt"
+                            @(isVerified ? "disabled" : "")>
+                                @(opt == "X" ? "X" : $"{opt} ({val:0.00})")
+                            </button>
+                        }
+                    </div>
+
+                    <div class="mb-3">
+                        @if (!isReadonlyUser)
+                        {
+                            <button type="button"
+                                    class="btn btn-sm btn-secondary cancel-score-btn"
+                                    data-node-id="@Model.Id"
+                            @(isVerified ? "disabled" : "")>
+                                Batal
+                            </button>
+                            <button type="button"
+                                    class="btn btn-sm btn-primary update-score-btn"
+                                    data-node-id="@Model.Id"
+                                    data-audit-id="@auditId"
+                            @(isVerified ? "disabled" : "")>
+                                Update Nilai
+                            </button>
+                        }
+                    </div>
+
+                    <div class="d-flex gap-2 align-items-center mb-3">
+                        @if (Model.MediaItems?.Any() ?? false)
+                        {
+                            <button class="btn btn-outline-primary btn-sm"
+                                    onclick='showMediaPopup(@Html.Raw(JsonConvert.SerializeObject(Model.MediaItems ?? new List<e_Pas_CMS.ViewModels.MediaItem>())))'>
+                                <i class="bi bi-image me-1"></i> Lihat Dokumentasi
+                            </button>
+                        }
+                        @if (!isReadonlyUser)
+                        {
+                            <form asp-controller="Audit"
+                                  asp-action="UploadDocument"
+                                  asp-route-nodeId="@Model.Id"
+                                  asp-route-auditId="@auditId"
+                                  enctype="multipart/form-data"
+                                  method="post"
+                                  class="d-flex align-items-center">
+                                <input type="file" name="file" class="form-control form-control-sm me-2" required @(isVerified ? "disabled" : "") />
+                                <button type="submit" class="btn btn-sm btn-primary" @(isVerified ? "disabled" : "")>Upload</button>
+                            </form>
+                        }
+                    </div>
+                }
+
+                @if (Model.ScoreInput == "X" && Model.ScoreX.HasValue)
+                {
+                    <div class="mt-1">
+                        <span class="badge bg-info text-dark">Nilai X: @Model.ScoreX.Value.ToString("0.00")</span>
+                    </div>
+                }
+
+                @if (Model.Children?.Any() ?? false)
+                {
+                    <ul class="list-unstyled mt-3">
+                        @foreach (var child in Model.Children)
+                        {
+                            Html.RenderPartial("_ChecklistNode", child, new ViewDataDictionary(ViewData)
+                    {
+                    { "Level", level + 1 },
+                    { "IsVerified", isVerified },
+                    { "IsReadonlyUser", isReadonlyUser },
+                    { "AuditId", auditId }
+                    });
+                        }
+                    </ul>
+                }
+
+            </div>
+        </div>
+    </div>
+</li>

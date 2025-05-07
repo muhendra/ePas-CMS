@@ -142,71 +142,72 @@ namespace e_Pas_CMS.Controllers
                 KomentarManager = ""
             };
 
-            string mediaQuestionSql = @"
-                SELECT media_type AS MediaType, media_path AS MediaPath
-                FROM trx_audit_media
-                WHERE trx_audit_id = @id AND type = 'QUESTION';
-            ";
-            string mediaFinalSql = @"
-                SELECT media_type AS MediaType, media_path AS MediaPath
-                FROM trx_audit_media
-                WHERE trx_audit_id = @id AND type = 'FINAL';
-            ";
-            // Media untuk pertanyaan (type QUESTION) disimpan di model.MediaNotes
-            var mediaQuestionList = await conn.QueryAsync<MediaItem>(mediaQuestionSql, new { id });
+            var mediaQuestionList = await conn.QueryAsync<MediaItem>(
+                @"SELECT media_type AS MediaType, media_path AS MediaPath FROM trx_audit_media WHERE trx_audit_id = @id AND type = 'QUESTION';",
+                new { id }
+            );
             model.MediaNotes = mediaQuestionList.ToList();
-            // Media untuk lampiran final (type FINAL) disimpan di model.FinalDocuments
-            var mediaFinalList = await conn.QueryAsync<MediaItem>(mediaFinalSql, new { id });
+
+            var mediaFinalList = await conn.QueryAsync<MediaItem>(
+                @"SELECT media_type AS MediaType, media_path AS MediaPath FROM trx_audit_media WHERE trx_audit_id = @id AND type = 'FINAL';",
+                new { id }
+            );
             model.FinalDocuments = mediaFinalList.ToList();
 
-            string qqSql = @"
-                SELECT 
-                    nozzle_number               AS NozzleNumber,
-                    du_make                     AS DuMake,
-                    du_serial_no                AS DuSerialNo,
-                    product                     AS Product,
-                    mode                        AS Mode,
-                    quantity_variation_with_measure   AS QuantityVariationWithMeasure,
-                    quantity_variation_in_percentage AS QuantityVariationInPercentage,
-                    observed_density            AS ObservedDensity,
-                    observed_temp               AS ObservedTemp,
-                    observed_density_15_degree  AS ObservedDensity15Degree,
-                    reference_density_15_degree AS ReferenceDensity15Degree,
-                    tank_number                 AS TankNumber,
-                    density_variation           AS DensityVariation
-                FROM trx_audit_qq
-                WHERE trx_audit_id = @id;
-            ";
-            var qqData = await conn.QueryAsync<AuditQqCheckItem>(qqSql, new { id });
+            var qqData = await conn.QueryAsync<AuditQqCheckItem>(
+                @"SELECT nozzle_number, du_make, du_serial_no, product, mode,
+                quantity_variation_with_measure, quantity_variation_in_percentage,
+                observed_density, observed_temp, observed_density_15_degree,
+                reference_density_15_degree, tank_number, density_variation
+          FROM trx_audit_qq WHERE trx_audit_id = @id;",
+                new { id }
+            );
             model.QqChecks = qqData.ToList();
 
-            string checklistSql = @"
+            var checklistSql = @"
                 SELECT
-                    mqd.id,
-                    mqd.title,
-                    mqd.description,
-                    mqd.parent_id,
-                    mqd.type,
-                    mqd.weight,
-                    mqd.score_option,
-                    tac.score_input,
-                    tac.score_af,
-                    tac.score_x
+                  mqd.id,
+                  mqd.title,
+                  mqd.description,
+                  mqd.parent_id,
+                  mqd.type,
+                  mqd.weight,
+                  mqd.score_option,
+                  tac.score_input,
+                  tac.score_af,
+                  tac.score_x
                 FROM master_questioner_detail mqd
                 LEFT JOIN trx_audit_checklist tac
-                    ON tac.master_questioner_detail_id = mqd.id
-                    AND tac.trx_audit_id = @id
+                  ON tac.master_questioner_detail_id = mqd.id
+                 AND tac.trx_audit_id = @id
                 WHERE mqd.master_questioner_id = (
-                    SELECT master_questioner_checklist_id 
-                    FROM trx_audit 
-                    WHERE id = @id
+                  SELECT master_questioner_checklist_id
+                  FROM trx_audit
+                  WHERE id = @id
                 )
-                ORDER BY mqd.order_no;
-            ";
-            var checklistFlat = await conn.QueryAsync<ChecklistFlatItem>(checklistSql, new { id });
-            var checklistData = checklistFlat.ToList();
+                ORDER BY mqd.order_no";
 
-            model.Elements = BuildHierarchy(checklistData);
+            var checklistData = (await conn.QueryAsync<ChecklistFlatItem>(checklistSql, new { id }))
+                                    .ToList();
+
+            // Load any media per-node
+            var mediaSql = @"
+                SELECT master_questioner_detail_id, media_type, media_path
+                FROM trx_audit_media
+                WHERE trx_audit_id = @id
+                  AND master_questioner_detail_id IS NOT NULL";
+            var mediaList = (await conn.QueryAsync<(string master_questioner_detail_id, string media_type, string media_path)>(mediaSql, new { id }))
+                .GroupBy(x => x.master_questioner_detail_id)
+                .ToDictionary(
+                    g => g.Key,
+                    g => g.Select(m => new MediaItem
+                    {
+                        MediaType = m.media_type,
+                        MediaPath = "https://epas.zarata.co.id" + m.media_path
+                    }).ToList()
+                );
+
+            model.Elements = BuildHierarchy(checklistData, mediaList);
 
             var nilaiAF = new Dictionary<string, decimal>
             {
@@ -217,6 +218,52 @@ namespace e_Pas_CMS.Controllers
                 ["E"] = 0.20m,
                 ["F"] = 0.00m
             };
+
+            foreach (var root in model.Elements)
+            {
+                HitungScorePerNode(root);
+            }
+
+            void HitungScorePerNode(AuditChecklistNode node)
+            {
+                if (node.Children == null || node.Children.Count == 0)
+                {
+                    if (node.Type == "QUESTION" && !string.IsNullOrWhiteSpace(node.ScoreInput) && node.ScoreInput != "X")
+                    {
+                        var input = node.ScoreInput.Trim().ToUpper();
+                        if (nilaiAF.TryGetValue(input, out var nilai))
+                        {
+                            node.ScoreAF = nilai;
+                        }
+                    }
+                }
+                else
+                {
+                    decimal totalScore = 0m;
+                    decimal totalBobot = 0m;
+                    decimal totalWeight = 0m;
+
+                    foreach (var child in node.Children)
+                    {
+                        HitungScorePerNode(child);
+
+                        var bobot = child.Weight ?? 1m;
+
+                        if (child.ScoreAF.HasValue)
+                        {
+                            totalScore += child.ScoreAF.Value * bobot;
+                            totalBobot += bobot;
+                        }
+
+                        totalWeight += child.Weight ?? 0m;
+                    }
+
+                    node.Weight ??= totalWeight; // jika Weight null, isi dengan total bobot anak-anak
+                    node.ScoreAF = totalBobot > 0 ? totalScore / totalBobot : null;
+                }
+            }
+
+            // Skor keseluruhan
             decimal totalNilai = 0m;
             decimal totalBobot = 0m;
             foreach (var q in checklistData.Where(x => x.type == "QUESTION"))
@@ -224,32 +271,15 @@ namespace e_Pas_CMS.Controllers
                 string input = q.score_input?.Trim().ToUpper();
                 decimal bobot = q.weight ?? 0m;
 
-                Console.WriteLine($">> Pertanyaan: {q.title}, Input: {input}, Bobot: {bobot}");
-
-                if (string.IsNullOrWhiteSpace(input))
-                {
-                    Console.WriteLine(">> Skipped: kosong");
+                if (string.IsNullOrWhiteSpace(input) || input == "X")
                     continue;
-                }
-
-                if (input == "X")
-                {
-                    Console.WriteLine(">> Skipped: X");
-                    continue;
-                }
 
                 if (!nilaiAF.TryGetValue(input, out var nilai))
-                {
-                    Console.WriteLine($">> Skipped: input tidak dikenal: {input}");
                     continue;
-                }
 
                 totalNilai += nilai * bobot;
                 totalBobot += bobot;
-
-                Console.WriteLine($">> Ditambahkan: nilai: {nilai}, bobot: {bobot}, subtotal: {nilai * bobot}");
             }
-
 
             model.TotalScore = totalBobot > 0 ? (totalNilai / totalBobot) * 100m : 0m;
             model.MaxScore = totalBobot;
@@ -257,34 +287,39 @@ namespace e_Pas_CMS.Controllers
             model.MinPassingScore = 85.00m;
 
             ViewBag.AuditId = id;
-
             return View(model);
         }
 
-        private List<AuditChecklistNode> BuildHierarchy(List<ChecklistFlatItem> flatList)
+        private List<AuditChecklistNode> BuildHierarchy(
+    List<ChecklistFlatItem> flatList,
+    Dictionary<string, List<MediaItem>> mediaList)
         {
-            var lookupByParent = flatList.ToLookup(item => item.parent_id);
-            List<AuditChecklistNode> Recurse(string parentId) =>
-                lookupByParent[parentId]
-                    .Select(x => new AuditChecklistNode
-                    {
-                        Id = x.id,
-                        Title = x.title,
-                        Description = x.description,
-                        Type = x.type,
-                        Weight = x.weight,
-                        ScoreOption = x.score_option,
-                        ScoreInput = x.score_input,
-                        ScoreAF = x.score_af,
-                        ScoreX = x.score_x,
-                        MediaItems = (x.id != null && ( /* lookup media by ID if exists */ false))
-                                      ? new List<MediaItem>()
-                                      : new List<MediaItem>(),
-                        Children = Recurse(x.id)  // rekursif cari anak dari node ini
-                    })
-                    .ToList();
+            var lookup = flatList.ToLookup(x => x.parent_id);
 
-            return Recurse(null);
+            List<AuditChecklistNode> BuildChildren(string parentId) =>
+                lookup[parentId]
+                .OrderBy(x => x.weight)
+                .Select(item => new AuditChecklistNode
+                {
+                    Id = item.id,
+                    Title = item.title,
+                    Description = item.description,
+                    Type = item.type,
+                    Weight = item.weight,
+                    ScoreOption = item.score_option,
+                    ScoreInput = item.score_input,
+                    ScoreAF = item.score_af,
+                    ScoreX = item.score_x,
+                    MediaItems = mediaList.ContainsKey(item.id)
+                                  ? mediaList[item.id]
+                                  : new List<MediaItem>(),
+                    Children = BuildChildren(item.id)
+                })
+                .ToList();
+
+            return BuildChildren(
+                flatList.Any(x => x.parent_id == null) ? null : ""
+            );
         }
     }
 }

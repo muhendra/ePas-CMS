@@ -17,31 +17,31 @@
 <style>
     /* Gaya tampilan badge compliance */
     .compliance-badge {
-        display: inline-block;
-        min-width: 90px;
-        font-size: 0.75rem;
-        font-weight: 600;
-        border-radius: 0.5rem;
-        padding: 0.25rem 0.5rem;
-        text-align: center;
-        line-height: 1.2;
-        color: white;
+    display: inline-block;
+    min-width: 90px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    border-radius: 0.5rem;
+    padding: 0.25rem 0.5rem;
+    text-align: center;
+    line-height: 1.2;
+    color: white;
     }
 
     .bg-excellent {
-        background-color: #f0ad4e; /* orange */
+    background-color: #f0ad4e; /* orange */
     }
 
     .bg-good {
-        background-color: #5cb85c; /* green */
+    background-color: #5cb85c; /* green */
     }
 
     .bg-improve {
-        background-color: #d9534f; /* red */
+    background-color: #d9534f; /* red */
     }
 
     .bg-none {
-        background-color: #6c757d; /* gray */
+    background-color: #6c757d; /* gray */
     }
 </style>
 
@@ -55,14 +55,14 @@
         <div>
             <small>Daftar Report / </small>
             <a class="text-primary text-decoration-none"
-               href="@Url.Action("Index", "AuditReport")">
+            href="@Url.Action("Index", "AuditReport")">
                 @Model.ReportNo <i class="bi bi-caret-down-fill"></i>
             </a>
         </div>
     </div>
     <div>
         <a class="btn btn-outline-primary"
-           href="@Url.Action("DownloadPdf", "AuditReport", new { id = Context.Request.RouteValues["id"] })">
+        href="@Url.Action("DownloadPdf", "AuditReport", new { id = Context.Request.RouteValues["id"] })">
             <i class="bi bi-file-earmark-pdf"></i> Download PDF
         </a>
     </div>
@@ -239,9 +239,9 @@ else
         <div class="mt-4">
             <div class="d-flex justify-content-between align-items-center mb-2">
                 <h6 class="fw-bold mb-0">@element.Description</h6>
-                <div class="text-muted">
+                @* <div class="text-muted">
                     Skor: <strong>@elementScoreStr</strong>
-                </div>
+                </div> *@
             </div>
 
             <table class="table table-bordered align-middle">
@@ -341,17 +341,21 @@ else
     </div>
 </div>
 
-<!-- CHECKLIST AUDIT (tree view pertanyaan dan jawaban) -->
+@{
+    var checklistViewData = new ViewDataDictionary(ViewData);
+    checklistViewData["Level"] = 0;
+    checklistViewData["IsVerified"] = isVerified;
+    checklistViewData["IsReadonlyUser"] = false;
+    checklistViewData["AuditId"] = ViewBag.AuditId;
+}
+
 @if (Model.AuditType == "Mystery Audit" || Model.AuditType == "Regular Audit" || Model.AuditType == "Basic Operational")
 {
     <h4 class="mt-5 fw-bold">Checklist Audit</h4>
-    <ul id="auditChecklist" class="list-unstyled">
-        @foreach (var node in Model.Elements)
-        {
-            @await Html.PartialAsync("_ChecklistNode", (node, 0, isVerified, Model.AuditId))
-        }
-    </ul>
+    @await Html.PartialAsync("_ChecklistPartial", Model.Elements, checklistViewData)
 }
+
+
 
 <!-- Q&Q CHECK (tabel hasil Quality & Quantity Check jika ada) -->
 @if (Model.QqChecks?.Any() == true)
@@ -516,19 +520,19 @@ else
     </script>
 }
 
-<!-- FUNCTIONS: Rekursif untuk render node checklist -->
 @functions {
-    void RenderChecklistNode(AuditChecklistNode node, int level, bool isVerified)
+    async Task RenderChecklistNode(AuditChecklistNode node, int level, bool isVerified, bool isReadonlyUser)
+
     {
         var collapseId = $"collapse-{node.Id}";
-        var paddingClass = $"ps-{level * 3}";  // padding kiri berdasarkan level untuk indentasi
-
-        <li id="node-@node.Id" class="mb-3 @paddingClass"
+        var paddingClass = $"ps-{level * 3}";
+        <li id="node-@node.Id"
+            class="mb-3 @paddingClass"
             data-weight="@(node.Weight ?? 0)"
             data-score-x="@(node.ScoreX?.ToString("0.00") ?? "0")">
 
             <div class="card border-secondary">
-                <!-- HEADER: Tombol toggle dan tampilan skor (jika bukan X) -->
+                <!-- HEADER: toggle + skor -->
                 <div class="card-header bg-light d-flex align-items-center">
                     <button class="btn btn-link flex-grow-1 text-start py-0"
                             type="button"
@@ -552,19 +556,16 @@ else
                     }
                 </div>
 
-                <!-- COLLAPSE BODY: Detail pertanyaan & jawaban -->
+                <!-- COLLAPSE BODY -->
                 <div id="@collapseId" class="collapse">
                     <div class="card-body">
 
-                        @* -- QUESTION TYPE: jika node ini merupakan pertanyaan (bukan sekedar kategori) -- *@
                         @if (node.Type == "QUESTION")
                         {
-                            <!-- Pilihan jawaban (A-F, X, dll) sebagai button -->
                             <div class="option-group mb-3"
                                  data-node-id="@node.Id"
                                  data-score-option="@node.ScoreOption">
                                 @{
-                                    // Tentukan daftar opsi yang tersedia untuk pertanyaan ini
                                     var opts = (node.ScoreOption ?? "")
                                     .Split('/', StringSplitOptions.RemoveEmptyEntries)
                                     .Select(s => s.Trim().ToUpper())
@@ -583,11 +584,11 @@ else
                                         "D" => 0.4m,
                                         "E" => 0.2m,
                                         "F" => 0m,
-                                        _ => 0m // Untuk opsi lain (misal "YES"/"NO"/"X"), berikan nilai default 0 atau sesuai kebutuhan
+                                        _ => 0m
                                     };
                                     bool active = node.ScoreInput == opt;
                                     <button type="button"
-                                            class="btn btn-sm option-btn @(active ? "active bg-success text-white" : "btn-outline-secondary")"
+                                            class="btn btn-sm option-btn @(active?"active bg-success text-white":"btn-outline-secondary")"
                                             data-node-id="@node.Id"
                                             data-score="@opt"
                                     @(isVerified ? "disabled" : "")>
@@ -596,34 +597,43 @@ else
                                 }
                             </div>
 
-                            <!-- TOMBOL BATAL & UPDATE NILAI (untuk ubah jawaban) -->
                             <div class="mb-3">
-                                <button type="button"
-                                        class="btn btn-sm btn-secondary cancel-score-btn"
-                                        data-node-id="@node.Id"
-                                @(isVerified ? "disabled" : "")>
-                                    Batal
-                                </button>
-                                <button type="button"
-                                        class="btn btn-sm btn-primary update-score-btn"
-                                        data-node-id="@node.Id"
-                                        data-audit-id="@ViewBag.AuditId"
-                                @(isVerified ? "disabled" : "")>
-                                    Update Nilai
-                                </button>
+                                @if (!isReadonlyUser)
+                                {
+                                    <button type="button"
+                                            class="btn btn-sm btn-secondary cancel-score-btn"
+                                            data-node-id="@node.Id"
+                                    @(isVerified ? "disabled" : "")>
+                                        Batal
+                                    </button>
+                                    <button type="button"
+                                            class="btn btn-sm btn-primary update-score-btn"
+                                            data-node-id="@node.Id"
+                                            data-audit-id="@ViewBag.AuditId"
+                                    @(isVerified ? "disabled" : "")>
+                                        Update Nilai
+                                    </button>
+                                }
+                            </div>
+
+                            <div class="d-flex gap-2 align-items-center mb-3">
+                                @if (node.MediaItems?.Any() ?? false)
+                                {
+                                    <button class="btn btn-outline-primary btn-sm"
+                                            onclick='showMediaPopup(@Html.Raw(JsonConvert.SerializeObject(node.MediaItems ?? new List<MediaItem> { })))'>
+                                        <i class="bi bi-image me-1"></i> Lihat Dokumentasi
+                                    </button>
+                                }
+                                @if (!isReadonlyUser)
+                                {
+                                    <form asp-controller="Audit" asp-action="UploadDocument" asp-route-nodeId="@node.Id" asp-route-auditId="@ViewBag.AuditId" enctype="multipart/form-data" method="post" class="d-flex align-items-center">
+                                        <input type="file" name="file" class="form-control form-control-sm me-2" required @(isVerified ? "disabled" : "") />
+                                        <button type="submit" class="btn btn-sm btn-primary" @(isVerified ? "disabled" : "")>Upload</button>
+                                    </form>
+                                }
                             </div>
                         }
 
-                        @* -- MEDIA POPUP: tombol untuk melihat media lampiran jika ada -- *@
-                        @if (node.MediaItems?.Any() ?? false)
-                        {
-                            <button class="btn btn-outline-primary btn-sm mb-3"
-                                    onclick='showMediaPopup(@Html.Raw(JsonConvert.SerializeObject(node.MediaItems ?? new List<MediaItem>())))'>
-                                <i class="bi bi-image me-1"></i> Lihat Dokumentasi
-                            </button>
-                        }
-
-                        @* -- TAMPILKAN NILAI X (jika jawaban "X" memiliki nilai khusus) -- *@
                         @if (node.ScoreInput == "X" && node.ScoreX.HasValue)
                         {
                             <div class="mt-1">
@@ -631,13 +641,12 @@ else
                             </div>
                         }
 
-                        @* -- CHILDREN: Render anak-anak (sub-pertanyaan) secara rekursif jika ada -- *@
                         @if (node.Children?.Any() ?? false)
                         {
                             <ul class="list-unstyled mt-3">
                                 @foreach (var child in node.Children)
                                 {
-                                    RenderChecklistNode(child, level + 1, isVerified);
+                                    RenderChecklistNode(child, level + 1, isVerified, isReadonlyUser);
                                 }
                             </ul>
                         }
