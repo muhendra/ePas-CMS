@@ -155,11 +155,21 @@ namespace e_Pas_CMS.Controllers
             model.FinalDocuments = mediaFinalList.ToList();
 
             var qqData = await conn.QueryAsync<AuditQqCheckItem>(
-                @"SELECT nozzle_number, du_make, du_serial_no, product, mode,
-                quantity_variation_with_measure, quantity_variation_in_percentage,
-                observed_density, observed_temp, observed_density_15_degree,
-                reference_density_15_degree, tank_number, density_variation
-          FROM trx_audit_qq WHERE trx_audit_id = @id;",
+                @"SELECT nozzle_number AS NozzleNumber,
+                       du_make  AS DuMake,
+                       du_serial_no AS DuSerialNo,
+                       product  AS Product,
+                       mode     AS Mode,
+                       quantity_variation_with_measure AS QuantityVariationWithMeasure,
+                       quantity_variation_in_percentage  AS QuantityVariationInPercentage,
+                       observed_density      AS ObservedDensity,
+                       observed_temp         AS ObservedTemp,
+                       observed_density_15_degree   AS ObservedDensity15Degree,
+                       reference_density_15_degree  AS ReferenceDensity15Degree,
+                       tank_number  AS TankNumber,
+                       density_variation AS DensityVariation
+                FROM trx_audit_qq
+                WHERE trx_audit_id = @id",
                 new { id }
             );
             model.QqChecks = qqData.ToList();
