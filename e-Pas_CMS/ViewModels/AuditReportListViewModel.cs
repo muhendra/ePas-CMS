@@ -24,6 +24,21 @@
         public decimal? CPO { get; set; }
         public string KelasSpbu { get; set; }
         public string TrxAuditId { get; set; }
+
+        // Properti detail audit (dari DetailAuditViewModel)
+        public string NamaAuditor { get; set; }
+        public string Status { get; set; }
+        public string Provinsi { get; set; }
+        public string AlamatDetail { get; set; } // rename agar tidak bentrok dengan Address dari summary
+        public decimal TotalScore { get; set; }
+        public decimal MaxScore { get; set; }
+        public decimal FinalScore { get; set; }
+        public string AuditType { get; set; }
+        public List<MediaItem> MediaNotes { get; set; } = new();
+        public List<MediaItem> FinalDocuments { get; set; } = new();
+        public List<AuditChecklistNode> Elements { get; set; } = new();
+        public List<AuditQqCheckItem> QqChecks { get; set; } = new();
+        public string Notes { get; set; }
     }
 
 }
