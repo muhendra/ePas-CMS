@@ -183,7 +183,18 @@ namespace e_Pas_CMS.Controllers
                   mqd.score_option,
                   tac.score_input,
                   tac.score_af,
-                  tac.score_x
+                  tac.score_x,
+                  tac.comment,
+                  mqd.is_penalty,
+                  (
+                    SELECT string_agg(mqd2.penalty_alert, ', ')
+                    FROM trx_audit_checklist tac2
+                    INNER JOIN master_questioner_detail mqd2 ON mqd2.id = tac2.master_questioner_detail_id
+                    WHERE 
+                      tac2.trx_audit_id = @id
+                      AND tac2.score_input = 'F'
+                      AND mqd2.is_penalty = true
+                  ) AS penalty_alert
                 FROM master_questioner_detail mqd
                 LEFT JOIN trx_audit_checklist tac
                   ON tac.master_questioner_detail_id = mqd.id
@@ -193,7 +204,7 @@ namespace e_Pas_CMS.Controllers
                   FROM trx_audit
                   WHERE id = @id
                 )
-                ORDER BY mqd.order_no";
+                ORDER BY mqd.order_no;";
 
             var checklistData = (await conn.QueryAsync<ChecklistFlatItem>(checklistSql, new { id }))
                                     .ToList();
@@ -215,7 +226,7 @@ namespace e_Pas_CMS.Controllers
                     }).ToList()
                 );
 
-            // Build your tree
+            // Build tree
             audit.Elements = BuildHierarchy(checklistData, mediaList);
 
             var validAF = new Dictionary<string, decimal>
@@ -363,6 +374,9 @@ namespace e_Pas_CMS.Controllers
                     ScoreInput = item.score_input,
                     ScoreAF = item.score_af,
                     ScoreX = item.score_x,
+                    Comment = item.comment,
+                    IsPenalty = item.is_penalty,
+                    PenaltyAlert = item.penalty_alert,
                     MediaItems = mediaList.ContainsKey(item.id)
                                   ? mediaList[item.id]
                                   : new List<MediaItem>(),

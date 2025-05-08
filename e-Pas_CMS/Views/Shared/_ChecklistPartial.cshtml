@@ -1,16 +1,7 @@
 ﻿@using e_Pas_CMS.ViewModels
-@using Newtonsoft.Json
 @model List<AuditChecklistNode>
 
-@{
-    bool isVerified = ViewBag.IsVerified ?? false;
-    bool isReadonlyUser = ViewBag.IsReadonlyUser ?? false;
-    string auditId = ViewBag.AuditId ?? "";
+@foreach (var node in Model)
+{
+    @Html.Partial("_ChecklistNode", node)
 }
-
-<ul id="auditChecklist" class="list-unstyled">
-    @foreach (var node in Model)
-    {
-        await Html.RenderPartialAsync("_ChecklistNode", node);
-    }
-</ul>

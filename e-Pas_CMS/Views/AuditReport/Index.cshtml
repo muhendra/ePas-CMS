@@ -1,5 +1,18 @@
 ﻿@model List<e_Pas_CMS.ViewModels.AuditReportListViewModel>
 
+@section Styles {
+    <link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/jquery.dataTables.min.css" />
+    <style>
+        table.dataTable {
+            width: 100% !important;
+        }
+
+        #audit-table_wrapper {
+            overflow-x: auto;
+        }
+    </style>
+}
+
 <h3 class="mb-4 fw-bold">Laporan Audit</h3>
 
 <div class="mb-3">
@@ -11,90 +24,83 @@
     <div>Status: <strong class="text-primary">Semua</strong></div>
 </div>
 
-<div class="table-responsive">
-    <table id="audit-table" class="table table-striped table-hover text-center align-middle">
-        <thead class="table-light">
+<table id="audit-table" class="table table-bordered table-striped nowrap w-100">
+    <thead class="table-light">
+        <tr>
+            <th>No</th>
+            <th>No. SPBU</th>
+            <th>Region</th>
+            <th>Provinsi</th>
+            <th>Kota</th>
+            <th>Alamat</th>
+            <th>SBM</th>
+            <th>SAM</th>
+            <th>Tahun</th>
+            <th>Tanggal Audit</th>
+            <th>Tanggal Submit</th>
+            <th>Auditor</th>
+            <th>Score</th>
+            <th>Good</th>
+            <th>Excellent</th>
+            <th>WTMS</th>
+            <th>Q&Q</th>
+            <th>WMEF</th>
+            <th>Format Fisik</th>
+            <th>CPO</th>
+            <th>Kelas SPBU</th>
+            <th>Aksi</th>
+        </tr>
+    </thead>
+    <tbody>
+        @for (int i = 0; i < Model.Count; i++)
+        {
+            var item = Model[i];
             <tr>
-                <th>No</th>
-                <th>No. SPBU</th>
-                <th>Region</th>
-                <th>Provinsi</th>
-                <th>Kota</th>
-                <th>Alamat</th>
-                <th>SBM</th>
-                <th>SAM</th>
-                <th>Tahun</th>
-                <th>Tanggal Audit</th>
-                <th>Tanggal Submit</th>
-                <th>Auditor</th>
-                <th>Score</th>
-                <th>Good</th>
-                <th>Excellent</th>
-                <th>WTMS</th>
-                <th>Q&Q</th>
-                <th>WMEF</th>
-                <th>Format Fisik</th>
-                <th>CPO</th>
-                <th>Kelas SPBU</th>
-                <th>Aksi</th>
+                <td>@(i + 1)</td>
+                <td>@item.SpbuNo</td>
+                <td>@item.Region</td>
+                <td>@item.Province</td>
+                <td>@item.City</td>
+                <td>@item.Address</td>
+                <td>@item.SBM</td>
+                <td>@item.SAM</td>
+                <td>@item.Year</td>
+                <td>@item.AuditDate?.ToString("dd/MM/yyyy")</td>
+                <td>@item.SubmitDate?.ToString("dd/MM/yyyy HH:mm")</td>
+                <td>@item.Auditor</td>
+                <td>@item.Score</td>
+                <td class="text-@(item.GoodStatus == "CERTIFIED" ? "success" : "danger")">@item.GoodStatus</td>
+                <td class="text-@(item.ExcellentStatus == "CERTIFIED" ? "success" : "danger")">@item.ExcellentStatus</td>
+                <td>@item.WTMS</td>
+                <td>@item.QQ</td>
+                <td>@item.WMEF</td>
+                <td>@item.FormatFisik</td>
+                <td>@item.CPO</td>
+                <td>@item.KelasSpbu</td>
+                <td>
+                    <a class="btn btn-sm btn-outline-primary fw-semibold"
+                       asp-controller="AuditReport" asp-action="Detail" asp-route-id="@item.TrxAuditId">
+                        <i class="bi bi-eye"></i> Detail
+                    </a>
+                </td>
             </tr>
-        </thead>
-        <tbody>
-            @for (int i = 0; i < Model.Count; i++)
-            {
-                var item = Model[i];
-                <tr>
-                    <td>@(i + 1)</td>
-                    <td>@item.SpbuNo</td>
-                    <td>@item.Region</td>
-                    <td>@item.Province</td>
-                    <td>@item.City</td>
-                    <td>@item.Address</td>
-                    <td>@item.SBM</td>
-                    <td>@item.SAM</td>
-                    <td>@item.Year</td>
-                    <td>@item.AuditDate?.ToString("dd/MM/yyyy")</td>
-                    <td>@item.SubmitDate?.ToString("dd/MM/yyyy HH:mm")</td>
-                    <td>@item.Auditor</td>
-                    <td>@item.Score</td>
-                    <td class="text-@(item.GoodStatus == "CERTIFIED" ? "success" : "danger")">@item.GoodStatus</td>
-                    <td class="text-@(item.ExcellentStatus == "CERTIFIED" ? "success" : "danger")">@item.ExcellentStatus</td>
-                    <td>@item.WTMS</td>
-                    <td>@item.QQ</td>
-                    <td>@item.WMEF</td>
-                    <td>@item.FormatFisik</td>
-                    <td>@item.CPO</td>
-                    <td>@item.KelasSpbu</td>
-                    <td>
-                        <a class="btn btn-sm btn-outline-primary fw-semibold"
-                           asp-controller="AuditReport" asp-action="Detail" asp-route-id="@item.TrxAuditId">
-                            <i class="bi bi-eye"></i> Detail
-                        </a>
-                    </td>
-                </tr>
-            }
-        </tbody>
-    </table>
-</div>
+        }
+    </tbody>
+</table>
 
 @section Scripts {
-    <script src="https://cdn.jsdelivr.net/npm/simple-datatables@latest" defer></script>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
     <script>
-        document.addEventListener("DOMContentLoaded", function () {
-            const table = document.querySelector("#audit-table");
-            const dataTable = new simpleDatatables.DataTable(table, {
-                searchable: true,
-                fixedHeight: true,
-                perPage: 10
+        $(document).ready(function () {
+            const table = $('#audit-table').DataTable({
+                scrollX: true,
+                pageLength: 10
             });
 
-            // Custom search box
-            const searchInput = document.getElementById("search-input");
-            if (searchInput) {
-                searchInput.addEventListener("input", function () {
-                    dataTable.search(this.value);
-                });
-            }
+            $('#search-input').on('input', function () {
+                table.search(this.value).draw();
+            });
         });
     </script>
 }

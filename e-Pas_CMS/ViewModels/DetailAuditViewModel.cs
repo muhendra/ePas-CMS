@@ -25,6 +25,8 @@
 
         public string Notes { get; set; } // Untuk isi catatan
         public List<MediaItem> FinalDocuments { get; set; } // Untuk list foto/video FINAL
+        public string PenaltyAlert { get; set; }
+
 
     }
 

@@ -6,6 +6,10 @@
         public string parent_id { get; set; }
         public string title { get; set; }
         public string description { get; set; }
+        public string comment { get; set; }
+        public bool is_penalty { get; set; }
+        public string penalty_alert { get; set; }
+
         public string type { get; set; }
         public decimal? weight { get; set; }
         public string score_input { get; set; }
