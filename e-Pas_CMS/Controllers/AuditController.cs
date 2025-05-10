@@ -441,13 +441,12 @@ namespace e_Pas_CMS.Controllers
 INSERT INTO trx_audit_media 
     (id, trx_audit_id, master_questioner_detail_id, media_type, media_path, type, status, created_date, created_by, updated_date, updated_by)
 VALUES 
-    (uuid_generate_v4(), @auditId, @nodeId, @mediaType, @mediaPath, 'FINAL', 'ACTIVE', NOW(), @createdBy, NOW(), @createdBy)";
+    (uuid_generate_v4(), @auditId, null, @mediaType, @mediaPath, 'FINAL', 'ACTIVE', NOW(), @createdBy, NOW(), @createdBy)";
 
 
             await conn.ExecuteAsync(insertSql, new
             {
                 auditId,
-                nodeId = generatedNodeId,
                 mediaType = Path.GetExtension(fileName).Trim('.').ToLower(),
                 mediaPath = $"/uploads/{auditId}/{generatedNodeId}/{fileName}",
                 createdBy = User.Identity?.Name ?? "anonymous"
