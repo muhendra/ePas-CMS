@@ -28,6 +28,7 @@
 <table id="audit-table" class="table table-bordered table-striped nowrap display">
     <thead class="table-light">
         <tr>
+            <th>Aksi</th>
             <th>No</th>
             <th>No. SPBU</th>
             <th>Auditor</th>
@@ -44,7 +45,6 @@
             <th>Status</th>
             <th>Komplain</th>
             <th>Banding</th>
-            <th>Aksi</th>
         </tr>
     </thead>
     <tbody>
@@ -52,6 +52,14 @@
         {
             var item = Model[i];
             <tr>
+                <td>
+                    <a class="btn btn-sm btn-outline-primary fw-semibold"
+                       asp-controller="Audit"
+                       asp-action="Detail"
+                       asp-route-id="@item.Id">
+                        <i class="bi bi-eye"></i> Detail
+                    </a>
+                </td>
                 <td>@(i + 1)</td>
                 <td>@item.NoSpbu</td>
                 <td>@item.NamaAuditor</td>
@@ -68,14 +76,6 @@
                 <td class="fw-bold text-@((item.Status == "PASS" || item.Status == "VERIFIED") ? "success" : "danger")">@item.Status</td>
                 <td class="text-@((item.Komplain == "ADA") ? "danger" : "success")">@item.Komplain</td>
                 <td class="text-@((item.Banding == "ADA") ? "danger" : "success")">@item.Banding</td>
-                <td>
-                    <a class="btn btn-sm btn-outline-primary fw-semibold"
-                       asp-controller="Audit"
-                       asp-action="Detail"
-                       asp-route-id="@item.Id">
-                        <i class="bi bi-eye"></i> Detail
-                    </a>
-                </td>
             </tr>
         }
     </tbody>

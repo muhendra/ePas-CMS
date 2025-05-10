@@ -50,16 +50,11 @@ namespace e_Pas_CMS.Controllers
                 GoodStatus = a.spbu.status_good,
                 ExcellentStatus = a.spbu.status_excellent,
                 Score = a.spbu.audit_current_score,       
-                WTMS = _context.trx_audit_qqs.Where(q => q.trx_audit_id == a.id)
-                                  .Average(q => (decimal?)q.quantity_variation_with_measure),
-                QQ = _context.trx_audit_qqs.Where(q => q.trx_audit_id == a.id)
-                                  .Average(q => (decimal?)q.quantity_variation_in_percentage),
-                WMEF = _context.trx_audit_qqs.Where(q => q.trx_audit_id == a.id)
-                                  .Average(q => (decimal?)q.observed_density),
-                FormatFisik = _context.trx_audit_qqs.Where(q => q.trx_audit_id == a.id)
-                                  .Average(q => (decimal?)q.observed_temp),
-                CPO = _context.trx_audit_qqs.Where(q => q.trx_audit_id == a.id)
-                                  .Average(q => (decimal?)q.density_variation),
+                WTMS = a.spbu.wtms,
+                QQ = a.spbu.qq,
+                WMEF = a.spbu.wmef,
+                FormatFisik = a.spbu.format_fisik,
+                CPO = a.spbu.cpo,
                 KelasSpbu = "Pasti Pas Excellent" 
             })
             .ToList();

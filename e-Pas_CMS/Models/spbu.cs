@@ -69,6 +69,15 @@ public partial class spbu
 
     public DateTime? updated_date { get; set; }
 
+    public decimal wtms { get; set; }
+
+    public decimal qq {  get; set; }
+
+    public decimal wmef { get; set; }
+
+    public decimal format_fisik { get; set; }
+
+    public decimal cpo { get; set; }
     public virtual ICollection<app_user_role> app_user_roles { get; set; } = new List<app_user_role>();
 
     public virtual ICollection<spbu_image> spbu_images { get; set; } = new List<spbu_image>();
