@@ -27,6 +27,7 @@
 <table id="audit-table" class="table table-bordered table-striped nowrap w-100">
     <thead class="table-light">
         <tr>
+            <th>Aksi</th>
             <th>No</th>
             <th>No. SPBU</th>
             <th>Region</th>
@@ -48,7 +49,6 @@
             <th>Format Fisik</th>
             <th>CPO</th>
             <th>Kelas SPBU</th>
-            <th>Aksi</th>
         </tr>
     </thead>
     <tbody>
@@ -56,6 +56,12 @@
         {
             var item = Model[i];
             <tr>
+                <td>
+                    <a class="btn btn-sm btn-outline-primary fw-semibold"
+                       asp-controller="AuditReport" asp-action="Detail" asp-route-id="@item.TrxAuditId">
+                        <i class="bi bi-eye"></i> Detail
+                    </a>
+                </td>
                 <td>@(i + 1)</td>
                 <td>@item.SpbuNo</td>
                 <td>@item.Region</td>
@@ -77,12 +83,6 @@
                 <td>@item.FormatFisik</td>
                 <td>@item.CPO</td>
                 <td>@item.KelasSpbu</td>
-                <td>
-                    <a class="btn btn-sm btn-outline-primary fw-semibold"
-                       asp-controller="AuditReport" asp-action="Detail" asp-route-id="@item.TrxAuditId">
-                        <i class="bi bi-eye"></i> Detail
-                    </a>
-                </td>
             </tr>
         }
     </tbody>
