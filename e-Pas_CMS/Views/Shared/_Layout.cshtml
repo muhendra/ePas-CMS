@@ -1,9 +1,10 @@
-﻿<!DOCTYPE html>
+﻿@* _Layout.cshtml *@
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>@ViewData["Title"] E-PAS PERTAMINA</title>
+    <title>@ViewData["Title"] - E-PAS PERTAMINA</title>
 
     <!-- Bootstrap & Icons -->
     <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
@@ -16,12 +17,13 @@
     <style>
         body {
             font-family: 'Segoe UI', sans-serif;
-            overflow-x: auto; /* ✅ FIX: allow horizontal scroll */
+            overflow-x: hidden;
+            min-height: 100vh;
         }
 
         .sidebar {
-            background: linear-gradient(180deg, #d1001f 0%, #a8001a 100%);
-            color: white;
+            background: #FFC80A;
+            color: #140F10;
             height: 100vh;
             width: 250px;
             position: fixed;
@@ -33,18 +35,19 @@
             flex-direction: column;
             justify-content: space-between;
             transition: transform 0.3s ease-in-out;
+            box-shadow: 2px 0 5px rgba(0, 0, 0, 0.1);
+            border-top-right-radius: 100px;
         }
 
             .sidebar .nav-link {
-                color: white;
-                transition: all 0.2s ease-in-out;
+                color: #140F10;
                 border-radius: 6px;
                 padding-left: 0.75rem;
             }
 
                 .sidebar .nav-link:hover {
-                    background-color: rgba(255, 255, 255, 0.15);
-                    padding-left: 1rem;
+                    background-color: #140F10;
+                    color: white;
                 }
 
             .sidebar strong {
@@ -62,9 +65,7 @@
         .content-wrapper {
             margin-left: 250px;
             padding: 2rem;
-            width: auto;
-            overflow-x: auto; /* ✅ FIX: allow inner content (tables) to scroll */
-            transition: margin-left 0.3s;
+            width: calc(100% - 250px);
         }
 
         .sidebar-overlay {
@@ -87,36 +88,49 @@
             font-size: 1.75rem;
             background: none;
             border: none;
-            color: #d1001f;
-            transition: all 0.3s ease-in-out;
+            color: #FFC80A;
         }
 
-        .sidebar.active ~ .toggle-sidebar {
-            left: 260px;
-            color: white;
-        }
-
-        /* Responsiveness: pakai @@media agar Razor tidak error */
         @@media (max-width: 768px) {
-            .sidebar {
-                transform: translateX(-100%);
-            }
+            .sidebar
 
-                .sidebar.active {
-                    transform: translateX(0);
-                }
+        {
+            transform: translateX(-100%);
+        }
 
-            .sidebar-overlay.active {
-                display: block;
-            }
+        .sidebar.active {
+            transform: translateX(0);
+        }
 
-            .content-wrapper {
-                margin-left: 0 !important;
-            }
+        .sidebar-overlay.active {
+            display: block;
+        }
 
-            .toggle-sidebar {
-                display: block;
-            }
+        .content-wrapper {
+            margin-left: 0 !important;
+            width: 100% !important;
+        }
+
+        .toggle-sidebar {
+            display: block;
+        }
+
+        }
+
+        .navbar {
+            position: sticky;
+            top: 0;
+            z-index: 1020;
+            background: white;
+        }
+
+        /* FIX: Make sure modal appears above everything */
+        .modal {
+            z-index: 1055 !important;
+        }
+
+        .modal-backdrop {
+            z-index: 1050 !important;
         }
     </style>
 </head>
@@ -124,24 +138,24 @@
     <!-- Sidebar -->
     <div class="sidebar p-3" id="sidebar">
         <div>
-            <h4 class="fw-bold mb-4">E-PAS Pertamina</h4>
+            <div class="text-center mb-4">
+                <img src="~/images/pasti-pas.png" alt="E-PAS Logo" class="img-fluid" style="max-width: 150px;">
+            </div>
             <ul class="nav flex-column">
                 <li class="nav-item mb-2">
-                    <a class="nav-link text-white d-flex align-items-center" asp-controller="Dashboard" asp-action="Index">
+                    <a class="nav-link d-flex align-items-center" asp-controller="Dashboard" asp-action="Index">
                         <i class="bi bi-speedometer2 me-2"></i> Dashboard
                     </a>
                 </li>
-
-                <!-- Menu Audit -->
                 <li class="nav-item mt-3">
-                    <a class="nav-link text-white d-flex justify-content-between align-items-center" data-bs-toggle="collapse" href="#menu-audit">
+                    <a class="nav-link d-flex justify-content-between align-items-center" data-bs-toggle="collapse" href="#menu-audit">
                         <strong>Audit</strong>
                         <i class="bi bi-caret-down-fill"></i>
                     </a>
                     <div class="collapse" id="menu-audit">
                         <ul class="nav flex-column ms-3 mt-2">
-                            <li class="nav-item"><a class="nav-link text-white" asp-controller="Audit" asp-action="Index">Review Audit</a></li>
-                            <li class="nav-item"><a class="nav-link text-white" asp-controller="AuditReport" asp-action="Index">Report</a></li>
+                            <li class="nav-item"><a class="nav-link" asp-controller="Audit" asp-action="Index">Review Audit</a></li>
+                            <li class="nav-item"><a class="nav-link" asp-controller="AuditReport" asp-action="Index">Report</a></li>
                         </ul>
                     </div>
                 </li>
@@ -149,7 +163,7 @@
         </div>
 
         <div class="sidebar-bottom">
-            <a class="nav-link text-white d-flex justify-content-center align-items-center" asp-controller="Auth" asp-action="Logout">
+            <a class="nav-link" asp-controller="Auth" asp-action="Logout">
                 <i class="bi bi-box-arrow-right me-2"></i> Logout
             </a>
         </div>
@@ -158,13 +172,13 @@
     <!-- Sidebar Overlay -->
     <div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleSidebar()"></div>
 
-    <!-- Toggle Button -->
+    <!-- Toggle Sidebar -->
     <button class="toggle-sidebar" onclick="toggleSidebar()" id="sidebarToggleBtn">
         <i class="bi bi-list" id="toggleIcon"></i>
     </button>
 
     <!-- Main Content -->
-    <div class="content-wrapper w-100">
+    <div class="content-wrapper">
         <header>
             <nav class="navbar navbar-expand-sm navbar-light bg-white border-bottom box-shadow mb-3">
                 <div class="container-fluid">
@@ -175,15 +189,30 @@
             </nav>
         </header>
 
-        <main role="main" class="pb-3">
+        <main class="pb-3">
             @RenderBody()
         </main>
 
-        <footer class="border-top footer text-muted mt-5">
+        <footer class="footer text-muted mt-5">
             <div class="container text-center">
                 &copy; 2025 - E-PAS PERTAMINA
             </div>
         </footer>
+    </div>
+
+    <!-- Optional: Test Modal -->
+    <div class="modal fade" id="testModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Test Modal</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    Ini adalah isi modal. Klik luar atau tombol X untuk tutup.
+                </div>
+            </div>
+        </div>
     </div>
 
     <!-- Scripts -->

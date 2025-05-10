@@ -157,12 +157,22 @@
     }
 }
 <!-- BERITA ACARA -->
-@if (!string.IsNullOrEmpty(Model.Notes) || (Model.FinalDocuments != null && Model.FinalDocuments.Any()))
+@if (Model.Status != "VERIFIED" && currentUser != "usermanagement1")
 {
     <div class="card p-4 mb-5 shadow-sm mt-5">
         <h4 class="fw-bold mb-4">Berita Acara</h4>
 
-        @if (!string.IsNullOrEmpty(Model.Notes))
+        @if (!isVerified && !isReadonlyUser)
+        {
+            <form method="post" asp-action="UpdateBeritaAcaraText" asp-route-id="@ViewBag.AuditId">
+                <div class="mb-3">
+                    <label for="BeritaAcaraText" class="form-label fw-semibold">Isi Berita Acara</label>
+                    <textarea id="BeritaAcaraText" name="Notes" class="form-control" rows="5" required>@Model.Notes</textarea>
+                </div>
+                <button type="submit" class="btn btn-primary rounded-pill px-4">Ubah Berita Acara</button>
+            </form>
+        }
+        else if (!string.IsNullOrEmpty(Model.Notes))
         {
             <div class="mb-3">
                 <label class="fw-semibold">Isi Catatan</label>
@@ -172,17 +182,28 @@
             </div>
         }
 
-        @if (Model.FinalDocuments != null && Model.FinalDocuments.Any())
+        <hr class="my-4" />
+
+        @if (!isVerified && !isReadonlyUser)
         {
-            <div class="mb-2 fw-semibold mt-4">
-                Bukti Dokumen/Foto Berita Acara
-            </div>
+            <form method="post" asp-action="UploadBeritaAcaraMedia" asp-route-id="@ViewBag.AuditId" enctype="multipart/form-data">
+                <div class="mb-3">
+                    <label for="beritaAcaraFile" class="form-label fw-semibold">Upload Dokumen Tambahan Berita Acara</label>
+                    <input type="file" class="form-control" id="beritaAcaraFile" name="file" required />
+                </div>
+                <button type="submit" class="btn btn-secondary rounded-pill px-4">Upload Berita Acara</button>
+            </form>
+        }
+
+        @if (Model.FinalDocuments?.Any() ?? false)
+        {
+            <div class="mb-2 fw-semibold mt-4">Dokumen Lampiran</div>
             <ul class="list-unstyled">
                 <li class="mb-2">
                     <i class="bi bi-file-earmark-image text-primary"></i>
                     <button type="button"
-                    class="btn btn-link text-decoration-none p-0"
-                    onclick='showFinalMediaPopup(@Html.Raw(JsonConvert.SerializeObject(Model.FinalDocuments)))'>
+                            class="btn btn-link text-decoration-none p-0"
+                            onclick='showFinalMediaPopup(@Html.Raw(JsonConvert.SerializeObject(Model.FinalDocuments)))'>
                         Lihat Lampiran
                     </button>
                 </li>
@@ -190,6 +211,35 @@
         }
     </div>
 }
+else if (!string.IsNullOrEmpty(Model.Notes) || (Model.FinalDocuments != null && Model.FinalDocuments.Any()))
+{
+    <div class="card p-4 mb-5 shadow-sm mt-5">
+        <h4 class="fw-bold mb-4">Berita Acara</h4>
+
+        <div class="mb-3">
+            <label class="fw-semibold">Isi Catatan</label>
+            <div class="border rounded p-3 bg-light">
+                @Model.Notes
+            </div>
+        </div>
+
+        @if (Model.FinalDocuments?.Any() ?? false)
+        {
+            <div class="mb-2 fw-semibold mt-4">Bukti Dokumen/Foto Berita Acara</div>
+            <ul class="list-unstyled">
+                <li class="mb-2">
+                    <i class="bi bi-file-earmark-image text-primary"></i>
+                    <button type="button"
+                            class="btn btn-link text-decoration-none p-0"
+                            onclick='showFinalMediaPopup(@Html.Raw(JsonConvert.SerializeObject(Model.FinalDocuments)))'>
+                        Lihat Lampiran
+                    </button>
+                </li>
+            </ul>
+        }
+    </div>
+}
+
 
 <div class="text-end mt-5">
 
@@ -344,6 +394,31 @@
         $li.find('.score-x[data-node-id="' + nodeId + '"]').text(skor.toFixed(2));
         return { af: sumAF, wt: sumWeight, x: sumX };
         }
+
+                $(document).on('click', '.save-comment-btn', function () {
+            const nodeId = $(this).data('node-id');
+            const auditId = $(this).data('audit-id');
+            const comment = $(`.comment-input[data-node-id="${nodeId}"]`).val();
+            const token = $('input[name="__RequestVerificationToken"]').val();
+
+            fetch('/Audit/UpdateComment', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'RequestVerificationToken': token
+                },
+                body: JSON.stringify({ NodeId: nodeId, AuditId: auditId, Comment: comment })
+            })
+            .then(res => {
+                if (!res.ok) return res.text().then(t => Promise.reject(t));
+                alert("Komentar berhasil disimpan");
+            })
+            .catch(err => {
+                console.error(err);
+                alert("Gagal menyimpan komentar: " + err);
+            });
+        });
+
 
         function recalcAll() {
         $('#auditChecklist > li[id^="node-"]').each(function () {
@@ -625,17 +700,27 @@
                                     </div>
                                 }
 
-                                @if (!string.IsNullOrWhiteSpace(node.Comment))
-                                {
-                                    <div class="mb-3">
-                                        <label class="fw-semibold text-muted">Catatan Penilaian:</label>
-                                        <div class="border rounded p-2 bg-light small">
-                                            @node.Comment
-                                        </div>
-                                    </div>
-                                }
-                            }
+                                <div class="mb-3">
+                                    <label class="fw-semibold text-muted">Catatan Penilaian:</label>
+                                    @if (isReadonlyUser || isVerified)
+                                    {
+                                        <div class="border rounded p-2 bg-light small">@node.Comment</div>
+                                    }
+                                    else
+                                    {
+                                        <textarea class="form-control form-control-sm comment-input"
+                                                  data-node-id="@node.Id"
+                                                  rows="2">@node.Comment</textarea>
+                                        <button class="btn btn-sm btn-outline-success mt-1 save-comment-btn"
+                                                data-node-id="@node.Id"
+                                                data-audit-id="@ViewBag.AuditId">
+                                            Ubah Komentar
+                                        </button>
+                                    }
 
+                                </div>
+                                
+                            }
 
                             // <div class="d-flex gap-2 align-items-center mb-3">
                             //     @if (node.MediaItems?.Any() ?? false)

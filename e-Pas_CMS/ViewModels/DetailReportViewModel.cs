@@ -66,6 +66,12 @@
         public string Sbm { get; set; }
         public string ClassSpbu { get; set; }
         public string Phone { get; set; }
+        public string KomentarStaf { get; set; }
+        public string KomentarQuality { get; set; }
+        public string KomentarHSSE { get; set; }
+        public string KomentarVisual { get; set; }
+        public string KomentarManager { get; set; }
+
     }
 
 
