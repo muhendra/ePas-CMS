@@ -186,13 +186,20 @@
 
         @if (!isVerified && !isReadonlyUser)
         {
-            <form method="post" asp-action="UploadBeritaAcaraMedia" asp-route-id="@ViewBag.AuditId" enctype="multipart/form-data">
+            <form method="post"
+                  asp-action="UploadBeritaAcaraMedia"
+                  asp-controller="Audit"
+                  asp-route-auditId="@ViewBag.AuditId"
+                  enctype="multipart/form-data">
+
                 <div class="mb-3">
                     <label for="beritaAcaraFile" class="form-label fw-semibold">Upload Dokumen Tambahan Berita Acara</label>
                     <input type="file" class="form-control" id="beritaAcaraFile" name="file" required />
                 </div>
+
                 <button type="submit" class="btn btn-secondary rounded-pill px-4">Upload Berita Acara</button>
             </form>
+
         }
 
         @if (Model.FinalDocuments?.Any() ?? false)

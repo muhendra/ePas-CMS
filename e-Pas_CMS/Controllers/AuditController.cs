@@ -412,6 +412,7 @@ namespace e_Pas_CMS.Controllers
             return RedirectToAction("Detail", new { id });
         }
 
+        [HttpPost("Audit/UploadBeritaAcaraMedia")]
         public async Task<IActionResult> UploadBeritaAcaraMedia(IFormFile file, string nodeId, string auditId)
         {
             if (file == null || file.Length == 0)
