@@ -413,13 +413,14 @@ namespace e_Pas_CMS.Controllers
         }
 
         [HttpPost("Audit/UploadBeritaAcaraMedia")]
-        public async Task<IActionResult> UploadBeritaAcaraMedia(IFormFile file, string nodeId, string auditId)
+        public async Task<IActionResult> UploadBeritaAcaraMedia(IFormFile file, string auditId)
         {
             if (file == null || file.Length == 0)
                 return BadRequest("File tidak ditemukan atau kosong.");
 
-            // Direktori penyimpanan
-            var uploadsPath = Path.Combine("/var/www/epas-api", "wwwroot", "uploads", auditId, nodeId);
+            var generatedNodeId = Guid.NewGuid().ToString();
+            var uploadsPath = Path.Combine("/var/www/epas-api", "wwwroot", "uploads", auditId, generatedNodeId);
+
             Directory.CreateDirectory(uploadsPath);
 
             var fileName = Path.GetFileName(file.FileName);
@@ -446,9 +447,8 @@ VALUES
             await conn.ExecuteAsync(insertSql, new
             {
                 auditId,
-                nodeId,
                 mediaType = Path.GetExtension(fileName).Trim('.').ToLower(),
-                mediaPath = $"/uploads/{auditId}/{nodeId}/{fileName}",
+                mediaPath = $"/uploads/{auditId}/{generatedNodeId}/{fileName}",
                 createdBy = User.Identity?.Name ?? "anonymous"
             });
 
