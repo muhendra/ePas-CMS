@@ -447,6 +447,7 @@ VALUES
             await conn.ExecuteAsync(insertSql, new
             {
                 auditId,
+                nodeId = generatedNodeId,
                 mediaType = Path.GetExtension(fileName).Trim('.').ToLower(),
                 mediaPath = $"/uploads/{auditId}/{generatedNodeId}/{fileName}",
                 createdBy = User.Identity?.Name ?? "anonymous"
