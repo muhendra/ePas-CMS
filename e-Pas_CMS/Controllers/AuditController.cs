@@ -16,106 +16,149 @@ namespace e_Pas_CMS.Controllers
     public class AuditController : Controller
     {
         private readonly EpasDbContext _context;
+        private const int DefaultPageSize = 10;
 
         public AuditController(EpasDbContext context)
         {
             _context = context;
         }
 
-        public async Task<IActionResult> Index()
+        public async Task<IActionResult> Index(int pageNumber = 1, int pageSize = DefaultPageSize, string searchTerm = "")
         {
-            var currentUser = User.Identity?.Name;
-            bool isReadonlyUser = currentUser == "usermanagement1";
-
-            var audits = await (from s in _context.spbus
-                                join a in _context.trx_audits on s.id equals a.spbu_id
-                                join u in _context.app_users on a.app_user_id equals u.id into aud
-                                from u in aud.DefaultIfEmpty()
-                                where (isReadonlyUser ? a.status == "VERIFIED"
-                                                      : a.status == "UNDER_REVIEW" || a.status == "VERIFIED")
-                                select new
-                                {
-                                    Audit = a,
-                                    Spbu = s,
-                                    AuditorName = u.name
-                                }).ToListAsync();
-
-            using var conn = _context.Database.GetDbConnection();
-            if (conn.State != ConnectionState.Open)
-                await conn.OpenAsync();
-
-            var result = new List<SpbuViewModel>();
-
-            foreach (var item in audits)
+            try
             {
-                // … your existing “needsUpdate” / “updateSql” logic …
+                var currentUser = User.Identity?.Name;
+                bool isReadonlyUser = currentUser == "usermanagement1";
 
-                var sql = @"
-                    SELECT mqd.weight, tac.score_input
-                    FROM master_questioner_detail mqd
-                    LEFT JOIN trx_audit_checklist tac 
-                        ON tac.master_questioner_detail_id = mqd.id 
-                        AND tac.trx_audit_id = @id
-                    WHERE mqd.master_questioner_id = (
-                        SELECT master_questioner_checklist_id 
-                        FROM trx_audit 
-                        WHERE id = @id
-                    )
-                    AND mqd.type = 'QUESTION'";
+                var query = from s in _context.spbus
+                           join a in _context.trx_audits on s.id equals a.spbu_id
+                           join u in _context.app_users on a.app_user_id equals u.id into aud
+                           from u in aud.DefaultIfEmpty()
+                           where (isReadonlyUser ? a.status == "VERIFIED"
+                                                 : a.status == "UNDER_REVIEW" || a.status == "VERIFIED")
+                           select new
+                           {
+                               Audit = a,
+                               Spbu = s,
+                               AuditorName = u.name
+                           };
 
-                var checklist = (await conn.QueryAsync<(decimal? weight, string score_input)>(sql, new { id = item.Audit.id }))
-                                   .ToList();
-
-                decimal totalScore = 0, maxScore = 0;
-                foreach (var q in checklist)
+                if (!string.IsNullOrWhiteSpace(searchTerm))
                 {
-                    decimal w = q.weight ?? 0;
-                    decimal v = q.score_input switch
-                    {
-                        "A" => 1.00m,
-                        "B" => 0.80m,
-                        "C" => 0.60m,
-                        "D" => 0.40m,
-                        "E" => 0.20m,
-                        "F" => 0.00m,
-                        _ => 0.00m
-                    };
-                    totalScore += v * w;
-                    maxScore += w;
+                    searchTerm = searchTerm.ToLower();
+                    query = query.Where(x => 
+                        x.Spbu.spbu_no.ToLower().Contains(searchTerm) ||
+                        (x.AuditorName != null && x.AuditorName.ToLower().Contains(searchTerm)) ||
+                        x.Audit.status.ToLower().Contains(searchTerm) ||
+                        (x.Spbu.address != null && x.Spbu.address.ToLower().Contains(searchTerm)) ||
+                        (x.Spbu.province_name != null && x.Spbu.province_name.ToLower().Contains(searchTerm)) ||
+                        (x.Spbu.city_name != null && x.Spbu.city_name.ToLower().Contains(searchTerm))
+                    );
                 }
 
-                decimal finalScore = maxScore > 0
-                    ? totalScore / maxScore * 100
-                    : 0m;
+                var totalItems = await query.CountAsync();
 
-                result.Add(new SpbuViewModel
+                var items = await query
+                    .Skip((pageNumber - 1) * pageSize)
+                    .Take(pageSize)
+                    .ToListAsync();
+
+                using var conn = _context.Database.GetDbConnection();
+                if (conn.State != ConnectionState.Open)
+                    await conn.OpenAsync();
+
+                var result = new List<SpbuViewModel>();
+
+                foreach (var item in items)
                 {
-                    Id = item.Audit.id,
-                    NoSpbu = item.Spbu.spbu_no,
-                    Rayon = item.Spbu.region,
-                    Alamat = item.Spbu.address,
-                    TipeSpbu = item.Spbu.type,
-                    Tahun = item.Audit.created_date.ToString("yyyy"),
-                    Audit = "DAE",
-                    Score = finalScore,
-                    Good = "certified",
-                    Excelent = "certified",
-                    Provinsi = item.Spbu.province_name,
-                    Kota = item.Spbu.city_name,
-                    NamaAuditor = item.AuditorName,
-                    Report = item.Audit.report_no,
-                    TanggalSubmit = (item.Audit.audit_execution_time == null
-                                   || item.Audit.audit_execution_time.Value == DateTime.MinValue)
-                                  ? item.Audit.updated_date.Value
-                                  : item.Audit.audit_execution_time.Value,
-                    Status = item.Audit.status,
-                    Komplain = item.Audit.status == "FAIL" ? "ADA" : "Tidak Ada",
-                    Banding = item.Audit.audit_level == "Re-Audit" ? "ADA" : "Tidak Ada",
-                    Type = item.Audit.audit_type
+                    var sql = @"
+                        SELECT mqd.weight, tac.score_input
+                        FROM master_questioner_detail mqd
+                        LEFT JOIN trx_audit_checklist tac 
+                            ON tac.master_questioner_detail_id = mqd.id 
+                            AND tac.trx_audit_id = @id
+                        WHERE mqd.master_questioner_id = (
+                            SELECT master_questioner_checklist_id 
+                            FROM trx_audit 
+                            WHERE id = @id
+                        )
+                        AND mqd.type = 'QUESTION'";
+
+                    var checklist = (await conn.QueryAsync<(decimal? weight, string score_input)>(sql, new { id = item.Audit.id }))
+                                       .ToList();
+
+                    decimal totalScore = 0, maxScore = 0;
+                    foreach (var q in checklist)
+                    {
+                        decimal w = q.weight ?? 0;
+                        decimal v = q.score_input switch
+                        {
+                            "A" => 1.00m,
+                            "B" => 0.80m,
+                            "C" => 0.60m,
+                            "D" => 0.40m,
+                            "E" => 0.20m,
+                            "F" => 0.00m,
+                            _ => 0.00m
+                        };
+                        totalScore += v * w;
+                        maxScore += w;
+                    }
+
+                    decimal finalScore = maxScore > 0
+                        ? totalScore / maxScore * 100
+                        : 0m;
+
+                    result.Add(new SpbuViewModel
+                    {
+                        Id = item.Audit.id,
+                        NoSpbu = item.Spbu.spbu_no,
+                        Rayon = item.Spbu.region,
+                        Alamat = item.Spbu.address,
+                        TipeSpbu = item.Spbu.type,
+                        Tahun = item.Audit.created_date.ToString("yyyy"),
+                        Audit = "DAE",
+                        Score = finalScore,
+                        Good = "certified",
+                        Excelent = "certified",
+                        Provinsi = item.Spbu.province_name,
+                        Kota = item.Spbu.city_name,
+                        NamaAuditor = item.AuditorName,
+                        Report = item.Audit.report_no,
+                        TanggalSubmit = (item.Audit.audit_execution_time == null
+                                       || item.Audit.audit_execution_time.Value == DateTime.MinValue)
+                                      ? item.Audit.updated_date.Value
+                                      : item.Audit.audit_execution_time.Value,
+                        Status = item.Audit.status,
+                        Komplain = item.Audit.status == "FAIL" ? "ADA" : "Tidak Ada",
+                        Banding = item.Audit.audit_level == "Re-Audit" ? "ADA" : "Tidak Ada",
+                        Type = item.Audit.audit_type
+                    });
+                }
+
+                var paginationModel = new PaginationModel<SpbuViewModel>
+                {
+                    Items = result,
+                    PageNumber = pageNumber,
+                    PageSize = pageSize,
+                    TotalItems = totalItems
+                };
+
+                ViewBag.SearchTerm = searchTerm;
+                return View(paginationModel);
+            }
+            catch (Exception ex)
+            {
+                // Log the exception here
+                TempData["Error"] = "Terjadi kesalahan saat memuat data. Silakan coba lagi.";
+                return View(new PaginationModel<SpbuViewModel>
+                {
+                    Items = new List<SpbuViewModel>(),
+                    PageNumber = 1,
+                    PageSize = DefaultPageSize,
+                    TotalItems = 0
                 });
             }
-
-            return View(result);
         }
 
         [HttpGet("Audit/Detail/{id}")]
