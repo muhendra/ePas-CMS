@@ -34,8 +34,7 @@ namespace e_Pas_CMS.Controllers
                             join a in _context.trx_audits on s.id equals a.spbu_id
                             join u in _context.app_users on a.app_user_id equals u.id into aud
                             from u in aud.DefaultIfEmpty()
-                            where (isReadonlyUser ? a.status == "VERIFIED"
-                                                  : a.status == "UNDER_REVIEW" || a.status == "VERIFIED")
+                            where (a.status == "UNDER_REVIEW" || a.status == "VERIFIED")
                             select new
                             {
                                 Audit = a,
