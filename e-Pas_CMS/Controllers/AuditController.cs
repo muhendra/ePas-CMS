@@ -31,21 +31,22 @@ namespace e_Pas_CMS.Controllers
                 bool isReadonlyUser = currentUser == "usermanagement1";
 
                 var query = from s in _context.spbus
-                            join a in _context.trx_audits on s.id equals a.spbu_id
-                            join u in _context.app_users on a.app_user_id equals u.id into aud
-                            from u in aud.DefaultIfEmpty()
-                            where (a.status == "UNDER_REVIEW" || a.status == "VERIFIED")
-                            select new
-                            {
-                                Audit = a,
-                                Spbu = s,
-                                AuditorName = u.name
-                            };
+                           join a in _context.trx_audits on s.id equals a.spbu_id
+                           join u in _context.app_users on a.app_user_id equals u.id into aud
+                           from u in aud.DefaultIfEmpty()
+                           where (isReadonlyUser ? a.status == "VERIFIED"
+                                                 : a.status == "UNDER_REVIEW" || a.status == "VERIFIED")
+                           select new
+                           {
+                               Audit = a,
+                               Spbu = s,
+                               AuditorName = u.name
+                           };
 
                 if (!string.IsNullOrWhiteSpace(searchTerm))
                 {
                     searchTerm = searchTerm.ToLower();
-                    query = query.Where(x =>
+                    query = query.Where(x => 
                         x.Spbu.spbu_no.ToLower().Contains(searchTerm) ||
                         (x.AuditorName != null && x.AuditorName.ToLower().Contains(searchTerm)) ||
                         x.Audit.status.ToLower().Contains(searchTerm) ||

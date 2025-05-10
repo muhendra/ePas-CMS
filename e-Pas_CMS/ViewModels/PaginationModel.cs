@@ -1,4 +1,4 @@
-﻿namespace e_Pas_CMS.ViewModels
+namespace e_Pas_CMS.ViewModels
 {
     public class PaginationModel<T>
     {
@@ -10,4 +10,4 @@
         public bool HasPreviousPage => PageNumber > 1;
         public bool HasNextPage => PageNumber < TotalPages;
     }
-}
+} 
