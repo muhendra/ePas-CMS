@@ -69,11 +69,10 @@ namespace e_Pas_CMS.Controllers
                     "Tahun" => sortDirection == "asc" ? query.OrderBy(q => q.Audit.created_date) : query.OrderByDescending(q => q.Audit.created_date),
                     "Audit" => sortDirection == "asc" ? query.OrderBy(q => q.Audit.audit_type) : query.OrderByDescending(q => q.Audit.audit_type),
                     "TipeAudit" => sortDirection == "asc" ? query.OrderBy(q => q.Audit.audit_type) : query.OrderByDescending(q => q.Audit.audit_type),
-                    "TanggalAudit" => sortDirection == "asc" ? query.OrderBy(q => q.Audit.audit_execution_time ?? q.Audit.updated_date) : query.OrderByDescending(q => q.Audit.audit_execution_time ?? q.Audit.updated_date),
+                    "TanggalAudit" => sortDirection == "asc" ? query.OrderBy(q => q.Audit.updated_date) : query.OrderByDescending(q => q.Audit.updated_date),
                     "Status" => sortDirection == "asc" ? query.OrderBy(q => q.Audit.status) : query.OrderByDescending(q => q.Audit.status),
                     "Komplain" => sortDirection == "asc" ? query.OrderBy(q => q.Audit.status) : query.OrderByDescending(q => q.Audit.status),
-                    "Banding" => sortDirection == "asc" ? query.OrderBy(q => q.Audit.audit_level) : query.OrderByDescending(q => q.Audit.audit_level),
-                    _ => sortDirection == "asc" ? query.OrderBy(q => q.Audit.audit_execution_time ?? q.Audit.updated_date) : query.OrderByDescending(q => q.Audit.audit_execution_time ?? q.Audit.updated_date)
+                    "Banding" => sortDirection == "asc" ? query.OrderBy(q => q.Audit.audit_level) : query.OrderByDescending(q => q.Audit.audit_level)
                 };
 
                 var totalItems = await query.CountAsync();
