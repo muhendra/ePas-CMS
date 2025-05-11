@@ -1,6 +1,7 @@
 ﻿@model e_Pas_CMS.ViewModels.PaginationModel<e_Pas_CMS.ViewModels.SpbuViewModel>
 
 @section Styles {
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
     <style>
         .search-container {
             position: sticky;
@@ -42,11 +43,11 @@
             color: #2c3e50;
         }
 
-            .table thead {
-                position: sticky;
-                top: 0;
-                z-index: 1;
-            }
+        .table thead {
+            position: sticky;
+            top: 0;
+            z-index: 1;
+        }
 
                 .table thead th {
                     background: #f8f9fa;
@@ -59,25 +60,48 @@
                     font-size: 0.85rem;
                     white-space: nowrap;
                     box-shadow: 0 2px 2px rgba(0,0,0,0.05);
+            cursor: pointer;
+        }
+
+        .table thead th.sorting:after,
+        .table thead th.sorting_asc:after,
+        .table thead th.sorting_desc:after {
+            position: absolute;
+            right: 8px;
+            display: block;
+            opacity: 0.5;
+        }
+
+        .table thead th.sorting:after {
+            content: "⇅";
+            opacity: 0.2;
+        }
+
+        .table thead th.sorting_asc:after {
+            content: "↑";
+        }
+
+        .table thead th.sorting_desc:after {
+            content: "↓";
                 }
 
-            .table tbody td {
-                border: none;
-                border-bottom: 1px solid #edf2f7;
-                padding: 14px 16px;
-                background: #fff;
-                vertical-align: middle;
-                transition: all 0.2s ease;
-                white-space: nowrap;
-            }
+        .table tbody td {
+            border: none;
+            border-bottom: 1px solid #edf2f7;
+            padding: 14px 16px;
+            background: #fff;
+            vertical-align: middle;
+            transition: all 0.2s ease;
+            white-space: nowrap;
+        }
 
-            .table tbody tr:hover td {
-                background-color: #f8fafc;
-            }
+        .table tbody tr:hover td {
+            background-color: #f8fafc;
+        }
 
-            .table tbody tr:last-child td {
-                border-bottom: none;
-            }
+        .table tbody tr:last-child td {
+            border-bottom: none;
+        }
 
         .table-striped > tbody > tr:nth-of-type(odd) {
             background-color: #fafbfc;
@@ -101,11 +125,11 @@
             transition: all 0.2s ease;
         }
 
-            .btn-outline-primary:hover {
-                background-color: #E30613;
-                color: white;
-                border-color: #E30613;
-            }
+        .btn-outline-primary:hover {
+            background-color: #E30613;
+            color: white;
+            border-color: #E30613;
+        }
 
         .form-control {
             border-radius: 8px;
@@ -115,10 +139,10 @@
             transition: all 0.2s ease;
         }
 
-            .form-control:focus {
-                border-color: #E30613;
-                box-shadow: 0 0 0 3px rgba(227, 6, 19, 0.1);
-            }
+        .form-control:focus {
+            border-color: #E30613;
+            box-shadow: 0 0 0 3px rgba(227, 6, 19, 0.1);
+        }
 
         .form-select {
             border-radius: 8px;
@@ -128,10 +152,10 @@
             transition: all 0.2s ease;
         }
 
-            .form-select:focus {
-                border-color: #E30613;
-                box-shadow: 0 0 0 3px rgba(227, 6, 19, 0.1);
-            }
+        .form-select:focus {
+            border-color: #E30613;
+            box-shadow: 0 0 0 3px rgba(227, 6, 19, 0.1);
+        }
 
         .btn-primary {
             background-color: #21B6D7;
@@ -142,10 +166,10 @@
             transition: all 0.2s ease;
         }
 
-            .btn-primary:hover {
-                background-color: #1a9ab8;
-                border-color: #1a9ab8;
-            }
+        .btn-primary:hover {
+            background-color: #1a9ab8;
+            border-color: #1a9ab8;
+        }
 
         .pagination {
             margin-top: 1.5rem;
@@ -153,25 +177,25 @@
             gap: 0.25rem;
         }
 
-            .pagination .page-item.active .page-link {
-                background-color: #21B6D7;
-                border-color: #21B6D7;
-                border-radius: 6px;
-            }
+        .pagination .page-item.active .page-link {
+            background-color: #21B6D7;
+            border-color: #21B6D7;
+            border-radius: 6px;
+        }
 
-            .pagination .page-link {
-                color: #21B6D7;
-                border-radius: 6px;
-                padding: 8px 16px;
-                border: 1px solid #e2e8f0;
-                transition: all 0.2s ease;
-            }
+        .pagination .page-link {
+            color: #21B6D7;
+            border-radius: 6px;
+            padding: 8px 16px;
+            border: 1px solid #e2e8f0;
+            transition: all 0.2s ease;
+        }
 
-                .pagination .page-link:hover {
-                    color: #21B6D7;
-                    background-color: #e6f7fa;
-                    border-color: #21B6D7;
-                }
+        .pagination .page-link:hover {
+            color: #21B6D7;
+            background-color: #e6f7fa;
+            border-color: #21B6D7;
+        }
 
         .text-success {
             color: #059669 !important;
@@ -200,6 +224,23 @@
             background-color: #dcfce7;
             color: #059669;
         }
+
+        .table thead th a {
+            color: inherit;
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            width: 100%;
+        }
+
+        .table thead th a:hover {
+            color: #E30613;
+        }
+
+        .table thead th i {
+            margin-left: 5px;
+        }
     </style>
 }
 
@@ -216,7 +257,7 @@
 
     <div class="search-container">
         <form method="get" class="row g-3">
-            <div class="col-md-6">
+            <div class="col-md-8">
                 <input type="text" name="searchTerm" value="@ViewBag.SearchTerm" class="form-control" placeholder="🔍 Cari SPBU, Auditor, Status...">
             </div>
             <div class="col-md-2">
@@ -245,21 +286,141 @@
                             <tr>
                                 <th>Aksi</th>
                                 <th>No</th>
-                                <th>No. SPBU</th>
-                                <th>Auditor</th>
-                                <th>Rayon</th>
-                                <th>Provinsi</th>
-                                <th>Kabupaten/Kota</th>
-                                <th>Alamat</th>
-                                <th>Tipe SPBU</th>
-                                <th>Tahun</th>
-                                <th>Audit</th>
-                                <th>Tipe Audit</th>
-                                <th>Tanggal Audit</th>
-                                <th>Score</th>
-                                <th>Status</th>
-                                <th>Komplain</th>
-                                <th>Banding</th>
+                                <th>
+                                    <a href="@Url.Action("Index", new { pageNumber = 1, pageSize = Model.PageSize, searchTerm = ViewBag.SearchTerm, sortColumn = "NoSpbu", sortDirection = ViewBag.SortColumn == "NoSpbu" && ViewBag.SortDirection == "asc" ? "desc" : "asc" })">
+                                        No. SPBU
+                                        @if (ViewBag.SortColumn == "NoSpbu")
+                                        {
+                                            <i class="bi bi-arrow-@(ViewBag.SortDirection == "asc" ? "up" : "down")"></i>
+                                        }
+                                    </a>
+                                </th>
+                                <th>
+                                    <a href="@Url.Action("Index", new { pageNumber = 1, pageSize = Model.PageSize, searchTerm = ViewBag.SearchTerm, sortColumn = "Auditor", sortDirection = ViewBag.SortColumn == "Auditor" && ViewBag.SortDirection == "asc" ? "desc" : "asc" })">
+                                        Auditor
+                                        @if (ViewBag.SortColumn == "Auditor")
+                                        {
+                                            <i class="bi bi-arrow-@(ViewBag.SortDirection == "asc" ? "up" : "down")"></i>
+                                        }
+                                    </a>
+                                </th>
+                                <th>
+                                    <a href="@Url.Action("Index", new { pageNumber = 1, pageSize = Model.PageSize, searchTerm = ViewBag.SearchTerm, sortColumn = "Rayon", sortDirection = ViewBag.SortColumn == "Rayon" && ViewBag.SortDirection == "asc" ? "desc" : "asc" })">
+                                        Rayon
+                                        @if (ViewBag.SortColumn == "Rayon")
+                                        {
+                                            <i class="bi bi-arrow-@(ViewBag.SortDirection == "asc" ? "up" : "down")"></i>
+                                        }
+                                    </a>
+                                </th>
+                                <th>
+                                    <a href="@Url.Action("Index", new { pageNumber = 1, pageSize = Model.PageSize, searchTerm = ViewBag.SearchTerm, sortColumn = "Provinsi", sortDirection = ViewBag.SortColumn == "Provinsi" && ViewBag.SortDirection == "asc" ? "desc" : "asc" })">
+                                        Provinsi
+                                        @if (ViewBag.SortColumn == "Provinsi")
+                                        {
+                                            <i class="bi bi-arrow-@(ViewBag.SortDirection == "asc" ? "up" : "down")"></i>
+                                        }
+                                    </a>
+                                </th>
+                                <th>
+                                    <a href="@Url.Action("Index", new { pageNumber = 1, pageSize = Model.PageSize, searchTerm = ViewBag.SearchTerm, sortColumn = "Kota", sortDirection = ViewBag.SortColumn == "Kota" && ViewBag.SortDirection == "asc" ? "desc" : "asc" })">
+                                        Kabupaten/Kota
+                                        @if (ViewBag.SortColumn == "Kota")
+                                        {
+                                            <i class="bi bi-arrow-@(ViewBag.SortDirection == "asc" ? "up" : "down")"></i>
+                                        }
+                                    </a>
+                                </th>
+                                <th>
+                                    <a href="@Url.Action("Index", new { pageNumber = 1, pageSize = Model.PageSize, searchTerm = ViewBag.SearchTerm, sortColumn = "Alamat", sortDirection = ViewBag.SortColumn == "Alamat" && ViewBag.SortDirection == "asc" ? "desc" : "asc" })">
+                                        Alamat
+                                        @if (ViewBag.SortColumn == "Alamat")
+                                        {
+                                            <i class="bi bi-arrow-@(ViewBag.SortDirection == "asc" ? "up" : "down")"></i>
+                                        }
+                                    </a>
+                                </th>
+                                <th>
+                                    <a href="@Url.Action("Index", new { pageNumber = 1, pageSize = Model.PageSize, searchTerm = ViewBag.SearchTerm, sortColumn = "TipeSpbu", sortDirection = ViewBag.SortColumn == "TipeSpbu" && ViewBag.SortDirection == "asc" ? "desc" : "asc" })">
+                                        Tipe SPBU
+                                        @if (ViewBag.SortColumn == "TipeSpbu")
+                                        {
+                                            <i class="bi bi-arrow-@(ViewBag.SortDirection == "asc" ? "up" : "down")"></i>
+                                        }
+                                    </a>
+                                </th>
+                                <th>
+                                    <a href="@Url.Action("Index", new { pageNumber = 1, pageSize = Model.PageSize, searchTerm = ViewBag.SearchTerm, sortColumn = "Tahun", sortDirection = ViewBag.SortColumn == "Tahun" && ViewBag.SortDirection == "asc" ? "desc" : "asc" })">
+                                        Tahun
+                                        @if (ViewBag.SortColumn == "Tahun")
+                                        {
+                                            <i class="bi bi-arrow-@(ViewBag.SortDirection == "asc" ? "up" : "down")"></i>
+                                        }
+                                    </a>
+                                </th>
+                                <th>
+                                    <a href="@Url.Action("Index", new { pageNumber = 1, pageSize = Model.PageSize, searchTerm = ViewBag.SearchTerm, sortColumn = "Audit", sortDirection = ViewBag.SortColumn == "Audit" && ViewBag.SortDirection == "asc" ? "desc" : "asc" })">
+                                        Audit
+                                        @if (ViewBag.SortColumn == "Audit")
+                                        {
+                                            <i class="bi bi-arrow-@(ViewBag.SortDirection == "asc" ? "up" : "down")"></i>
+                                        }
+                                    </a>
+                                </th>
+                                <th>
+                                    <a href="@Url.Action("Index", new { pageNumber = 1, pageSize = Model.PageSize, searchTerm = ViewBag.SearchTerm, sortColumn = "TipeAudit", sortDirection = ViewBag.SortColumn == "TipeAudit" && ViewBag.SortDirection == "asc" ? "desc" : "asc" })">
+                                        Tipe Audit
+                                        @if (ViewBag.SortColumn == "TipeAudit")
+                                        {
+                                            <i class="bi bi-arrow-@(ViewBag.SortDirection == "asc" ? "up" : "down")"></i>
+                                        }
+                                    </a>
+                                </th>
+                                <th>
+                                    <a href="@Url.Action("Index", new { pageNumber = 1, pageSize = Model.PageSize, searchTerm = ViewBag.SearchTerm, sortColumn = "TanggalAudit", sortDirection = ViewBag.SortColumn == "TanggalAudit" && ViewBag.SortDirection == "asc" ? "desc" : "asc" })">
+                                        Tanggal Audit
+                                        @if (ViewBag.SortColumn == "TanggalAudit")
+                                        {
+                                            <i class="bi bi-arrow-@(ViewBag.SortDirection == "asc" ? "up" : "down")"></i>
+                                        }
+                                    </a>
+                                </th>
+                                <th>
+                                    <a href="@Url.Action("Index", new { pageNumber = 1, pageSize = Model.PageSize, searchTerm = ViewBag.SearchTerm, sortColumn = "Score", sortDirection = ViewBag.SortColumn == "Score" && ViewBag.SortDirection == "asc" ? "desc" : "asc" })">
+                                        Score
+                                        @if (ViewBag.SortColumn == "Score")
+                                        {
+                                            <i class="bi bi-arrow-@(ViewBag.SortDirection == "asc" ? "up" : "down")"></i>
+                                        }
+                                    </a>
+                                </th>
+                                <th>
+                                    <a href="@Url.Action("Index", new { pageNumber = 1, pageSize = Model.PageSize, searchTerm = ViewBag.SearchTerm, sortColumn = "Status", sortDirection = ViewBag.SortColumn == "Status" && ViewBag.SortDirection == "asc" ? "desc" : "asc" })">
+                                        Status
+                                        @if (ViewBag.SortColumn == "Status")
+                                        {
+                                            <i class="bi bi-arrow-@(ViewBag.SortDirection == "asc" ? "up" : "down")"></i>
+                                        }
+                                    </a>
+                                </th>
+                                <th>
+                                    <a href="@Url.Action("Index", new { pageNumber = 1, pageSize = Model.PageSize, searchTerm = ViewBag.SearchTerm, sortColumn = "Komplain", sortDirection = ViewBag.SortColumn == "Komplain" && ViewBag.SortDirection == "asc" ? "desc" : "asc" })">
+                                        Komplain
+                                        @if (ViewBag.SortColumn == "Komplain")
+                                        {
+                                            <i class="bi bi-arrow-@(ViewBag.SortDirection == "asc" ? "up" : "down")"></i>
+                                        }
+                                    </a>
+                                </th>
+                                <th>
+                                    <a href="@Url.Action("Index", new { pageNumber = 1, pageSize = Model.PageSize, searchTerm = ViewBag.SearchTerm, sortColumn = "Banding", sortDirection = ViewBag.SortColumn == "Banding" && ViewBag.SortDirection == "asc" ? "desc" : "asc" })">
+                                        Banding
+                                        @if (ViewBag.SortColumn == "Banding")
+                                        {
+                                            <i class="bi bi-arrow-@(ViewBag.SortDirection == "asc" ? "up" : "down")"></i>
+                                        }
+                                    </a>
+                                </th>
                             </tr>
                         </thead>
                         <tbody>
@@ -318,7 +479,7 @@
         <nav aria-label="Page navigation" class="px-3">
             <ul class="pagination">
                 <li class="page-item @(!Model.HasPreviousPage ? "disabled" : "")">
-                    <a class="page-link" href="@Url.Action("Index", new { pageNumber = Model.PageNumber - 1, pageSize = Model.PageSize, searchTerm = ViewBag.SearchTerm })" aria-label="Previous">
+                    <a class="page-link" href="@Url.Action("Index", new { pageNumber = Model.PageNumber - 1, pageSize = Model.PageSize, searchTerm = ViewBag.SearchTerm, sortColumn = ViewBag.SortColumn, sortDirection = ViewBag.SortDirection })" aria-label="Previous">
                         <span aria-hidden="true">&laquo;</span>
                     </a>
                 </li>
@@ -333,7 +494,7 @@
                 @if (startPage > 1)
                 {
                     <li class="page-item">
-                        <a class="page-link" href="@Url.Action("Index", new { pageNumber = 1, pageSize = Model.PageSize, searchTerm = ViewBag.SearchTerm })">1</a>
+                        <a class="page-link" href="@Url.Action("Index", new { pageNumber = 1, pageSize = Model.PageSize, searchTerm = ViewBag.SearchTerm, sortColumn = ViewBag.SortColumn, sortDirection = ViewBag.SortDirection })">1</a>
                     </li>
                     if (startPage > 2)
                     {
@@ -345,7 +506,7 @@
                 @for (int i = startPage; i <= endPage; i++)
                 {
                     <li class="page-item @(i == Model.PageNumber ? "active" : "")">
-                        <a class="page-link" href="@Url.Action("Index", new { pageNumber = i, pageSize = Model.PageSize, searchTerm = ViewBag.SearchTerm })">@i</a>
+                        <a class="page-link" href="@Url.Action("Index", new { pageNumber = i, pageSize = Model.PageSize, searchTerm = ViewBag.SearchTerm, sortColumn = ViewBag.SortColumn, sortDirection = ViewBag.SortDirection })">@i</a>
                     </li>
                 }
                 @if (endPage < Model.TotalPages)
@@ -357,11 +518,11 @@
                         </li>
                     }
                     <li class="page-item">
-                        <a class="page-link" href="@Url.Action("Index", new { pageNumber = Model.TotalPages, pageSize = Model.PageSize, searchTerm = ViewBag.SearchTerm })">@Model.TotalPages</a>
+                        <a class="page-link" href="@Url.Action("Index", new { pageNumber = Model.TotalPages, pageSize = Model.PageSize, searchTerm = ViewBag.SearchTerm, sortColumn = ViewBag.SortColumn, sortDirection = ViewBag.SortDirection })">@Model.TotalPages</a>
                     </li>
                 }
                 <li class="page-item @(!Model.HasNextPage ? "disabled" : "")">
-                    <a class="page-link" href="@Url.Action("Index", new { pageNumber = Model.PageNumber + 1, pageSize = Model.PageSize, searchTerm = ViewBag.SearchTerm })" aria-label="Next">
+                    <a class="page-link" href="@Url.Action("Index", new { pageNumber = Model.PageNumber + 1, pageSize = Model.PageSize, searchTerm = ViewBag.SearchTerm, sortColumn = ViewBag.SortColumn, sortDirection = ViewBag.SortDirection })" aria-label="Next">
                         <span aria-hidden="true">&raquo;</span>
                     </a>
                 </li>
@@ -371,5 +532,9 @@
 </div>
 
 @section Scripts {
-    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script>
+        $(document).ready(function () {
+            // Any other initialization code can go here
+        });
+    </script>
 }

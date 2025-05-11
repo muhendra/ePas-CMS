@@ -146,11 +146,21 @@
                                 }
                                 else
                                 {
-                                    <img src="@media.MediaPath" alt="Foto Catatan Audit" class="rounded shadow-sm" style="max-height:800px; width:auto; max-width:100%;" />
+                                    <img src="@media.MediaPath" alt="Foto Catatan Audit" class="rounded shadow-sm" style="max-height:200px; width:100%; max-width:100%;" onerror="this.onerror=null; this.src='/images/no-image.png';" />
                                 }
                             </div>
                         </div>
                     }
+                </div>
+            }
+            else
+            {
+                <div class="row row-cols-1 row-cols-md-2 g-4">
+                    <div class="col d-flex justify-content-center">
+                        <div class="card h-100 p-3 d-flex align-items-center justify-content-center">
+                            <img src="/images/no-image.png" alt="Tidak ada foto" class="rounded shadow-sm" style="max-height:800px; width:auto; max-width:100%;" />
+                        </div>
+                    </div>
                 </div>
             }
         </div>
@@ -202,7 +212,7 @@
 
         @if (Model.FinalDocuments?.Any() ?? false)
         {
-            <div class="mb-2 fw-semibold mt-4">Dokumen Lampiran</div>
+            <div class="mb-2 fw-semibold mt-4">Bukti Dokumen/Foto Berita Acara</div>
             <ul class="list-unstyled">
                 <li class="mb-2">
                     <i class="bi bi-file-earmark-image text-primary"></i>
@@ -213,6 +223,13 @@
                     </button>
                 </li>
             </ul>
+        }
+        else
+        {
+            <div class="mb-2 fw-semibold mt-4">Bukti Dokumen/Foto Berita Acara</div>
+            <div class="text-center p-4">
+                <img src="/images/no-image.png" alt="Tidak ada foto" class="rounded shadow-sm" style="max-height:400px; width:auto; max-width:100%;" />
+            </div>
         }
     </div>
 }
@@ -462,74 +479,72 @@ else if (!string.IsNullOrEmpty(Model.Notes) || (Model.FinalDocuments != null && 
         recalcAll();
         });
         function showMediaPopup(mediaItems) {
-        const container = document.getElementById('mediaModalBody');
-        container.innerHTML = '';
+            const container = document.getElementById('mediaModalBody');
+            container.innerHTML = '';
 
-        if (!mediaItems || mediaItems.length === 0) {
-        container.innerHTML = '<p class="text-muted">Tidak ada media tersedia.</p>';
-        }
-        else if (mediaItems.length === 1) {
-        const item = mediaItems[0];
-        let el = document.createElement(item.MediaType?.toUpperCase() === 'VIDEO' || item.MediaPath?.endsWith('.mp4')
-        ? 'video' : 'img');
+            if (!mediaItems || mediaItems.length === 0) {
+                container.innerHTML = '<div class="text-center p-4"><img src="/images/no-image.png" alt="Tidak ada foto" class="rounded shadow-sm" style="max-height:400px; width:auto; max-width:100%;" /></div>';
+            }
+            else if (mediaItems.length === 1) {
+                const item = mediaItems[0];
+                let el = document.createElement(item.MediaType?.toUpperCase() === 'VIDEO' || item.MediaPath?.endsWith('.mp4')
+                    ? 'video' : 'img');
 
-        if (el.tagName === 'IMG') {
-        el.src = item.MediaPath;
-        el.alt = '';
-        el.className = 'img-fluid rounded';
-        } else {
-        el.src = item.MediaPath;
-        el.controls = true;
-        el.className = 'w-100 rounded';
-        }
-        container.appendChild(el);
-        }
-        else {
-        const carouselId = 'mediaCarousel';
-        const indicators = [];
-        const innerItems = [];
+                if (el.tagName === 'IMG') {
+                    el.src = item.MediaPath;
+                    el.alt = '';
+                    el.className = 'img-fluid rounded';
+                    el.onerror = function() {
+                        this.onerror = null;
+                        this.src = '/images/no-image.png';
+                    };
+                } else {
+                    el.src = item.MediaPath;
+                    el.controls = true;
+                    el.className = 'w-100 rounded';
+                }
+                container.appendChild(el);
+            }
+            else {
+                const carouselId = 'mediaCarousel';
+                const indicators = [];
+                const innerItems = [];
 
-        mediaItems.forEach((item, index) => {
-        const isActive = index === 0 ? 'active' : '';
-        const mediaTag = item.MediaType?.toUpperCase() === 'VIDEO' || item.MediaPath?.endsWith('.mp4')
-        ? `<video controls class="d-block w-100 rounded"><source src="${item.MediaPath}" type="video/mp4"></video>`
-        : `<img src="${item.MediaPath}" class="d-block w-100 rounded" alt="">`;
+                mediaItems.forEach((item, index) => {
+                    const isActive = index === 0 ? 'active' : '';
+                    const mediaTag = item.MediaType?.toUpperCase() === 'VIDEO' || item.MediaPath?.endsWith('.mp4')
+                        ? `<video controls class="d-block w-100 rounded"><source src="${item.MediaPath}" type="video/mp4"></video>`
+                        : `<img src="${item.MediaPath}" class="d-block w-100 rounded" alt="" onerror="this.onerror=null; this.src='/images/no-image.png';">`;
 
-        indicators.push(`<button type="button" data-bs-target="#${carouselId}" data-bs-slide-to="${index}" class="${isActive}" aria-current="${isActive ? 'true' : ''}" aria-label="Slide ${index + 1}"></button>`);
-        innerItems.push(`<div class="carousel-item ${isActive}">${mediaTag}</div>`);
-        });
+                    indicators.push(`<button type="button" data-bs-target="#${carouselId}" data-bs-slide-to="${index}" class="${isActive}" aria-current="${isActive ? 'true' : ''}" aria-label="Slide ${index + 1}"></button>`);
+                    innerItems.push(`<div class="carousel-item ${isActive}">${mediaTag}</div>`);
+                });
 
-        container.innerHTML = `
-        <div id="${carouselId}" class="carousel slide" data-bs-ride="carousel">
-        <div class="carousel-indicators">
-        ${indicators.join('')}
-        </div>
-        <div class="carousel-inner">
-        ${innerItems.join('')}
-        </div>
-        <button class="carousel-control-prev" type="button" data-bs-target="#${carouselId}" data-bs-slide="prev">
-        <span class="carousel-control-prev-icon" aria-hidden="true"></span>
-        <span class="visually-hidden">Previous</span>
-        </button>
-        <button class="carousel-control-next" type="button" data-bs-target="#${carouselId}" data-bs-slide="next">
-        <span class="carousel-control-next-icon" aria-hidden="true"></span>
-        <span class="visually-hidden">Next</span>
-        </button>
-        </div>`;
-        }
+                container.innerHTML = `
+                    <div id="${carouselId}" class="carousel slide" data-bs-ride="carousel">
+                        <div class="carousel-indicators">
+                            ${indicators.join('')}
+                        </div>
+                        <div class="carousel-inner">
+                            ${innerItems.join('')}
+                        </div>
+                        <button class="carousel-control-prev" type="button" data-bs-target="#${carouselId}" data-bs-slide="prev">
+                            <span class="carousel-control-prev-icon" aria-hidden="true"></span>
+                            <span class="visually-hidden">Previous</span>
+                        </button>
+                        <button class="carousel-control-next" type="button" data-bs-target="#${carouselId}" data-bs-slide="next">
+                            <span class="carousel-control-next-icon" aria-hidden="true"></span>
+                            <span class="visually-hidden">Next</span>
+                        </button>
+                    </div>`;
+            }
 
-                const modalEl = document.getElementById('mediaModal');
-        const modal = new bootstrap.Modal(modalEl, {
-            backdrop: 'static',
-            keyboard: false,
-            focus: false // <== mencegah scroll auto ke dalam modal
-        });
-        modal.show();
-
+            const modal = new bootstrap.Modal(document.getElementById('mediaModal'));
+            modal.show();
         }
 
         function showFinalMediaPopup(mediaItems) {
-        showMediaPopup(mediaItems);
+            showMediaPopup(mediaItems);
         }
 
     </script>
@@ -726,7 +741,7 @@ else if (!string.IsNullOrEmpty(Model.Notes) || (Model.FinalDocuments != null && 
                                 </div>
                                 
                             }
-
+                        }
                             // <div class="d-flex gap-2 align-items-center mb-3">
                             //     @if (node.MediaItems?.Any() ?? false)
                             //     {
@@ -753,8 +768,6 @@ else if (!string.IsNullOrEmpty(Model.Notes) || (Model.FinalDocuments != null && 
                             //         </form>
                             //     }
                             // </div>
-                        }
-
 
                             @if (node.ScoreInput == "X" && node.ScoreX.HasValue)
                             {

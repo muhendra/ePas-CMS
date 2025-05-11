@@ -23,7 +23,7 @@ namespace e_Pas_CMS.Controllers
             _context = context;
         }
 
-        public async Task<IActionResult> Index(int pageNumber = 1, int pageSize = DefaultPageSize, string searchTerm = "")
+        public async Task<IActionResult> Index(int pageNumber = 1, int pageSize = DefaultPageSize, string searchTerm = "", string sortColumn = "TanggalAudit", string sortDirection = "desc")
         {
             try
             {
@@ -31,21 +31,22 @@ namespace e_Pas_CMS.Controllers
                 bool isReadonlyUser = currentUser == "usermanagement1";
 
                 var query = from s in _context.spbus
-                            join a in _context.trx_audits on s.id equals a.spbu_id
-                            join u in _context.app_users on a.app_user_id equals u.id into aud
-                            from u in aud.DefaultIfEmpty()
-                            where (a.status == "UNDER_REVIEW" || a.status == "VERIFIED")
-                            select new
-                            {
-                                Audit = a,
-                                Spbu = s,
-                                AuditorName = u.name
-                            };
+                           join a in _context.trx_audits on s.id equals a.spbu_id
+                           join u in _context.app_users on a.app_user_id equals u.id into aud
+                           from u in aud.DefaultIfEmpty()
+                           where (isReadonlyUser ? a.status == "VERIFIED"
+                                                 : a.status == "UNDER_REVIEW" || a.status == "VERIFIED")
+                           select new
+                           {
+                               Audit = a,
+                               Spbu = s,
+                               AuditorName = u.name
+                           };
 
                 if (!string.IsNullOrWhiteSpace(searchTerm))
                 {
                     searchTerm = searchTerm.ToLower();
-                    query = query.Where(x =>
+                    query = query.Where(x => 
                         x.Spbu.spbu_no.ToLower().Contains(searchTerm) ||
                         (x.AuditorName != null && x.AuditorName.ToLower().Contains(searchTerm)) ||
                         x.Audit.status.ToLower().Contains(searchTerm) ||
@@ -54,6 +55,25 @@ namespace e_Pas_CMS.Controllers
                         (x.Spbu.city_name != null && x.Spbu.city_name.ToLower().Contains(searchTerm))
                     );
                 }
+
+                // Apply sorting
+                query = sortColumn switch
+                {
+                    "NoSpbu" => sortDirection == "asc" ? query.OrderBy(q => q.Spbu.spbu_no) : query.OrderByDescending(q => q.Spbu.spbu_no),
+                    "Auditor" => sortDirection == "asc" ? query.OrderBy(q => q.AuditorName) : query.OrderByDescending(q => q.AuditorName),
+                    "Rayon" => sortDirection == "asc" ? query.OrderBy(q => q.Spbu.region) : query.OrderByDescending(q => q.Spbu.region),
+                    "Provinsi" => sortDirection == "asc" ? query.OrderBy(q => q.Spbu.province_name) : query.OrderByDescending(q => q.Spbu.province_name),
+                    "Kota" => sortDirection == "asc" ? query.OrderBy(q => q.Spbu.city_name) : query.OrderByDescending(q => q.Spbu.city_name),
+                    "Alamat" => sortDirection == "asc" ? query.OrderBy(q => q.Spbu.address) : query.OrderByDescending(q => q.Spbu.address),
+                    "TipeSpbu" => sortDirection == "asc" ? query.OrderBy(q => q.Spbu.type) : query.OrderByDescending(q => q.Spbu.type),
+                    "Tahun" => sortDirection == "asc" ? query.OrderBy(q => q.Audit.created_date) : query.OrderByDescending(q => q.Audit.created_date),
+                    "Audit" => sortDirection == "asc" ? query.OrderBy(q => q.Audit.audit_type) : query.OrderByDescending(q => q.Audit.audit_type),
+                    "TipeAudit" => sortDirection == "asc" ? query.OrderBy(q => q.Audit.audit_type) : query.OrderByDescending(q => q.Audit.audit_type),
+                    "TanggalAudit" => sortDirection == "asc" ? query.OrderBy(q => q.Audit.updated_date) : query.OrderByDescending(q => q.Audit.updated_date),
+                    "Status" => sortDirection == "asc" ? query.OrderBy(q => q.Audit.status) : query.OrderByDescending(q => q.Audit.status),
+                    "Komplain" => sortDirection == "asc" ? query.OrderBy(q => q.Audit.status) : query.OrderByDescending(q => q.Audit.status),
+                    "Banding" => sortDirection == "asc" ? query.OrderBy(q => q.Audit.audit_level) : query.OrderByDescending(q => q.Audit.audit_level)
+                };
 
                 var totalItems = await query.CountAsync();
 
@@ -135,6 +155,14 @@ namespace e_Pas_CMS.Controllers
                     });
                 }
 
+                // If sorting by Score, we need to sort the result list after calculating the scores
+                if (sortColumn == "Score")
+                {
+                    result = sortDirection == "asc" 
+                        ? result.OrderBy(r => r.Score).ToList()
+                        : result.OrderByDescending(r => r.Score).ToList();
+                }
+
                 var paginationModel = new PaginationModel<SpbuViewModel>
                 {
                     Items = result,
@@ -144,6 +172,8 @@ namespace e_Pas_CMS.Controllers
                 };
 
                 ViewBag.SearchTerm = searchTerm;
+                ViewBag.SortColumn = sortColumn;
+                ViewBag.SortDirection = sortDirection;
                 return View(paginationModel);
             }
             catch (Exception ex)
