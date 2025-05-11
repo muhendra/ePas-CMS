@@ -1,0 +1,126 @@
+﻿@using e_Pas_CMS.ViewModels
+@model DetailReportViewModel
+
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <title>Audit Report PDF</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+    <style>
+        body {
+            font-size: 12px;
+        }
+        .compliance-badge {
+            display: inline-block;
+            min-width: 70px;
+            font-size: 0.7rem;
+            font-weight: 600;
+            border-radius: 0.5rem;
+            padding: 0.25rem 0.5rem;
+            color: white;
+            text-align: center;
+        }
+        .bg-excellent { background-color: #f0ad4e; }
+        .bg-good { background-color: #5cb85c; }
+        .bg-improve { background-color: #d9534f; }
+        .bg-none { background-color: #6c757d; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h3 class="fw-bold">Detail Laporan Audit - @Model.ReportNo</h3>
+        <hr />
+        <h5 class="mt-4">Informasi SPBU</h5>
+        <table class="table table-sm table-bordered">
+            <tr>
+                <th>Nomor SPBU</th>
+                <td>@Model.SpbuNo</td>
+                <th>Region</th>
+                <td>@Model.Region</td>
+            </tr>
+            <tr>
+                <th>Kota</th>
+                <td>@Model.Kota</td>
+                <th>Alamat</th>
+                <td>@Model.Alamat</td>
+            </tr>
+            <tr>
+                <th>Pemilik</th>
+                <td>@Model.OwnerName</td>
+                <th>Manager</th>
+                <td>@Model.ManagerName</td>
+            </tr>
+            <tr>
+                <th>Ownership</th>
+                <td>@Model.OwnershipType</td>
+                <th>Quarter</th>
+                <td>@Model.Quarter</td>
+            </tr>
+            <tr>
+                <th>Tahun</th>
+                <td>@Model.Year</td>
+                <th>MOR</th>
+                <td>@Model.MOR</td>
+            </tr>
+            <tr>
+                <th>Sales Area</th>
+                <td>@Model.SalesArea</td>
+                <th>SBM</th>
+                <td>@Model.SBM</td>
+            </tr>
+        </table>
+
+        <h5 class="mt-4">Total Score</h5>
+        <p><strong>@Model.TotalScore.ToString("0.00")%</strong> &mdash; @(Model.TotalScore >= Model.MinPassingScore ? "EXCELLENT" : "GOOD")</p>
+
+        <h5 class="mt-4">Level Konfirmasi Pertamina Way (Elemen)</h5>
+        <table class="table table-bordered">
+            <thead class="table-light">
+                <tr>
+                    <th>Indikator</th>
+                    <th class="text-center">Bobot</th>
+                    <th class="text-center">Nilai Min</th>
+                    <th class="text-center">Compliance</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var element in Model.Elements)
+                {
+                    var scoreFraction = element.ScoreAF ?? 0m;
+                    string level = "-";
+                    string badgeClass = "bg-none";
+
+                    if (scoreFraction >= 1.00m) { level = "Excellent"; badgeClass = "bg-excellent"; }
+                    else if (scoreFraction >= 0.875m) { level = "Good"; badgeClass = "bg-good"; }
+                    else { level = "Needs Improvement"; badgeClass = "bg-improve"; }
+
+                    <tr>
+                        <td>@element.Title</td>
+                        <td class="text-center">@((int)(element.Weight ?? 0))</td>
+                        <td class="text-center">85,00%</td>
+                        <td class="text-center">
+                            <div class="compliance-badge @badgeClass">
+                                @($"{(scoreFraction * 100):0.##}%")<br /><small>@level</small>
+                            </div>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+
+        <h5 class="mt-4">Komentar</h5>
+        <p><strong>Staf:</strong><br />@Model.KomentarStaf</p>
+        <p><strong>Quality:</strong><br />@Model.KomentarQuality</p>
+        <p><strong>HSSE:</strong><br />@Model.KomentarHSSE</p>
+        <p><strong>Visual:</strong><br />@Model.KomentarVisual</p>
+        <p><strong>Manager:</strong><br />@Model.KomentarManager</p>
+
+        @if (!string.IsNullOrEmpty(Model.Notes))
+        {
+            <h5 class="mt-4">Berita Acara</h5>
+            <p>@Model.Notes</p>
+        }
+    </div>
+</body>
+</html>

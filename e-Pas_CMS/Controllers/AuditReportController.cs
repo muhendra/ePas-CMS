@@ -9,6 +9,15 @@ using Microsoft.EntityFrameworkCore;
 using e_Pas_CMS.Data;
 using e_Pas_CMS.ViewModels;
 using Microsoft.AspNetCore.Authorization;
+using Rotativa.AspNetCore;
+using Microsoft.AspNetCore.Mvc.ModelBinding;
+using Microsoft.AspNetCore.Mvc.Razor;
+using Microsoft.AspNetCore.Mvc.Rendering;
+using Microsoft.AspNetCore.Mvc.ViewFeatures;
+using PdfSharp;
+using PdfSharpCore.Pdf;
+using PdfSharpCore.Utils;
+using TheArtOfDev.HtmlRenderer.PdfSharp;
 
 namespace e_Pas_CMS.Controllers
 {
@@ -116,6 +125,82 @@ namespace e_Pas_CMS.Controllers
             ViewBag.AuditId = id;
             return View(model);
         }
+
+        public async Task<IActionResult> DownloadPdf(Guid id)
+        {
+            var model = await GetDetailReportAsync(id);
+            var html = await RenderViewToStringAsync("DetailPdf", model);
+
+            var config = new PdfGenerateConfig()
+            {
+                PageSize = PageSize.A4,
+                PageOrientation = PageOrientation.Landscape,
+                MarginTop = 20,
+                MarginBottom = 20,
+                MarginLeft = 20,
+                MarginRight = 20
+            };
+
+            var pdf = PdfGenerator.GeneratePdf(html, config);
+
+            using var stream = new MemoryStream();
+            pdf.Save(stream, false);
+            stream.Position = 0;
+
+            return File(stream.ToArray(), "application/pdf", $"AuditReport_{model.ReportNo}.pdf");
+        }
+
+        private async Task<DetailReportViewModel> GetDetailReportAsync(Guid id)
+        {
+            using var conn = _context.Database.GetDbConnection();
+            if (conn.State != ConnectionState.Open)
+                await conn.OpenAsync();
+
+            var auditHeader = await GetAuditHeaderAsync(conn, id.ToString());
+            if (auditHeader == null)
+                throw new Exception("Data tidak ditemukan.");
+
+            var model = MapToViewModel(auditHeader);
+            model.FinalDocuments = await GetMediaNotesAsync(conn, id.ToString(), "FINAL");
+            model.QqChecks = await GetQqCheckDataAsync(conn, id.ToString());
+
+            var checklistData = await GetChecklistDataAsync(conn, id.ToString());
+            var mediaList = await GetMediaPerNodeAsync(conn, id.ToString());
+            model.Elements = BuildHierarchy(checklistData, mediaList);
+
+            CalculateChecklistScores(model.Elements);
+            CalculateOverallScore(model, checklistData);
+
+            return model;
+        }
+
+        private async Task<string> RenderViewToStringAsync(string viewName, object model)
+        {
+            var viewEngine = HttpContext.RequestServices.GetService<IRazorViewEngine>();
+            var tempDataProvider = HttpContext.RequestServices.GetService<ITempDataProvider>();
+            var serviceProvider = HttpContext.RequestServices.GetService<IServiceProvider>();
+
+            var actionContext = new ActionContext(HttpContext, RouteData, ControllerContext.ActionDescriptor);
+
+            using var sw = new StringWriter();
+            var viewResult = viewEngine.FindView(actionContext, viewName, false);
+
+            if (!viewResult.Success)
+                throw new InvalidOperationException($"View {viewName} not found");
+
+            var viewContext = new ViewContext(
+                actionContext,
+                viewResult.View,
+                new ViewDataDictionary(new EmptyModelMetadataProvider(), new ModelStateDictionary()) { Model = model },
+                new TempDataDictionary(HttpContext, tempDataProvider),
+                sw,
+                new HtmlHelperOptions()
+            );
+
+            await viewResult.View.RenderAsync(viewContext);
+            return sw.ToString();
+        }
+
 
         private async Task<AuditHeaderDto> GetAuditHeaderAsync(IDbConnection conn, string id)
         {
