@@ -60,12 +60,10 @@
             </a>
         </div>
     </div>
-    <div>
-        <a class="btn btn-outline-primary"
-           href="@Url.Action("DownloadPdf", "AuditReport", new { id = Context.Request.RouteValues["id"] })">
-            <i class="bi bi-file-earmark-pdf"></i> Download PDF
-        </a>
-    </div>
+    <a class="btn btn-outline-primary"
+       href="@Url.Action("DownloadPdfQuest", "AuditReport", new { id = Context.Request.RouteValues["id"] })">
+        <i class="bi bi-file-earmark-pdf"></i> Download PDF
+    </a>
 </div>
 
 <!-- STATUS -->
@@ -685,6 +683,36 @@ else
         function showFinalMediaPopup(mediaItems) {
         showMediaPopup(mediaItems);
         }
+
+            document.getElementById('btnDownloadPdf')?.addEventListener('click', function () {
+            const auditId = '@Context.Request.RouteValues["id"]';
+
+            fetch(`/AuditReport/DownloadPdfQuest?id=${auditId}`, {
+                method: 'GET',
+                headers: {
+                    'Accept': 'application/pdf'
+                }
+            })
+            .then(response => {
+                if (!response.ok) throw new Error('Gagal mengunduh PDF');
+
+                return response.blob();
+            })
+            .then(blob => {
+                const url = window.URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = `LaporanAudit_${auditId}.pdf`;
+                document.body.appendChild(link);
+                link.click();
+                link.remove();
+                window.URL.revokeObjectURL(url);
+            })
+            .catch(err => {
+                console.error(err);
+                alert('Gagal mengunduh PDF');
+            });
+        });
 
     </script>
 }

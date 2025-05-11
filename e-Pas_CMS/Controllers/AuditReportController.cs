@@ -18,6 +18,7 @@ using PdfSharp;
 using PdfSharpCore.Pdf;
 using PdfSharpCore.Utils;
 using TheArtOfDev.HtmlRenderer.PdfSharp;
+using QuestPDF.Fluent;
 
 namespace e_Pas_CMS.Controllers
 {
@@ -126,29 +127,18 @@ namespace e_Pas_CMS.Controllers
             return View(model);
         }
 
-        public async Task<IActionResult> DownloadPdf(Guid id)
+        public async Task<IActionResult> DownloadPdfQuest(Guid id)
         {
             var model = await GetDetailReportAsync(id);
-            var html = await RenderViewToStringAsync("DetailPdf", model);
 
-            var config = new PdfGenerateConfig()
-            {
-                PageSize = PageSize.A4,
-                PageOrientation = PageOrientation.Landscape,
-                MarginTop = 20,
-                MarginBottom = 20,
-                MarginLeft = 20,
-                MarginRight = 20
-            };
+            var document = new ReportExcellentTemplate(model);
+            var pdfStream = new MemoryStream();
+            document.GeneratePdf(pdfStream);
+            pdfStream.Position = 0;
 
-            var pdf = PdfGenerator.GeneratePdf(html, config);
-
-            using var stream = new MemoryStream();
-            pdf.Save(stream, false);
-            stream.Position = 0;
-
-            return File(stream.ToArray(), "application/pdf", $"AuditReport_{model.ReportNo}.pdf");
+            return File(pdfStream, "application/pdf", $"LaporanAudit_{id}.pdf");
         }
+
 
         private async Task<DetailReportViewModel> GetDetailReportAsync(Guid id)
         {
