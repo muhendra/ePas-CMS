@@ -133,24 +133,14 @@
             @if (Model.MediaNotes != null && Model.MediaNotes.Any())
             {
                 <div class="row row-cols-1 row-cols-md-2 g-4">
-                    @foreach (var media in Model.MediaNotes)
-                    {
-                        <div class="col d-flex justify-content-center">
-                            <div class="card h-100 p-3 d-flex align-items-center justify-content-center">
-                                @if (media.MediaType?.ToUpper() == "VIDEO" || media.MediaPath.EndsWith(".mp4", StringComparison.OrdinalIgnoreCase))
-                                {
-                                    <video controls class="rounded shadow-sm" style="max-height:800px; width:auto; max-width:100%;">
-                                        <source src="@media.MediaPath" type="video/mp4" />
-                                        Your browser does not support the video tag.
-                                    </video>
-                                }
-                                else
-                                {
-                                    <img src="@media.MediaPath" alt="Foto Catatan Audit" class="rounded shadow-sm" style="max-height:800px; width:auto; max-width:100%;" />
-                                }
-                            </div>
-                        </div>
-                    }
+                    <div class="text-center">
+                        <button type="button"
+                                class="btn btn-outline-primary"
+                                onclick='handleDocumentationClick(@Html.Raw(JsonConvert.SerializeObject(Model.MediaNotes ?? new List<MediaItem>())))'>
+                            <i class="bi bi-images me-1"></i> Lihat Dokumentasi (Foto/Video)
+                        </button>
+                    </div>
+
                 </div>
             }
         </div>
