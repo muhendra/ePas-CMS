@@ -589,6 +589,36 @@ VALUES
             return PhysicalFile(fullPath, mimeType);
         }
 
+        [HttpGet]
+        public IActionResult GetLibraryMedia(int page = 1, int pageSize = 10)
+        {
+            string libraryDir = "/var/www/epas-api/wwwroot/uploads/library";
+            string urlBase = "/uploads/library";
+
+            if (!Directory.Exists(libraryDir))
+                return Json(new { total = 0, data = new List<object>() });
+
+            var allFiles = Directory.GetFiles(libraryDir)
+                .Where(f => f.EndsWith(".jpg", StringComparison.OrdinalIgnoreCase) ||
+                            f.EndsWith(".png", StringComparison.OrdinalIgnoreCase) ||
+                            f.EndsWith(".jpeg", StringComparison.OrdinalIgnoreCase) ||
+                            f.EndsWith(".mp4", StringComparison.OrdinalIgnoreCase))
+                .OrderByDescending(f => System.IO.File.GetCreationTime(f))
+                .ToList();
+
+            int total = allFiles.Count();
+
+            var pagedFiles = allFiles
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .Select(f => new
+                {
+                    MediaType = f.EndsWith(".mp4", StringComparison.OrdinalIgnoreCase) ? "VIDEO" : "IMAGE",
+                    MediaPath = $"{urlBase}/{Path.GetFileName(f)}"
+                });
+
+            return Json(new { total, data = pagedFiles });
+        }
 
     }
 }

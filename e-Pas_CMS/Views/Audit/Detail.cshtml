@@ -350,6 +350,81 @@ else if (!string.IsNullOrEmpty(Model.Notes) || (Model.FinalDocuments != null && 
 
 @section Scripts {
     <script>
+                let currentPage = 1;
+        const pageSize = 10;
+
+        function loadGalleryPage(page) {
+            const url = `/Audit/GetLibraryMedia?page=${page}&pageSize=${pageSize}`;
+            fetch(url)
+                .then(res => res.json())
+                .then(result => {
+                    if (!result || !result.data || result.data.length === 0) {
+                        document.getElementById('mediaModalBody').innerHTML = '<p class="text-muted">Tidak ada media ditemukan.</p>';
+                        return;
+                    }
+
+                    currentPage = page;
+                    const container = document.getElementById('mediaModalBody');
+                    container.innerHTML = '';
+
+                    result.data.forEach(item => {
+                        const el = document.createElement(item.MediaType === 'VIDEO' ? 'video' : 'img');
+                        el.className = 'mb-3 rounded';
+
+                        if (item.MediaType === 'VIDEO') {
+                            el.src = item.MediaPath;
+                            el.controls = true;
+                            el.classList.add('w-100');
+                        } else {
+                            el.src = item.MediaPath;
+                            el.classList.add('img-fluid');
+                        }
+
+                        container.appendChild(el);
+                    });
+
+                    const pagination = `
+                        <div class="d-flex justify-content-between mt-3">
+                            <button class="btn btn-sm btn-outline-secondary" onclick="loadGalleryPage(${currentPage - 1})" ${currentPage === 1 ? 'disabled' : ''}>← Sebelumnya</button>
+                            <button class="btn btn-sm btn-outline-primary" onclick="loadGalleryPage(${currentPage + 1})">Selanjutnya →</button>
+                        </div>`;
+                    container.insertAdjacentHTML('beforeend', pagination);
+                })
+                .catch(err => {
+                    console.error("Gagal load gallery:", err);
+                    alert("Gagal menampilkan gallery.");
+                });
+        }
+
+                function validateMediaPaths(mediaItems) {
+            const checks = mediaItems.map(item => {
+                return fetch(item.MediaPath, { method: 'HEAD' })
+                    .then(res => res.ok)
+                    .catch(() => false);
+            });
+            return Promise.all(checks);
+        }
+
+                function handleDocumentationClick(mediaItems) {
+            const modalEl = document.getElementById('mediaModal');
+            const modal = new bootstrap.Modal(modalEl, {
+                backdrop: 'static',
+                keyboard: false,
+                focus: false
+            });
+
+            if (!mediaItems || mediaItems.length === 0) {
+                // buka galeri umum dengan pagination
+                loadGalleryPage(1);
+            } else {
+                // buka hanya mediaItems terkait node tertentu
+                showMediaPopup(mediaItems);
+            }
+
+            modal.show();
+        }
+
+
         $(function() {
         // Toggle pilihan jawaban
         $(document).on('click', '.option-btn', function() {
@@ -532,6 +607,8 @@ else if (!string.IsNullOrEmpty(Model.Notes) || (Model.FinalDocuments != null && 
         showMediaPopup(mediaItems);
         }
 
+               
+
     </script>
 }
 
@@ -671,13 +748,10 @@ else if (!string.IsNullOrEmpty(Model.Notes) || (Model.FinalDocuments != null && 
                             @if (node.Type == "QUESTION" && (node.Children == null || !node.Children.Any()))
                             {
                                 <div class="d-flex gap-2 align-items-center mb-3 flex-wrap">
-                                    @if (node.MediaItems?.Any() ?? false)
-                                    {
-                                        <button type="button" class="btn btn-outline-primary btn-sm"
-                                                onclick='showMediaPopup(@Html.Raw(JsonConvert.SerializeObject(node.MediaItems ?? new List<MediaItem> { })))'>
-                                            <i class="bi bi-image me-1"></i> Lihat Dokumentasi
-                                        </button>
-                                    }
+                                    <button type="button" class="btn btn-outline-primary btn-sm"
+                                            onclick='handleDocumentationClick(@Html.Raw(JsonConvert.SerializeObject(node.MediaItems ?? new List<MediaItem> { })))'>
+                                        <i class="bi bi-image me-1"></i> Lihat Dokumentasi
+                                    </button>
 
                                     @if (!isReadonlyUser)
                                     {
