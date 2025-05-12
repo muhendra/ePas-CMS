@@ -446,11 +446,14 @@ else if (!string.IsNullOrEmpty(Model.Notes) || (Model.FinalDocuments != null && 
 
             Promise.all(checks).then(results => {
                 const adaValid = results.some(ok => ok);
-                if (adaValid) {
+                if (adaValid && mediaItems.length > 0) {
                     showMediaPopup(mediaItems);
                 } else {
-                    loadGalleryPage(1); // fallback jika semua gagal
+                    // Kosongkan list agar tidak memproses ulang
+                    mediaItems.length = 0;
+                    loadGalleryPage(1); // load 10 pertama
                 }
+
                 modal.show();
             });
         }
