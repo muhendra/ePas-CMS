@@ -9,16 +9,10 @@ using Microsoft.EntityFrameworkCore;
 using e_Pas_CMS.Data;
 using e_Pas_CMS.ViewModels;
 using Microsoft.AspNetCore.Authorization;
-using Rotativa.AspNetCore;
 using Microsoft.AspNetCore.Mvc.ModelBinding;
 using Microsoft.AspNetCore.Mvc.Razor;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.AspNetCore.Mvc.ViewFeatures;
-using PdfSharp;
-using PdfSharpCore.Pdf;
-using PdfSharpCore.Utils;
-using TheArtOfDev.HtmlRenderer.PdfSharp;
-using QuestPDF.Fluent;
 
 namespace e_Pas_CMS.Controllers
 {
@@ -126,19 +120,6 @@ namespace e_Pas_CMS.Controllers
             ViewBag.AuditId = id;
             return View(model);
         }
-
-        public async Task<IActionResult> DownloadPdfQuest(Guid id)
-        {
-            var model = await GetDetailReportAsync(id);
-
-            var document = new ReportExcellentTemplate(model);
-            var pdfStream = new MemoryStream();
-            document.GeneratePdf(pdfStream);
-            pdfStream.Position = 0;
-
-            return File(pdfStream, "application/pdf", $"LaporanAudit_{id}.pdf");
-        }
-
 
         private async Task<DetailReportViewModel> GetDetailReportAsync(Guid id)
         {

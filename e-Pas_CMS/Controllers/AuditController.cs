@@ -17,10 +17,12 @@ namespace e_Pas_CMS.Controllers
     {
         private readonly EpasDbContext _context;
         private const int DefaultPageSize = 10;
+        private readonly ILogger<AuditController> _logger;
 
-        public AuditController(EpasDbContext context)
+        public AuditController(EpasDbContext context, ILogger<AuditController> logger)
         {
             _context = context;
+            _logger = logger;
         }
 
         public async Task<IActionResult> Index(int pageNumber = 1, int pageSize = DefaultPageSize, string searchTerm = "")
@@ -595,8 +597,13 @@ VALUES
             string libraryDir = "/var/www/epas-api/wwwroot/uploads/library";
             string urlBase = "/uploads/library";
 
+            _logger.LogInformation("Gallery requested. Page: {Page}, PageSize: {PageSize}", page, pageSize);
+
             if (!Directory.Exists(libraryDir))
+            {
+                _logger.LogWarning("Library directory not found: {Dir}", libraryDir);
                 return Json(new { total = 0, data = new List<object>() });
+            }
 
             var allFiles = Directory.GetFiles(libraryDir)
                 .Where(f => f.EndsWith(".jpg", StringComparison.OrdinalIgnoreCase) ||
@@ -606,7 +613,8 @@ VALUES
                 .OrderByDescending(f => System.IO.File.GetCreationTime(f))
                 .ToList();
 
-            int total = allFiles.Count();
+            int total = allFiles.Count;
+            _logger.LogInformation("Total media files found: {Total}", total);
 
             var pagedFiles = allFiles
                 .Skip((page - 1) * pageSize)
@@ -615,10 +623,14 @@ VALUES
                 {
                     MediaType = f.EndsWith(".mp4", StringComparison.OrdinalIgnoreCase) ? "VIDEO" : "IMAGE",
                     MediaPath = $"{urlBase}/{Path.GetFileName(f)}"
-                });
+                })
+                .ToList();
+
+            _logger.LogInformation("Returning {Count} media files for page {Page}", pagedFiles.Count, page);
 
             return Json(new { total, data = pagedFiles });
         }
+
 
     }
 }
