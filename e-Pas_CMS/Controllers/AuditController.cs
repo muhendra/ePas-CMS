@@ -617,14 +617,15 @@ VALUES
             _logger.LogInformation("Total media files found: {Total}", total);
 
             var pagedFiles = allFiles
-                .Skip((page - 1) * pageSize)
-                .Take(pageSize)
-                .Select(f => new
-                {
-                    MediaType = f.EndsWith(".mp4", StringComparison.OrdinalIgnoreCase) ? "VIDEO" : "IMAGE",
-                    MediaPath = $"{urlBase}/{Path.GetFileName(f)}"
-                })
-                .ToList();
+    .Skip((page - 1) * pageSize)
+    .Take(pageSize)
+    .Select(f => new
+    {
+        MediaType = f.EndsWith(".mp4", StringComparison.OrdinalIgnoreCase) ? "VIDEO" : "IMAGE",
+        MediaPath = $"https://epas.zarata.co.id/uploads/library/{Path.GetFileName(f)}"  // ← FIX INI
+    })
+    .ToList();
+
 
             _logger.LogInformation("Returning {Count} media files for page {Page}", pagedFiles.Count, page);
 
