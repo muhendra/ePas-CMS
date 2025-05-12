@@ -348,9 +348,7 @@ else if (!string.IsNullOrEmpty(Model.Notes) || (Model.FinalDocuments != null && 
 
             fetch(url)
                 .then(res => res.json())
-                .then(async result => {
-                    console.log("Gallery result:", result);
-
+                .then(result => {
                     const container = document.getElementById('mediaModalBody');
                     container.innerHTML = '';
 
@@ -359,18 +357,11 @@ else if (!string.IsNullOrEmpty(Model.Notes) || (Model.FinalDocuments != null && 
                         return;
                     }
 
-                    // 👉 VALIDASI semua path terlebih dahulu
-                    const isValidFlags = await validateMediaPaths(result.data);
-                    const validItems = result.data.filter((item, index) => isValidFlags[index]);
-
-                    if (validItems.length === 0) {
-                        container.innerHTML = '<p class="text-muted">Semua media gagal dimuat.</p>';
-                        return;
-                    }
-
                     currentPage = page;
 
-                    validItems.forEach(item => {
+                    const limitedItems = result.data.slice(0, pageSize); // Ambil hanya 10 item
+
+                    limitedItems.forEach(item => {
                         const el = document.createElement(item.MediaType === 'VIDEO' ? 'video' : 'img');
                         el.className = 'mb-3 rounded';
 
@@ -381,6 +372,7 @@ else if (!string.IsNullOrEmpty(Model.Notes) || (Model.FinalDocuments != null && 
                         } else {
                             el.src = item.MediaPath;
                             el.classList.add('img-fluid');
+
                             el.onerror = () => {
                                 el.src = '/images/image-not-found.png';
                                 el.alt = 'Gambar tidak ditemukan';
@@ -406,8 +398,6 @@ else if (!string.IsNullOrEmpty(Model.Notes) || (Model.FinalDocuments != null && 
                     alert("Gagal menampilkan gallery.");
                 });
         }
-
-
 
                 function validateMediaPaths(mediaItems) {
             const checks = mediaItems.map(item => {
