@@ -422,9 +422,7 @@ else if (!string.IsNullOrEmpty(Model.Notes) || (Model.FinalDocuments != null && 
             return Promise.all(checks);
         }
 
-                                let localMediaItems = [];
-
-        function handleDocumentationClick(mediaItems) {
+                        function handleDocumentationClick(mediaItems) {
             const modalEl = document.getElementById('mediaModal');
             const modal = new bootstrap.Modal(modalEl, {
                 backdrop: 'static',
@@ -432,21 +430,33 @@ else if (!string.IsNullOrEmpty(Model.Notes) || (Model.FinalDocuments != null && 
                 focus: false
             });
 
+            // Kalau kosong, langsung load gallery
             if (!mediaItems || mediaItems.length === 0) {
                 loadGalleryPage(1);
                 modal.show();
                 return;
             }
 
-            // Save locally
-            localMediaItems = mediaItems;
+            // Cek semua URL apakah valid
+            const checks = mediaItems.map(item =>
+                fetch(item.MediaPath, { method: 'HEAD' })
+                    .then(res => res.ok)
+                    .catch(() => false)
+            );
 
-            // show page 1
-            showMediaPopup(localMediaItems.slice(0, pageSize));
-            currentPage = 1;
-            modal.show();
+            Promise.all(checks).then(results => {
+                const adaValid = results.some(ok => ok);
+                        if (adaValid && mediaItems.length > 0) {
+            const limited = mediaItems.slice(0, 10); // hanya ambil 10 pertama
+            showMediaPopup(limited);
+        } else {
+            loadGalleryPage(1); // fallback: ambil dari server
         }
 
+
+                modal.show();
+            });
+        }
 
         $(function() {
         // Toggle pilihan jawaban
