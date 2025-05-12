@@ -343,13 +343,13 @@ else if (!string.IsNullOrEmpty(Model.Notes) || (Model.FinalDocuments != null && 
                 let currentPage = 1;
         const pageSize = 10;
 
-        function loadGalleryPage(page) {
+                function loadGalleryPage(page) {
             const url = `/Audit/GetLibraryMedia?page=${page}&pageSize=${pageSize}`;
 
             fetch(url)
                 .then(res => res.json())
-                .then(result => {
-                    console.log("Gallery result:", result); // DEBUG
+                .then(async result => {
+                    console.log("Gallery result:", result);
 
                     const container = document.getElementById('mediaModalBody');
                     container.innerHTML = '';
@@ -359,11 +359,18 @@ else if (!string.IsNullOrEmpty(Model.Notes) || (Model.FinalDocuments != null && 
                         return;
                     }
 
+                    // 👉 VALIDASI semua path terlebih dahulu
+                    const isValidFlags = await validateMediaPaths(result.data);
+                    const validItems = result.data.filter((item, index) => isValidFlags[index]);
+
+                    if (validItems.length === 0) {
+                        container.innerHTML = '<p class="text-muted">Semua media gagal dimuat.</p>';
+                        return;
+                    }
+
                     currentPage = page;
 
-                    result.data.forEach(item => {
-                        console.log("Item:", item); // DEBUG
-
+                    validItems.forEach(item => {
                         const el = document.createElement(item.MediaType === 'VIDEO' ? 'video' : 'img');
                         el.className = 'mb-3 rounded';
 
@@ -374,10 +381,8 @@ else if (!string.IsNullOrEmpty(Model.Notes) || (Model.FinalDocuments != null && 
                         } else {
                             el.src = item.MediaPath;
                             el.classList.add('img-fluid');
-
-                            // fallback jika gagal load gambar
                             el.onerror = () => {
-                                el.src = '/images/image-not-found.png'; // pastikan file ini ada
+                                el.src = '/images/image-not-found.png';
                                 el.alt = 'Gambar tidak ditemukan';
                             };
                         }
@@ -401,6 +406,7 @@ else if (!string.IsNullOrEmpty(Model.Notes) || (Model.FinalDocuments != null && 
                     alert("Gagal menampilkan gallery.");
                 });
         }
+
 
 
                 function validateMediaPaths(mediaItems) {
