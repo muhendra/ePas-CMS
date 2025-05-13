@@ -9,6 +9,7 @@ using e_Pas_CMS.ViewModels;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using static NpgsqlTypes.NpgsqlTsQuery;
 
 namespace e_Pas_CMS.Controllers
 {
@@ -594,7 +595,8 @@ VALUES
         [HttpGet]
         public IActionResult GetLibraryMedia(int page = 1, int pageSize = 10)
         {
-            string libraryDir = "/var/www/epas-api/wwwroot/uploads/library";
+            var libraryDir = Path.Combine("/var/www/epas-api", "wwwroot", "uploads", "library");
+
             string urlBase = "/uploads/library";
 
             _logger.LogInformation("Gallery requested. Page: {Page}, PageSize: {PageSize}", page, pageSize);
