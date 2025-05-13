@@ -847,7 +847,8 @@ VALUES
                 _logger.LogInformation("UpdateMediaPath: Creating destination directory: {DestinationDir}", destinationDir);
                 Directory.CreateDirectory(destinationDir);
                 
-                var sourcePath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", request.MediaPath.TrimStart('/'));
+                // var sourcePath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", request.MediaPath.TrimStart('/'));
+                var sourcePath = libraryDir;
                 var destinationPath = Path.Combine(destinationDir, fileName);
                 _logger.LogInformation("UpdateMediaPath: Source path: {SourcePath}, Destination path: {DestinationPath}", sourcePath, destinationPath);
 
