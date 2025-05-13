@@ -33,17 +33,27 @@ namespace e_Pas_CMS.Controllers
                 var currentUser = User.Identity?.Name;
                 bool isReadonlyUser = currentUser == "usermanagement1";
 
-                var query = from s in _context.spbus
-                            join a in _context.trx_audits on s.id equals a.spbu_id
+                // Ambil region user (jika ada)
+                var userRegion = await (from aur in _context.app_user_roles
+                                        join au in _context.app_users on aur.app_user_id equals au.id
+                                        where au.username == currentUser
+                                        select aur.region)
+                                        .FirstOrDefaultAsync();
+
+                // Query utama
+                var query = from a in _context.trx_audits
+                            join s in _context.spbus on a.spbu_id equals s.id
                             join u in _context.app_users on a.app_user_id equals u.id into aud
                             from u in aud.DefaultIfEmpty()
-                            where (a.status == "UNDER_REVIEW" || a.status == "VERIFIED")
+                            where a.status == "UNDER_REVIEW"
+                               && (userRegion == null || s.region == userRegion)
                             select new
                             {
                                 Audit = a,
                                 Spbu = s,
                                 AuditorName = u.name
                             };
+
 
                 if (!string.IsNullOrWhiteSpace(searchTerm))
                 {
@@ -57,6 +67,8 @@ namespace e_Pas_CMS.Controllers
                         (x.Spbu.city_name != null && x.Spbu.city_name.ToLower().Contains(searchTerm))
                     );
                 }
+
+                query = query.OrderBy(x => x.Audit.created_date);
 
                 var totalItems = await query.CountAsync();
 

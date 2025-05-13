@@ -13,6 +13,8 @@ public partial class app_user_role
 
     public string? spbu_id { get; set; }
 
+    public string? region { get; set; }
+
     public virtual app_role app_role { get; set; } = null!;
 
     public virtual app_user app_user { get; set; } = null!;
