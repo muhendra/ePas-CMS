@@ -136,7 +136,7 @@
                     <div class="text-center">
                         <button type="button"
                                 class="btn btn-outline-primary"
-                                onclick='handleDocumentationClick(@Html.Raw(JsonConvert.SerializeObject(Model.MediaNotes ?? new List<MediaItem>())))'>
+                                onclick="loadGalleryPage(1)">
                             <i class="bi bi-images me-1"></i> Lihat Dokumentasi (Foto/Video)
                         </button>
                     </div>
@@ -400,6 +400,12 @@ else if (!string.IsNullOrEmpty(Model.Notes) || (Model.FinalDocuments != null && 
                             </button>
                         </div>`;
                     container.insertAdjacentHTML('beforeend', pagination);
+                            const modalEl = document.getElementById('mediaModal');
+        const modal = new bootstrap.Modal(modalEl, {
+            backdrop: 'static',
+            keyboard: false
+        });
+        modal.show();
                 })
                 .catch(err => {
                     console.error("Gagal load gallery:", err);
