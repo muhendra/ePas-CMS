@@ -843,12 +843,12 @@ VALUES
                 var fileName = Path.GetFileName(request.MediaPath);
                 _logger.LogInformation("UpdateMediaPath: Processing file: {FileName}", fileName);
                 
-                var destinationDir = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads", request.AuditId, request.NodeId);
+                var destinationDir = Path.Combine("/var/www/epas-api", "wwwroot", "uploads", request.AuditId, request.NodeId);
                 _logger.LogInformation("UpdateMediaPath: Creating destination directory: {DestinationDir}", destinationDir);
                 Directory.CreateDirectory(destinationDir);
                 
                 // var sourcePath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", request.MediaPath.TrimStart('/'));
-                var sourcePath = Path.Combine("/var/www/epas-api", "wwwroot", "uploads", "library");
+                var sourcePath = Path.Combine("/var/www/epas-api", "wwwroot", "uploads", "library", fileName);
                 var destinationPath = Path.Combine(destinationDir, fileName);
                 _logger.LogInformation("UpdateMediaPath: Source path: {SourcePath}, Destination path: {DestinationPath}", sourcePath, destinationPath);
 
