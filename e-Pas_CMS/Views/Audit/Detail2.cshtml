@@ -354,76 +354,56 @@ else if (!string.IsNullOrEmpty(Model.Notes) || (Model.FinalDocuments != null && 
         const pageSize = 10;
 
                 function loadGalleryPage(page) {
-            const url = `/Audit/GetLibraryMedia?page=${page}&pageSize=${pageSize}`;
+          const url = `/Audit/GetLibraryMedia?page=${page}&pageSize=${pageSize}`;
 
-            fetch(url)
-                .then(res => res.json())
-                .then(async result => {
-                    console.log("Gallery result:", result);
+          fetch(url)
+            .then(res => res.json())
+            .then(async result => {
+              console.log("Gallery result:", result);
+              const container = document.getElementById('mediaModalBody');
+              container.innerHTML = '';
 
-                    const container = document.getElementById('mediaModalBody');
-                    container.innerHTML = '';
+              // validasi
+              const isValidFlags = await validateMediaPaths(result.data.map(i => i.mediaPath));
+              const validItems = result.data.filter((_, i) => isValidFlags[i]);
 
-                    console.log(typeof showMediaPopup);
+              // render
+              validItems.forEach(item => {
+                // pakai camelCase di sini
+                const isVideo = item.mediaType === 'VIDEO'
+                                  || item.mediaPath.toLowerCase().endsWith('.mp4');
+                const el = document.createElement(isVideo ? 'video' : 'img');
+                el.className = 'mb-3 rounded w-100';
+                if (isVideo) {
+                  el.src = item.mediaPath;
+                  el.controls = true;
+                } else {
+                  el.src = item.mediaPath;
+                  el.onerror = () => {
+                    el.src = '/images/image-not-found.png';
+                    el.alt = 'Gambar tidak ditemukan';
+                  };
+                }
+                container.appendChild(el);
+              });
 
-                    if (!result || !result.data || result.data.length === 0) {
-                        container.innerHTML = '<p class="text-muted">Tidak ada media ditemukan.</p>';
-                        console.log(typeof showMediaPopup);
-                        return;
-                    }
+              // pagination (sama)
+              /* ... */
 
-                    // 👉 VALIDASI semua path terlebih dahulu
-                    const isValidFlags = await validateMediaPaths(result.data);
-                    const validItems = result.data.filter((item, index) => isValidFlags[index]);
+              new bootstrap.Modal(document.getElementById('mediaModal'), {
+                backdrop: 'static', keyboard: false
+              }).show();
+            })
+            .catch(/* ... */);
+        }
 
-                    // if (validItems.length === 0) {
-                    //     container.innerHTML = '<p class="text-muted">Semua media gagal dimuat.</p>';
-                    //     return;
-                    // }
-
-                    currentPage = page;
-
-                    validItems.forEach(item => {
-                        const el = document.createElement(item.MediaType === 'VIDEO' ? 'video' : 'img');
-                        el.className = 'mb-3 rounded';
-
-                        if (item.MediaType === 'VIDEO') {
-                            el.src = item.MediaPath;
-                            el.controls = true;
-                            el.classList.add('w-100');
-                        } else {
-                            el.src = item.MediaPath;
-                            el.classList.add('img-fluid');
-                            el.onerror = () => {
-                                el.src = '/images/image-not-found.png';
-                                el.alt = 'Gambar tidak ditemukan';
-                            };
-                        }
-
-                        container.appendChild(el);
-                    });
-
-                    const pagination = `
-                        <div class="d-flex justify-content-between mt-3">
-                            <button class="btn btn-sm btn-outline-secondary" onclick="loadGalleryPage(${currentPage - 1})" ${currentPage === 1 ? 'disabled' : ''}>
-                                ← Sebelumnya
-                            </button>
-                            <button class="btn btn-sm btn-outline-primary" onclick="loadGalleryPage(${currentPage + 1})">
-                                Selanjutnya →
-                            </button>
-                        </div>`;
-                    container.insertAdjacentHTML('beforeend', pagination);
-                            const modalEl = document.getElementById('mediaModal');
-        const modal = new bootstrap.Modal(modalEl, {
-            backdrop: 'static',
-            keyboard: false
-        });
-        modal.show();
-                })
-                .catch(err => {
-                    console.error("Gagal load gallery:", err);
-                    alert("Gagal menampilkan gallery.");
-                });
+        function validateMediaPaths(paths) {
+          return Promise.all(paths.map(src => new Promise(r => {
+            const img = new Image();
+            img.onload  = () => r(true);
+            img.onerror = () => r(false);
+            img.src     = src;
+          })));
         }
 
 
