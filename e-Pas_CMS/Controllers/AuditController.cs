@@ -817,55 +817,72 @@ VALUES
         public async Task<IActionResult> UpdateMediaPath([FromBody] UpdateMediaPathRequest request)
         {
             if (string.IsNullOrEmpty(request.NodeId) || string.IsNullOrEmpty(request.MediaPath))
+            {
+                _logger.LogWarning("UpdateMediaPath: Invalid request - NodeId or MediaPath is empty");
                 return BadRequest("Data tidak lengkap");
+            }
 
             if (request.AuditId.Contains("..") || request.NodeId.Contains(".."))
+            {
+                _logger.LogWarning("UpdateMediaPath: Invalid audit ID or node ID - contains '..'");
                 return BadRequest("Invalid audit ID or node ID");
+            }
 
+            _logger.LogInformation("UpdateMediaPath: Searching for media entity with AuditId: {AuditId}, NodeId: {NodeId}", request.AuditId, request.NodeId);
             var entity = await _context.trx_audit_media
                 .FirstOrDefaultAsync(x => x.trx_audit_id == request.AuditId && x.master_questioner_detail_id == request.NodeId);
 
             if (entity == null)
+            {
+                _logger.LogWarning("UpdateMediaPath: Media entity not found for AuditId: {AuditId}, NodeId: {NodeId}", request.AuditId, request.NodeId);
                 return NotFound("Data tidak ditemukan");
+            }
 
             try
             {
                 var fileName = Path.GetFileName(request.MediaPath);
+                _logger.LogInformation("UpdateMediaPath: Processing file: {FileName}", fileName);
                 
                 var destinationDir = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads", request.AuditId, request.NodeId);
+                _logger.LogInformation("UpdateMediaPath: Creating destination directory: {DestinationDir}", destinationDir);
                 Directory.CreateDirectory(destinationDir);
                 
                 var sourcePath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", request.MediaPath.TrimStart('/'));
                 var destinationPath = Path.Combine(destinationDir, fileName);
+                _logger.LogInformation("UpdateMediaPath: Source path: {SourcePath}, Destination path: {DestinationPath}", sourcePath, destinationPath);
 
                 if (!System.IO.File.Exists(sourcePath))
                 {
-                    _logger.LogWarning("Source file not found: {SourcePath}", sourcePath);
+                    _logger.LogWarning("UpdateMediaPath: Source file not found: {SourcePath}", sourcePath);
                     return BadRequest("Source file not found");
                 }
 
                 if (System.IO.File.Exists(destinationPath))
                 {
+                    _logger.LogInformation("UpdateMediaPath: Destination file exists, computing hashes for comparison");
                     var sourceHash = ComputeFileHash(sourcePath);
                     var destHash = ComputeFileHash(destinationPath);
                     
                     if (sourceHash == destHash)
                     {
-                        _logger.LogInformation("File already exists and is identical, skipping copy");
+                        _logger.LogInformation("UpdateMediaPath: File already exists and is identical, skipping copy");
                         return Ok();
                     }
+                    _logger.LogInformation("UpdateMediaPath: File exists but is different, proceeding with copy");
                 }
 
                 System.IO.File.Copy(sourcePath, destinationPath, true);
-                _logger.LogInformation("File copied successfully from {SourcePath} to {DestinationPath}", sourcePath, destinationPath);
+                _logger.LogInformation("UpdateMediaPath: File copied successfully from {SourcePath} to {DestinationPath}", sourcePath, destinationPath);
 
                 var newMediaPath = $"/uploads/{request.AuditId}/{request.NodeId}/{fileName}";
+                _logger.LogInformation("UpdateMediaPath: Updating entity with new media path: {NewMediaPath}", newMediaPath);
                 entity.media_path = newMediaPath;
                 entity.media_type = request.MediaType;
                 entity.updated_by = User.Identity?.Name;
                 entity.updated_date = DateTime.Now;
 
                 await _context.SaveChangesAsync();
+                _logger.LogInformation("UpdateMediaPath: Successfully updated media entity in database");
                 return Ok();
             }
             catch (Exception ex)
