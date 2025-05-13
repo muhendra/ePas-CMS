@@ -697,13 +697,13 @@ else if (!string.IsNullOrEmpty(Model.Notes) || (Model.FinalDocuments != null && 
 
                         if (isVideo) {
                             const video = document.createElement('video');
-                            video.src = item.mediaPath;
+                            video.src = 'https://epas.zarata.co.id' + item.mediaPath;
                             video.className = 'rounded';
                             video.style.objectFit = 'cover';
                             mediaContainer.appendChild(video);
                         } else {
                             const img = document.createElement('img');
-                            img.src = item.mediaPath;
+                            img.src = 'https://epas.zarata.co.id' + item.mediaPath;
                             img.className = 'rounded';
                             img.style.objectFit = 'cover';
                             img.onerror = () => {
