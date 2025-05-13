@@ -409,14 +409,24 @@ else if (!string.IsNullOrEmpty(Model.Notes) || (Model.FinalDocuments != null && 
 
 
 
-                function validateMediaPaths(mediaItems) {
+                        function validateMediaPaths(mediaItems) {
             const checks = mediaItems.map(item => {
-                return fetch(item.MediaPath, { method: 'HEAD' })
-                    .then(res => res.ok)
-                    .catch(() => false);
+                return new Promise(resolve => {
+                    if (item.MediaType === 'VIDEO') {
+                        // Bisa dibiarkan true atau dikembangkan untuk cek manual video jika perlu
+                        resolve(true);
+                    } else {
+                        const img = new Image();
+                        img.onload = () => resolve(true);
+                        img.onerror = () => resolve(false);
+                        img.src = item.MediaPath;
+                    }
+                });
             });
+
             return Promise.all(checks);
         }
+
 
                         function handleDocumentationClick(mediaItems) {
             const modalEl = document.getElementById('mediaModal');
