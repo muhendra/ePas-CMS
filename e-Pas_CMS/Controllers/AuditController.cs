@@ -551,18 +551,18 @@ namespace e_Pas_CMS.Controllers
             if (conn.State != System.Data.ConnectionState.Open)
                 await conn.OpenAsync();
 
-            var sql = @"
-        UPDATE trx_audit_checklist
-        SET score_input = @score
-        WHERE master_questioner_detail_id = @nodeId
-          AND trx_audit_id = @auditId";
+                var sql = @"
+                    UPDATE trx_audit_checklist
+                    SET score_input = @score
+                    WHERE master_questioner_detail_id = @nodeId
+                      AND trx_audit_id = @auditId";
 
-            var affected = await conn.ExecuteAsync(sql, new
-            {
+                var affected = await conn.ExecuteAsync(sql, new
+                {
                 score = request.Score,
                 nodeId = request.NodeId,
                 auditId = request.AuditId
-            });
+                });
 
             return affected > 0 ? Ok() : BadRequest("Tidak berhasil update");
         }
@@ -763,8 +763,7 @@ VALUES
         [HttpGet]
         public IActionResult GetLibraryMedia(int page = 1, int pageSize = 10)
         {
-            var libraryDir = Path.Combine("/var/www/epas-api", "wwwroot", "uploads", "library");
-
+            var libraryDir = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads", "library");
 
             _logger.LogInformation("Gallery requested. Page: {Page}, PageSize: {PageSize}", page, pageSize);
 
@@ -786,19 +785,89 @@ VALUES
             _logger.LogInformation("Total media files found: {Total}", total);
 
             var pagedFiles = allFiles
-            .Skip((page - 1) * pageSize)
-            .Take(pageSize)
-            .Select(f => new
-            {
-                MediaType = f.EndsWith(".mp4", StringComparison.OrdinalIgnoreCase) ? "VIDEO" : "IMAGE",
-                MediaPath = $"https://epas.zarata.co.id/uploads/library/{Path.GetFileName(f)}"  // ← FIX INI
-            })
-            .ToList();
-
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .Select(f => new
+                {
+                    MediaType = f.EndsWith(".mp4", StringComparison.OrdinalIgnoreCase) ? "VIDEO" : "IMAGE",
+                    MediaPath = $"/uploads/library/{Path.GetFileName(f)}"
+                })
+                .ToList();
 
             _logger.LogInformation("Returning {Count} media files for page {Page}", pagedFiles.Count, page);
 
             return Json(new { total, data = pagedFiles });
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> UpdateMediaPath([FromBody] UpdateMediaPathRequest request)
+        {
+            if (string.IsNullOrEmpty(request.NodeId) || string.IsNullOrEmpty(request.MediaPath))
+                return BadRequest("Data tidak lengkap");
+
+            if (request.AuditId.Contains("..") || request.NodeId.Contains(".."))
+                return BadRequest("Invalid audit ID or node ID");
+
+            var entity = await _context.trx_audit_media
+                .FirstOrDefaultAsync(x => x.trx_audit_id == request.AuditId && x.master_questioner_detail_id == request.NodeId);
+
+            if (entity == null)
+                return NotFound("Data tidak ditemukan");
+
+            try
+            {
+                var fileName = Path.GetFileName(request.MediaPath);
+                
+                var destinationDir = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads", request.AuditId, request.NodeId);
+                Directory.CreateDirectory(destinationDir);
+                
+                var sourcePath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", request.MediaPath.TrimStart('/'));
+                var destinationPath = Path.Combine(destinationDir, fileName);
+
+                if (!System.IO.File.Exists(sourcePath))
+                {
+                    _logger.LogWarning("Source file not found: {SourcePath}", sourcePath);
+                    return BadRequest("Source file not found");
+                }
+
+                if (System.IO.File.Exists(destinationPath))
+                {
+                    var sourceHash = ComputeFileHash(sourcePath);
+                    var destHash = ComputeFileHash(destinationPath);
+                    
+                    if (sourceHash == destHash)
+                    {
+                        _logger.LogInformation("File already exists and is identical, skipping copy");
+                        return Ok();
+                    }
+                }
+
+                System.IO.File.Copy(sourcePath, destinationPath, true);
+                _logger.LogInformation("File copied successfully from {SourcePath} to {DestinationPath}", sourcePath, destinationPath);
+
+                var newMediaPath = $"/uploads/{request.AuditId}/{request.NodeId}/{fileName}";
+                entity.media_path = newMediaPath;
+                entity.media_type = request.MediaType;
+                entity.updated_by = User.Identity?.Name;
+                entity.updated_date = DateTime.Now;
+
+                await _context.SaveChangesAsync();
+                return Ok();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error copying file for audit {AuditId}, node {NodeId}", request.AuditId, request.NodeId);
+                return BadRequest("Error copying file: " + ex.Message);
+            }
+        }
+
+        private string ComputeFileHash(string filePath)
+        {
+            using var md5 = System.Security.Cryptography.MD5.Create();
+            using var stream = System.IO.File.OpenRead(filePath);
+            var hash = md5.ComputeHash(stream);
+            return BitConverter.ToString(hash).Replace("-", "").ToLowerInvariant();
         }
 
     }

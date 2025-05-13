@@ -293,7 +293,26 @@ else if (!string.IsNullOrEmpty(Model.Notes) || (Model.FinalDocuments != null && 
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Tutup"></button>
             </div>
             <div class="modal-body" id="mediaModalBody">
-                <!-- Media akan dimasukkan di sini -->
+                <!-- Media will be inserted here -->
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Full Size Media -->
+<div class="modal fade" id="fullSizeMediaModal" tabindex="-1" aria-labelledby="fullSizeMediaModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Tutup"></button>
+            </div>
+            <div class="modal-body p-0 position-relative" id="fullSizeMediaModalBody">
+                <!-- Full size media will be inserted here -->
+            </div>
+            <div class="modal-footer justify-content-end">
+                <button type="button" class="btn btn-primary" id="useMediaBtn" style="display: none;">
+                    Gunakan media ini
+                </button>
             </div>
         </div>
     </div>
@@ -315,9 +334,9 @@ else if (!string.IsNullOrEmpty(Model.Notes) || (Model.FinalDocuments != null && 
             transition: transform .3s ease;
         }
 
-            .rotate-arrow.rotate {
-                transform: rotate(90deg);
-            }
+        .rotate-arrow.rotate {
+            transform: rotate(90deg);
+        }
 
         .option-btn:hover {
             background-color: #e0f2f1 !important;
@@ -329,11 +348,14 @@ else if (!string.IsNullOrEmpty(Model.Notes) || (Model.FinalDocuments != null && 
             background-color: #059669 !important;
             color: #fff;
         }
-        /* Media fit di modal */
+
+        /* Media fit in modal */
         .carousel-item img,
         .carousel-item video,
         #mediaModalBody img,
-        #mediaModalBody video {
+        #mediaModalBody video,
+        #fullSizeMediaModalBody img,
+        #fullSizeMediaModalBody video {
             max-width: 100%;
             max-height: 80vh;
             object-fit: contain;
@@ -345,145 +367,484 @@ else if (!string.IsNullOrEmpty(Model.Notes) || (Model.FinalDocuments != null && 
             outline: none !important;
         }
 
+        #fullSizeMediaModal .modal-content {
+            background-color: rgba(0, 0, 0, 0.9);
+        }
+
+        #fullSizeMediaModal .modal-header {
+            border-bottom: none;
+            padding: 0.5rem;
+        }
+
+        #fullSizeMediaModal .modal-body {
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 80vh;
+        }
+
+        #fullSizeMediaModal .btn-close {
+            background-color: white;
+            opacity: 0.8;
+        }
+
+        #fullSizeMediaModal .btn-close:hover {
+            opacity: 1;
+        }
+
+        #fullSizeMediaModal .modal-footer {
+            background-color: rgba(0, 0, 0, 0.9);
+            border-top: none;
+            padding: 1rem;
+        }
+
+        #fullSizeMediaModal .btn-primary {
+            background-color: #0d6efd;
+            border: none;
+            padding: 0.5rem 1.5rem;
+        }
+
+        #fullSizeMediaModal .btn-primary:hover {
+            background-color: #0b5ed7;
+        }
+
+        /* Add these new styles for full screen modal */
+        #fullSizeMediaModal .modal-dialog {
+            max-width: 100%;
+            margin: 0;
+            height: 100vh;
+        }
+
+        #fullSizeMediaModal .modal-content {
+            height: 100vh;
+            background-color: rgba(0, 0, 0, 0.9);
+            border: none;
+            border-radius: 0;
+        }
+
+        #fullSizeMediaModal .modal-body {
+            padding: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        #fullSizeMediaModal .carousel-item {
+            height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        #fullSizeMediaModal .carousel-control-prev,
+        #fullSizeMediaModal .carousel-control-next {
+            width: 10%;
+        }
+
+        #fullSizeMediaModal .carousel-indicators {
+            margin-bottom: 1rem;
+        }
+
+        #fullSizeMediaModal .btn-close {
+            position: absolute;
+            right: 1rem;
+            top: 1rem;
+            z-index: 1050;
+            background-color: white;
+            opacity: 0.8;
+        }
+
+        #fullSizeMediaModal .btn-close:hover {
+            opacity: 1;
+        }
     </style>
 }
 
 @section Scripts {
     <script>
-                let currentPage = 1;
-        const pageSize = 20;
+        let currentPage = 1;
+        const pageSize = 15;
+        let selectedMedia = null;
 
-                function loadGalleryPage(page) {
-          const url = `/Audit/GetLibraryMedia?page=${page}&pageSize=${pageSize}`;
+        function loadGalleryPage(page) {
+            const url = `/Audit/GetLibraryMedia?page=${page}&pageSize=${pageSize}`;
 
-          fetch(url)
-            .then(res => res.json())
-            .then(result => {
-              console.log("Gallery result:", result);
-              const container = document.getElementById('mediaModalBody');
-              container.innerHTML = '';
+            fetch(url)
+                .then(res => res.json())
+                .then(result => {
+                    console.log("Gallery result:", result);
+                    const container = document.getElementById('mediaModalBody');
+                    container.innerHTML = '';
 
-              if (!result.data || result.data.length === 0) {
-                container.innerHTML = '<p class="text-muted">Tidak ada media tersedia.</p>';
-                return;
-              }
+                    if (!result.data || result.data.length === 0) {
+                        container.innerHTML = '<p class="text-muted">Tidak ada media tersedia.</p>';
+                        return;
+                    }
 
-              // Create grid container
-              const gridContainer = document.createElement('div');
-              gridContainer.className = 'row row-cols-4 g-3';
+                    // Create grid container
+                    const gridContainer = document.createElement('div');
+                    gridContainer.className = 'row row-cols-5 g-2';
 
-              // Add each media item as a thumbnail
-              result.data.forEach(item => {
-                const isVideo = item.mediaType === 'VIDEO' || item.mediaPath.toLowerCase().endsWith('.mp4');
-                const col = document.createElement('div');
-                col.className = 'col';
+                    // Add each media item as a thumbnail
+                    result.data.forEach(item => {
+                        const isVideo = item.mediaType === 'VIDEO' || item.mediaPath.toLowerCase().endsWith('.mp4');
+                        const col = document.createElement('div');
+                        col.className = 'col';
 
-                const card = document.createElement('div');
-                card.className = 'card h-100';
+                        const card = document.createElement('div');
+                        card.className = 'card h-100';
 
-                const cardBody = document.createElement('div');
-                cardBody.className = 'card-body p-2';
+                        const cardBody = document.createElement('div');
+                        cardBody.className = 'card-body p-1';
 
-                const mediaContainer = document.createElement('div');
-                mediaContainer.className = 'ratio ratio-1x1 mb-2';
+                        const mediaContainer = document.createElement('div');
+                        mediaContainer.className = 'ratio ratio-4x3 mb-1';
 
-                if (isVideo) {
-                  const video = document.createElement('video');
-                  video.src = item.mediaPath;
-                  video.className = 'rounded';
-                  video.style.objectFit = 'cover';
-                  mediaContainer.appendChild(video);
-                } else {
-                  const img = document.createElement('img');
-                  img.src = item.mediaPath;
-                  img.className = 'rounded';
-                  img.style.objectFit = 'cover';
-                  img.onerror = () => {
-                    img.src = '/images/image-not-found.png';
-                    img.alt = 'Gambar tidak ditemukan';
-                  };
-                  mediaContainer.appendChild(img);
-                }
+                        if (isVideo) {
+                            const video = document.createElement('video');
+                            video.src = item.mediaPath;
+                            video.className = 'rounded';
+                            video.style.objectFit = 'cover';
+                            mediaContainer.appendChild(video);
+                        } else {
+                            const img = document.createElement('img');
+                            img.src = item.mediaPath;
+                            img.className = 'rounded';
+                            img.style.objectFit = 'cover';
+                            img.onerror = () => {
+                                img.src = '/images/image-not-found.png';
+                                img.alt = 'Gambar tidak ditemukan';
+                            };
+                            mediaContainer.appendChild(img);
+                        }
 
-                // Add click handler to show full image/video
-                mediaContainer.style.cursor = 'pointer';
-                mediaContainer.onclick = () => {
-                  const modalContent = document.createElement('div');
-                  if (isVideo) {
-                    const video = document.createElement('video');
-                    video.src = item.mediaPath;
-                    video.controls = true;
-                    video.className = 'w-100 rounded';
-                    modalContent.appendChild(video);
-                  } else {
-                    const img = document.createElement('img');
-                    img.src = item.mediaPath;
-                    img.className = 'img-fluid rounded';
-                    modalContent.appendChild(img);
-                  }
-                  container.innerHTML = '';
-                  container.appendChild(modalContent);
-                };
+                        // Add click handler to show full image/video in new modal
+                        mediaContainer.style.cursor = 'pointer';
+                        mediaContainer.onclick = () => {
+                            const fullSizeContainer = document.getElementById('fullSizeMediaModalBody');
+                            fullSizeContainer.innerHTML = '';
 
-                cardBody.appendChild(mediaContainer);
-                card.appendChild(cardBody);
-                col.appendChild(card);
-                gridContainer.appendChild(col);
-              });
+                            if (isVideo) {
+                                const video = document.createElement('video');
+                                video.src = item.mediaPath;
+                                video.controls = true;
+                                video.className = 'w-100 rounded';
+                                fullSizeContainer.appendChild(video);
+                            } else {
+                                const img = document.createElement('img');
+                                img.src = item.mediaPath;
+                                img.className = 'img-fluid rounded';
+                                fullSizeContainer.appendChild(img);
+                            }
 
-              container.appendChild(gridContainer);
+                            // Store the selected media with additional data
+                            selectedMedia = {
+                                ...selectedMedia,  // Preserve existing data including nodeId and auditId
+                                mediaType: item.mediaType,
+                                mediaPath: item.mediaPath
+                            };
 
-              // Get the modal element
-              const modalEl = document.getElementById('mediaModal');
-              
-              // Remove any existing modal instances
-              const existingModal = bootstrap.Modal.getInstance(modalEl);
-              if (existingModal) {
-                  existingModal.dispose();
-              }
+                            // Show the "Use Media" button
+                            const useMediaBtn = document.getElementById('useMediaBtn');
+                            useMediaBtn.style.display = 'block';
 
-              // Create and show new modal
-              const modal = new bootstrap.Modal(modalEl, {
-                  backdrop: 'static',
-                  keyboard: false
-              });
+                            const fullSizeModal = new bootstrap.Modal(document.getElementById('fullSizeMediaModal'));
+                            fullSizeModal.show();
+                        };
 
-              // Add event listener for when modal is hidden
-              modalEl.addEventListener('hidden.bs.modal', function () {
-                  // Clean up the modal content
-                  container.innerHTML = '';
-                  // Remove the backdrop
-                  const backdrop = document.querySelector('.modal-backdrop');
-                  if (backdrop) {
-                      backdrop.remove();
-                  }
-                  // Remove modal-open class from body
-                  document.body.classList.remove('modal-open');
-                  document.body.style.overflow = '';
-                  document.body.style.paddingRight = '';
-              });
+                        cardBody.appendChild(mediaContainer);
+                        card.appendChild(cardBody);
+                        col.appendChild(card);
+                        gridContainer.appendChild(col);
+                    });
 
-              modal.show();
-            })
-            .catch(error => {
-              console.error('Error loading gallery:', error);
-              const container = document.getElementById('mediaModalBody');
-              container.innerHTML = '<p class="text-danger">Error loading media. Please try again.</p>';
-            });
+                    container.appendChild(gridContainer);
+
+                    // Add page info
+                    const pageInfo = document.createElement('div');
+                    pageInfo.className = 'text-center text-muted mt-3';
+                    const startItem = (page - 1) * pageSize + 1;
+                    const endItem = Math.min(page * pageSize, result.total);
+                    pageInfo.textContent = `Showing ${startItem}-${endItem} of ${result.total} items`;
+                    container.appendChild(pageInfo);
+
+                    // Add pagination controls
+                    const paginationContainer = document.createElement('div');
+                    paginationContainer.className = 'd-flex justify-content-center mt-3';
+                    
+                    const pagination = document.createElement('nav');
+                    pagination.setAttribute('aria-label', 'Gallery pagination');
+                    
+                    const paginationList = document.createElement('ul');
+                    paginationList.className = 'pagination';
+
+                    const totalPages = Math.ceil(result.total / pageSize);
+
+                    // First page button
+                    const firstLi = document.createElement('li');
+                    firstLi.className = `page-item ${page === 1 ? 'disabled' : ''}`;
+                    const firstLink = document.createElement('a');
+                    firstLink.className = 'page-link';
+                    firstLink.href = '#';
+                    firstLink.innerHTML = '&laquo;&laquo;';
+                    firstLink.onclick = (e) => {
+                        e.preventDefault();
+                        if (page > 1) {
+                            loadGalleryPage(1);
+                        }
+                    };
+                    firstLi.appendChild(firstLink);
+                    paginationList.appendChild(firstLi);
+
+                    // Previous button
+                    const prevLi = document.createElement('li');
+                    prevLi.className = `page-item ${page === 1 ? 'disabled' : ''}`;
+                    const prevLink = document.createElement('a');
+                    prevLink.className = 'page-link';
+                    prevLink.href = '#';
+                    prevLink.innerHTML = '&laquo;';
+                    prevLink.onclick = (e) => {
+                        e.preventDefault();
+                        if (page > 1) {
+                            loadGalleryPage(page - 1);
+                        }
+                    };
+                    prevLi.appendChild(prevLink);
+                    paginationList.appendChild(prevLi);
+
+                    // Page numbers with ellipsis
+                    const maxVisiblePages = 5;
+                    let startPage = Math.max(1, page - Math.floor(maxVisiblePages / 2));
+                    let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
+
+                    if (endPage - startPage + 1 < maxVisiblePages) {
+                        startPage = Math.max(1, endPage - maxVisiblePages + 1);
+                    }
+
+                    if (startPage > 1) {
+                        const firstPageLi = document.createElement('li');
+                        firstPageLi.className = 'page-item';
+                        const firstPageLink = document.createElement('a');
+                        firstPageLink.className = 'page-link';
+                        firstPageLink.href = '#';
+                        firstPageLink.textContent = '1';
+                        firstPageLink.onclick = (e) => {
+                            e.preventDefault();
+                            loadGalleryPage(1);
+                        };
+                        firstPageLi.appendChild(firstPageLink);
+                        paginationList.appendChild(firstPageLi);
+
+                        if (startPage > 2) {
+                            const ellipsisLi = document.createElement('li');
+                            ellipsisLi.className = 'page-item disabled';
+                            const ellipsisSpan = document.createElement('span');
+                            ellipsisSpan.className = 'page-link';
+                            ellipsisSpan.textContent = '...';
+                            ellipsisLi.appendChild(ellipsisSpan);
+                            paginationList.appendChild(ellipsisLi);
+                        }
+                    }
+
+                    for (let i = startPage; i <= endPage; i++) {
+                        const pageLi = document.createElement('li');
+                        pageLi.className = `page-item ${i === page ? 'active' : ''}`;
+                        const pageLink = document.createElement('a');
+                        pageLink.className = 'page-link';
+                        pageLink.href = '#';
+                        pageLink.textContent = i;
+                        pageLink.onclick = (e) => {
+                            e.preventDefault();
+                            loadGalleryPage(i);
+                        };
+                        pageLi.appendChild(pageLink);
+                        paginationList.appendChild(pageLi);
+                    }
+
+                    if (endPage < totalPages) {
+                        if (endPage < totalPages - 1) {
+                            const ellipsisLi = document.createElement('li');
+                            ellipsisLi.className = 'page-item disabled';
+                            const ellipsisSpan = document.createElement('span');
+                            ellipsisSpan.className = 'page-link';
+                            ellipsisSpan.textContent = '...';
+                            ellipsisLi.appendChild(ellipsisSpan);
+                            paginationList.appendChild(ellipsisLi);
+                        }
+
+                        const lastPageLi = document.createElement('li');
+                        lastPageLi.className = 'page-item';
+                        const lastPageLink = document.createElement('a');
+                        lastPageLink.className = 'page-link';
+                        lastPageLink.href = '#';
+                        lastPageLink.textContent = totalPages;
+                        lastPageLink.onclick = (e) => {
+                            e.preventDefault();
+                            loadGalleryPage(totalPages);
+                        };
+                        lastPageLi.appendChild(lastPageLink);
+                        paginationList.appendChild(lastPageLi);
+                    }
+
+                    // Next button
+                    const nextLi = document.createElement('li');
+                    nextLi.className = `page-item ${page === totalPages ? 'disabled' : ''}`;
+                    const nextLink = document.createElement('a');
+                    nextLink.className = 'page-link';
+                    nextLink.href = '#';
+                    nextLink.innerHTML = '&raquo;';
+                    nextLink.onclick = (e) => {
+                        e.preventDefault();
+                        if (page < totalPages) {
+                            loadGalleryPage(page + 1);
+                        }
+                    };
+                    nextLi.appendChild(nextLink);
+                    paginationList.appendChild(nextLi);
+
+                    // Last page button
+                    const lastLi = document.createElement('li');
+                    lastLi.className = `page-item ${page === totalPages ? 'disabled' : ''}`;
+                    const lastLink = document.createElement('a');
+                    lastLink.className = 'page-link';
+                    lastLink.href = '#';
+                    lastLink.innerHTML = '&raquo;&raquo;';
+                    lastLink.onclick = (e) => {
+                        e.preventDefault();
+                        if (page < totalPages) {
+                            loadGalleryPage(totalPages);
+                        }
+                    };
+                    lastLi.appendChild(lastLink);
+                    paginationList.appendChild(lastLi);
+
+                    pagination.appendChild(paginationList);
+                    paginationContainer.appendChild(pagination);
+                    container.appendChild(paginationContainer);
+
+                    // Get the modal element
+                    const modalEl = document.getElementById('mediaModal');
+                    
+                    // Remove any existing modal instances
+                    const existingModal = bootstrap.Modal.getInstance(modalEl);
+                    if (existingModal) {
+                        existingModal.dispose();
+                    }
+
+                    // Create and show new modal
+                    const modal = new bootstrap.Modal(modalEl, {
+                        backdrop: 'static',
+                        keyboard: false
+                    });
+
+                    // Add event listener for when modal is hidden
+                    modalEl.addEventListener('hidden.bs.modal', function () {
+                        // Clean up the modal content
+                        container.innerHTML = '';
+                        // Remove the backdrop
+                        const backdrop = document.querySelector('.modal-backdrop');
+                        if (backdrop) {
+                            backdrop.remove();
+                        }
+                        // Remove modal-open class from body
+                        document.body.classList.remove('modal-open');
+                        document.body.style.overflow = '';
+                        document.body.style.paddingRight = '';
+                    });
+
+                    modal.show();
+                })
+                .catch(error => {
+                    console.error('Error loading gallery:', error);
+                    const container = document.getElementById('mediaModalBody');
+                    container.innerHTML = '<p class="text-danger">Error loading media. Please try again.</p>';
+                });
         }
+
+        // Add event listener for the "Use Media" button
+        document.getElementById('useMediaBtn').addEventListener('click', function() {
+            if (selectedMedia) {
+                const token = $('input[name="__RequestVerificationToken"]').val();
+                
+                fetch('/Audit/UpdateMediaPath', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'RequestVerificationToken': token
+                    },
+                    body: JSON.stringify({
+                        NodeId: selectedMedia.nodeId,
+                        AuditId: selectedMedia.auditId,
+                        MediaPath: selectedMedia.mediaPath,
+                        MediaType: selectedMedia.mediaType
+                    })
+                })
+                .then(response => {
+                    if (response.ok) {
+                        // Close both modals
+                        const fullSizeModal = bootstrap.Modal.getInstance(document.getElementById('fullSizeMediaModal'));
+                        const mediaModal = bootstrap.Modal.getInstance(document.getElementById('mediaModal'));
+                        
+                        if (fullSizeModal) {
+                            fullSizeModal.hide();
+                            // Remove modal backdrop and body classes
+                            document.body.classList.remove('modal-open');
+                            document.body.style.overflow = '';
+                            document.body.style.paddingRight = '';
+                            const backdrop = document.querySelector('.modal-backdrop');
+                            if (backdrop) {
+                                backdrop.remove();
+                            }
+                        }
+                        
+                        if (mediaModal) {
+                            mediaModal.hide();
+                            // Remove modal backdrop and body classes
+                            document.body.classList.remove('modal-open');
+                            document.body.style.overflow = '';
+                            document.body.style.paddingRight = '';
+                            const backdrop = document.querySelector('.modal-backdrop');
+                            if (backdrop) {
+                                backdrop.remove();
+                            }
+                        }
+
+                        // Show success message
+                        const successAlert = document.createElement('div');
+                        successAlert.className = 'alert alert-success alert-dismissible fade show position-fixed top-0 start-50 translate-middle-x mt-3';
+                        successAlert.style.zIndex = '9999';
+                        successAlert.innerHTML = `
+                            Media berhasil diperbarui
+                            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                        `;
+                        document.body.appendChild(successAlert);
+
+                        // Reload the page after a short delay to show the success message
+                        setTimeout(() => {
+                            window.location.reload();
+                        }, 1500);
+                    } else {
+                        throw new Error('Failed to update media path');
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('Failed to update media path. Please try again.');
+                });
+            }
+        });
 
         function validateMediaPaths(paths) {
-          return Promise.all(paths.map(src => new Promise(r => {
-            const img = new Image();
-            img.onload  = () => r(true);
-            img.onerror = () => r(false);
-            img.src     = src;
-          })));
+            return Promise.all(paths.map(src => new Promise(r => {
+                const img = new Image();
+                img.onload  = () => r(true);
+                img.onerror = () => r(false);
+                img.src     = src;
+            })));
         }
 
-
-
-                        function validateMediaPaths(mediaItems) {
+        function validateMediaPaths(mediaItems) {
             const checks = mediaItems.map(item => {
                 return new Promise(resolve => {
                     if (item.MediaType === 'VIDEO') {
@@ -501,162 +862,198 @@ else if (!string.IsNullOrEmpty(Model.Notes) || (Model.FinalDocuments != null && 
             return Promise.all(checks);
         }
 
+        function handleDocumentationClick(mediaItems, nodeId, auditId) {
+            // Initialize selectedMedia with IDs
+            selectedMedia = {
+                nodeId: nodeId,
+                auditId: auditId
+            };
 
-                        function handleDocumentationClick(mediaItems) {
-            const modalEl = document.getElementById('mediaModal');
-            const modal = new bootstrap.Modal(modalEl, {
-                backdrop: 'static',
-                keyboard: false,
-                focus: false
-            });
-
-            // Kalau kosong, langsung load gallery
+            // If no media items, directly open gallery
             if (!mediaItems || mediaItems.length === 0) {
                 loadGalleryPage(1);
-                modal.show();
                 return;
             }
 
-            // Cek semua URL apakah valid
-            const checks = mediaItems.map(item =>
-                fetch(item.MediaPath, { method: 'HEAD' })
-                    .then(res => res.ok)
-                    .catch(() => false)
-            );
+            // Try to show existing media first
+            const container = document.getElementById('mediaModalBody');
+            if (!container) {
+                console.error('Media modal container not found');
+                return;
+            }
 
-            Promise.all(checks).then(results => {
-                const adaValid = results.some(ok => ok);
-                        if (adaValid && mediaItems.length > 0) {
-            const limited = mediaItems.slice(0, 10); // hanya ambil 10 pertama
-            showMediaPopup(limited);
-        } else {
-            loadGalleryPage(1); // fallback: ambil dari server
-        }
+            // Try to load the first media item
+            const firstItem = mediaItems[0];
+            console.log('First media item:', firstItem); // Debug log
 
+            const isVideo = firstItem.mediaType?.toUpperCase() === 'VIDEO' || 
+                          firstItem.mediaPath?.toLowerCase().endsWith('.mp4');
+            
+            const mediaElement = document.createElement(isVideo ? 'video' : 'img');
+            mediaElement.className = 'w-100 rounded';
+            if (isVideo) {
+                mediaElement.controls = true;
+                mediaElement.innerHTML = `<source src="${firstItem.mediaPath}" type="video/mp4">`;
+            } else {
+                mediaElement.src = firstItem.mediaPath;
+            }
 
-                modal.show();
-            });
+            console.log('Media element source:', mediaElement.src); // Debug log
+
+            // Try to load the media
+            mediaElement.onload = () => {
+                // Media loaded successfully
+                container.innerHTML = '';
+                container.appendChild(mediaElement);
+                
+                // Update selectedMedia
+                selectedMedia = {
+                    ...selectedMedia,
+                    mediaType: firstItem.mediaType,
+                    mediaPath: firstItem.mediaPath
+                };
+
+                // Show modal
+                const modalEl = document.getElementById('mediaModal');
+                if (modalEl) {
+                    const modal = new bootstrap.Modal(modalEl, {
+                        backdrop: 'static',
+                        keyboard: false
+                    });
+                    modal.show();
+                }
+            };
+
+            mediaElement.onerror = () => {
+                // Media failed to load, open gallery instead
+                console.log('Media failed to load, opening gallery.. ', firstItem.mediaPath);
+                loadGalleryPage(1);
+            };
         }
 
         $(function() {
-        // Toggle pilihan jawaban
-        $(document).on('click', '.option-btn', function() {
-        var nodeId = $(this).data('node-id');
-        $('.option-btn[data-node-id="'+nodeId+'"]')
-        .removeClass('active bg-success text-white')
-        .addClass('btn-outline-secondary');
-        $(this)
-        .removeClass('btn-outline-secondary')
-        .addClass('active bg-success text-white');
-        });
-
-        // Hitung ulang satu node (rekursif)
-        function recalcNode($li) {
-        var nodeId = $li.attr('id').replace('node-', '');
-        var weight = parseFloat($li.attr('data-weight')) || 0;
-        var sumAF = 0;
-        var sumWeight = 0;
-        var sumX = 0;
-
-        var map = { A: 1, B: 0.8, C: 0.6, D: 0.4, E: 0.2, F: 0 };
-
-        var $grp = $li.find('.option-group[data-node-id="' + nodeId + '"]');
-        if ($grp.length) {
-        var letter = $grp.find('.option-btn.active').data('score') || '';
-        if (letter === 'X') {
-        var scoreX = parseFloat($li.attr('data-score-x')) || 0;
-        sumX = weight;
-        sumAF = scoreX;
-        } else {
-        sumAF = (map[letter] || 0) * weight;
-        }
-        sumWeight = weight;
-        } else {
-        $li.find('> .card > .collapse > .card-body > ul > li').each(function () {
-        var result = recalcNode($(this));
-        sumAF += result.af;
-        sumWeight += result.wt;
-        sumX += result.x;
-        });
-        }
-
-        var skor = (sumWeight - sumX) > 0
-        ? (sumAF / (sumWeight - sumX)) * sumWeight
-        : 0;
-
-        $li.find('.score-x[data-node-id="' + nodeId + '"]').text(skor.toFixed(2));
-        return { af: sumAF, wt: sumWeight, x: sumX };
-        }
-
-                $(document).on('click', '.save-comment-btn', function () {
-            const nodeId = $(this).data('node-id');
-            const auditId = $(this).data('audit-id');
-            const comment = $(`.comment-input[data-node-id="${nodeId}"]`).val();
-            const token = $('input[name="__RequestVerificationToken"]').val();
-
-            fetch('/Audit/UpdateComment', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'RequestVerificationToken': token
-                },
-                body: JSON.stringify({ NodeId: nodeId, AuditId: auditId, Comment: comment })
-            })
-            .then(res => {
-                if (!res.ok) return res.text().then(t => Promise.reject(t));
-                alert("Komentar berhasil disimpan");
-            })
-            .catch(err => {
-                console.error(err);
-                alert("Gagal menyimpan komentar: " + err);
+            // Toggle pilihan jawaban
+            $(document).on('click', '.option-btn', function() {
+                var nodeId = $(this).data('node-id');
+                $('.option-btn[data-node-id="'+nodeId+'"]')
+                .removeClass('active bg-success text-white')
+                .addClass('btn-outline-secondary');
+                $(this)
+                .removeClass('btn-outline-secondary')
+                .addClass('active bg-success text-white');
             });
+
+            // Hitung ulang satu node (rekursif)
+            function recalcNode($li) {
+                var nodeId = $li.attr('id').replace('node-', '');
+                var weight = parseFloat($li.attr('data-weight')) || 0;
+                var sumAF = 0;
+                var sumWeight = 0;
+                var sumX = 0;
+
+                var map = { A: 1, B: 0.8, C: 0.6, D: 0.4, E: 0.2, F: 0 };
+
+                var $grp = $li.find('.option-group[data-node-id="' + nodeId + '"]');
+                if ($grp.length) {
+                    var letter = $grp.find('.option-btn.active').data('score') || '';
+                    if (letter === 'X') {
+                        var scoreX = parseFloat($li.attr('data-score-x')) || 0;
+                        sumX = weight;
+                        sumAF = scoreX;
+                    } else {
+                        sumAF = (map[letter] || 0) * weight;
+                    }
+                    sumWeight = weight;
+                } else {
+                    $li.find('> .card > .collapse > .card-body > ul > li').each(function () {
+                        var result = recalcNode($(this));
+                        sumAF += result.af;
+                        sumWeight += result.wt;
+                        sumX += result.x;
+                    });
+                }
+
+                var skor = (sumWeight - sumX) > 0
+                ? (sumAF / (sumWeight - sumX)) * sumWeight
+                : 0;
+
+                $li.find('.score-x[data-node-id="' + nodeId + '"]').text(skor.toFixed(2));
+                return { af: sumAF, wt: sumWeight, x: sumX };
+            }
+
+            $(document).on('click', '.save-comment-btn', function () {
+                const nodeId = $(this).data('node-id');
+                const auditId = $(this).data('audit-id');
+                const comment = $(`.comment-input[data-node-id="${nodeId}"]`).val();
+                const token = $('input[name="__RequestVerificationToken"]').val();
+
+                fetch('/Audit/UpdateComment', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'RequestVerificationToken': token
+                    },
+                    body: JSON.stringify({ NodeId: nodeId, AuditId: auditId, Comment: comment })
+                })
+                .then(res => {
+                    if (!res.ok) return res.text().then(t => Promise.reject(t));
+                    alert("Komentar berhasil disimpan");
+                })
+                .catch(err => {
+                    console.error(err);
+                    alert("Gagal menyimpan komentar: " + err);
+                });
+            });
+
+            function recalcAll() {
+                $('#auditChecklist > li[id^="node-"]').each(function () {
+                    recalcNode($(this));
+                });
+            }
+
+            // recalc saat update
+            $(document).on('click', '.update-score-btn', function() {
+                var nodeId  = $(this).data('node-id');
+                var auditId = $(this).data('audit-id');
+                var score   = $('.option-btn[data-node-id="'+nodeId+'"].active').data('score');
+                var token   = $('input[name="__RequestVerificationToken"]').val();
+                if (!score) return alert('Pilih jawaban dulu!');
+                fetch('/Audit/UpdateScore', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'RequestVerificationToken': token
+                    },
+                    body: JSON.stringify({ NodeId: nodeId, AuditId: auditId, Score: score })
+                })
+                .then(res => res.ok ? recalcAll() : res.text().then(t => Promise.reject(t)))
+                .catch(err => {
+                    console.error(err);
+                    alert('Gagal update nilai: ' + err);
+                });
+            });
+
+            // Recalc juga setelah collapse toggle (open/close)
+            $('#auditChecklist').on('shown.bs.collapse hidden.bs.collapse', function(){
+                recalcAll();
+            });
+
+            // Inisialisasi pertama
+            recalcAll();
         });
 
-
-        function recalcAll() {
-        $('#auditChecklist > li[id^="node-"]').each(function () {
-        recalcNode($(this));
-        });
-        }
-
-        // recalc saat update
-        $(document).on('click', '.update-score-btn', function() {
-        var nodeId  = $(this).data('node-id');
-        var auditId = $(this).data('audit-id');
-        var score   = $('.option-btn[data-node-id="'+nodeId+'"].active').data('score');
-        var token   = $('input[name="__RequestVerificationToken"]').val();
-        if (!score) return alert('Pilih jawaban dulu!');
-        fetch('/Audit/UpdateScore', {
-        method: 'POST',
-        headers: {
-        'Content-Type': 'application/json',
-        'RequestVerificationToken': token
-        },
-        body: JSON.stringify({ NodeId: nodeId, AuditId: auditId, Score: score })
-        })
-        .then(res => res.ok ? recalcAll() : res.text().then(t => Promise.reject(t)))
-        .catch(err => {
-        console.error(err);
-        alert('Gagal update nilai: ' + err);
-        });
-        });
-
-        // Recalc juga setelah collapse toggle (open/close)
-        $('#auditChecklist').on('shown.bs.collapse hidden.bs.collapse', function(){
-        recalcAll();
-        });
-
-        // Inisialisasi pertama
-        recalcAll();
-        });
-                function showMediaPopup(mediaItems) {
+        function showMediaPopup(mediaItems) {
             const container = document.getElementById('mediaModalBody');
+            if (!container) {
+                console.error('Media modal container not found');
+                return;
+            }
             container.innerHTML = '';
 
             // normalisasi agar kita selalu pakai camelCase
             const items = (mediaItems||[]).map(i => ({
-              path: i.mediaPath ?? i.MediaPath,
-              type: (i.mediaType ?? i.MediaType)?.toUpperCase()
+                path: i.mediaPath ?? i.MediaPath,
+                type: (i.mediaType ?? i.MediaType)?.toUpperCase()
             }));
 
             validateMediaPaths(items.map(i => i.path)).then(validFlags => {
@@ -680,6 +1077,13 @@ else if (!string.IsNullOrEmpty(Model.Notes) || (Model.FinalDocuments != null && 
                         el.className = 'img-fluid rounded';
                     }
                     container.appendChild(el);
+
+                    // Update selectedMedia with the current media
+                    selectedMedia = {
+                        ...selectedMedia,  // Preserve nodeId and auditId
+                        mediaType: type,
+                        mediaPath: path
+                    };
                 }
                 else {
                     const carouselId = 'mediaCarousel';
@@ -694,45 +1098,59 @@ else if (!string.IsNullOrEmpty(Model.Notes) || (Model.FinalDocuments != null && 
                             : `<img src="${path}" class="d-block w-100 rounded" alt="">`;
 
                         indicators.push(`
-                          <button type="button" data-bs-target="#${carouselId}"
-                                  data-bs-slide-to="${index}"
-                                  class="${isActive}"
-                                  aria-current="${isActive}"
-                                  aria-label="Slide ${index+1}"></button>
+                            <button type="button" data-bs-target="#${carouselId}"
+                                    data-bs-slide-to="${index}"
+                                    class="${isActive}"
+                                    aria-current="${isActive}"
+                                    aria-label="Slide ${index+1}"></button>
                         `);
                         innerItems.push(`
-                          <div class="carousel-item ${isActive}">${mediaTag}</div>
+                            <div class="carousel-item ${isActive}">${mediaTag}</div>
                         `);
                     });
 
                     container.innerHTML = `
-                      <div id="${carouselId}" class="carousel slide" data-bs-ride="carousel">
-                        <div class="carousel-indicators">
-                          ${indicators.join('')}
-                        </div>
-                        <div class="carousel-inner">
-                          ${innerItems.join('')}
-                        </div>
-                        <button class="carousel-control-prev" type="button"
-                                data-bs-target="#${carouselId}" data-bs-slide="prev">
-                          <span class="carousel-control-prev-icon" aria-hidden="true"></span>
-                          <span class="visually-hidden">Previous</span>
-                        </button>
-                        <button class="carousel-control-next" type="button"
-                                data-bs-target="#${carouselId}" data-bs-slide="next">
-                          <span class="carousel-control-next-icon" aria-hidden="true"></span>
-                          <span class="visually-hidden">Next</span>
-                        </button>
-                      </div>`;
+                        <div id="${carouselId}" class="carousel slide" data-bs-ride="carousel">
+                            <div class="carousel-indicators">
+                                ${indicators.join('')}
+                            </div>
+                            <div class="carousel-inner">
+                                ${innerItems.join('')}
+                            </div>
+                            <button class="carousel-control-prev" type="button"
+                                    data-bs-target="#${carouselId}" data-bs-slide="prev">
+                                <span class="carousel-control-prev-icon" aria-hidden="true"></span>
+                                <span class="visually-hidden">Previous</span>
+                            </button>
+                            <button class="carousel-control-next" type="button"
+                                    data-bs-target="#${carouselId}" data-bs-slide="next">
+                                <span class="carousel-control-next-icon" aria-hidden="true"></span>
+                                <span class="visually-hidden">Next</span>
+                            </button>
+                        </div>`;
+
+                    // Update selectedMedia with the first media item
+                    selectedMedia = {
+                        ...selectedMedia,  // Preserve nodeId and auditId
+                        mediaType: validItems[0].type,
+                        mediaPath: validItems[0].path
+                    };
                 }
 
-                new bootstrap.Modal(document.getElementById('mediaModal'), {
-                    backdrop: 'static', keyboard: false
-                }).show();
+                const modalEl = document.getElementById('mediaModal');
+                if (modalEl) {
+                    const modal = new bootstrap.Modal(modalEl, {
+                        backdrop: 'static',
+                        keyboard: false
+                    });
+                    modal.show();
+                } else {
+                    console.error('Media modal element not found');
+                }
             });
         }
 
-                function showFinalMediaPopup(mediaList) {
+        function showFinalMediaPopup(mediaList) {
             const container = document.getElementById('mediaModalBody');
             container.innerHTML = '';
 
@@ -758,14 +1176,119 @@ else if (!string.IsNullOrEmpty(Model.Notes) || (Model.FinalDocuments != null && 
             modal.show();
         }
 
+        // Add this at the beginning of your script section
+        $(document).on('click', '.view-documentation-btn', function() {
+            const mediaItems = $(this).data('media-items');
+            const nodeId = $(this).data('node-id');
+            const auditId = $(this).data('audit-id');
+            handleDocumentationClick(mediaItems, nodeId, auditId);
+        });
 
+        // Add this new function for viewing media in full screen
+        function showFullScreenMedia(mediaItems) {
+            console.log('Media Items:', mediaItems); // Debug log
 
+            if (!mediaItems || mediaItems.length === 0) {
+                alert('Tidak ada dokumentasi tersedia');
+                return;
+            }
+
+            // Normalize media items to ensure consistent property names
+            const normalizedItems = mediaItems.map(item => ({
+                path: item.mediaPath || item.MediaPath,
+                type: (item.mediaType || item.MediaType)?.toUpperCase()
+            }));
+
+            console.log('Normalized Items:', normalizedItems); // Debug log
+
+            const container = document.getElementById('fullSizeMediaModalBody');
+            container.innerHTML = '';
+
+            // Create carousel for multiple media items
+            if (normalizedItems.length > 1) {
+                const carouselId = 'fullScreenCarousel';
+                const indicators = [];
+                const innerItems = [];
+
+                normalizedItems.forEach((item, index) => {
+                    console.log('Processing item:', item); // Debug log
+                    
+                    const isVideo = item.type === 'VIDEO' || 
+                                  item.path?.toLowerCase().endsWith('.mp4');
+                    const isActive = index === 0 ? 'active' : '';
+                    
+                    const mediaTag = isVideo
+                        ? `<video controls class="w-100 h-100" style="object-fit: contain;">
+                             <source src="${item.path}" type="video/mp4">
+                           </video>`
+                        : `<img src="${item.path}" class="w-100 h-100" style="object-fit: contain;" alt="Dokumentasi">`;
+
+                    indicators.push(`
+                        <button type="button" data-bs-target="#${carouselId}"
+                                data-bs-slide-to="${index}"
+                                class="${isActive}"
+                                aria-current="${isActive}"
+                                aria-label="Slide ${index+1}"></button>
+                    `);
+                    innerItems.push(`
+                        <div class="carousel-item ${isActive}">${mediaTag}</div>
+                    `);
+                });
+
+                container.innerHTML = `
+                    <div id="${carouselId}" class="carousel slide" data-bs-ride="carousel">
+                        <div class="carousel-indicators">
+                            ${indicators.join('')}
+                        </div>
+                        <div class="carousel-inner">
+                            ${innerItems.join('')}
+                        </div>
+                        <button class="carousel-control-prev" type="button"
+                                data-bs-target="#${carouselId}" data-bs-slide="prev">
+                            <span class="carousel-control-prev-icon" aria-hidden="true"></span>
+                            <span class="visually-hidden">Previous</span>
+                        </button>
+                        <button class="carousel-control-next" type="button"
+                                data-bs-target="#${carouselId}" data-bs-slide="next">
+                            <span class="carousel-control-next-icon" aria-hidden="true"></span>
+                            <span class="visually-hidden">Next</span>
+                        </button>
+                    </div>`;
+            } else {
+                // Single media item
+                const item = normalizedItems[0];
+                console.log('Single item:', item); // Debug log
+                
+                const isVideo = item.type === 'VIDEO' || 
+                              item.path?.toLowerCase().endsWith('.mp4');
+                
+                if (isVideo) {
+                    container.innerHTML = `
+                        <video controls class="w-100 h-100" style="object-fit: contain;">
+                            <source src="${item.path}" type="video/mp4">
+                        </video>`;
+                } else {
+                    container.innerHTML = `
+                        <img src="${item.path}" class="w-100 h-100" style="object-fit: contain;" alt="Dokumentasi">`;
+                }
+            }
+
+            // Show the modal
+            const modal = new bootstrap.Modal(document.getElementById('fullSizeMediaModal'));
+            modal.show();
+        }
+
+        // Add click handler for the new view media button
+        $(document).on('click', '.view-media-btn', function() {
+            const mediaItems = $(this).data('media-items');
+            console.log('Raw media items from data attribute:', mediaItems); // Debug log
+            showFullScreenMedia(mediaItems);
+        });
     </script>
 }
 
 @functions {
     async Task RenderChecklistNode(AuditChecklistNode node, int level, bool isVerified, bool isReadonlyUser)
-
     {
         var collapseId = $"collapse-{node.Id}";
         var paddingClass = $"ps-{level * 3}";
@@ -880,9 +1403,16 @@ else if (!string.IsNullOrEmpty(Model.Notes) || (Model.FinalDocuments != null && 
                             @if (node.Type == "QUESTION" && (node.Children == null || !node.Children.Any()))
                             {
                                 <div class="d-flex gap-2 align-items-center mb-3 flex-wrap">
-                                    <button type="button" class="btn btn-outline-primary btn-sm"
-                                            onclick='handleDocumentationClick(@Html.Raw(JsonConvert.SerializeObject(node.MediaItems ?? new List<MediaItem> { })))'>
-                                        <i class="bi bi-image me-1"></i> Lihat Dokumentasi
+                                    <button type="button" class="btn btn-outline-primary btn-sm view-documentation-btn"
+                                            data-media-items='@Html.Raw(JsonConvert.SerializeObject(node.MediaItems ?? new List<MediaItem> { }))'
+                                            data-node-id="@node.Id"
+                                            data-audit-id="@ViewBag.AuditId">
+                                        <i class="bi bi-image me-1"></i> Upload dari Media Library
+                                    </button>
+
+                                    <button type="button" class="btn btn-outline-secondary btn-sm view-media-btn"
+                                            data-media-items='@Html.Raw(JsonConvert.SerializeObject(node.MediaItems ?? new List<MediaItem> { }))'>
+                                        <i class="bi bi-eye me-1"></i> Lihat Dokumentasi
                                     </button>
 
                                     @if (!isReadonlyUser)
