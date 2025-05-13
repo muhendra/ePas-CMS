@@ -763,7 +763,9 @@ VALUES
         [HttpGet]
         public IActionResult GetLibraryMedia(int page = 1, int pageSize = 10, string search = "")
         {
-            var libraryDir = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads", "library");
+            //var libraryDir = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads", "library");
+
+            var libraryDir = "/var/www/epas-api/uploads/library";
 
             _logger.LogInformation("Gallery requested. Page: {Page}, PageSize: {PageSize}, Search: {Search}", page, pageSize, search);
 
