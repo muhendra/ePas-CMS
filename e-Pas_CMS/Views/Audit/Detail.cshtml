@@ -1011,27 +1011,54 @@ else if (!string.IsNullOrEmpty(Model.Notes) || (Model.FinalDocuments != null && 
                 });
             }
 
-            // recalc saat update
-            $(document).on('click', '.update-score-btn', function() {
-                var nodeId  = $(this).data('node-id');
-                var auditId = $(this).data('audit-id');
-                var score   = $('.option-btn[data-node-id="'+nodeId+'"].active').data('score');
-                var token   = $('input[name="__RequestVerificationToken"]').val();
-                if (!score) return alert('Pilih jawaban dulu!');
-                fetch('/Audit/UpdateScore', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'RequestVerificationToken': token
-                    },
-                    body: JSON.stringify({ NodeId: nodeId, AuditId: auditId, Score: score })
-                })
-                .then(res => res.ok ? recalcAll() : res.text().then(t => Promise.reject(t)))
-                .catch(err => {
-                    console.error(err);
-                    alert('Gagal update nilai: ' + err);
-                });
+                    // recalc saat update
+        $(document).on('click', '.update-score-btn', function() {
+            var nodeId  = $(this).data('node-id');
+            var auditId = $(this).data('audit-id');
+            var score   = $('.option-btn[data-node-id="' + nodeId + '"].active').data('score');
+            var token   = $('input[name="__RequestVerificationToken"]').val();
+
+            if (!score) return alert('Pilih jawaban dulu!');
+
+            fetch('/Audit/UpdateScore', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'RequestVerificationToken': token
+                },
+                body: JSON.stringify({ NodeId: nodeId, AuditId: auditId, Score: score })
+            })
+            .then(res => {
+                if (res.ok) {
+                    recalcAll();
+
+                    // Tampilkan notifikasi sukses setelah update berhasil
+                    const alertBox = document.createElement('div');
+                    alertBox.className = 'alert alert-success alert-dismissible fade show position-fixed top-0 start-50 translate-middle-x mt-3';
+                    alertBox.style.zIndex = '9999';
+                    alertBox.innerHTML = `
+                        Nilai berhasil diperbarui.
+                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                    `;
+                    document.body.appendChild(alertBox);
+
+                    // Auto-dismiss setelah 2.5 detik
+                    setTimeout(() => {
+                        alertBox.classList.remove('show');
+                        alertBox.classList.add('fade');
+                        alertBox.addEventListener('transitionend', () => alertBox.remove());
+                    }, 2500);
+                } else {
+                    return res.text().then(t => Promise.reject(t));
+                }
+            })
+            .catch(err => {
+                console.error(err);
+                alert('Gagal update nilai: ' + err);
             });
+        });
+
+
 
             // Recalc juga setelah collapse toggle (open/close)
             $('#auditChecklist').on('shown.bs.collapse hidden.bs.collapse', function(){
