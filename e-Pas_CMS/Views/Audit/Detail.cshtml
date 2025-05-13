@@ -1,4 +1,4 @@
-﻿﻿@using e_Pas_CMS.ViewModels
+﻿@using e_Pas_CMS.ViewModels
 @using Newtonsoft.Json
 @model DetailAuditViewModel
 
@@ -351,50 +351,125 @@ else if (!string.IsNullOrEmpty(Model.Notes) || (Model.FinalDocuments != null && 
 @section Scripts {
     <script>
                 let currentPage = 1;
-        const pageSize = 10;
+        const pageSize = 20;
 
                 function loadGalleryPage(page) {
           const url = `/Audit/GetLibraryMedia?page=${page}&pageSize=${pageSize}`;
 
           fetch(url)
             .then(res => res.json())
-            .then(async result => {
+            .then(result => {
               console.log("Gallery result:", result);
               const container = document.getElementById('mediaModalBody');
               container.innerHTML = '';
 
-              // validasi
-              const isValidFlags = await validateMediaPaths(result.data.map(i => i.mediaPath));
-              const validItems = result.data.filter((_, i) => isValidFlags[i]);
+              if (!result.data || result.data.length === 0) {
+                container.innerHTML = '<p class="text-muted">Tidak ada media tersedia.</p>';
+                return;
+              }
 
-              // render
-              validItems.forEach(item => {
-                // pakai camelCase di sini
-                const isVideo = item.mediaType === 'VIDEO'
-                                  || item.mediaPath.toLowerCase().endsWith('.mp4');
-                const el = document.createElement(isVideo ? 'video' : 'img');
-                el.className = 'mb-3 rounded w-100';
+              // Create grid container
+              const gridContainer = document.createElement('div');
+              gridContainer.className = 'row row-cols-4 g-3';
+
+              // Add each media item as a thumbnail
+              result.data.forEach(item => {
+                const isVideo = item.mediaType === 'VIDEO' || item.mediaPath.toLowerCase().endsWith('.mp4');
+                const col = document.createElement('div');
+                col.className = 'col';
+
+                const card = document.createElement('div');
+                card.className = 'card h-100';
+
+                const cardBody = document.createElement('div');
+                cardBody.className = 'card-body p-2';
+
+                const mediaContainer = document.createElement('div');
+                mediaContainer.className = 'ratio ratio-1x1 mb-2';
+
                 if (isVideo) {
-                  el.src = item.mediaPath;
-                  el.controls = true;
+                  const video = document.createElement('video');
+                  video.src = item.mediaPath;
+                  video.className = 'rounded';
+                  video.style.objectFit = 'cover';
+                  mediaContainer.appendChild(video);
                 } else {
-                  el.src = item.mediaPath;
-                  el.onerror = () => {
-                    el.src = '/images/image-not-found.png';
-                    el.alt = 'Gambar tidak ditemukan';
+                  const img = document.createElement('img');
+                  img.src = item.mediaPath;
+                  img.className = 'rounded';
+                  img.style.objectFit = 'cover';
+                  img.onerror = () => {
+                    img.src = '/images/image-not-found.png';
+                    img.alt = 'Gambar tidak ditemukan';
                   };
+                  mediaContainer.appendChild(img);
                 }
-                container.appendChild(el);
+
+                // Add click handler to show full image/video
+                mediaContainer.style.cursor = 'pointer';
+                mediaContainer.onclick = () => {
+                  const modalContent = document.createElement('div');
+                  if (isVideo) {
+                    const video = document.createElement('video');
+                    video.src = item.mediaPath;
+                    video.controls = true;
+                    video.className = 'w-100 rounded';
+                    modalContent.appendChild(video);
+                  } else {
+                    const img = document.createElement('img');
+                    img.src = item.mediaPath;
+                    img.className = 'img-fluid rounded';
+                    modalContent.appendChild(img);
+                  }
+                  container.innerHTML = '';
+                  container.appendChild(modalContent);
+                };
+
+                cardBody.appendChild(mediaContainer);
+                card.appendChild(cardBody);
+                col.appendChild(card);
+                gridContainer.appendChild(col);
               });
 
-              // pagination (sama)
-              /* ... */
+              container.appendChild(gridContainer);
 
-              new bootstrap.Modal(document.getElementById('mediaModal'), {
-                backdrop: 'static', keyboard: false
-              }).show();
+              // Get the modal element
+              const modalEl = document.getElementById('mediaModal');
+              
+              // Remove any existing modal instances
+              const existingModal = bootstrap.Modal.getInstance(modalEl);
+              if (existingModal) {
+                  existingModal.dispose();
+              }
+
+              // Create and show new modal
+              const modal = new bootstrap.Modal(modalEl, {
+                  backdrop: 'static',
+                  keyboard: false
+              });
+
+              // Add event listener for when modal is hidden
+              modalEl.addEventListener('hidden.bs.modal', function () {
+                  // Clean up the modal content
+                  container.innerHTML = '';
+                  // Remove the backdrop
+                  const backdrop = document.querySelector('.modal-backdrop');
+                  if (backdrop) {
+                      backdrop.remove();
+                  }
+                  // Remove modal-open class from body
+                  document.body.classList.remove('modal-open');
+                  document.body.style.overflow = '';
+                  document.body.style.paddingRight = '';
+              });
+
+              modal.show();
             })
-            .catch(/* ... */);
+            .catch(error => {
+              console.error('Error loading gallery:', error);
+              const container = document.getElementById('mediaModalBody');
+              container.innerHTML = '<p class="text-danger">Error loading media. Please try again.</p>';
+            });
         }
 
         function validateMediaPaths(paths) {
@@ -802,25 +877,6 @@ else if (!string.IsNullOrEmpty(Model.Notes) || (Model.FinalDocuments != null && 
                     <div class="card-body">
                         @if (node.Type == "QUESTION")
                         {
-                            // @if (!isReadonlyUser)
-                            // {
-                            //     <div class="mb-2 d-flex gap-2 align-items-center flex-wrap">
-                            //         <button type="button"
-                            //                 class="btn btn-sm btn-primary update-score-btn"
-                            //                 data-node-id="@node.Id"
-                            //                 data-audit-id="@ViewBag.AuditId"
-                            //         @(isVerified ? "disabled" : "")>
-                            //             Update Nilai
-                            //         </button>
-
-                            //         <button type="button"
-                            //                 class="btn btn-sm btn-secondary cancel-score-btn"
-                            //                 data-node-id="@node.Id"
-                            //         @(isVerified ? "disabled" : "")>
-                            //             Batal
-                            //         </button>
-                            //     </div>
-                            // }
                             @if (node.Type == "QUESTION" && (node.Children == null || !node.Children.Any()))
                             {
                                 <div class="d-flex gap-2 align-items-center mb-3 flex-wrap">
@@ -876,33 +932,6 @@ else if (!string.IsNullOrEmpty(Model.Notes) || (Model.FinalDocuments != null && 
                                 </div>
 
                             }
-
-                            // <div class="d-flex gap-2 align-items-center mb-3">
-                            //     @if (node.MediaItems?.Any() ?? false)
-                            //     {
-                            //         <button class="btn btn-outline-primary btn-sm"
-                            //                 onclick='showMediaPopup(@Html.Raw(JsonConvert.SerializeObject(node.MediaItems ?? new List<MediaItem> { })))'>
-                            //             <i class="bi bi-image me-1"></i> Lihat Dokumentasi
-                            //         </button>
-                            //     }
-
-                            //     @if (!isReadonlyUser)
-                            //     {
-                            //         <form asp-controller="Audit" asp-action="UploadDocument"
-                            //               asp-route-nodeId="@node.Id"
-                            //               asp-route-auditId="@ViewBag.AuditId"
-                            //               enctype="multipart/form-data"
-                            //               method="post"
-                            //               class="d-flex align-items-center">
-                            //             <input type="file" name="file" class="form-control form-control-sm me-2"
-                            //                    required @(isVerified ? "disabled" : "") />
-                            //             <button type="submit" class="btn btn-sm btn-secondary"
-                            //             @(isVerified ? "disabled" : "")>
-                            //                 Upload
-                            //             </button>
-                            //         </form>
-                            //     }
-                            // </div>
                         }
 
 
