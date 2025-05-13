@@ -765,7 +765,9 @@ VALUES
         {
             //var libraryDir = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads", "library");
 
-            var libraryDir = "/var/www/epas-api/uploads/library";
+            //var libraryDir = "/var/www/epas-api/uploads/library";
+
+            var libraryDir = Path.Combine("/var/www/epas-api", "wwwroot", "uploads", "library");
 
             _logger.LogInformation("Gallery requested. Page: {Page}, PageSize: {PageSize}, Search: {Search}", page, pageSize, search);
 
