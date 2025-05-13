@@ -350,6 +350,119 @@ else if (!string.IsNullOrEmpty(Model.Notes) || (Model.FinalDocuments != null && 
 
 @section Scripts {
     <script>
+                let currentPage = 1;
+        const pageSize = 10;
+
+                function loadGalleryPage(page) {
+          const url = `/Audit/GetLibraryMedia?page=${page}&pageSize=${pageSize}`;
+
+          fetch(url)
+            .then(res => res.json())
+            .then(async result => {
+              console.log("Gallery result:", result);
+              const container = document.getElementById('mediaModalBody');
+              container.innerHTML = '';
+
+              // validasi
+              const isValidFlags = await validateMediaPaths(result.data.map(i => i.mediaPath));
+              const validItems = result.data.filter((_, i) => isValidFlags[i]);
+
+              // render
+              validItems.forEach(item => {
+                // pakai camelCase di sini
+                const isVideo = item.mediaType === 'VIDEO'
+                                  || item.mediaPath.toLowerCase().endsWith('.mp4');
+                const el = document.createElement(isVideo ? 'video' : 'img');
+                el.className = 'mb-3 rounded w-100';
+                if (isVideo) {
+                  el.src = item.mediaPath;
+                  el.controls = true;
+                } else {
+                  el.src = item.mediaPath;
+                  el.onerror = () => {
+                    el.src = '/images/image-not-found.png';
+                    el.alt = 'Gambar tidak ditemukan';
+                  };
+                }
+                container.appendChild(el);
+              });
+
+              // pagination (sama)
+              /* ... */
+
+              new bootstrap.Modal(document.getElementById('mediaModal'), {
+                backdrop: 'static', keyboard: false
+              }).show();
+            })
+            .catch(/* ... */);
+        }
+
+        function validateMediaPaths(paths) {
+          return Promise.all(paths.map(src => new Promise(r => {
+            const img = new Image();
+            img.onload  = () => r(true);
+            img.onerror = () => r(false);
+            img.src     = src;
+          })));
+        }
+
+
+
+                        function validateMediaPaths(mediaItems) {
+            const checks = mediaItems.map(item => {
+                return new Promise(resolve => {
+                    if (item.MediaType === 'VIDEO') {
+                        // Bisa dibiarkan true atau dikembangkan untuk cek manual video jika perlu
+                        resolve(true);
+                    } else {
+                        const img = new Image();
+                        img.onload = () => resolve(true);
+                        img.onerror = () => resolve(false);
+                        img.src = item.MediaPath;
+                    }
+                });
+            });
+
+            return Promise.all(checks);
+        }
+
+
+                        function handleDocumentationClick(mediaItems) {
+            const modalEl = document.getElementById('mediaModal');
+            const modal = new bootstrap.Modal(modalEl, {
+                backdrop: 'static',
+                keyboard: false,
+                focus: false
+            });
+
+            // Kalau kosong, langsung load gallery
+            if (!mediaItems || mediaItems.length === 0) {
+                loadGalleryPage(1);
+                modal.show();
+                return;
+            }
+
+            // Cek semua URL apakah valid
+            const checks = mediaItems.map(item =>
+                fetch(item.MediaPath, { method: 'HEAD' })
+                    .then(res => res.ok)
+                    .catch(() => false)
+            );
+
+            Promise.all(checks).then(results => {
+                const adaValid = results.some(ok => ok);
+                        if (adaValid && mediaItems.length > 0) {
+            const limited = mediaItems.slice(0, 10); // hanya ambil 10 pertama
+            showMediaPopup(limited);
+        } else {
+            loadGalleryPage(1); // fallback: ambil dari server
+        }
+
+
+                modal.show();
+            });
+        }
+
         $(function() {
         // Toggle pilihan jawaban
         $(document).on('click', '.option-btn', function() {
@@ -461,76 +574,116 @@ else if (!string.IsNullOrEmpty(Model.Notes) || (Model.FinalDocuments != null && 
         // Inisialisasi pertama
         recalcAll();
         });
-        function showMediaPopup(mediaItems) {
-        const container = document.getElementById('mediaModalBody');
-        container.innerHTML = '';
+                function showMediaPopup(mediaItems) {
+            const container = document.getElementById('mediaModalBody');
+            container.innerHTML = '';
 
-        if (!mediaItems || mediaItems.length === 0) {
-        container.innerHTML = '<p class="text-muted">Tidak ada media tersedia.</p>';
+            // normalisasi agar kita selalu pakai camelCase
+            const items = (mediaItems||[]).map(i => ({
+              path: i.mediaPath ?? i.MediaPath,
+              type: (i.mediaType ?? i.MediaType)?.toUpperCase()
+            }));
+
+            validateMediaPaths(items.map(i => i.path)).then(validFlags => {
+                const validItems = items.filter((_, idx) => validFlags[idx]);
+
+                if (validItems.length === 0) {
+                    container.innerHTML = '<p class="text-muted">Tidak ada media tersedia.</p>';
+                }
+                else if (validItems.length === 1) {
+                    const { path, type } = validItems[0];
+                    const isVideo = type === 'VIDEO' || path.endsWith('.mp4');
+                    const el = document.createElement(isVideo ? 'video' : 'img');
+
+                    if (isVideo) {
+                        el.src = path;
+                        el.controls = true;
+                        el.className = 'w-100 rounded';
+                    } else {
+                        el.src = path;
+                        el.alt = '';
+                        el.className = 'img-fluid rounded';
+                    }
+                    container.appendChild(el);
+                }
+                else {
+                    const carouselId = 'mediaCarousel';
+                    const indicators = [];
+                    const innerItems = [];
+
+                    validItems.forEach(({ path, type }, index) => {
+                        const isActive = index === 0 ? 'active' : '';
+                        const isVideo = type === 'VIDEO' || path.endsWith('.mp4');
+                        const mediaTag = isVideo
+                            ? `<video controls class="d-block w-100 rounded"><source src="${path}" type="video/mp4"></video>`
+                            : `<img src="${path}" class="d-block w-100 rounded" alt="">`;
+
+                        indicators.push(`
+                          <button type="button" data-bs-target="#${carouselId}"
+                                  data-bs-slide-to="${index}"
+                                  class="${isActive}"
+                                  aria-current="${isActive}"
+                                  aria-label="Slide ${index+1}"></button>
+                        `);
+                        innerItems.push(`
+                          <div class="carousel-item ${isActive}">${mediaTag}</div>
+                        `);
+                    });
+
+                    container.innerHTML = `
+                      <div id="${carouselId}" class="carousel slide" data-bs-ride="carousel">
+                        <div class="carousel-indicators">
+                          ${indicators.join('')}
+                        </div>
+                        <div class="carousel-inner">
+                          ${innerItems.join('')}
+                        </div>
+                        <button class="carousel-control-prev" type="button"
+                                data-bs-target="#${carouselId}" data-bs-slide="prev">
+                          <span class="carousel-control-prev-icon" aria-hidden="true"></span>
+                          <span class="visually-hidden">Previous</span>
+                        </button>
+                        <button class="carousel-control-next" type="button"
+                                data-bs-target="#${carouselId}" data-bs-slide="next">
+                          <span class="carousel-control-next-icon" aria-hidden="true"></span>
+                          <span class="visually-hidden">Next</span>
+                        </button>
+                      </div>`;
+                }
+
+                new bootstrap.Modal(document.getElementById('mediaModal'), {
+                    backdrop: 'static', keyboard: false
+                }).show();
+            });
         }
-        else if (mediaItems.length === 1) {
-        const item = mediaItems[0];
-        let el = document.createElement(item.MediaType?.toUpperCase() === 'VIDEO' || item.MediaPath?.endsWith('.mp4')
-        ? 'video' : 'img');
 
-        if (el.tagName === 'IMG') {
-        el.src = item.MediaPath;
-        el.alt = '';
-        el.className = 'img-fluid rounded';
-        } else {
-        el.src = item.MediaPath;
-        el.controls = true;
-        el.className = 'w-100 rounded';
-        }
-        container.appendChild(el);
-        }
-        else {
-        const carouselId = 'mediaCarousel';
-        const indicators = [];
-        const innerItems = [];
+                function showFinalMediaPopup(mediaList) {
+            const container = document.getElementById('mediaModalBody');
+            container.innerHTML = '';
 
-        mediaItems.forEach((item, index) => {
-        const isActive = index === 0 ? 'active' : '';
-        const mediaTag = item.MediaType?.toUpperCase() === 'VIDEO' || item.MediaPath?.endsWith('.mp4')
-        ? `<video controls class="d-block w-100 rounded"><source src="${item.MediaPath}" type="video/mp4"></video>`
-        : `<img src="${item.MediaPath}" class="d-block w-100 rounded" alt="">`;
+            mediaList.forEach(item => {
+                const isVideo = item.mediaType?.toUpperCase() === 'VIDEO' || item.mediaPath.toLowerCase().endsWith('.mp4');
 
-        indicators.push(`<button type="button" data-bs-target="#${carouselId}" data-bs-slide-to="${index}" class="${isActive}" aria-current="${isActive ? 'true' : ''}" aria-label="Slide ${index + 1}"></button>`);
-        innerItems.push(`<div class="carousel-item ${isActive}">${mediaTag}</div>`);
-        });
+                const el = document.createElement(isVideo ? 'video' : 'img');
+                el.src = item.mediaPath;
+                el.className = "rounded shadow-sm mb-3";
+                el.style.maxWidth = "100%";
+                el.style.maxHeight = "80vh";
+                el.style.display = "block";
+                el.style.margin = "0 auto";
 
-        container.innerHTML = `
-        <div id="${carouselId}" class="carousel slide" data-bs-ride="carousel">
-        <div class="carousel-indicators">
-        ${indicators.join('')}
-        </div>
-        <div class="carousel-inner">
-        ${innerItems.join('')}
-        </div>
-        <button class="carousel-control-prev" type="button" data-bs-target="#${carouselId}" data-bs-slide="prev">
-        <span class="carousel-control-prev-icon" aria-hidden="true"></span>
-        <span class="visually-hidden">Previous</span>
-        </button>
-        <button class="carousel-control-next" type="button" data-bs-target="#${carouselId}" data-bs-slide="next">
-        <span class="carousel-control-next-icon" aria-hidden="true"></span>
-        <span class="visually-hidden">Next</span>
-        </button>
-        </div>`;
+                if (isVideo) {
+                    el.controls = true;
+                }
+
+                container.appendChild(el);
+            });
+
+            const modal = new bootstrap.Modal(document.getElementById('mediaModal'));
+            modal.show();
         }
 
-                const modalEl = document.getElementById('mediaModal');
-        const modal = new bootstrap.Modal(modalEl, {
-            backdrop: 'static',
-            keyboard: false,
-            focus: false // <== mencegah scroll auto ke dalam modal
-        });
-        modal.show();
 
-        }
-
-        function showFinalMediaPopup(mediaItems) {
-        showMediaPopup(mediaItems);
-        }
 
     </script>
 }
@@ -671,13 +824,10 @@ else if (!string.IsNullOrEmpty(Model.Notes) || (Model.FinalDocuments != null && 
                             @if (node.Type == "QUESTION" && (node.Children == null || !node.Children.Any()))
                             {
                                 <div class="d-flex gap-2 align-items-center mb-3 flex-wrap">
-                                    @if (node.MediaItems?.Any() ?? false)
-                                    {
-                                        <button type="button" class="btn btn-outline-primary btn-sm"
-                                                onclick='showMediaPopup(@Html.Raw(JsonConvert.SerializeObject(node.MediaItems ?? new List<MediaItem> { })))'>
-                                            <i class="bi bi-image me-1"></i> Lihat Dokumentasi
-                                        </button>
-                                    }
+                                    <button type="button" class="btn btn-outline-primary btn-sm"
+                                            onclick='handleDocumentationClick(@Html.Raw(JsonConvert.SerializeObject(node.MediaItems ?? new List<MediaItem> { })))'>
+                                        <i class="bi bi-image me-1"></i> Lihat Dokumentasi
+                                    </button>
 
                                     @if (!isReadonlyUser)
                                     {
