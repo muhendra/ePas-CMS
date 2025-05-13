@@ -32,7 +32,7 @@ namespace e_Pas_CMS.Controllers
             var query = _context.trx_audits
                 .Include(a => a.spbu)
                 .Include(a => a.app_user)
-                .Where(a => a.status == "UNDER_REVIEW" || a.status == "VERIFIED");
+                .Where(a => a.status == "VERIFIED");
 
             if (!string.IsNullOrWhiteSpace(searchTerm))
             {
