@@ -1,4 +1,4 @@
-﻿@using e_Pas_CMS.ViewModels
+﻿﻿@using e_Pas_CMS.ViewModels
 @using Newtonsoft.Json
 @model DetailAuditViewModel
 
@@ -133,14 +133,24 @@
             @if (Model.MediaNotes != null && Model.MediaNotes.Any())
             {
                 <div class="row row-cols-1 row-cols-md-2 g-4">
-                    <div class="text-center">
-                        <button type="button"
-                                class="btn btn-outline-primary"
-                                onclick="loadGalleryPage(1)">
-                            <i class="bi bi-images me-1"></i> Lihat Dokumentasi (Foto/Video)
-                        </button>
-                    </div>
-
+                    @foreach (var media in Model.MediaNotes)
+                    {
+                        <div class="col d-flex justify-content-center">
+                            <div class="card h-100 p-3 d-flex align-items-center justify-content-center">
+                                @if (media.MediaType?.ToUpper() == "VIDEO" || media.MediaPath.EndsWith(".mp4", StringComparison.OrdinalIgnoreCase))
+                                {
+                                    <video controls class="rounded shadow-sm" style="max-height:800px; width:auto; max-width:100%;">
+                                        <source src="@media.MediaPath" type="video/mp4" />
+                                        Your browser does not support the video tag.
+                                    </video>
+                                }
+                                else
+                                {
+                                    <img src="@media.MediaPath" alt="Foto Catatan Audit" class="rounded shadow-sm" style="max-height:800px; width:auto; max-width:100%;" />
+                                }
+                            </div>
+                        </div>
+                    }
                 </div>
             }
         </div>
@@ -340,136 +350,6 @@ else if (!string.IsNullOrEmpty(Model.Notes) || (Model.FinalDocuments != null && 
 
 @section Scripts {
     <script>
-                let currentPage = 1;
-        const pageSize = 10;
-
-                function loadGalleryPage(page) {
-            const url = `/Audit/GetLibraryMedia?page=${page}&pageSize=${pageSize}`;
-
-            fetch(url)
-                .then(res => res.json())
-                .then(async result => {
-                    console.log("Gallery result:", result);
-
-                    const container = document.getElementById('mediaModalBody');
-                    container.innerHTML = '';
-
-                    if (!result || !result.data || result.data.length === 0) {
-                        container.innerHTML = '<p class="text-muted">Tidak ada media ditemukan.</p>';
-                        return;
-                    }
-
-                    // 👉 VALIDASI semua path terlebih dahulu
-                    const isValidFlags = await validateMediaPaths(result.data);
-                    const validItems = result.data.filter((item, index) => isValidFlags[index]);
-
-                    if (validItems.length === 0) {
-                        container.innerHTML = '<p class="text-muted">Semua media gagal dimuat.</p>';
-                        return;
-                    }
-
-                    currentPage = page;
-
-                    validItems.forEach(item => {
-                        const el = document.createElement(item.MediaType === 'VIDEO' ? 'video' : 'img');
-                        el.className = 'mb-3 rounded';
-
-                        if (item.MediaType === 'VIDEO') {
-                            el.src = item.MediaPath;
-                            el.controls = true;
-                            el.classList.add('w-100');
-                        } else {
-                            el.src = item.MediaPath;
-                            el.classList.add('img-fluid');
-                            el.onerror = () => {
-                                el.src = '/images/image-not-found.png';
-                                el.alt = 'Gambar tidak ditemukan';
-                            };
-                        }
-
-                        container.appendChild(el);
-                    });
-
-                    const pagination = `
-                        <div class="d-flex justify-content-between mt-3">
-                            <button class="btn btn-sm btn-outline-secondary" onclick="loadGalleryPage(${currentPage - 1})" ${currentPage === 1 ? 'disabled' : ''}>
-                                ← Sebelumnya
-                            </button>
-                            <button class="btn btn-sm btn-outline-primary" onclick="loadGalleryPage(${currentPage + 1})">
-                                Selanjutnya →
-                            </button>
-                        </div>`;
-                    container.insertAdjacentHTML('beforeend', pagination);
-                            const modalEl = document.getElementById('mediaModal');
-        const modal = new bootstrap.Modal(modalEl, {
-            backdrop: 'static',
-            keyboard: false
-        });
-        modal.show();
-                })
-                .catch(err => {
-                    console.error("Gagal load gallery:", err);
-                    alert("Gagal menampilkan gallery.");
-                });
-        }
-
-
-
-                        function validateMediaPaths(mediaItems) {
-            const checks = mediaItems.map(item => {
-                return new Promise(resolve => {
-                    if (item.MediaType === 'VIDEO') {
-                        // Bisa dibiarkan true atau dikembangkan untuk cek manual video jika perlu
-                        resolve(true);
-                    } else {
-                        const img = new Image();
-                        img.onload = () => resolve(true);
-                        img.onerror = () => resolve(false);
-                        img.src = item.MediaPath;
-                    }
-                });
-            });
-
-            return Promise.all(checks);
-        }
-
-
-                        function handleDocumentationClick(mediaItems) {
-            const modalEl = document.getElementById('mediaModal');
-            const modal = new bootstrap.Modal(modalEl, {
-                backdrop: 'static',
-                keyboard: false,
-                focus: false
-            });
-
-            // Kalau kosong, langsung load gallery
-            if (!mediaItems || mediaItems.length === 0) {
-                loadGalleryPage(1);
-                modal.show();
-                return;
-            }
-
-            // Cek semua URL apakah valid
-            const checks = mediaItems.map(item =>
-                fetch(item.MediaPath, { method: 'HEAD' })
-                    .then(res => res.ok)
-                    .catch(() => false)
-            );
-
-            Promise.all(checks).then(results => {
-                const adaValid = results.some(ok => ok);
-                        if (adaValid && mediaItems.length > 0) {
-            const limited = mediaItems.slice(0, 10); // hanya ambil 10 pertama
-            showMediaPopup(limited);
-        } else {
-            loadGalleryPage(1); // fallback: ambil dari server
-        }
-
-
-                modal.show();
-            });
-        }
-
         $(function() {
         // Toggle pilihan jawaban
         $(document).on('click', '.option-btn', function() {
@@ -581,78 +461,76 @@ else if (!string.IsNullOrEmpty(Model.Notes) || (Model.FinalDocuments != null && 
         // Inisialisasi pertama
         recalcAll();
         });
-                function showMediaPopup(mediaItems) {
-            const container = document.getElementById('mediaModalBody');
-            container.innerHTML = '';
+        function showMediaPopup(mediaItems) {
+        const container = document.getElementById('mediaModalBody');
+        container.innerHTML = '';
 
-            // Filter ulang agar hanya path yang valid yang ditampilkan
-            validateMediaPaths(mediaItems).then(validFlags => {
-                const validItems = mediaItems.filter((item, index) => validFlags[index]);
+        if (!mediaItems || mediaItems.length === 0) {
+        container.innerHTML = '<p class="text-muted">Tidak ada media tersedia.</p>';
+        }
+        else if (mediaItems.length === 1) {
+        const item = mediaItems[0];
+        let el = document.createElement(item.MediaType?.toUpperCase() === 'VIDEO' || item.MediaPath?.endsWith('.mp4')
+        ? 'video' : 'img');
 
-                if (validItems.length === 0) {
-                    container.innerHTML = '<p class="text-muted">Tidak ada media tersedia.</p>';
-                }
-                else if (validItems.length === 1) {
-                    const item = validItems[0];
-                    let el = document.createElement(item.MediaType?.toUpperCase() === 'VIDEO' || item.MediaPath?.endsWith('.mp4')
-                        ? 'video' : 'img');
+        if (el.tagName === 'IMG') {
+        el.src = item.MediaPath;
+        el.alt = '';
+        el.className = 'img-fluid rounded';
+        } else {
+        el.src = item.MediaPath;
+        el.controls = true;
+        el.className = 'w-100 rounded';
+        }
+        container.appendChild(el);
+        }
+        else {
+        const carouselId = 'mediaCarousel';
+        const indicators = [];
+        const innerItems = [];
 
-                    if (el.tagName === 'IMG') {
-                        el.src = item.MediaPath;
-                        el.alt = '';
-                        el.className = 'img-fluid rounded';
-                    } else {
-                        el.src = item.MediaPath;
-                        el.controls = true;
-                        el.className = 'w-100 rounded';
-                    }
-                    container.appendChild(el);
-                }
-                else {
-                    const carouselId = 'mediaCarousel';
-                    const indicators = [];
-                    const innerItems = [];
+        mediaItems.forEach((item, index) => {
+        const isActive = index === 0 ? 'active' : '';
+        const mediaTag = item.MediaType?.toUpperCase() === 'VIDEO' || item.MediaPath?.endsWith('.mp4')
+        ? `<video controls class="d-block w-100 rounded"><source src="${item.MediaPath}" type="video/mp4"></video>`
+        : `<img src="${item.MediaPath}" class="d-block w-100 rounded" alt="">`;
 
-                    validItems.forEach((item, index) => {
-                        const isActive = index === 0 ? 'active' : '';
-                        const mediaTag = item.MediaType?.toUpperCase() === 'VIDEO' || item.MediaPath?.endsWith('.mp4')
-                            ? `<video controls class="d-block w-100 rounded"><source src="${item.MediaPath}" type="video/mp4"></video>`
-                            : `<img src="${item.MediaPath}" class="d-block w-100 rounded" alt="">`;
+        indicators.push(`<button type="button" data-bs-target="#${carouselId}" data-bs-slide-to="${index}" class="${isActive}" aria-current="${isActive ? 'true' : ''}" aria-label="Slide ${index + 1}"></button>`);
+        innerItems.push(`<div class="carousel-item ${isActive}">${mediaTag}</div>`);
+        });
 
-                        indicators.push(`<button type="button" data-bs-target="#${carouselId}" data-bs-slide-to="${index}" class="${isActive}" aria-current="${isActive ? 'true' : ''}" aria-label="Slide ${index + 1}"></button>`);
-                        innerItems.push(`<div class="carousel-item ${isActive}">${mediaTag}</div>`);
-                    });
-
-                    container.innerHTML = `
-                        <div id="${carouselId}" class="carousel slide" data-bs-ride="carousel">
-                            <div class="carousel-indicators">${indicators.join('')}</div>
-                            <div class="carousel-inner">${innerItems.join('')}</div>
-                            <button class="carousel-control-prev" type="button" data-bs-target="#${carouselId}" data-bs-slide="prev">
-                                <span class="carousel-control-prev-icon" aria-hidden="true"></span>
-                                <span class="visually-hidden">Previous</span>
-                            </button>
-                            <button class="carousel-control-next" type="button" data-bs-target="#${carouselId}" data-bs-slide="next">
-                                <span class="carousel-control-next-icon" aria-hidden="true"></span>
-                                <span class="visually-hidden">Next</span>
-                            </button>
-                        </div>`;
-                }
+        container.innerHTML = `
+        <div id="${carouselId}" class="carousel slide" data-bs-ride="carousel">
+        <div class="carousel-indicators">
+        ${indicators.join('')}
+        </div>
+        <div class="carousel-inner">
+        ${innerItems.join('')}
+        </div>
+        <button class="carousel-control-prev" type="button" data-bs-target="#${carouselId}" data-bs-slide="prev">
+        <span class="carousel-control-prev-icon" aria-hidden="true"></span>
+        <span class="visually-hidden">Previous</span>
+        </button>
+        <button class="carousel-control-next" type="button" data-bs-target="#${carouselId}" data-bs-slide="next">
+        <span class="carousel-control-next-icon" aria-hidden="true"></span>
+        <span class="visually-hidden">Next</span>
+        </button>
+        </div>`;
+        }
 
                 const modalEl = document.getElementById('mediaModal');
-                const modal = new bootstrap.Modal(modalEl, {
-                    backdrop: 'static',
-                    keyboard: false,
-                    focus: false
-                });
-                modal.show();
-            });
+        const modal = new bootstrap.Modal(modalEl, {
+            backdrop: 'static',
+            keyboard: false,
+            focus: false // <== mencegah scroll auto ke dalam modal
+        });
+        modal.show();
+
         }
 
         function showFinalMediaPopup(mediaItems) {
         showMediaPopup(mediaItems);
         }
-
-               
 
     </script>
 }
@@ -793,10 +671,13 @@ else if (!string.IsNullOrEmpty(Model.Notes) || (Model.FinalDocuments != null && 
                             @if (node.Type == "QUESTION" && (node.Children == null || !node.Children.Any()))
                             {
                                 <div class="d-flex gap-2 align-items-center mb-3 flex-wrap">
-                                    <button type="button" class="btn btn-outline-primary btn-sm"
-                                            onclick='handleDocumentationClick(@Html.Raw(JsonConvert.SerializeObject(node.MediaItems ?? new List<MediaItem> { })))'>
-                                        <i class="bi bi-image me-1"></i> Lihat Dokumentasi
-                                    </button>
+                                    @if (node.MediaItems?.Any() ?? false)
+                                    {
+                                        <button type="button" class="btn btn-outline-primary btn-sm"
+                                                onclick='showMediaPopup(@Html.Raw(JsonConvert.SerializeObject(node.MediaItems ?? new List<MediaItem> { })))'>
+                                            <i class="bi bi-image me-1"></i> Lihat Dokumentasi
+                                        </button>
+                                    }
 
                                     @if (!isReadonlyUser)
                                     {
