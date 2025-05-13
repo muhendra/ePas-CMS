@@ -1021,11 +1021,6 @@ else if (!string.IsNullOrEmpty(Model.Notes) || (Model.FinalDocuments != null && 
                             <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
                         `;
                         document.body.appendChild(successAlert);
-
-                        // Reload the page after a short delay to show the success message
-                        setTimeout(() => {
-                            window.location.reload();
-                        }, 1500);
                     } else {
                         throw new Error('Failed to update media path');
                     }
