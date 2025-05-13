@@ -761,11 +761,11 @@ VALUES
         }
 
         [HttpGet]
-        public IActionResult GetLibraryMedia(int page = 1, int pageSize = 10)
+        public IActionResult GetLibraryMedia(int page = 1, int pageSize = 10, string search = "")
         {
             var libraryDir = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads", "library");
 
-            _logger.LogInformation("Gallery requested. Page: {Page}, PageSize: {PageSize}", page, pageSize);
+            _logger.LogInformation("Gallery requested. Page: {Page}, PageSize: {PageSize}, Search: {Search}", page, pageSize, search);
 
             if (!Directory.Exists(libraryDir))
             {
@@ -778,10 +778,19 @@ VALUES
                             f.EndsWith(".png", StringComparison.OrdinalIgnoreCase) ||
                             f.EndsWith(".jpeg", StringComparison.OrdinalIgnoreCase) ||
                             f.EndsWith(".mp4", StringComparison.OrdinalIgnoreCase))
-                .OrderByDescending(f => System.IO.File.GetCreationTime(f))
-                .ToList();
+                .OrderByDescending(f => System.IO.File.GetCreationTime(f));
 
-            int total = allFiles.Count;
+            // Apply search filter if search term is provided
+            if (!string.IsNullOrWhiteSpace(search))
+            {
+                search = search.ToLower();
+                allFiles = allFiles.Where(f => 
+                    Path.GetFileName(f).ToLower().Contains(search) ||
+                    Path.GetFileNameWithoutExtension(f).ToLower().Contains(search)
+                ).OrderByDescending(f => System.IO.File.GetCreationTime(f));
+            }
+
+            var total = allFiles.Count();
             _logger.LogInformation("Total media files found: {Total}", total);
 
             var pagedFiles = allFiles

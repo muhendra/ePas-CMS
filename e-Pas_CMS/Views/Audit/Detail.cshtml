@@ -286,7 +286,7 @@ else if (!string.IsNullOrEmpty(Model.Notes) || (Model.FinalDocuments != null && 
 
 <!-- Modal Media -->
 <div class="modal fade" id="mediaModal" tabindex="-1" aria-labelledby="mediaModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-lg modal-dialog-centered">
+    <div class="modal-dialog modal-xl modal-dialog-centered">
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title" id="mediaModalLabel">Dokumentasi Foto / Video</h5>
@@ -301,7 +301,7 @@ else if (!string.IsNullOrEmpty(Model.Notes) || (Model.FinalDocuments != null && 
 
 <!-- Modal Full Size Media -->
 <div class="modal fade" id="fullSizeMediaModal" tabindex="-1" aria-labelledby="fullSizeMediaModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-xl modal-dialog-centered">
+    <div class="modal-dialog modal-fullscreen">
         <div class="modal-content">
             <div class="modal-header">
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Tutup"></button>
@@ -357,7 +357,7 @@ else if (!string.IsNullOrEmpty(Model.Notes) || (Model.FinalDocuments != null && 
         #fullSizeMediaModalBody img,
         #fullSizeMediaModalBody video {
             max-width: 100%;
-            max-height: 80vh;
+            max-height: 85vh;
             object-fit: contain;
             display: block;
             margin: 0 auto;
@@ -458,17 +458,184 @@ else if (!string.IsNullOrEmpty(Model.Notes) || (Model.FinalDocuments != null && 
         #fullSizeMediaModal .btn-close:hover {
             opacity: 1;
         }
+
+        /* Gallery grid styles */
+        .gallery-grid {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            grid-auto-rows: min-content; /* Prevent row stretching */
+            gap: 0.3rem;
+            padding: 0.3rem;
+            width: 100%;
+            max-width: 100%;
+            margin: 0;
+        }
+
+        .gallery-grid .col {
+            width: 100%;
+            padding: 0;
+            min-width: 0;
+            height: fit-content; /* Prevent column stretching */
+        }
+
+        .gallery-grid .card {
+            margin: 0;
+            border: 1px solid rgba(0,0,0,0.1);
+            transform: scale(0.97);
+            transform-origin: center;
+            height: fit-content; /* Prevent card stretching */
+            width: 100%;
+            min-width: 0;
+        }
+
+        .gallery-grid .card-body {
+            padding: 0.12rem;
+            display: flex;
+            flex-direction: column;
+            height: fit-content; /* Prevent body stretching */
+            min-width: 0;
+        }
+
+        .gallery-grid .media-container {
+            flex: 0 0 120px; /* Fixed height, don't grow or shrink */
+            min-height: 0;
+            position: relative;
+            width: 100%;
+            height: 120px;
+            min-width: 0;
+        }
+
+        .gallery-grid .media-container img,
+        .gallery-grid .media-container video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            border-radius: 0.25rem;
+        }
+
+        .gallery-grid .text-truncate.small {
+            flex: 0 0 auto; /* Don't grow or shrink */
+            font-size: 0.65rem;
+            line-height: 1.1;
+            margin-top: 0.12rem;
+            padding: 0 0.15rem;
+            color: #666;
+            text-align: center;
+            display: block;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        /* Modal styles */
+        #mediaModal .modal-dialog {
+            max-width: 95vw;
+            margin: 1.75rem auto;
+            width: 95vw;
+        }
+
+        #mediaModal .modal-content {
+            background-color: #f8f9fa;
+            width: 100%;
+            max-width: 100%;
+        }
+
+        #mediaModal .modal-body {
+            padding: 0.3rem;
+            max-height: 90vh;
+            overflow-y: auto;
+            overflow-x: hidden;
+            width: 100%;
+            max-width: 100%;
+        }
+
+        /* Ensure search container doesn't cause horizontal scroll */
+        #mediaModal .input-group {
+            max-width: 100%;
+            margin-bottom: 0.5rem;
+        }
+
+        /* Ensure pagination container doesn't cause horizontal scroll */
+        #mediaModal .pagination {
+            flex-wrap: wrap;
+            justify-content: center;
+            margin: 0.5rem 0;
+        }
+
+        #mediaModal .pagination .page-item {
+            margin: 0.1rem;
+        }
+
+        #fullSizeMediaModal .modal-dialog {
+            margin: 0;
+            max-width: 100%;
+            height: 100vh;
+        }
+
+        #fullSizeMediaModal .modal-content {
+            height: 100vh;
+            background-color: rgba(0, 0, 0, 0.9);
+            border: none;
+            border-radius: 0;
+        }
+
+        #fullSizeMediaModal .modal-body {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0;
+        }
+
+        #fullSizeMediaModal .modal-header {
+            position: absolute;
+            top: 0;
+            right: 0;
+            z-index: 1050;
+            border: none;
+            padding: 1rem;
+        }
+
+        #fullSizeMediaModal .modal-footer {
+            position: absolute;
+            bottom: 0;
+            right: 0;
+            z-index: 1050;
+            border: none;
+            padding: 1rem;
+            background-color: transparent;
+        }
+
+        #fullSizeMediaModal .btn-close {
+            background-color: white;
+            opacity: 0.8;
+        }
+
+        #fullSizeMediaModal .btn-close:hover {
+            opacity: 1;
+        }
+
+        #fullSizeMediaModal .btn-primary {
+            background-color: #0d6efd;
+            border: none;
+            padding: 0.5rem 1.5rem;
+        }
+
+        #fullSizeMediaModal .btn-primary:hover {
+            background-color: #0b5ed7;
+        }
     </style>
 }
 
 @section Scripts {
     <script>
         let currentPage = 1;
-        const pageSize = 15;
+        const pageSize = 35;
         let selectedMedia = null;
 
         function loadGalleryPage(page) {
-            const url = `/Audit/GetLibraryMedia?page=${page}&pageSize=${pageSize}`;
+            const searchInput = document.getElementById('gallerySearch');
+            const searchQuery = searchInput ? searchInput.value : '';
+            const url = `/Audit/GetLibraryMedia?page=${page}&pageSize=${pageSize}&search=${encodeURIComponent(searchQuery)}`;
 
             fetch(url)
                 .then(res => res.json())
@@ -477,14 +644,41 @@ else if (!string.IsNullOrEmpty(Model.Notes) || (Model.FinalDocuments != null && 
                     const container = document.getElementById('mediaModalBody');
                     container.innerHTML = '';
 
+                    // Add search input at the top
+                    const searchContainer = document.createElement('div');
+                    searchContainer.className = 'mb-3';
+                    searchContainer.innerHTML = `
+                        <div class="input-group">
+                            <input type="text" 
+                                   class="form-control" 
+                                   id="gallerySearch" 
+                                   placeholder="Cari file..." 
+                                   value="${searchQuery}">
+                            <button class="btn btn-outline-secondary" 
+                                    type="button" 
+                                    onclick="loadGalleryPage(1)">
+                                <i class="bi bi-search"></i>
+                            </button>
+                        </div>
+                    `;
+                    container.appendChild(searchContainer);
+
+                    // Add event listener for Enter key on search input
+                    const newSearchInput = searchContainer.querySelector('#gallerySearch');
+                    newSearchInput.addEventListener('keypress', function(e) {
+                        if (e.key === 'Enter') {
+                            loadGalleryPage(1);
+                        }
+                    });
+
                     if (!result.data || result.data.length === 0) {
-                        container.innerHTML = '<p class="text-muted">Tidak ada media tersedia.</p>';
+                        container.innerHTML += '<p class="text-muted">Tidak ada media tersedia.</p>';
                         return;
                     }
 
                     // Create grid container
                     const gridContainer = document.createElement('div');
-                    gridContainer.className = 'row row-cols-5 g-2';
+                    gridContainer.className = 'gallery-grid';
 
                     // Add each media item as a thumbnail
                     result.data.forEach(item => {
@@ -499,7 +693,7 @@ else if (!string.IsNullOrEmpty(Model.Notes) || (Model.FinalDocuments != null && 
                         cardBody.className = 'card-body p-1';
 
                         const mediaContainer = document.createElement('div');
-                        mediaContainer.className = 'ratio ratio-4x3 mb-1';
+                        mediaContainer.className = 'media-container mb-1';
 
                         if (isVideo) {
                             const video = document.createElement('video');
@@ -518,6 +712,15 @@ else if (!string.IsNullOrEmpty(Model.Notes) || (Model.FinalDocuments != null && 
                             };
                             mediaContainer.appendChild(img);
                         }
+
+                        // Add filename display
+                        const fileName = document.createElement('div');
+                        fileName.className = 'text-truncate small text-muted';
+                        fileName.style.fontSize = '0.75rem';
+                        fileName.title = item.mediaPath.split('/').pop(); // Full filename for tooltip
+                        fileName.textContent = item.mediaPath.split('/').pop(); // Just the filename
+                        cardBody.appendChild(mediaContainer);
+                        cardBody.appendChild(fileName);
 
                         // Add click handler to show full image/video in new modal
                         mediaContainer.style.cursor = 'pointer';
@@ -553,7 +756,6 @@ else if (!string.IsNullOrEmpty(Model.Notes) || (Model.FinalDocuments != null && 
                             fullSizeModal.show();
                         };
 
-                        cardBody.appendChild(mediaContainer);
                         card.appendChild(cardBody);
                         col.appendChild(card);
                         gridContainer.appendChild(col);
@@ -819,11 +1021,6 @@ else if (!string.IsNullOrEmpty(Model.Notes) || (Model.FinalDocuments != null && 
                             <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
                         `;
                         document.body.appendChild(successAlert);
-
-                        // Reload the page after a short delay to show the success message
-                        setTimeout(() => {
-                            window.location.reload();
-                        }, 1500);
                     } else {
                         throw new Error('Failed to update media path');
                     }
