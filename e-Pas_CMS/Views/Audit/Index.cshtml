@@ -287,97 +287,12 @@
                                 <th>Aksi</th>
                                 <th>No</th>
                                 <th>
-                                    <a href="@Url.Action("Index", new { pageNumber = 1, pageSize = Model.PageSize, searchTerm = ViewBag.SearchTerm, sortColumn = "NoSpbu", sortDirection = ViewBag.SortColumn == "NoSpbu" && ViewBag.SortDirection == "asc" ? "desc" : "asc" })">
-                                        No. SPBU
-                                        @if (ViewBag.SortColumn == "NoSpbu")
-                                        {
-                                            <i class="bi bi-arrow-@(ViewBag.SortDirection == "asc" ? "up" : "down")"></i>
-                                        }
-                                    </a>
-                                </th>
-                                <th>
-                                    <a href="@Url.Action("Index", new { pageNumber = 1, pageSize = Model.PageSize, searchTerm = ViewBag.SearchTerm, sortColumn = "Auditor", sortDirection = ViewBag.SortColumn == "Auditor" && ViewBag.SortDirection == "asc" ? "desc" : "asc" })">
-                                        Auditor
-                                        @if (ViewBag.SortColumn == "Auditor")
-                                        {
-                                            <i class="bi bi-arrow-@(ViewBag.SortDirection == "asc" ? "up" : "down")"></i>
-                                        }
-                                    </a>
-                                </th>
-                                <th>
-                                    <a href="@Url.Action("Index", new { pageNumber = 1, pageSize = Model.PageSize, searchTerm = ViewBag.SearchTerm, sortColumn = "Rayon", sortDirection = ViewBag.SortColumn == "Rayon" && ViewBag.SortDirection == "asc" ? "desc" : "asc" })">
-                                        Rayon
-                                        @if (ViewBag.SortColumn == "Rayon")
-                                        {
-                                            <i class="bi bi-arrow-@(ViewBag.SortDirection == "asc" ? "up" : "down")"></i>
-                                        }
-                                    </a>
-                                </th>
-                                <th>
-                                    <a href="@Url.Action("Index", new { pageNumber = 1, pageSize = Model.PageSize, searchTerm = ViewBag.SearchTerm, sortColumn = "Provinsi", sortDirection = ViewBag.SortColumn == "Provinsi" && ViewBag.SortDirection == "asc" ? "desc" : "asc" })">
-                                        Provinsi
-                                        @if (ViewBag.SortColumn == "Provinsi")
-                                        {
-                                            <i class="bi bi-arrow-@(ViewBag.SortDirection == "asc" ? "up" : "down")"></i>
-                                        }
-                                    </a>
-                                </th>
-                                <th>
-                                    <a href="@Url.Action("Index", new { pageNumber = 1, pageSize = Model.PageSize, searchTerm = ViewBag.SearchTerm, sortColumn = "Kota", sortDirection = ViewBag.SortColumn == "Kota" && ViewBag.SortDirection == "asc" ? "desc" : "asc" })">
-                                        Kabupaten/Kota
-                                        @if (ViewBag.SortColumn == "Kota")
-                                        {
-                                            <i class="bi bi-arrow-@(ViewBag.SortDirection == "asc" ? "up" : "down")"></i>
-                                        }
-                                    </a>
-                                </th>
-                                <th>
-                                    <a href="@Url.Action("Index", new { pageNumber = 1, pageSize = Model.PageSize, searchTerm = ViewBag.SearchTerm, sortColumn = "Alamat", sortDirection = ViewBag.SortColumn == "Alamat" && ViewBag.SortDirection == "asc" ? "desc" : "asc" })">
-                                        Alamat
-                                        @if (ViewBag.SortColumn == "Alamat")
-                                        {
-                                            <i class="bi bi-arrow-@(ViewBag.SortDirection == "asc" ? "up" : "down")"></i>
-                                        }
-                                    </a>
-                                </th>
-                                <th>
-                                    <a href="@Url.Action("Index", new { pageNumber = 1, pageSize = Model.PageSize, searchTerm = ViewBag.SearchTerm, sortColumn = "TipeSpbu", sortDirection = ViewBag.SortColumn == "TipeSpbu" && ViewBag.SortDirection == "asc" ? "desc" : "asc" })">
-                                        Tipe SPBU
-                                        @if (ViewBag.SortColumn == "TipeSpbu")
-                                        {
-                                            <i class="bi bi-arrow-@(ViewBag.SortDirection == "asc" ? "up" : "down")"></i>
-                                        }
-                                    </a>
-                                </th>
-                                <th>
-                                    <a href="@Url.Action("Index", new { pageNumber = 1, pageSize = Model.PageSize, searchTerm = ViewBag.SearchTerm, sortColumn = "Tahun", sortDirection = ViewBag.SortColumn == "Tahun" && ViewBag.SortDirection == "asc" ? "desc" : "asc" })">
-                                        Tahun
-                                        @if (ViewBag.SortColumn == "Tahun")
-                                        {
-                                            <i class="bi bi-arrow-@(ViewBag.SortDirection == "asc" ? "up" : "down")"></i>
-                                        }
-                                    </a>
-                                </th>
-                                <th>
-                                    <a href="@Url.Action("Index", new { pageNumber = 1, pageSize = Model.PageSize, searchTerm = ViewBag.SearchTerm, sortColumn = "Audit", sortDirection = ViewBag.SortColumn == "Audit" && ViewBag.SortDirection == "asc" ? "desc" : "asc" })">
-                                        Audit
-                                        @if (ViewBag.SortColumn == "Audit")
-                                        {
-                                            <i class="bi bi-arrow-@(ViewBag.SortDirection == "asc" ? "up" : "down")"></i>
-                                        }
-                                    </a>
-                                </th>
-                                <th>
-                                    <a href="@Url.Action("Index", new { pageNumber = 1, pageSize = Model.PageSize, searchTerm = ViewBag.SearchTerm, sortColumn = "TipeAudit", sortDirection = ViewBag.SortColumn == "TipeAudit" && ViewBag.SortDirection == "asc" ? "desc" : "asc" })">
-                                        Tipe Audit
-                                        @if (ViewBag.SortColumn == "TipeAudit")
-                                        {
-                                            <i class="bi bi-arrow-@(ViewBag.SortDirection == "asc" ? "up" : "down")"></i>
-                                        }
-                                    </a>
-                                </th>
-                                <th>
-                                    <a href="@Url.Action("Index", new { pageNumber = 1, pageSize = Model.PageSize, searchTerm = ViewBag.SearchTerm, sortColumn = "TanggalAudit", sortDirection = ViewBag.SortColumn == "TanggalAudit" && ViewBag.SortDirection == "asc" ? "desc" : "asc" })">
+                                    <a asp-action="Index"
+                                       asp-route-pageNumber="1"
+                                       asp-route-pageSize="@Model.PageSize"
+                                       asp-route-searchTerm="@ViewBag.SearchTerm"
+                                       asp-route-sortColumn="TanggalAudit"
+                                       asp-route-sortDirection="@(ViewBag.SortColumn == "TanggalAudit" && ViewBag.SortDirection == "asc" ? "desc" : "asc")">
                                         Tanggal Audit
                                         @if (ViewBag.SortColumn == "TanggalAudit")
                                         {
@@ -385,42 +300,33 @@
                                         }
                                     </a>
                                 </th>
+                                <th>No. SPBU</th>
                                 <th>
-                                    <a href="@Url.Action("Index", new { pageNumber = 1, pageSize = Model.PageSize, searchTerm = ViewBag.SearchTerm, sortColumn = "Score", sortDirection = ViewBag.SortColumn == "Score" && ViewBag.SortDirection == "asc" ? "desc" : "asc" })">
-                                        Score
-                                        @if (ViewBag.SortColumn == "Score")
+                                    <a asp-action="Index"
+                                       asp-route-pageNumber="1"
+                                       asp-route-pageSize="@Model.PageSize"
+                                       asp-route-searchTerm="@ViewBag.SearchTerm"
+                                       asp-route-sortColumn="Auditor"
+                                       asp-route-sortDirection="@(ViewBag.SortColumn == "Auditor" && ViewBag.SortDirection == "asc" ? "desc" : "asc")">
+                                        Auditor
+                                        @if (ViewBag.SortColumn == "Auditor")
                                         {
                                             <i class="bi bi-arrow-@(ViewBag.SortDirection == "asc" ? "up" : "down")"></i>
                                         }
                                     </a>
                                 </th>
-                                <th>
-                                    <a href="@Url.Action("Index", new { pageNumber = 1, pageSize = Model.PageSize, searchTerm = ViewBag.SearchTerm, sortColumn = "Status", sortDirection = ViewBag.SortColumn == "Status" && ViewBag.SortDirection == "asc" ? "desc" : "asc" })">
-                                        Status
-                                        @if (ViewBag.SortColumn == "Status")
-                                        {
-                                            <i class="bi bi-arrow-@(ViewBag.SortDirection == "asc" ? "up" : "down")"></i>
-                                        }
-                                    </a>
-                                </th>
-                                <th>
-                                    <a href="@Url.Action("Index", new { pageNumber = 1, pageSize = Model.PageSize, searchTerm = ViewBag.SearchTerm, sortColumn = "Komplain", sortDirection = ViewBag.SortColumn == "Komplain" && ViewBag.SortDirection == "asc" ? "desc" : "asc" })">
-                                        Komplain
-                                        @if (ViewBag.SortColumn == "Komplain")
-                                        {
-                                            <i class="bi bi-arrow-@(ViewBag.SortDirection == "asc" ? "up" : "down")"></i>
-                                        }
-                                    </a>
-                                </th>
-                                <th>
-                                    <a href="@Url.Action("Index", new { pageNumber = 1, pageSize = Model.PageSize, searchTerm = ViewBag.SearchTerm, sortColumn = "Banding", sortDirection = ViewBag.SortColumn == "Banding" && ViewBag.SortDirection == "asc" ? "desc" : "asc" })">
-                                        Banding
-                                        @if (ViewBag.SortColumn == "Banding")
-                                        {
-                                            <i class="bi bi-arrow-@(ViewBag.SortDirection == "asc" ? "up" : "down")"></i>
-                                        }
-                                    </a>
-                                </th>
+                                <th>Rayon</th>
+                                <th>Provinsi</th>
+                                <th>Kabupaten/Kota</th>
+                                <th>Alamat</th>
+                                <th>Tipe SPBU</th>
+                                <th>Tahun</th>
+                                <th>Audit</th>
+                                <th>Tipe Audit</th>
+                                <th>Score</th>
+                                <th>Status</th>
+                                <th>Komplain</th>
+                                <th>Banding</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -432,11 +338,14 @@
                                     <tr>
                                         <td>
                                             <a class="btn btn-sm btn-outline-primary fw-semibold"
-                                               asp-controller="Audit" asp-action="Detail" asp-route-id="@item.Id">
+                                               asp-controller="Audit"
+                                               asp-action="Detail"
+                                               asp-route-id="@item.Id">
                                                 <i class="bi bi-eye"></i> Detail
                                             </a>
                                         </td>
                                         <td>@((Model.PageNumber - 1) * Model.PageSize + i + 1)</td>
+                                        <td>@item.TanggalSubmit.ToString("dd/MM/yyyy HH:mm")</td>
                                         <td>@item.NoSpbu</td>
                                         <td>@item.NamaAuditor</td>
                                         <td>@item.Rayon</td>
@@ -447,7 +356,6 @@
                                         <td>@item.Tahun</td>
                                         <td>@item.Audit</td>
                                         <td>@item.Type</td>
-                                        <td>@item.TanggalSubmit.ToString("dd/MM/yyyy HH:mm")</td>
                                         <td>@item.Score</td>
                                         <td class="fw-bold @(item.Status == "VERIFIED" || item.Status == "PASS" ? "text-success" : "text-danger")">
                                             @item.Status
@@ -464,7 +372,9 @@
                             else
                             {
                                 <tr>
-                                    <td colspan="17" class="text-center">Tidak ada data yang ditemukan</td>
+                                    <td colspan="17" class="text-center">
+                                        Tidak ada data yang ditemukan
+                                    </td>
                                 </tr>
                             }
                         </tbody>
