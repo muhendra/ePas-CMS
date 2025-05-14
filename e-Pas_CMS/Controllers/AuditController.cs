@@ -34,14 +34,34 @@ namespace e_Pas_CMS.Controllers
                 bool isReadonlyUser = currentUser == "usermanagement1";
 
                 // Ambil region user (jika ada)
+                //var query = from a in _context.trx_audits
+                //            join s in _context.spbus on a.spbu_id equals s.id
+                //            join u in _context.app_users on a.app_user_id equals u.id
+                //            join aur in _context.app_user_roles on s.region equals aur.region
+                //            join au in _context.app_users on aur.app_user_id equals au.id
+                //            where a.status == "UNDER_REVIEW"
+                //               && au.username == currentUser
+                //            orderby a.created_date descending
+                //            select new
+                //            {
+                //                Audit = a,
+                //                Spbu = s,
+                //                AuditorName = u.name
+                //            };
+
+                var userRegion = await (from aur in _context.app_user_roles
+                                        join au in _context.app_users on aur.app_user_id equals au.id
+                                        where au.username == currentUser
+                                        select aur.region)
+                       .Distinct()
+                       .Where(r => r != null)
+                       .ToListAsync();
+
                 var query = from a in _context.trx_audits
                             join s in _context.spbus on a.spbu_id equals s.id
-                            join u in _context.app_users on a.app_user_id equals u.id
-                            join aur in _context.app_user_roles on s.region equals aur.region
-                            join au in _context.app_users on aur.app_user_id equals au.id
+                            join u in _context.app_users on a.app_user_id equals u.id into aud
+                            from u in aud.DefaultIfEmpty()
                             where a.status == "UNDER_REVIEW"
-                               && au.username == currentUser
-                            orderby a.created_date descending
                             select new
                             {
                                 Audit = a,
@@ -49,6 +69,10 @@ namespace e_Pas_CMS.Controllers
                                 AuditorName = u.name
                             };
 
+                if (userRegion.Any())
+                {
+                    query = query.Where(x => userRegion.Contains(x.Spbu.region));
+                }
 
                 if (!string.IsNullOrWhiteSpace(searchTerm))
                 {
