@@ -29,6 +29,8 @@ namespace e_Pas_CMS.Controllers
 
         public async Task<IActionResult> Index(int pageNumber = 1, int pageSize = 10, string searchTerm = "")
         {
+            var currentUser = User.Identity?.Name;
+
             var query = _context.trx_audits
                 .Include(a => a.spbu)
                 .Include(a => a.app_user)
@@ -48,37 +50,87 @@ namespace e_Pas_CMS.Controllers
             }
 
             var totalItems = await query.CountAsync();
+
             var pagedAudits = await query
                 .OrderByDescending(a => a.audit_execution_time ?? a.updated_date)
                 .Skip((pageNumber - 1) * pageSize)
                 .Take(pageSize)
                 .ToListAsync();
 
-            var result = pagedAudits.Select(a => new AuditReportListViewModel
+            var conn = _context.Database.GetDbConnection();
+            if (conn.State != ConnectionState.Open)
+                await conn.OpenAsync();
+
+            var result = new List<AuditReportListViewModel>();
+
+            foreach (var a in pagedAudits)
             {
-                TrxAuditId = a.id,
-                ReportNo = a.report_no,
-                SpbuNo = a.spbu.spbu_no,
-                Region = a.spbu.region,
-                Address = a.spbu.address,
-                City = a.spbu.city_name,
-                SBM = a.spbu.sbm,
-                SAM = a.spbu.sam,
-                Province = a.spbu.province_name,
-                Year = a.spbu.year ?? DateTime.Now.Year,
-                AuditDate = a.audit_schedule_date?.ToDateTime(TimeOnly.MinValue),
-                SubmitDate = a.audit_execution_time,
-                Auditor = a.app_user.name,
-                GoodStatus = a.spbu.status_good,
-                ExcellentStatus = a.spbu.status_excellent,
-                Score = a.spbu.audit_current_score,
-                WTMS = a.spbu.wtms,
-                QQ = a.spbu.qq,
-                WMEF = a.spbu.wmef,
-                FormatFisik = a.spbu.format_fisik,
-                CPO = a.spbu.cpo,
-                KelasSpbu = "Pasti Pas Excellent"
-            }).ToList();
+                // Hitung final score berdasarkan checklist
+                var sql = @"
+            SELECT mqd.weight, tac.score_input
+            FROM master_questioner_detail mqd
+            LEFT JOIN trx_audit_checklist tac 
+                ON tac.master_questioner_detail_id = mqd.id 
+                AND tac.trx_audit_id = @id
+            WHERE mqd.master_questioner_id = (
+                SELECT master_questioner_checklist_id 
+                FROM trx_audit 
+                WHERE id = @id
+            )
+            AND mqd.type = 'QUESTION'";
+
+                var checklist = (await conn.QueryAsync<(decimal? weight, string score_input)>(sql, new { id = a.id }))
+                                    .ToList();
+
+                decimal totalScore = 0, maxScore = 0;
+
+                foreach (var item in checklist)
+                {
+                    decimal w = item.weight ?? 0;
+                    decimal v = item.score_input switch
+                    {
+                        "A" => 1.00m,
+                        "B" => 0.80m,
+                        "C" => 0.60m,
+                        "D" => 0.40m,
+                        "E" => 0.20m,
+                        "F" => 0.00m,
+                        _ => 0.00m
+                    };
+                    totalScore += v * w;
+                    maxScore += w;
+                }
+
+                decimal finalScore = maxScore > 0
+                    ? totalScore / maxScore * 100
+                    : 0m;
+
+                result.Add(new AuditReportListViewModel
+                {
+                    TrxAuditId = a.id,
+                    ReportNo = a.report_no,
+                    SpbuNo = a.spbu.spbu_no,
+                    Region = a.spbu.region,
+                    Address = a.spbu.address,
+                    City = a.spbu.city_name,
+                    SBM = a.spbu.sbm,
+                    SAM = a.spbu.sam,
+                    Province = a.spbu.province_name,
+                    Year = a.spbu.year ?? DateTime.Now.Year,
+                    AuditDate = a.audit_schedule_date?.ToDateTime(TimeOnly.MinValue),
+                    SubmitDate = a.audit_execution_time,
+                    Auditor = a.app_user.name,
+                    GoodStatus = a.spbu.status_good,
+                    ExcellentStatus = a.spbu.status_excellent,
+                    Score = finalScore,
+                    WTMS = a.spbu.wtms,
+                    QQ = a.spbu.qq,
+                    WMEF = a.spbu.wmef,
+                    FormatFisik = a.spbu.format_fisik,
+                    CPO = a.spbu.cpo,
+                    KelasSpbu = "Pasti Pas Excellent"
+                });
+            }
 
             var model = new PaginationModel<AuditReportListViewModel>
             {
@@ -154,6 +206,16 @@ namespace e_Pas_CMS.Controllers
 
             CalculateChecklistScores(model.Elements);
             CalculateOverallScore(model, checklistData);
+
+            var penaltySql = @"
+            SELECT STRING_AGG(mqd.penalty_alert, ', ') AS penalty_alerts
+            FROM trx_audit_checklist tac 
+            INNER JOIN master_questioner_detail mqd ON mqd.id = tac.master_questioner_detail_id 
+            WHERE tac.trx_audit_id = @id
+              AND tac.score_input = 'F'
+              AND mqd.is_penalty = TRUE";
+
+            model.PenaltyAlerts = await conn.ExecuteScalarAsync<string>(penaltySql, new { id = id.ToString() });
 
             return model;
         }

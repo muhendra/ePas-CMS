@@ -41,6 +41,8 @@
         public string ClassSPBU { get; set; }
         public string Phone { get; set; }
         public decimal MinPassingScore { get; set; }    // nilai minimum Pasti Pas
+        public string PenaltyAlerts { get; set; }
+
         public List<AuditLevelSummaryGroup> LevelSummaryGroups { get; set; }
     }
 

@@ -60,15 +60,50 @@ public class ReportExcellentTemplate : IDocument
     {
         container.Column(col =>
         {
-            col.Item().Background(Colors.Red.Medium).Padding(5).AlignCenter().Text(_model.Status?.ToUpper() == "VERIFIED" ? "CERTIFIED" : "NOT CERTIFIED").FontSize(14).Bold().FontColor(Colors.White);
+            var statusText = _model.Status?.ToUpper() == "VERIFIED" ? "CERTIFIED" : "NOT CERTIFIED";
+            string statusColor = "#4CAF50"; // Hijau untuk keduanya
+
+            col.Item()
+               .Background(statusColor)
+               .Padding(5)
+               .AlignCenter()
+               .Text(statusText)
+               .FontSize(14)
+               .Bold()
+               .FontColor(Colors.White);
+
+            if (!string.IsNullOrWhiteSpace(_model.PenaltyAlerts))
+            {
+                col.Item()
+                    .PaddingTop(5)
+                    .Text($"Gagal di elemen: {_model.PenaltyAlerts}")
+                    .FontColor(Colors.Red.Darken2)
+                    .Italic()
+                    .FontSize(9);
+            }
+
             col.Item().PaddingVertical(10).Element(ComposeInfoTable);
 
             col.Item().PaddingBottom(10).Text($"Catatan Auditor: {_model.Notes}").Italic().FontSize(9);
 
             col.Item().PaddingVertical(10).Row(row =>
             {
-                row.RelativeItem().Background(Colors.Grey.Lighten2).Padding(10).Text($"TOTAL SCORE (TS): {_model.TotalScore:0.00}").Bold();
-                row.ConstantItem(180).AlignMiddle().AlignRight().Text($"Nilai Minimum Pasti Pas: {_model.MinPassingScore:0.00}").FontSize(9);
+                string scoreColor = _model.TotalScore >= 100m ? "#FFC800" : // Kuning
+                                    _model.TotalScore >= 87.5m ? "#2196F3" : // Biru
+                                    "#F44336"; // Merah
+
+                row.RelativeItem()
+                    .Background(scoreColor)
+                    .Padding(10)
+                    .Text($"TOTAL SCORE (TS): {_model.TotalScore:0.00}")
+                    .Bold()
+                    .FontColor(Colors.White);
+
+                row.ConstantItem(180)
+                    .AlignMiddle()
+                    .AlignRight()
+                    .Text($"Nilai Minimum Pasti Pas: {_model.MinPassingScore:0.00}")
+                    .FontSize(9);
             });
 
             col.Item().PaddingVertical(10).Element(ComposeElementTable);
@@ -99,7 +134,7 @@ public class ReportExcellentTemplate : IDocument
                 col.Item().Text($"{root.Title} - {root.Description}").Bold().FontSize(10);
                 foreach (var child in root.Children)
                 {
-                    RenderChecklistStructured(col, child);
+                    RenderChecklistStructured(col, child, root.Title + ".");
                 }
             }
 
@@ -114,19 +149,19 @@ public class ReportExcellentTemplate : IDocument
         });
     }
 
-    void RenderChecklistStructured(ColumnDescriptor col, AuditChecklistNode node)
+    void RenderChecklistStructured(ColumnDescriptor col, AuditChecklistNode node, string prefix = "")
     {
-        var af = node.ScoreAF ?? 0;
-        var percent = af * 100;
-        string levelLabel = percent >= 100m ? "Excellent" : percent >= 87.5m ? "Good" : "Needs Improvement";
+        // Gunakan Title sebagai nomor soal (misal "1.1", "A", dll)
+        var skor = node.ScoreInput ?? "-";
+        var indent = prefix + node.Title;
 
-        col.Item().PaddingLeft(10).Text($"• {node.Title}: {node.Description} | Skor: {percent:0.##}% ({levelLabel})").FontSize(9);
+        col.Item().PaddingLeft(10).Text($"{indent}. {node.Description} | Skor: {skor}").FontSize(9);
 
         if (node.Children != null && node.Children.Any())
         {
-            foreach (var sub in node.Children)
+            foreach (var child in node.Children)
             {
-                RenderChecklistStructured(col, sub);
+                RenderChecklistStructured(col, child, indent + ".");
             }
         }
     }
@@ -232,7 +267,7 @@ public class ReportExcellentTemplate : IDocument
             InfoRow("SALES AREA", _model.SalesArea);
             InfoRow("SBM", _model.SBM);
 
-            InfoRow("TIPE AUDIT", _model.AuditType);
+            InfoRow("TIPE AUDIT", "Audit");
             InfoRow("KELAS SPBU", _model.ClassSPBU);
             InfoRow("TELEPON", _model.Phone);
         });
@@ -240,39 +275,48 @@ public class ReportExcellentTemplate : IDocument
 
     void ComposeElementTable(IContainer container)
     {
+        var elements = new[]
+        {
+        new { Name = "Skilled Staff & Services", Weight = 30 },
+        new { Name = "Exact Quality & Quantity", Weight = 30 },
+        new { Name = "Reliable Facilities & Safety", Weight = 20 },
+        new { Name = "Visual Format Consistency", Weight = 10 },
+        new { Name = "Expansive Product Offer", Weight = 10 },
+    };
+
         container.Table(table =>
         {
             table.ColumnsDefinition(c =>
             {
-                c.RelativeColumn(2);
-                c.RelativeColumn();
-                c.RelativeColumn();
-                c.RelativeColumn();
+                c.RelativeColumn(2); // Indikator
+                c.RelativeColumn();  // Bobot
+                c.RelativeColumn();  // Marks
+                c.RelativeColumn();  // Nilai Minimum
+                c.RelativeColumn();  // Compliance
             });
 
             table.Header(header =>
             {
                 header.Cell().Text("Indikator Penilaian").Bold();
                 header.Cell().AlignCenter().Text("Bobot Nilai").Bold();
+                header.Cell().AlignCenter().Text("Marks").Bold();
                 header.Cell().AlignCenter().Text("Nilai Minimum").Bold();
                 header.Cell().AlignCenter().Text("Compliance Level").Bold();
             });
 
-            foreach (var element in _model.Elements)
+            foreach (var e in elements)
             {
-                string level = "-";
-                var af = element.ScoreAF ?? 0;
+                var modelElement = _model.Elements.FirstOrDefault(x => x.Description.Contains(e.Name));
+                var af = modelElement?.ScoreAF ?? 0;
+                var marks = e.Weight * af;
                 var percent = af * 100;
 
-                if (percent >= 100)
-                    level = "Excellent";
-                else if (percent >= 87.5m)
-                    level = "Good";
-                else
-                    level = "Needs Improvement";
+                string level = percent >= 100 ? "Excellent" :
+                               percent >= 87.5m ? "Good" : "Needs Improvement";
 
-                table.Cell().Text($"{element.Description}").FontSize(9);
-                table.Cell().AlignCenter().Text($"{element.Weight}");
+                table.Cell().Text(e.Name).FontSize(9);
+                table.Cell().AlignCenter().Text($"{e.Weight:0}");
+                table.Cell().AlignCenter().Text($"{marks:0.##}");
                 table.Cell().AlignCenter().Text("85.00%");
                 table.Cell().AlignCenter().Text($"{percent:0.##}%\n{level}").FontSize(9);
             }
@@ -281,33 +325,63 @@ public class ReportExcellentTemplate : IDocument
 
     void ComposeSubElementTable(IContainer container, List<AuditChecklistNode> children)
     {
+        // Hardcoded bobot berdasarkan urutan baris di Excel
+        var weights = new decimal[]
+        {
+        10.00m, // 1. Standar Kebersihan
+        20.00m, // 2. Prosedur Pelayanan
+
+        7.00m,  // 3. Peralatan
+        23.00m, // 4. Prosedur Monitoring
+
+        14.50m, // 5. Kebersihan Harian
+        4.50m,  // 6. Pemeliharaan berkala
+        1.00m,  // 7. Uraian pemeliharaan kerusakan
+
+        4.00m,  // 8. Identitas Visual Ritel
+        2.00m,  // 9. Dispenser Unit
+        4.00m,  // 10. Lain-lain
+
+        2.00m,  // 11. Penawaran BBM
+        8.00m   // 12. Penawaran Non-BBM
+        };
+
         container.Table(table =>
         {
             table.ColumnsDefinition(c =>
             {
-                c.RelativeColumn(2);
-                c.RelativeColumn();
-                c.RelativeColumn();
+                c.RelativeColumn(2); // Sub Elemen
+                c.RelativeColumn();  // Bobot
+                c.RelativeColumn();  // Marks
+                c.RelativeColumn();  // Compliance
             });
 
             table.Header(header =>
             {
                 header.Cell().Text("Sub Elemen").Bold();
+                header.Cell().AlignCenter().Text("Bobot").Bold();
                 header.Cell().AlignCenter().Text("Marks").Bold();
                 header.Cell().AlignCenter().Text("Compliance").Bold();
             });
 
-            foreach (var item in children)
+            for (int i = 0; i < children.Count; i++)
             {
+                var item = children[i];
+                var weight = i < weights.Length ? weights[i] : 0;
                 var af = item.ScoreAF ?? 0;
+                var marks = weight * af;
                 var percent = af * 100;
-                string level = percent >= 100m ? "Excellent" :
-                    percent >= 87.5m ? "Good" : "Needs Improvement";
 
-                table.Cell().Text(item.Description ?? "-");
-                table.Cell().AlignCenter().Text($"{item.Weight}");
+                string level = percent >= 100m ? "Excellent" :
+                               percent >= 87.5m ? "Good" : "Needs Improvement";
+
+                table.Cell().Text(item.Description ?? "-").FontSize(9);
+                table.Cell().AlignCenter().Text($"{weight:0.##}");
+                table.Cell().AlignCenter().Text($"{marks:0.##}");
                 table.Cell().AlignCenter().Text($"{percent:0.##}%\n{level}").FontSize(9);
             }
         });
     }
+
+
 }
