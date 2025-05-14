@@ -118,7 +118,9 @@ namespace e_Pas_CMS.Controllers
                     Province = a.spbu.province_name,
                     Year = a.spbu.year ?? DateTime.Now.Year,
                     AuditDate = a.audit_schedule_date?.ToDateTime(TimeOnly.MinValue),
-                    SubmitDate = a.audit_execution_time,
+                    SubmitDate = a.audit_execution_time == DateTime.MinValue
+                    ? a.created_date
+                    : a.audit_execution_time,
                     Auditor = a.app_user.name,
                     GoodStatus = a.spbu.status_good,
                     ExcellentStatus = a.spbu.status_excellent,

@@ -69,17 +69,25 @@ namespace e_Pas_CMS.Controllers
                 query = sortColumn switch
                 {
                     "Auditor" => sortDirection == "asc" ? query.OrderBy(q => q.AuditorName) : query.OrderByDescending(q => q.AuditorName),
-                    "TanggalAudit" => sortDirection == "asc" ? query.OrderBy(q => q.Audit.updated_date) : query.OrderByDescending(q => q.Audit.updated_date)
+                    "TanggalAudit" => sortDirection == "asc" ? query.OrderBy(q => q.Audit.updated_date) : query.OrderByDescending(q => q.Audit.updated_date),
+                    "Status" => sortDirection == "asc" ? query.OrderBy(q => q.Audit.status) : query.OrderByDescending(q => q.Audit.status),
+                    "Tahun" => sortDirection == "asc" ? query.OrderBy(q => q.Audit.created_date) : query.OrderByDescending(q => q.Audit.created_date),
+                    "NoSpbu" => sortDirection == "asc" ? query.OrderBy(q => q.Spbu.spbu_no) : query.OrderByDescending(q => q.Spbu.spbu_no),
+                    "Rayon" => sortDirection == "asc" ? query.OrderBy(q => q.Spbu.region) : query.OrderByDescending(q => q.Spbu.region),
+                    "Kota" => sortDirection == "asc" ? query.OrderBy(q => q.Spbu.city_name) : query.OrderByDescending(q => q.Spbu.city_name),
+                    "Alamat" => sortDirection == "asc" ? query.OrderBy(q => q.Spbu.address) : query.OrderByDescending(q => q.Spbu.address),
+                    "Audit" => sortDirection == "asc" ? query.OrderBy(q => q.Audit.audit_level) : query.OrderByDescending(q => q.Audit.audit_level),
+                    _ => query.OrderByDescending(q => q.Audit.updated_date)
                 };
 
                 var totalItems = await query.CountAsync();
-
                 var items = await query
                     .Skip((pageNumber - 1) * pageSize)
                     .Take(pageSize)
                     .ToListAsync();
 
                 using var conn = _context.Database.GetDbConnection();
+
                 if (conn.State != ConnectionState.Open)
                     await conn.OpenAsync();
 
@@ -88,22 +96,22 @@ namespace e_Pas_CMS.Controllers
                 foreach (var item in items)
                 {
                     var sql = @"
-                        SELECT mqd.weight, tac.score_input
-                        FROM master_questioner_detail mqd
-                        LEFT JOIN trx_audit_checklist tac 
-                            ON tac.master_questioner_detail_id = mqd.id 
-                            AND tac.trx_audit_id = @id
-                        WHERE mqd.master_questioner_id = (
-                            SELECT master_questioner_checklist_id 
-                            FROM trx_audit 
-                            WHERE id = @id
-                        )
-                        AND mqd.type = 'QUESTION'";
+                SELECT mqd.weight, tac.score_input
+                FROM master_questioner_detail mqd
+                LEFT JOIN trx_audit_checklist tac 
+                    ON tac.master_questioner_detail_id = mqd.id 
+                    AND tac.trx_audit_id = @id
+                WHERE mqd.master_questioner_id = (
+                    SELECT master_questioner_checklist_id 
+                    FROM trx_audit 
+                    WHERE id = @id
+                )
+                AND mqd.type = 'QUESTION'";
 
-                    var checklist = (await conn.QueryAsync<(decimal? weight, string score_input)>(sql, new { id = item.Audit.id }))
-                                       .ToList();
+                    var checklist = (await conn.QueryAsync<(decimal? weight, string score_input)>(sql, new { id = item.Audit.id })).ToList();
 
                     decimal totalScore = 0, maxScore = 0;
+
                     foreach (var q in checklist)
                     {
                         decimal w = q.weight ?? 0;
@@ -121,9 +129,34 @@ namespace e_Pas_CMS.Controllers
                         maxScore += w;
                     }
 
-                    decimal finalScore = maxScore > 0
-                        ? totalScore / maxScore * 100
-                        : 0m;
+                    decimal finalScore = maxScore > 0 ? totalScore / maxScore * 100 : 0m;
+
+                    var penaltyQuery = @"
+                SELECT string_agg(mqd.penalty_alert, ', ') AS penalty_alerts
+                FROM trx_audit_checklist tac 
+                INNER JOIN master_questioner_detail mqd 
+                    ON mqd.id = tac.master_questioner_detail_id 
+                WHERE tac.trx_audit_id = @id 
+                  AND tac.score_input = 'F' 
+                  AND mqd.is_penalty = true;";
+
+                    var penaltyResult = await conn.ExecuteScalarAsync<string>(penaltyQuery, new { id = item.Audit.id });
+
+                    bool hasPenalty = !string.IsNullOrEmpty(penaltyResult);
+
+                    string goodStatus = "NOT CERTIFIED";
+
+                    string excellentStatus = "NO CERTIFIED";
+
+                    if (finalScore >= 80)
+                    {
+                        goodStatus = "CERTIFIED";
+
+                        if (!hasPenalty)
+                        {
+                            excellentStatus = "EXCELLENT";
+                        }
+                    }
 
                     result.Add(new SpbuViewModel
                     {
@@ -133,32 +166,35 @@ namespace e_Pas_CMS.Controllers
                         Alamat = item.Spbu.address,
                         TipeSpbu = item.Spbu.type,
                         Tahun = item.Audit.created_date.ToString("yyyy"),
-                        Audit = "DAE",
+                        Audit = item.Audit.audit_level,
                         Score = finalScore,
-                        Good = "certified",
-                        Excelent = "certified",
+                        Good = goodStatus,
+                        Excelent = excellentStatus,
                         Provinsi = item.Spbu.province_name,
                         Kota = item.Spbu.city_name,
                         NamaAuditor = item.AuditorName,
                         Report = item.Audit.report_no,
-                        TanggalSubmit = (item.Audit.audit_execution_time == null
-                                       || item.Audit.audit_execution_time.Value == DateTime.MinValue)
-                                      ? item.Audit.updated_date.Value
-                                      : item.Audit.audit_execution_time.Value,
+                        TanggalSubmit = (item.Audit.audit_execution_time == null || item.Audit.audit_execution_time.Value == DateTime.MinValue)
+                            ? item.Audit.updated_date.Value
+                            : item.Audit.audit_execution_time.Value,
                         Status = item.Audit.status,
-                        Komplain = item.Audit.status == "FAIL" ? "ADA" : "Tidak Ada",
-                        Banding = item.Audit.audit_level == "Re-Audit" ? "ADA" : "Tidak Ada",
+                        Komplain = item.Audit.status == "FAIL" ? "ADA" : "TIDAK ADA",
+                        Banding = item.Audit.audit_level == "Re-Audit" ? "ADA" : "TIDAK ADA",
                         Type = item.Audit.audit_type
                     });
                 }
 
-                // If sorting by Score, we need to sort the result list after calculating the scores
-                if (sortColumn == "Score")
+                // Sorting untuk hasil final list
+
+                result = sortColumn switch
                 {
-                    result = sortDirection == "asc"
-                        ? result.OrderBy(r => r.Score).ToList()
-                        : result.OrderByDescending(r => r.Score).ToList();
-                }
+                    "Score" => sortDirection == "asc" ? result.OrderBy(r => r.Score).ToList() : result.OrderByDescending(r => r.Score).ToList(),
+                    "Good" => sortDirection == "asc" ? result.OrderBy(r => r.Good).ToList() : result.OrderByDescending(r => r.Good).ToList(),
+                    "Excellent" => sortDirection == "asc" ? result.OrderBy(r => r.Excelent).ToList() : result.OrderByDescending(r => r.Excelent).ToList(),
+                    "Komplain" => sortDirection == "asc" ? result.OrderBy(r => r.Komplain).ToList() : result.OrderByDescending(r => r.Komplain).ToList(),
+                    "Banding" => sortDirection == "asc" ? result.OrderBy(r => r.Banding).ToList() : result.OrderByDescending(r => r.Banding).ToList(),
+                    _ => result
+                };
 
                 var paginationModel = new PaginationModel<SpbuViewModel>
                 {
@@ -167,15 +203,15 @@ namespace e_Pas_CMS.Controllers
                     PageSize = pageSize,
                     TotalItems = totalItems
                 };
-
                 ViewBag.SearchTerm = searchTerm;
                 ViewBag.SortColumn = sortColumn;
                 ViewBag.SortDirection = sortDirection;
+
                 return View(paginationModel);
             }
+
             catch (Exception ex)
             {
-                // Log the exception here
                 TempData["Error"] = "Terjadi kesalahan saat memuat data. Silakan coba lagi.";
                 return View(new PaginationModel<SpbuViewModel>
                 {
