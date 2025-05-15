@@ -40,5 +40,4 @@
         public List<AuditQqCheckItem> QqChecks { get; set; } = new();
         public string Notes { get; set; }
     }
-
 }

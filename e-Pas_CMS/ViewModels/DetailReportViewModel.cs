@@ -47,7 +47,16 @@
         public string ExcellentStatus { get; set; }
 
         public List<AuditLevelSummaryGroup> LevelSummaryGroups { get; set; }
+
+        public List<FotoTemuan> FotoTemuan { get; set; } = new();
     }
+
+    public class FotoTemuan
+    {
+        public string Path { get; set; }
+        public string Caption { get; set; }
+    }
+
 
     public class AuditHeaderDto
     {

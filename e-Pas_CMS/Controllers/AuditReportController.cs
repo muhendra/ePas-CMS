@@ -190,7 +190,6 @@ namespace e_Pas_CMS.Controllers
             model.MediaNotes = await GetMediaNotesAsync(conn, id, "QUESTION");
             model.FinalDocuments = await GetMediaNotesAsync(conn, id, "FINAL");
 
-
             model.QqChecks = await GetQqCheckDataAsync(conn, id);
 
             var checklistData = await GetChecklistDataAsync(conn, id);
@@ -236,6 +235,7 @@ namespace e_Pas_CMS.Controllers
             var checklistData = await GetChecklistDataAsync(conn, id.ToString());
             var mediaList = await GetMediaPerNodeAsync(conn, id.ToString());
             model.Elements = BuildHierarchy(checklistData, mediaList);
+            model.FotoTemuan = await GetMediaReportFAsync(conn, id.ToString(), "QUESTION");
 
             CalculateChecklistScores(model.Elements);
             CalculateOverallScore(model, checklistData); // ini bisa dihapus kalau pakai finalScore baru
@@ -304,7 +304,6 @@ namespace e_Pas_CMS.Controllers
 
             return model;
         }
-
 
         private async Task<string> RenderViewToStringAsync(string viewName, object model)
         {
@@ -440,6 +439,25 @@ namespace e_Pas_CMS.Controllers
             {
                 MediaType = x.media_type,
                 MediaPath = "https://epas.zarata.co.id" + x.media_path
+            }).ToList();
+        }
+
+        private async Task<List<FotoTemuan>> GetMediaReportFAsync(IDbConnection conn, string id, string type)
+        {
+            string sql = @"SELECT am.media_path
+                        FROM trx_audit_media am
+                        JOIN trx_audit_checklist ac
+                          ON am.trx_audit_id = ac.trx_audit_id
+                          AND am.master_questioner_detail_id = ac.master_questioner_detail_id
+                        WHERE ac.score_input = 'F'
+                          AND am.trx_audit_id = @id";
+
+            var raw = await conn.QueryAsync<(string media_type, string media_path)>(sql, new { id, type });
+
+            return raw.Select(x => new FotoTemuan
+            {
+                Caption = x.media_type,
+                Path = x.media_path
             }).ToList();
         }
 
