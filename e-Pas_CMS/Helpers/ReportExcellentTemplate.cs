@@ -112,16 +112,21 @@ public class ReportExcellentTemplate : IDocument
             else if (_model.GoodStatus == "NOT CERTIFIED")
                 boxColor = "#F44336";
 
-            // Box skor (ditempatkan tepat di bawah judul/subjudul)
-            col.Item().AlignRight().Width(100).Background(boxColor).Padding(4).Column(score =>
-            {
-                score.Item().AlignLeft().Text("TOTAL SCORE (TS):")
-                    .Bold().FontColor(scoreFontColor).FontSize(9);
-                score.Item().AlignLeft().Text($"{_model.TotalScore:0.00}")
-                    .FontSize(16).Bold().FontColor(scoreFontColor);
-                score.Item().AlignLeft().Text("Minimum Skor: 85")
-                    .FontSize(8).FontColor(scoreFontColor);
-            });
+            col.Item()
+   .PaddingTop(-18)
+   .AlignRight()
+   .Width(100)
+   .Background(boxColor)
+   .Padding(4)
+   .Column(score =>
+   {
+       score.Item().AlignLeft().Text("TOTAL SCORE (TS):")
+           .Bold().FontColor(scoreFontColor).FontSize(9);
+       score.Item().AlignLeft().Text($"{_model.TotalScore:0.00}")
+           .FontSize(16).Bold().FontColor(scoreFontColor);
+       score.Item().AlignLeft().Text("Minimum Skor: 85")
+           .FontSize(8).FontColor(scoreFontColor);
+   });
 
             // Status Sertifikasi
             var statusText = "UNKNOWN";
