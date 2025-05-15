@@ -58,9 +58,9 @@ public class ReportExcellentTemplate : IDocument
         var rightImagePath = Path.Combine(basePath, "intertek.png");
 
         bool isNotCertified = _model.GoodStatus == "NOT CERTIFIED";
-        var titleFontColor = isNotCertified ? Colors.White : Colors.Blue.Medium;
-        var subTitleFontColor = isNotCertified ? Colors.White : Colors.Blue.Medium;
-        var descFontColor = isNotCertified ? Colors.White : Colors.Black;
+        var titleFontColor =  Colors.Blue.Medium;
+        var subTitleFontColor = Colors.Blue.Medium;
+        var descFontColor = Colors.Black;
 
         container.PaddingBottom(30).Row(row =>
         {
