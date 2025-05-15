@@ -7,6 +7,8 @@
     bool isVerified = Model.Status == "VERIFIED";
     var currentUser = User.Identity?.Name;
     bool isReadonlyUser = currentUser == "usermanagement1";
+    var batasTanggal = new DateTime(2025, 5, 11);
+    bool hideUploadButton = Model.TanggalSubmit.HasValue && Model.TanggalSubmit.Value > batasTanggal;
 }
 
 @Html.AntiForgeryToken()
@@ -58,7 +60,7 @@
     <ul id="auditChecklist" class="list-unstyled">
         @foreach (var node in Model.Elements)
         {
-            await RenderChecklistNode(node, 0, isVerified, isReadonlyUser);
+            await RenderChecklistNode(node, 0, isVerified, isReadonlyUser, hideUploadButton);
 
         }
     </ul>
@@ -623,6 +625,47 @@ else if (!string.IsNullOrEmpty(Model.Notes) || (Model.FinalDocuments != null && 
         #fullSizeMediaModal .btn-primary:hover {
             background-color: #0b5ed7;
         }
+
+        /* Custom black arrow style */
+        .carousel-control-prev-icon.custom-arrow,
+        .carousel-control-next-icon.custom-arrow {
+            background-image: none;
+            width: 2.5rem;
+            height: 2.5rem;
+            background-color: white;
+            border: 2px solid black;
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            opacity: 0.9;
+            transition: all 0.3s ease;
+        }
+
+            .carousel-control-prev-icon.custom-arrow::after,
+            .carousel-control-next-icon.custom-arrow::after {
+                content: '';
+                display: inline-block;
+                width: 0.5rem;
+                height: 0.5rem;
+                border: solid black;
+                border-width: 0 2px 2px 0;
+                padding: 3px;
+            }
+
+            .carousel-control-prev-icon.custom-arrow::after {
+                transform: rotate(135deg);
+            }
+
+            .carousel-control-next-icon.custom-arrow::after {
+                transform: rotate(-45deg);
+            }
+
+            .carousel-control-prev-icon.custom-arrow:hover,
+            .carousel-control-next-icon.custom-arrow:hover {
+                background-color: #f8f9fa;
+            }
+
     </style>
 }
 
@@ -1266,139 +1309,108 @@ else if (!string.IsNullOrEmpty(Model.Notes) || (Model.FinalDocuments != null && 
             recalcAll();
         });
 
-        function showMediaPopup(mediaItems) {
-            const container = document.getElementById('mediaModalBody');
-            if (!container) {
-                console.error('Media modal container not found');
-                return;
-            }
-            container.innerHTML = '';
-
-            // normalisasi agar kita selalu pakai camelCase
-            const items = (mediaItems||[]).map(i => ({
-                path: i.mediaPath ?? i.MediaPath,
-                type: (i.mediaType ?? i.MediaType)?.toUpperCase()
-            }));
-
-            validateMediaPaths(items.map(i => i.path)).then(validFlags => {
-                const validItems = items.filter((_, idx) => validFlags[idx]);
-
-                if (validItems.length === 0) {
-                    container.innerHTML = '<p class="text-muted">Tidak ada media tersedia.</p>';
-                }
-                else if (validItems.length === 1) {
-                    const { path, type } = validItems[0];
-                    const isVideo = type === 'VIDEO' || path.endsWith('.mp4');
-                    const el = document.createElement(isVideo ? 'video' : 'img');
-
-                    if (isVideo) {
-                        el.src = path;
-                        el.controls = true;
-                        el.className = 'w-100 rounded';
-                    } else {
-                        el.src = path;
-                        el.alt = '';
-                        el.className = 'img-fluid rounded';
-                    }
-                    container.appendChild(el);
-
-                    // Update selectedMedia with the current media
-                    selectedMedia = {
-                        ...selectedMedia,  // Preserve nodeId and auditId
-                        mediaType: type,
-                        mediaPath: path
-                    };
-                }
-                else {
-                    const carouselId = 'mediaCarousel';
-                    const indicators = [];
-                    const innerItems = [];
-
-                    validItems.forEach(({ path, type }, index) => {
-                        const isActive = index === 0 ? 'active' : '';
-                        const isVideo = type === 'VIDEO' || path.endsWith('.mp4');
-                        const mediaTag = isVideo
-                            ? `<video controls class="d-block w-100 rounded"><source src="${path}" type="video/mp4"></video>`
-                            : `<img src="${path}" class="d-block w-100 rounded" alt="">`;
-
-                        indicators.push(`
-                            <button type="button" data-bs-target="#${carouselId}"
-                                    data-bs-slide-to="${index}"
-                                    class="${isActive}"
-                                    aria-current="${isActive}"
-                                    aria-label="Slide ${index+1}"></button>
-                        `);
-                        innerItems.push(`
-                            <div class="carousel-item ${isActive}">${mediaTag}</div>
-                        `);
-                    });
-
-                    container.innerHTML = `
-                        <div id="${carouselId}" class="carousel slide" data-bs-ride="carousel">
-                            <div class="carousel-indicators">
-                                ${indicators.join('')}
-                            </div>
-                            <div class="carousel-inner">
-                                ${innerItems.join('')}
-                            </div>
-                            <button class="carousel-control-prev" type="button"
-                                    data-bs-target="#${carouselId}" data-bs-slide="prev">
-                                <span class="carousel-control-prev-icon" aria-hidden="true"></span>
-                                <span class="visually-hidden">Previous</span>
-                            </button>
-                            <button class="carousel-control-next" type="button"
-                                    data-bs-target="#${carouselId}" data-bs-slide="next">
-                                <span class="carousel-control-next-icon" aria-hidden="true"></span>
-                                <span class="visually-hidden">Next</span>
-                            </button>
-                        </div>`;
-
-                    // Update selectedMedia with the first media item
-                    selectedMedia = {
-                        ...selectedMedia,  // Preserve nodeId and auditId
-                        mediaType: validItems[0].type,
-                        mediaPath: validItems[0].path
-                    };
-                }
-
-                const modalEl = document.getElementById('mediaModal');
-                if (modalEl) {
-                    const modal = new bootstrap.Modal(modalEl, {
-                        backdrop: 'static',
-                        keyboard: false
-                    });
-                    modal.show();
-                } else {
-                    console.error('Media modal element not found');
-                }
-            });
-        }
-
-        function showFinalMediaPopup(mediaList) {
+                function showMediaPopup(mediaItems) {
             const container = document.getElementById('mediaModalBody');
             container.innerHTML = '';
 
-            mediaList.forEach(item => {
-                const isVideo = item.mediaType?.toUpperCase() === 'VIDEO' || item.mediaPath.toLowerCase().endsWith('.mp4');
-
+            if (!mediaItems || mediaItems.length === 0) {
+                container.innerHTML = '<p class="text-muted">Tidak ada media tersedia.</p>';
+            } else if (mediaItems.length === 1) {
+                const item = mediaItems[0];
+                const isVideo = item.MediaType?.toUpperCase() === 'VIDEO' || item.MediaPath?.toLowerCase().endsWith('.mp4');
                 const el = document.createElement(isVideo ? 'video' : 'img');
-                el.src = item.mediaPath;
-                el.className = "rounded shadow-sm mb-3";
-                el.style.maxWidth = "100%";
-                el.style.maxHeight = "80vh";
-                el.style.display = "block";
-                el.style.margin = "0 auto";
 
                 if (isVideo) {
+                    el.src = item.MediaPath;
                     el.controls = true;
+                    el.className = 'w-100 rounded';
+                } else {
+                    el.src = item.MediaPath;
+                    el.alt = '';
+                    el.className = 'img-fluid rounded';
                 }
 
                 container.appendChild(el);
-            });
+            } else {
+                const carouselId = 'mediaCarousel';
+                const indicators = [];
+                const innerItems = [];
 
-            const modal = new bootstrap.Modal(document.getElementById('mediaModal'));
+                mediaItems.forEach((item, index) => {
+                    const isActive = index === 0 ? 'active' : '';
+                    const isVideo = item.MediaType?.toUpperCase() === 'VIDEO' || item.MediaPath?.toLowerCase().endsWith('.mp4');
+                    const mediaTag = isVideo
+                        ? `<video controls class="d-block w-100 rounded"><source src="${item.MediaPath}" type="video/mp4"></video>`
+                        : `<img src="${item.MediaPath}" class="d-block w-100 rounded" alt="">`;
+
+                    indicators.push(`<button type="button" data-bs-target="#${carouselId}" data-bs-slide-to="${index}" class="${isActive}" aria-current="${isActive ? 'true' : ''}" aria-label="Slide ${index + 1}"></button>`);
+                    innerItems.push(`<div class="carousel-item ${isActive}">${mediaTag}</div>`);
+                });
+
+                container.innerHTML = `
+                <div id="${carouselId}" class="carousel slide" data-bs-ride="carousel">
+                    <div class="carousel-indicators">
+                        ${indicators.join('')}
+                    </div>
+                    <div class="carousel-inner">
+                        ${innerItems.join('')}
+                    </div>
+                    <button class="carousel-control-prev" type="button" data-bs-target="#${carouselId}" data-bs-slide="prev">
+                        <span class="carousel-control-prev-icon custom-arrow" aria-hidden="true"></span>
+                        <span class="visually-hidden">Previous</span>
+                    </button>
+                    <button class="carousel-control-next" type="button" data-bs-target="#${carouselId}" data-bs-slide="next">
+                        <span class="carousel-control-next-icon custom-arrow" aria-hidden="true"></span>
+                        <span class="visually-hidden">Next</span>
+                    </button>
+                </div>`;
+            }
+
+            const modalEl = document.getElementById('mediaModal');
+            const modal = new bootstrap.Modal(modalEl, {
+                backdrop: 'static',
+                keyboard: false,
+                focus: false
+            });
             modal.show();
         }
+
+        function showFinalMediaPopup(mediaItems) {
+        showMediaPopup(mediaItems);
+        }
+
+        // function showFinalMediaPopup(mediaList) {
+        //     const container = document.getElementById('mediaModalBody');
+        //     container.innerHTML = '';
+
+        //     mediaList.forEach(item => {
+        //         const isVideo = item.mediaType?.toUpperCase() === 'VIDEO' || item.mediaPath.toLowerCase().endsWith('.mp4');
+
+        //         const el = document.createElement(isVideo ? 'video' : 'img');
+        //         el.src = item.mediaPath;
+        //         el.className = "rounded shadow-sm mb-3";
+        //         el.style.maxWidth = "100%";
+        //         el.style.maxHeight = "80vh";
+        //         el.style.display = "block";
+        //         el.style.margin = "0 auto";
+
+        //         if (isVideo) {
+        //             el.controls = true;
+        //         }
+
+        //         container.appendChild(el);
+        //     });
+
+        //     const modal = new bootstrap.Modal(document.getElementById('mediaModal'));
+        //     modal.show();
+        // }
+
+        $(document).on('click', '.view-media-btn2', function () {
+            const mediaItems = $(this).data('media-items');
+            showMediaPopup(mediaItems);
+            console.log(mediaItems);
+        });
+
 
         // Add this at the beginning of your script section
         $(document).on('click', '.view-documentation-btn', function() {
@@ -1409,97 +1421,87 @@ else if (!string.IsNullOrEmpty(Model.Notes) || (Model.FinalDocuments != null && 
         });
 
         // Add this new function for viewing media in full screen
-        function showFullScreenMedia(mediaItems) {
-            console.log('Media Items:', mediaItems); // Debug log
-
-            if (!mediaItems || mediaItems.length === 0) {
-                alert('Tidak ada dokumentasi tersedia');
-                return;
-            }
-
-            // Normalize media items to ensure consistent property names
+                function showFullScreenMedia(mediaItems) {
             const normalizedItems = mediaItems.map(item => ({
                 path: item.mediaPath || item.MediaPath,
                 type: (item.mediaType || item.MediaType)?.toUpperCase()
             }));
 
-            console.log('Normalized Items:', normalizedItems); // Debug log
-
+            const modalEl = document.getElementById('fullSizeMediaModal');
             const container = document.getElementById('fullSizeMediaModalBody');
-            container.innerHTML = '';
 
-            // Create carousel for multiple media items
+            // Cleanup previously injected content and modal state
+            container.innerHTML = '';
+            document.body.classList.remove('modal-open');
+            document.body.style.overflow = '';
+            document.body.style.paddingRight = '';
+            const backdrop = document.querySelector('.modal-backdrop');
+            if (backdrop) backdrop.remove();
+
             if (normalizedItems.length > 1) {
                 const carouselId = 'fullScreenCarousel';
                 const indicators = [];
                 const innerItems = [];
 
                 normalizedItems.forEach((item, index) => {
-                    console.log('Processing item:', item); // Debug log
-                    
-                    const isVideo = item.type === 'VIDEO' || 
-                                  item.path?.toLowerCase().endsWith('.mp4');
+                    const isVideo = item.type === 'VIDEO' || item.path.toLowerCase().endsWith('.mp4');
                     const isActive = index === 0 ? 'active' : '';
-                    
                     const mediaTag = isVideo
-                        ? `<video controls class="w-100 h-100" style="object-fit: contain;">
-                             <source src="${item.path}" type="video/mp4">
-                           </video>`
+                        ? `<video controls class="w-100 h-100" style="object-fit: contain;"><source src="${item.path}" type="video/mp4"></video>`
                         : `<img src="${item.path}" class="w-100 h-100" style="object-fit: contain;" alt="Dokumentasi">`;
 
-                    indicators.push(`
-                        <button type="button" data-bs-target="#${carouselId}"
-                                data-bs-slide-to="${index}"
-                                class="${isActive}"
-                                aria-current="${isActive}"
-                                aria-label="Slide ${index+1}"></button>
-                    `);
-                    innerItems.push(`
-                        <div class="carousel-item ${isActive}">${mediaTag}</div>
-                    `);
+                    indicators.push(`<button type="button" data-bs-target="#${carouselId}" data-bs-slide-to="${index}" class="${isActive}" aria-current="${isActive}" aria-label="Slide ${index + 1}"></button>`);
+                    innerItems.push(`<div class="carousel-item ${isActive}">${mediaTag}</div>`);
                 });
 
-                container.innerHTML = `
-                    <div id="${carouselId}" class="carousel slide" data-bs-ride="carousel">
-                        <div class="carousel-indicators">
-                            ${indicators.join('')}
-                        </div>
-                        <div class="carousel-inner">
-                            ${innerItems.join('')}
-                        </div>
-                        <button class="carousel-control-prev" type="button"
-                                data-bs-target="#${carouselId}" data-bs-slide="prev">
+                const carouselHTML = `
+                    <div id="${carouselId}" class="carousel slide" data-bs-ride="false">
+                        <div class="carousel-indicators">${indicators.join('')}</div>
+                        <div class="carousel-inner">${innerItems.join('')}</div>
+                        <button class="carousel-control-prev" type="button" data-bs-target="#${carouselId}" data-bs-slide="prev">
                             <span class="carousel-control-prev-icon" aria-hidden="true"></span>
                             <span class="visually-hidden">Previous</span>
                         </button>
-                        <button class="carousel-control-next" type="button"
-                                data-bs-target="#${carouselId}" data-bs-slide="next">
+                        <button class="carousel-control-next" type="button" data-bs-target="#${carouselId}" data-bs-slide="next">
                             <span class="carousel-control-next-icon" aria-hidden="true"></span>
                             <span class="visually-hidden">Next</span>
                         </button>
                     </div>`;
-            } else {
-                // Single media item
-                const item = normalizedItems[0];
-                console.log('Single item:', item); // Debug log
-                
-                const isVideo = item.type === 'VIDEO' || 
-                              item.path?.toLowerCase().endsWith('.mp4');
-                
-                if (isVideo) {
-                    container.innerHTML = `
-                        <video controls class="w-100 h-100" style="object-fit: contain;">
-                            <source src="${item.path}" type="video/mp4">
-                        </video>`;
-                } else {
-                    container.innerHTML = `
-                        <img src="${item.path}" class="w-100 h-100" style="object-fit: contain;" alt="Dokumentasi">`;
-                }
-            }
 
-            // Show the modal
-            const modal = new bootstrap.Modal(document.getElementById('fullSizeMediaModal'));
-            modal.show();
+                container.innerHTML = carouselHTML;
+
+                const modal = new bootstrap.Modal(modalEl);
+                modal.show();
+
+                // Delay Carousel Initialization to ensure modal DOM is ready
+                setTimeout(() => {
+                    const carouselEl = document.getElementById(carouselId);
+                    if (carouselEl) {
+                        bootstrap.Carousel.getInstance(carouselEl)?.dispose();
+                        new bootstrap.Carousel(carouselEl, {
+                            interval: false,
+                            ride: false,
+                            wrap: false
+                        });
+                    }
+
+                    // Debug check
+                    const active = document.querySelectorAll(`#${carouselId} .carousel-item.active`).length;
+                    const all = document.querySelectorAll(`#${carouselId} .carousel-item`).length;
+                    console.log('Active carousel items:', active);
+                    console.log('All carousel items:', all);
+                }, 300);
+
+            } else {
+                const item = normalizedItems[0];
+                const isVideo = item.type === 'VIDEO' || item.path.toLowerCase().endsWith('.mp4');
+                container.innerHTML = isVideo
+                    ? `<video controls class="w-100 h-100" style="object-fit: contain;"><source src="${item.path}" type="video/mp4"></video>`
+                    : `<img src="${item.path}" class="w-100 h-100" style="object-fit: contain;" alt="Dokumentasi">`;
+
+                const modal = new bootstrap.Modal(modalEl);
+                modal.show();
+            }
         }
 
         // Add click handler for the new view media button
@@ -1508,11 +1510,22 @@ else if (!string.IsNullOrEmpty(Model.Notes) || (Model.FinalDocuments != null && 
             console.log('Raw media items from data attribute:', mediaItems); // Debug log
             showFullScreenMedia(mediaItems);
         });
+
+                const myCarousel = document.querySelector('#fullScreenCarousel');
+        if (myCarousel) {
+            console.log("Manually initializing carousel...");
+            bootstrap.Carousel.getInstance(myCarousel)?.dispose(); // buang instance lama
+            new bootstrap.Carousel(myCarousel, {
+                interval: false,
+                ride: false
+            });
+        }
+
     </script>
 }
 
 @functions {
-    async Task RenderChecklistNode(AuditChecklistNode node, int level, bool isVerified, bool isReadonlyUser)
+    async Task RenderChecklistNode(AuditChecklistNode node, int level, bool isVerified, bool isReadonlyUser, bool hideUploadButton)
     {
         var collapseId = $"collapse-{node.Id}";
         var paddingClass = $"ps-{level * 3}";
@@ -1627,17 +1640,21 @@ else if (!string.IsNullOrEmpty(Model.Notes) || (Model.FinalDocuments != null && 
                             @if (node.Type == "QUESTION" && (node.Children == null || !node.Children.Any()))
                             {
                                 <div class="d-flex gap-2 align-items-center mb-3 flex-wrap">
-                                    <button type="button" class="btn btn-outline-primary btn-sm view-documentation-btn"
-                                            data-media-items='@Html.Raw(JsonConvert.SerializeObject(node.MediaItems ?? new List<MediaItem> { }))'
-                                            data-node-id="@node.Id"
-                                            data-audit-id="@ViewBag.AuditId">
-                                        <i class="bi bi-image me-1"></i> Upload dari Media Library
-                                    </button>
+                                    @if (!hideUploadButton)
+                                    {
+                                        <button type="button" class="btn btn-outline-primary btn-sm view-documentation-btn"
+                                                data-media-items='@Html.Raw(JsonConvert.SerializeObject(node.MediaItems ?? new List<MediaItem> { }))'
+                                                data-node-id="@node.Id"
+                                                data-audit-id="@ViewBag.AuditId">
+                                            <i class="bi bi-image me-1"></i> Upload dari Media Library
+                                        </button>
+                                    }
 
-                                    <button type="button" class="btn btn-outline-secondary btn-sm view-media-btn"
+                                    <button type="button" class="btn btn-outline-secondary btn-sm view-media-btn2"
                                             data-media-items='@Html.Raw(JsonConvert.SerializeObject(node.MediaItems ?? new List<MediaItem> { }))'>
                                         <i class="bi bi-eye me-1"></i> Lihat Dokumentasi
                                     </button>
+
 
                                     @if (!isReadonlyUser)
                                     {
@@ -1645,7 +1662,7 @@ else if (!string.IsNullOrEmpty(Model.Notes) || (Model.FinalDocuments != null && 
                                               asp-action="UploadDocument"
                                               asp-route-nodeId="@node.Id"
                                               asp-route-auditId="@ViewBag.AuditId"
-                                              enctype="multipart/form-data"
+                                              enctype="multipart/form-data"Upload dari Media Library
                                               method="post"
                                               class="d-flex align-items-center">
                                             <input type="file" name="file" class="form-control form-control-sm me-2"
@@ -1701,7 +1718,7 @@ else if (!string.IsNullOrEmpty(Model.Notes) || (Model.FinalDocuments != null && 
                             <ul class="list-unstyled mt-3">
                                 @foreach (var child in node.Children)
                                 {
-                                    RenderChecklistNode(child, level + 1, isVerified, isReadonlyUser);
+                                    RenderChecklistNode(child, level + 1, isVerified, isReadonlyUser, hideUploadButton);
                                 }
                             </ul>
                         }

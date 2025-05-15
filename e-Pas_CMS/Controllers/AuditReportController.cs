@@ -14,6 +14,7 @@ using Microsoft.AspNetCore.Mvc.Razor;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.AspNetCore.Mvc.ViewFeatures;
 using QuestPDF.Fluent;
+using Newtonsoft.Json;
 
 namespace e_Pas_CMS.Controllers
 {
@@ -105,6 +106,33 @@ namespace e_Pas_CMS.Controllers
                     ? totalScore / maxScore * 100
                     : 0m;
 
+                var penaltyQuery = @"
+                SELECT string_agg(mqd.penalty_alert, ', ') AS penalty_alerts
+                FROM trx_audit_checklist tac 
+                INNER JOIN master_questioner_detail mqd 
+                    ON mqd.id = tac.master_questioner_detail_id 
+                WHERE tac.trx_audit_id = @id 
+                  AND tac.score_input = 'F' 
+                  AND mqd.is_penalty = true;";
+
+                var penaltyResult = await conn.ExecuteScalarAsync<string>(penaltyQuery, new { id = a.id });
+
+                bool hasPenalty = !string.IsNullOrEmpty(penaltyResult);
+
+                string goodStatus = "NOT CERTIFIED";
+
+                string excellentStatus = "NOT CERTIFIED";
+
+                if (finalScore >= 80)
+                {
+                    goodStatus = "CERTIFIED";
+
+                    if (!hasPenalty)
+                    {
+                        excellentStatus = "EXCELLENT";
+                    }
+                }
+
                 result.Add(new AuditReportListViewModel
                 {
                     TrxAuditId = a.id,
@@ -122,8 +150,8 @@ namespace e_Pas_CMS.Controllers
                     ? a.created_date
                     : a.audit_execution_time,
                     Auditor = a.app_user.name,
-                    GoodStatus = a.spbu.status_good,
-                    ExcellentStatus = a.spbu.status_excellent,
+                    GoodStatus = goodStatus,
+                    ExcellentStatus = excellentStatus,
                     Score = finalScore,
                     WTMS = a.spbu.wtms,
                     QQ = a.spbu.qq,
@@ -180,7 +208,10 @@ namespace e_Pas_CMS.Controllers
         {
             var model = await GetDetailReportAsync(id);
 
+            var json = JsonConvert.SerializeObject(model);
+
             var document = new ReportExcellentTemplate(model);
+
             var pdfStream = new MemoryStream();
             document.GeneratePdf(pdfStream);
             pdfStream.Position = 0;
@@ -207,20 +238,73 @@ namespace e_Pas_CMS.Controllers
             model.Elements = BuildHierarchy(checklistData, mediaList);
 
             CalculateChecklistScores(model.Elements);
-            CalculateOverallScore(model, checklistData);
+            CalculateOverallScore(model, checklistData); // ini bisa dihapus kalau pakai finalScore baru
 
+            // --- Hitung finalScore seperti di Index ---
+            var scoreSql = @"
+        SELECT mqd.weight, tac.score_input
+        FROM master_questioner_detail mqd
+        LEFT JOIN trx_audit_checklist tac 
+            ON tac.master_questioner_detail_id = mqd.id 
+            AND tac.trx_audit_id = @id
+        WHERE mqd.master_questioner_id = (
+            SELECT master_questioner_checklist_id 
+            FROM trx_audit 
+            WHERE id = @id
+        )
+        AND mqd.type = 'QUESTION'";
+
+            var checklist = (await conn.QueryAsync<(decimal? weight, string score_input)>(scoreSql, new { id = id.ToString() })).ToList();
+
+            decimal totalScore = 0, maxScore = 0;
+            foreach (var item in checklist)
+            {
+                decimal w = item.weight ?? 0;
+                decimal v = item.score_input switch
+                {
+                    "A" => 1.00m,
+                    "B" => 0.80m,
+                    "C" => 0.60m,
+                    "D" => 0.40m,
+                    "E" => 0.20m,
+                    "F" => 0.00m,
+                    _ => 0.00m
+                };
+                totalScore += v * w;
+                maxScore += w;
+            }
+
+            decimal finalScore = maxScore > 0 ? totalScore / maxScore * 100 : 0m;
+            model.Score = finalScore; // simpan di model
+
+            // --- Penalty ---
             var penaltySql = @"
-            SELECT STRING_AGG(mqd.penalty_alert, ', ') AS penalty_alerts
-            FROM trx_audit_checklist tac 
-            INNER JOIN master_questioner_detail mqd ON mqd.id = tac.master_questioner_detail_id 
-            WHERE tac.trx_audit_id = @id
-              AND tac.score_input = 'F'
-              AND mqd.is_penalty = TRUE";
+        SELECT STRING_AGG(mqd.penalty_alert, ', ') AS penalty_alerts
+        FROM trx_audit_checklist tac 
+        INNER JOIN master_questioner_detail mqd ON mqd.id = tac.master_questioner_detail_id 
+        WHERE tac.trx_audit_id = @id
+          AND tac.score_input = 'F'
+          AND mqd.is_penalty = TRUE";
 
             model.PenaltyAlerts = await conn.ExecuteScalarAsync<string>(penaltySql, new { id = id.ToString() });
+            bool hasPenalty = !string.IsNullOrEmpty(model.PenaltyAlerts);
+
+            // --- GoodStatus dan ExcellentStatus ---
+            model.GoodStatus = "NOT CERTIFIED";
+            model.ExcellentStatus = "NOT CERTIFIED";
+
+            if (finalScore >= 80)
+            {
+                model.GoodStatus = "CERTIFIED";
+                if (!hasPenalty)
+                {
+                    model.ExcellentStatus = "EXCELLENT";
+                }
+            }
 
             return model;
         }
+
 
         private async Task<string> RenderViewToStringAsync(string viewName, object model)
         {

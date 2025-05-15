@@ -19,6 +19,7 @@
         public List<MediaItem> FinalDocuments { get; set; }
         public decimal TotalScore { get; set; }
         public decimal MaxScore { get; set; }
+        public decimal Score { get; set; }
         public decimal FinalScore { get; set; }
 
         public List<AuditLevelSummary> LevelSummaries { get; set; }
@@ -42,6 +43,8 @@
         public string Phone { get; set; }
         public decimal MinPassingScore { get; set; }    // nilai minimum Pasti Pas
         public string PenaltyAlerts { get; set; }
+        public string GoodStatus { get; set; }
+        public string ExcellentStatus { get; set; }
 
         public List<AuditLevelSummaryGroup> LevelSummaryGroups { get; set; }
     }

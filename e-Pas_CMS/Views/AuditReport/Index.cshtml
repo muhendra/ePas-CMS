@@ -78,8 +78,8 @@
                 <td>@item.SubmitDate?.ToString("dd/MM/yyyy HH:mm")</td>
                 <td>@item.Auditor</td>
                 <td>@item.Score?.ToString("0.00")</td>
-                <td class="text-@(item.GoodStatus == "CERTIFIED" ? "success" : "danger")">@item.GoodStatus</td>
-                <td class="text-@(item.ExcellentStatus == "CERTIFIED" ? "success" : "danger")">@item.ExcellentStatus</td>
+                <td class="fw-bold @(item.GoodStatus == "CERTIFIED" ? "text-success" : "text-danger")">@item.GoodStatus</td>
+                <td class="fw-bold @(item.ExcellentStatus == "EXCELLENT" ? "text-success" : "text-danger")">@item.ExcellentStatus</td>
                 <td>@item.WTMS</td>
                 <td>@item.QQ</td>
                 <td>@item.WMEF</td>
