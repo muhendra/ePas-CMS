@@ -21,6 +21,8 @@
 
         public int order_no { get; set; }
 
+        public bool is_relaksasi { get; set; }
+
     }
 
 }

@@ -15,6 +15,7 @@ using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.AspNetCore.Mvc.ViewFeatures;
 using QuestPDF.Fluent;
 using Newtonsoft.Json;
+using System.Xml.Linq;
 
 namespace e_Pas_CMS.Controllers
 {
@@ -258,7 +259,7 @@ namespace e_Pas_CMS.Controllers
 
             // --- Hitung finalScore seperti di Index ---
             var scoreSql = @"
-        SELECT mqd.weight, tac.score_input
+        SELECT mqd.weight, tac.score_input, mqd.is_relaksasi
         FROM master_questioner_detail mqd
         LEFT JOIN trx_audit_checklist tac 
             ON tac.master_questioner_detail_id = mqd.id 
@@ -269,23 +270,24 @@ namespace e_Pas_CMS.Controllers
             WHERE id = @id
         )
         AND mqd.type = 'QUESTION'";
-
-            var checklist = (await conn.QueryAsync<(decimal? weight, string score_input)>(scoreSql, new { id = id.ToString() })).ToList();
+            var checklist = (await conn.QueryAsync<(decimal? weight, string score_input, bool? is_relaksasi)>(scoreSql, new { id = id })).ToList();
 
             decimal totalScore = 0, maxScore = 0;
             foreach (var item in checklist)
             {
                 decimal w = item.weight ?? 0;
-                decimal v = item.score_input switch
-                {
-                    "A" => 1.00m,
-                    "B" => 0.80m,
-                    "C" => 0.60m,
-                    "D" => 0.40m,
-                    "E" => 0.20m,
-                    "F" => 0.00m,
-                    _ => 0.00m
-                };
+                decimal v = item.is_relaksasi == true
+                    ? 1.00m
+                    : item.score_input switch
+                    {
+                        "A" => 1.00m,
+                        "B" => 0.80m,
+                        "C" => 0.60m,
+                        "D" => 0.40m,
+                        "E" => 0.20m,
+                        "F" => 0.00m,
+                        _ => 0.00m
+                    };
                 totalScore += v * w;
                 maxScore += w;
             }
@@ -511,7 +513,8 @@ namespace e_Pas_CMS.Controllers
                   tac.score_input,
                   tac.score_af,
                   tac.score_x,
-                  mqd.order_no
+                  mqd.order_no,
+                  mqd.is_relaksasi
                 FROM master_questioner_detail mqd
                 LEFT JOIN trx_audit_checklist tac
                   ON tac.master_questioner_detail_id = mqd.id
@@ -565,6 +568,10 @@ namespace e_Pas_CMS.Controllers
                     if (node.Type == "QUESTION")
                     {
                         var input = node.ScoreInput?.Trim().ToUpper();
+                        if (node.is_relaksasi == true && input == "F")
+                        {
+                            node.ScoreAF = 1.00m;
+                        }
                         var allowed = (node.ScoreOption ?? "")
                                         .Split('/', StringSplitOptions.RemoveEmptyEntries)
                                         .SelectMany(opt =>
@@ -579,7 +586,9 @@ namespace e_Pas_CMS.Controllers
                         if (!string.IsNullOrWhiteSpace(input) && allowed.Contains(input) && input != "X")
                         {
                             if (nilaiAF.TryGetValue(input, out var val))
+                            {
                                 node.ScoreAF = val;
+                            }
                         }
                     }
                 }
@@ -642,10 +651,20 @@ namespace e_Pas_CMS.Controllers
                 {
                     sumX += weight;
                 }
-                else if (nilaiAF.TryGetValue(input.ToUpper(), out var af))
+                else
                 {
-                    sumAF += af * weight;
-                    sumWeight += weight;
+                    if(nilaiAF.TryGetValue(input, out var af))
+                    {
+                        if (q.is_relaksasi == true)
+                        {
+                            sumAF = 1.00m * weight;
+                        }
+                        else
+                        {
+                            sumAF += af * weight;
+                        }
+                        sumWeight += weight;
+                    }
                 }
             }
 
@@ -675,6 +694,7 @@ namespace e_Pas_CMS.Controllers
                     ScoreInput = item.score_input,
                     ScoreAF = item.score_af,
                     ScoreX = item.score_x,
+                    is_relaksasi = item.is_relaksasi,
                     MediaItems = mediaList.ContainsKey(item.id)
                                   ? mediaList[item.id]
                                   : new List<MediaItem>(),

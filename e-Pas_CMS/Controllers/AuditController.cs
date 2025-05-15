@@ -460,6 +460,7 @@ namespace e_Pas_CMS.Controllers
                   tac.comment,
                   mqd.is_penalty,
                   mqd.order_no,
+                  mqd.is_relaksasi,
                   (
                     SELECT string_agg(mqd2.penalty_alert, ', ')
                     FROM trx_audit_checklist tac2
@@ -542,10 +543,17 @@ namespace e_Pas_CMS.Controllers
                 {
                     sumX += weight;
                 }
-                else if (validAF.TryGetValue(input, out var af))
+                else
                 {
-                    sumAF += af * weight;
-                    sumWeight += weight;
+                    // Override input jadi F kalau relaksasi
+                    if (q.is_relaksasi == true)
+                        input = "F";
+
+                    if (validAF.TryGetValue(input, out var af))
+                    {
+                        sumAF += af * weight;
+                        sumWeight += weight;
+                    }
                 }
             }
 
@@ -731,6 +739,7 @@ VALUES
                     Comment = item.comment,
                     IsPenalty = item.is_penalty,
                     PenaltyAlert = item.penalty_alert,
+                    is_relaksasi = item.is_relaksasi,
                     MediaItems = mediaList.ContainsKey(item.id)
                                   ? mediaList[item.id]
                                   : new List<MediaItem>(),
