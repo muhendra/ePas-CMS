@@ -22,9 +22,9 @@ namespace e_Pas_CMS.Controllers
     public class AuditReportController : Controller
     {
         private readonly EpasDbContext _context;
-        private readonly ILogger<AuditController> _logger;
+        private readonly ILogger<AuditReportController> _logger;
 
-        public AuditReportController(EpasDbContext context, ILogger<AuditController> logger)
+        public AuditReportController(EpasDbContext context, ILogger<AuditReportController> logger)
         {
             _context = context;
             _logger = logger;
@@ -251,7 +251,7 @@ namespace e_Pas_CMS.Controllers
             var mediaList = await GetMediaPerNodeAsync(conn, id.ToString());
             model.Elements = BuildHierarchy(checklistData, mediaList);
             model.FotoTemuan = await GetMediaReportFAsync(conn, id.ToString());
-            _logger.LogInformation("UpdateMediaPath: Creating destination directory: {DestinationDir}", model.FotoTemuan);
+            _logger.LogInformation("FotoTemuan: {Path}", model.FotoTemuan);
 
             CalculateChecklistScores(model.Elements);
             CalculateOverallScore(model, checklistData); // ini bisa dihapus kalau pakai finalScore baru

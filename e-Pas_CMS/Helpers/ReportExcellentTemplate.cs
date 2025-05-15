@@ -11,12 +11,10 @@ using QuestPDF.Helpers;   // Untuk ImageScaling
 public class ReportExcellentTemplate : IDocument
 {
     private readonly DetailReportViewModel _model;
-    private readonly ILogger<ReportExcellentTemplate> _logger;
 
-    public ReportExcellentTemplate(DetailReportViewModel model, ILogger<ReportExcellentTemplate> logger)
+    public ReportExcellentTemplate(DetailReportViewModel model)
     {
         _model = model;
-        _logger = logger;
     }
 
     public DocumentMetadata GetMetadata() => DocumentMetadata.Default;
@@ -246,13 +244,11 @@ public class ReportExcellentTemplate : IDocument
                         if (foto == null || string.IsNullOrWhiteSpace(foto.Path))
                             continue;
 
-                        _logger.LogInformation("photo.path: {DestinationDir}", foto.Path);
 
                         string fullPath = null;
                         try
                         {
                             fullPath = Path.Combine("/var/www/epas-api/wwwroot", foto.Path);
-                            _logger.LogInformation("Report: {DestinationDir}", fullPath);
 
                         }
                         catch
