@@ -19,6 +19,8 @@
         public string tacid { get; set; }
         public string score_option { get; set; }
 
+        public int order_no { get; set; }
+
     }
 
 }

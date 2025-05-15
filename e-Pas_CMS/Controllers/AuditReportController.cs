@@ -22,10 +22,12 @@ namespace e_Pas_CMS.Controllers
     public class AuditReportController : Controller
     {
         private readonly EpasDbContext _context;
+        private readonly ILogger<AuditController> _logger;
 
-        public AuditReportController(EpasDbContext context)
+        public AuditReportController(EpasDbContext context, ILogger<AuditController> logger)
         {
             _context = context;
+            _logger = logger;
         }
 
         public async Task<IActionResult> Index(int pageNumber = 1, int pageSize = 10, string searchTerm = "")
@@ -249,6 +251,7 @@ namespace e_Pas_CMS.Controllers
             var mediaList = await GetMediaPerNodeAsync(conn, id.ToString());
             model.Elements = BuildHierarchy(checklistData, mediaList);
             model.FotoTemuan = await GetMediaReportFAsync(conn, id.ToString());
+            _logger.LogInformation("UpdateMediaPath: Creating destination directory: {DestinationDir}", model.FotoTemuan);
 
             CalculateChecklistScores(model.Elements);
             CalculateOverallScore(model, checklistData); // ini bisa dihapus kalau pakai finalScore baru
@@ -378,7 +381,7 @@ namespace e_Pas_CMS.Controllers
             )
             SELECT 
                 ta.id,
-                (ta.report_prefix || ta.report_no)    AS ReportNo,
+                ta.report_no                          AS ReportNo,
                 ta.audit_type                         AS AuditType,
                 ta.audit_execution_time               AS SubmitDate,
                 ta.status,
@@ -414,7 +417,7 @@ namespace e_Pas_CMS.Controllers
             {
                 AuditId = basic.Id,
                 ReportNo = basic.ReportNo,
-                AuditType = basic.AuditType,
+                AuditType = basic.AuditType == "Mystery Audit" ? "Regular Audit" : basic.AuditType,
                 TanggalSubmit = basic.SubmitDate,
                 Status = basic.Status,
                 Notes = basic.Notes,
@@ -507,7 +510,8 @@ namespace e_Pas_CMS.Controllers
                   mqd.score_option,
                   tac.score_input,
                   tac.score_af,
-                  tac.score_x
+                  tac.score_x,
+                  mqd.order_no
                 FROM master_questioner_detail mqd
                 LEFT JOIN trx_audit_checklist tac
                   ON tac.master_questioner_detail_id = mqd.id
@@ -659,7 +663,7 @@ namespace e_Pas_CMS.Controllers
 
             List<AuditChecklistNode> BuildChildren(string parentId) =>
                 lookup[parentId]
-                .OrderBy(x => x.weight)
+                .OrderBy(x => x.order_no)
                 .Select(item => new AuditChecklistNode
                 {
                     Id = item.id,

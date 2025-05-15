@@ -459,6 +459,7 @@ namespace e_Pas_CMS.Controllers
                   tac.score_x,
                   tac.comment,
                   mqd.is_penalty,
+                  mqd.order_no,
                   (
                     SELECT string_agg(mqd2.penalty_alert, ', ')
                     FROM trx_audit_checklist tac2
@@ -715,7 +716,7 @@ VALUES
 
             List<AuditChecklistNode> BuildChildren(string parentId) =>
                 lookup[parentId]
-                .OrderBy(x => x.weight)
+                .OrderBy(x => x.order_no)
                 .Select(item => new AuditChecklistNode
                 {
                     Id = item.id,

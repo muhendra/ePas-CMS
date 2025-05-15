@@ -53,11 +53,12 @@
             <small class="text-muted">(@Model.AuditType)</small>
         </h2>
         <div>
-            <small>Daftar Report / </small>
             <a class="text-primary text-decoration-none"
                href="@Url.Action("Index", "AuditReport")">
+            <small>Daftar Report / </small></a>
+            
                 @Model.ReportNo <i class="bi bi-caret-down-fill"></i>
-            </a>
+            
         </div>
     </div>
     <a class="btn btn-outline-primary"
