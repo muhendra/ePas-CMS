@@ -739,7 +739,7 @@ VALUES
                     Comment = item.comment,
                     IsPenalty = item.is_penalty,
                     PenaltyAlert = item.penalty_alert,
-                    is_relaksasi = item.is_relaksasi,
+                    IsRelaksasi = item.is_relaksasi,
                     MediaItems = mediaList.ContainsKey(item.id)
                                   ? mediaList[item.id]
                                   : new List<MediaItem>(),

@@ -528,40 +528,45 @@
 
         // Hitung ulang satu node (rekursif)
         function recalcNode($li) {
-        var nodeId = $li.attr('id').replace('node-', '');
-        var weight = parseFloat($li.attr('data-weight')) || 0;
-        var sumAF = 0;
-        var sumWeight = 0;
-        var sumX = 0;
+            var nodeId = $li.attr('id').replace('node-', '');
+            var weight = parseFloat($li.attr('data-weight')) || 0;
+            var sumAF = 0;
+            var sumWeight = 0;
+            var sumX = 0;
 
-        var map = { A: 1, B: 0.8, C: 0.6, D: 0.4, E: 0.2, F: 0 };
+            var map = { A: 1, B: 0.8, C: 0.6, D: 0.4, E: 0.2, F: 0 };
 
-        var $grp = $li.find('.option-group[data-node-id="' + nodeId + '"]');
-        if ($grp.length) {
-        var letter = $grp.find('.option-btn.active').data('score') || '';
-        if (letter === 'X') {
-        var scoreX = parseFloat($li.attr('data-score-x')) || 0;
-        sumX = weight;
-        sumAF = scoreX;
-        } else {
-        sumAF = (map[letter] || 0) * weight;
-        }
-        sumWeight = weight;
-        } else {
-        $li.find('> .card > .collapse > .card-body > ul > li').each(function () {
-        var result = recalcNode($(this));
-        sumAF += result.af;
-        sumWeight += result.wt;
-        sumX += result.x;
-        });
-        }
+            var $grp = $li.find('.option-group[data-node-id="' + nodeId + '"]');
+            var isRelaksasi = $grp.data('is-relaksasi');
+            if ($grp.length) {
+                var letter = $grp.find('.option-btn.active').data('score') || '';
+                if (letter === 'X') {
+                    var scoreX = parseFloat($li.attr('data-score-x')) || 0;
+                    sumX = weight;
+                    sumAF = scoreX;
+                } else {
+                    if(isRelaksasi == "True"){
+                        sumAF = 1 * weight;
+                    }else{
+                        sumAF = (map[letter] || 0) * weight;
+                    }
+                }
+                sumWeight = weight;
+            } else {
+                $li.find('> .card > .collapse > .card-body > ul > li').each(function () {
+                    var result = recalcNode($(this));
+                    sumAF += result.af;
+                    sumWeight += result.wt;
+                    sumX += result.x;
+                });
+            }
 
-        var skor = (sumWeight - sumX) > 0
-        ? (sumAF / (sumWeight - sumX)) * sumWeight
-        : 0;
+            var skor = (sumWeight - sumX) > 0
+            ? (sumAF / (sumWeight - sumX)) * sumWeight
+            : 0;
 
-        $li.find('.score-x[data-node-id="' + nodeId + '"]').text(skor.toFixed(2));
-        return { af: sumAF, wt: sumWeight, x: sumX };
+            $li.find('.score-x[data-node-id="' + nodeId + '"]').text(skor.toFixed(2));
+            return { af: sumAF, wt: sumWeight, x: sumX };
         }
 
         function recalcAll() {
@@ -738,6 +743,7 @@
                             <div class="d-flex align-items-center flex-wrap gap-2">
                                 <div class="option-group"
                                      data-node-id="@node.Id"
+                                     data-is-relaksasi="@node.IsRelaksasi"
                                      data-score-option="@node.ScoreOption">
                                     @{
                                         var opts = (node.ScoreOption ?? "")
@@ -766,7 +772,7 @@
                                                 data-node-id="@node.Id"
                                                 data-score="@opt"
                                                 disabled>
-                                            @(opt == "X" ? "X" : $"{opt} ({val:0.00})")
+                                            @(opt == "X" ? "X" : $"{opt} ({(node.IsRelaksasi ? 1 : val):0.00})")
                                         </button>
 
                                     }
@@ -774,10 +780,8 @@
 
                                 <!-- Skor -->
                                 <div class="text-end">
-                                    <small>Skor:</small><br />
-                                    <strong class="score-x text-primary" data-node-id="@node.Id">
-                                        @(node.ScoreX?.ToString("0.00") ?? "0.00")
-                                    </strong>
+                                    <small>skor :</small><br />
+                                    <strong class="score-x text-primary" data-node-id="@node.Id"></strong>
                                 </div>
                             </div>
 
