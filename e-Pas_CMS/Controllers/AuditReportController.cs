@@ -32,10 +32,23 @@ namespace e_Pas_CMS.Controllers
         {
             var currentUser = User.Identity?.Name;
 
+            var userRegion = await (from aur in _context.app_user_roles
+                                    join au in _context.app_users on aur.app_user_id equals au.id
+                                    where au.username == currentUser
+                                    select aur.region)
+                       .Distinct()
+                       .Where(r => r != null)
+
+                       .ToListAsync();
             var query = _context.trx_audits
                 .Include(a => a.spbu)
                 .Include(a => a.app_user)
                 .Where(a => a.status == "VERIFIED");
+
+            if (userRegion.Any())
+            {
+                query = query.Where(x => userRegion.Contains(x.spbu.region));
+            }
 
             if (!string.IsNullOrWhiteSpace(searchTerm))
             {
@@ -235,7 +248,7 @@ namespace e_Pas_CMS.Controllers
             var checklistData = await GetChecklistDataAsync(conn, id.ToString());
             var mediaList = await GetMediaPerNodeAsync(conn, id.ToString());
             model.Elements = BuildHierarchy(checklistData, mediaList);
-            model.FotoTemuan = await GetMediaReportFAsync(conn, id.ToString(), "QUESTION");
+            model.FotoTemuan = await GetMediaReportFAsync(conn, id.ToString());
 
             CalculateChecklistScores(model.Elements);
             CalculateOverallScore(model, checklistData); // ini bisa dihapus kalau pakai finalScore baru
@@ -442,7 +455,7 @@ namespace e_Pas_CMS.Controllers
             }).ToList();
         }
 
-        private async Task<List<FotoTemuan>> GetMediaReportFAsync(IDbConnection conn, string id, string type)
+        private async Task<List<FotoTemuan>> GetMediaReportFAsync(IDbConnection conn, string id)
         {
             string sql = @"SELECT am.media_path
                         FROM trx_audit_media am
@@ -452,7 +465,7 @@ namespace e_Pas_CMS.Controllers
                         WHERE ac.score_input = 'F'
                           AND am.trx_audit_id = @id";
 
-            var raw = await conn.QueryAsync<(string media_type, string media_path)>(sql, new { id, type });
+            var raw = await conn.QueryAsync<(string media_type, string media_path)>(sql, new { id });
 
             return raw.Select(x => new FotoTemuan
             {
