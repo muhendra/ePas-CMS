@@ -236,8 +236,18 @@ public class ReportExcellentTemplate : IDocument
 
                     foreach (var foto in _model.FotoTemuan)
                     {
+                        // Cek null dan path kosong
+                        if (foto == null || string.IsNullOrWhiteSpace(foto.Path))
+                            continue;
+
+                        // Gabungkan path file lokal
                         var fullPath = Path.Combine("/var/www/epas-api", "wwwroot", foto.Path);
 
+                        // Cek apakah file benar-benar ada
+                        if (!System.IO.File.Exists(fullPath))
+                            continue;
+
+                        // Render jika valid
                         grid.Item().Padding(5).Column(item =>
                         {
                             item.Item().Height(100).Element(e =>
@@ -245,11 +255,13 @@ public class ReportExcellentTemplate : IDocument
                                 e.Image(Image.FromFile(fullPath)).FitArea();
                             });
 
-                            item.Item().PaddingTop(4).Text("Foto Temuan").FontSize(8).AlignCenter();
+                            item.Item().PaddingTop(4)
+                                .Text("Foto Temuan").FontSize(8).AlignCenter();
                         });
                     }
                 });
             });
+
 
 
         });
