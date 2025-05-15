@@ -243,6 +243,8 @@ public class ReportExcellentTemplate : IDocument
                         try
                         {
                             fullPath = Path.Combine("/var/www/epas-api", "wwwroot", foto.Path);
+                            Console.WriteLine($"[FotoTemuan] fullPath: {fullPath}");
+
                         }
                         catch
                         {
