@@ -568,10 +568,6 @@ namespace e_Pas_CMS.Controllers
                     if (node.Type == "QUESTION")
                     {
                         var input = node.ScoreInput?.Trim().ToUpper();
-                        if (node.is_relaksasi == true && input == "F")
-                        {
-                            node.ScoreAF = 1.00m;
-                        }
                         var allowed = (node.ScoreOption ?? "")
                                         .Split('/', StringSplitOptions.RemoveEmptyEntries)
                                         .SelectMany(opt =>
@@ -589,6 +585,12 @@ namespace e_Pas_CMS.Controllers
                             {
                                 node.ScoreAF = val;
                             }
+                        }
+
+                        // override value ScoreAF for F Relaksasi
+                        if (node.IsRelaksasi == true && input == "F")
+                        {
+                            node.ScoreAF = 1.00m;
                         }
                     }
                 }
@@ -657,7 +659,7 @@ namespace e_Pas_CMS.Controllers
                     {
                         if (q.is_relaksasi == true)
                         {
-                            sumAF = 1.00m * weight;
+                            sumAF += 1.00m * weight;
                         }
                         else
                         {
@@ -694,7 +696,7 @@ namespace e_Pas_CMS.Controllers
                     ScoreInput = item.score_input,
                     ScoreAF = item.score_af,
                     ScoreX = item.score_x,
-                    is_relaksasi = item.is_relaksasi,
+                    IsRelaksasi = item.is_relaksasi,
                     MediaItems = mediaList.ContainsKey(item.id)
                                   ? mediaList[item.id]
                                   : new List<MediaItem>(),
