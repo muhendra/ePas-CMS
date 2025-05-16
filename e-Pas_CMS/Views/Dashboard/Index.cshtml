@@ -1,6 +1,8 @@
-﻿@{
+﻿@using System.Security.Claims
+@{
     ViewBag.Title = "Dashboard Performance Audit SPBU Pertamina Way";
     Layout = "~/Views/Shared/_Layout.cshtml";
+    var isSuperadmin = User.IsInRole("Superadmin");
 }
 
 <style>
@@ -16,48 +18,69 @@
             box-shadow: 0 0.5rem 1rem rgba(0,0,0,0.15);
             opacity: 0.95;
         }
+
+    .welcome-text {
+        font-size: 2.5rem;
+        font-weight: 700;
+        color: #333;
+        text-align: center;
+        margin-top: 10vh;
+        text-shadow: 1px 1px 2px rgba(0,0,0,0.1);
+    }
 </style>
 
 <div class="container py-5">
-    <h4 class="fw-bold mb-4">Dashboard Performance Audit SPBU Pertamina Way</h4>
+    @if (isSuperadmin)
+    {
+        <div class="welcome-text">
+            Welcome to <span style="color:#E30613">E-PAS</span><br />
+            <small class="d-block mt-2 text-muted" style="font-size:1.25rem;">
+                Your centralized audit & performance portal
+            </small>
+        </div>
+    }
+    else
+    {
+        <h4 class="fw-bold mb-4">Dashboard Performance Audit SPBU Pertamina Way</h4>
 
-    <div class="row g-5">
-        <div class="col-md-4">
-            <a href="@Url.Action("Nasional", "Dashboard")"
-               class="btn btn-modern w-100 py-4 shadow-sm text-white"
-               style="background-color: #E30613;">
-                Nasional <span class="float-end">&gt;</span>
-            </a>
+        <div class="row g-5">
+            <div class="col-md-4">
+                <a href="@Url.Action("Nasional", "Dashboard")"
+                   class="btn btn-modern w-100 py-4 shadow-sm text-white"
+                   style="background-color: #E30613;">
+                    Nasional <span class="float-end">&gt;</span>
+                </a>
+            </div>
+            <div class="col-md-4">
+                <a href="@Url.Action("Province", "Dashboard")" class="btn btn-modern w-100 py-4 shadow-sm text-white" style="background-color: #E30613;">
+                    Provinsi <span class="float-end">&gt;</span>
+                </a>
+            </div>
+            <div class="col-md-4">
+                <a href="@Url.Action("Regional", "Dashboard")" class="btn btn-modern w-100 py-4 shadow-sm text-white" style="background-color: #E30613;">
+                    Regional <span class="float-end">&gt;</span>
+                </a>
+            </div>
+            <div class="col-md-4">
+                <a href="@Url.Action("Spbu", "Dashboard")" class="btn btn-modern w-100 py-4 shadow-sm text-white" style="background-color: #006CB8;">
+                    SPBU <span class="float-end">&gt;</span>
+                </a>
+            </div>
+            <div class="col-md-4">
+                <a href="#" class="btn btn-modern w-100 py-4 shadow-sm text-white" style="background-color: #006CB8;">
+                    Auditor <span class="float-end">&gt;</span>
+                </a>
+            </div>
+            <div class="col-md-4">
+                <a href="#" class="btn btn-modern w-100 py-4 shadow-sm text-white" style="background-color: #006CB8;">
+                    Verifikator <span class="float-end">&gt;</span>
+                </a>
+            </div>
+            <div class="col-md-4">
+                <a href="#" class="btn btn-modern w-100 py-4 shadow-sm text-dark" style="background-color: #C3D600;">
+                    Safety Alert <span class="float-end">&gt;</span>
+                </a>
+            </div>
         </div>
-        <div class="col-md-4">
-            <a href="@Url.Action("Province", "Dashboard")" class="btn btn-modern w-100 py-4 shadow-sm text-white" style="background-color: #E30613;">
-                Provinsi <span class="float-end">&gt;</span>
-            </a>
-        </div>
-        <div class="col-md-4">
-            <a href="@Url.Action("Regional", "Dashboard")" class="btn btn-modern w-100 py-4 shadow-sm text-white" style="background-color: #E30613;">
-                Regional <span class="float-end">&gt;</span>
-            </a>
-        </div>
-        <div class="col-md-4">
-            <a href="@Url.Action("Spbu", "Dashboard")" class="btn btn-modern w-100 py-4 shadow-sm text-white" style="background-color: #006CB8;">
-                SPBU <span class="float-end">&gt;</span>
-            </a>
-        </div>
-        <div class="col-md-4">
-            <a href="#" class="btn btn-modern w-100 py-4 shadow-sm text-white" style="background-color: #006CB8;">
-                Auditor <span class="float-end">&gt;</span>
-            </a>
-        </div>
-        <div class="col-md-4">
-            <a href="#" class="btn btn-modern w-100 py-4 shadow-sm text-white" style="background-color: #006CB8;">
-                Verifikator <span class="float-end">&gt;</span>
-            </a>
-        </div>
-        <div class="col-md-4">
-            <a href="#" class="btn btn-modern w-100 py-4 shadow-sm text-dark" style="background-color: #C3D600;">
-                Safety Alert <span class="float-end">&gt;</span>
-            </a>
-        </div>
-    </div>
+    }
 </div>

@@ -35,7 +35,8 @@ namespace e_Pas_CMS.Controllers
             if (!ModelState.IsValid)
                 return View(model);
 
-            var user = await _context.app_users.FirstOrDefaultAsync(u => u.username == model.Username && u.status == "ACTIVE");
+            var user = await _context.app_users
+                .FirstOrDefaultAsync(u => u.username == model.Username && u.status == "ACTIVE");
 
             if (user == null || !BCrypt.Net.BCrypt.Verify(model.Password, user.password_hash))
             {
@@ -43,13 +44,24 @@ namespace e_Pas_CMS.Controllers
                 return View(model);
             }
 
-            // Tambahkan claim
+            // Ambil role user dari relasi
+            var userRole = await (from aur in _context.app_user_roles
+                                  join ar in _context.app_roles on aur.app_role_id equals ar.id
+                                  where aur.app_user_id == user.id
+                                  select ar.name).FirstOrDefaultAsync();
+
+            // Tambahkan claims
             var claims = new List<Claim>
-            {
-                new Claim(ClaimTypes.Name, user.username),
-                new Claim("FullName", user.name),
-                new Claim(ClaimTypes.NameIdentifier, user.id)
+    {
+        new Claim(ClaimTypes.Name, user.username),
+        new Claim("FullName", user.name),
+        new Claim(ClaimTypes.NameIdentifier, user.id)
             };
+
+            if (!string.IsNullOrEmpty(userRole))
+            {
+                claims.Add(new Claim(ClaimTypes.Role, userRole));
+            }
 
             var claimsIdentity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
 
@@ -63,6 +75,7 @@ namespace e_Pas_CMS.Controllers
 
             return RedirectToAction("Index", "Dashboard");
         }
+
 
         public async Task<IActionResult> Logout()
         {
