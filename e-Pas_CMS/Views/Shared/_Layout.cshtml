@@ -136,7 +136,7 @@
                 <img src="https://epas.zarata.co.id/uploads/pasti-pas.png" alt="E-PAS Logo" class="img-fluid" style="max-width: 150px;">
             </div>
             <ul class="nav flex-column">
-                @if (!User.IsInRole("Superadmin"))
+                @if (!User.IsInRole("Report"))
                 {
                     <li class="nav-item mb-2">
                         <a class="nav-link d-flex align-items-center" asp-controller="Dashboard" asp-action="Index">
@@ -151,7 +151,7 @@
                     </a>
                     <div class="collapse" id="menu-audit">
                         <ul class="nav flex-column ms-3 mt-2">
-                            @if (!User.IsInRole("Superadmin"))
+                            @if (!User.IsInRole("Report"))
                             {
                                 <li class="nav-item"><a class="nav-link" asp-controller="Audit" asp-action="Index">Review Audit</a></li>
                             }
