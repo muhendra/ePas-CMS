@@ -44,23 +44,24 @@ namespace e_Pas_CMS.Controllers
                 return View(model);
             }
 
-            // Ambil role user dari relasi
-            var userRole = await (from aur in _context.app_user_roles
-                                  join ar in _context.app_roles on aur.app_role_id equals ar.id
-                                  where aur.app_user_id == user.id
-                                  select ar.name).FirstOrDefaultAsync();
+            // Ambil semua role user dari relasi
+            var userRoles = await (from aur in _context.app_user_roles
+                                   join ar in _context.app_roles on aur.app_role_id equals ar.id
+                                   where aur.app_user_id == user.id
+                                   select ar.name).ToListAsync();
 
-            // Tambahkan claims
+            // Tambahkan claims dasar
             var claims = new List<Claim>
     {
         new Claim(ClaimTypes.Name, user.username),
-        new Claim("FullName", user.name),
+        new Claim("FullName", user.name ?? ""),
         new Claim(ClaimTypes.NameIdentifier, user.id)
-            };
+    };
 
-            if (!string.IsNullOrEmpty(userRole))
+            // Tambahkan semua role sebagai claim
+            foreach (var role in userRoles)
             {
-                claims.Add(new Claim(ClaimTypes.Role, userRole));
+                claims.Add(new Claim(ClaimTypes.Role, role));
             }
 
             var claimsIdentity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
@@ -69,9 +70,9 @@ namespace e_Pas_CMS.Controllers
                 CookieAuthenticationDefaults.AuthenticationScheme,
                 new ClaimsPrincipal(claimsIdentity));
 
-            // Set session juga
+            // Set session jika diperlukan
             HttpContext.Session.SetString("UserId", user.id);
-            HttpContext.Session.SetString("UserName", user.name);
+            HttpContext.Session.SetString("UserName", user.name ?? "");
 
             return RedirectToAction("Index", "Dashboard");
         }
