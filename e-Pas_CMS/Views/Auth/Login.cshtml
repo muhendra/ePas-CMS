@@ -117,6 +117,18 @@
             </div>
             <div class="form-box text-start">
                 <h2>Salam,<br />Silakan login ke akun kamu</h2>
+
+                @* Alert dari ModelState *@
+                @if (!ViewData.ModelState.IsValid)
+                {
+                    <div class="alert alert-danger">
+                        @foreach (var error in ViewData.ModelState.Values.SelectMany(v => v.Errors))
+                        {
+                            <div>@error.ErrorMessage</div>
+                        }
+                    </div>
+                }
+
                 <form method="post" action="/Auth/Login">
                     <input type="text" name="username" class="form-control" placeholder="Email" required />
                     <input type="password" name="password" class="form-control" placeholder="Password" required />

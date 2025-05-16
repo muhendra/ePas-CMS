@@ -50,6 +50,13 @@ namespace e_Pas_CMS.Controllers
                                    where aur.app_user_id == user.id
                                    select ar.name).ToListAsync();
 
+            // Validasi: jika hanya punya 1 role dan itu "auditor", tolak login
+            if (userRoles.Count == 1 && userRoles[0].Equals("auditor", StringComparison.OrdinalIgnoreCase))
+            {
+                ModelState.AddModelError(string.Empty, "Tidak bisa login dengan user ini");
+                return View(model);
+            }
+
             // Tambahkan claims dasar
             var claims = new List<Claim>
     {
