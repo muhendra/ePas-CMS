@@ -270,7 +270,7 @@ namespace e_Pas_CMS.Controllers
             WHERE id = @id
         )
         AND mqd.type = 'QUESTION'";
-            var checklist = (await conn.QueryAsync<(decimal? weight, string score_input, bool? is_relaksasi)>(scoreSql, new { id = id })).ToList();
+            var checklist = (await conn.QueryAsync<(decimal? weight, string score_input, bool? is_relaksasi)>(scoreSql, new { id = id.ToString() })).ToList();
 
             decimal totalScore = 0, maxScore = 0;
             foreach (var item in checklist)
