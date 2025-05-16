@@ -545,7 +545,7 @@
                     sumX = weight;
                     sumAF = scoreX;
                 } else {
-                    if(isRelaksasi == "True"){
+                    if(isRelaksasi === 'True' && letter === 'F'){
                         sumAF = 1 * weight;
                     }else{
                         sumAF = (map[letter] || 0) * weight;
@@ -772,7 +772,7 @@
                                                 data-node-id="@node.Id"
                                                 data-score="@opt"
                                                 disabled>
-                                            @(opt == "X" ? "X" : $"{opt} ({(node.IsRelaksasi ? 1 : val):0.00})")
+                                            @(opt == "X" ? "X" : $"{opt} ({(node.IsRelaksasi && opt == "F" ? 1 : val):0.00})")
                                         </button>
 
                                     }
