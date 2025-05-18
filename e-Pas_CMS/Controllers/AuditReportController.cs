@@ -755,7 +755,7 @@ namespace e_Pas_CMS.Controllers
             approval_by = @p0,
             updated_date = now(),
             updated_by = @p0,
-            status = 'VERIFIED'
+            status = 'UNDER_REVIEW'
         WHERE id = @p1";
 
             int affected = await _context.Database.ExecuteSqlRawAsync(sql, currentUser, id);
