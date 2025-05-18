@@ -86,6 +86,12 @@
         public string KomentarVisual { get; set; }
         public string KomentarManager { get; set; }
 
+        public DateTime? ApproveDate { get; set; }
+
+
+        public DateTime? UpdatedDate { get; set; }
+
+        public string? ApproveBy { get; set; }
     }
 
 

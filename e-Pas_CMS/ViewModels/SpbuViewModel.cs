@@ -21,5 +21,9 @@
         public string Audit { get; set; }
         public string Good { get; set; }
         public string Excelent { get; set; }
+
+        public DateTime TanggalApprove { get; set; }
+
+        public string Approver {  get; set; }
     }
 }

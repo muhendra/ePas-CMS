@@ -1,10 +1,12 @@
-﻿@using e_Pas_CMS.ViewModels
+﻿﻿@using e_Pas_CMS.ViewModels
 @using Newtonsoft.Json
 @model DetailReportViewModel
 
 @{
     ViewData["Title"] = "Detail Laporan Audit";
     bool isVerified = Model.Status?.ToUpper() == "VERIFIED";
+
+    var isSuperadmin = User.IsInRole("Report");
 }
 
 @Html.AntiForgeryToken()
@@ -55,10 +57,11 @@
         <div>
             <a class="text-primary text-decoration-none"
                href="@Url.Action("Index", "AuditReport")">
-            <small>Daftar Report / </small></a>
-            
-                @Model.ReportNo <i class="bi bi-caret-down-fill"></i>
-            
+                <small>Daftar Report / </small>
+            </a>
+
+            @Model.ReportNo <i class="bi bi-caret-down-fill"></i>
+
         </div>
     </div>
     <a class="btn btn-outline-primary"
@@ -67,77 +70,65 @@
     </a>
 </div>
 
-<!-- INFORMASI SPBU -->
-<div class="card mb-5 shadow-sm">
+<!-- STATUS -->
+@if (isVerified)
+{
+    <div class="alert alert-success text-center py-2 mb-4">
+        <strong>CERTIFIED</strong>
+    </div>
+}
+else
+{
+    <div class="alert alert-warning text-center py-2 mb-4">
+        <strong>UNDER REVIEW</strong>
+    </div>
+}
+
+
+<!-- INFORMASI SPBU --><div class="card mb-5 shadow-sm">
     <div class="card-body">
+        <!-- Informasi SPBU -->
         <h5 class="card-title mb-4">Informasi SPBU</h5>
         <div class="row gy-3">
-            <div class="col-md-3">
-                <strong>Nomor SPBU</strong><br />
-                @Model.SpbuNo
-            </div>
-            <div class="col-md-3">
-                <strong>Region</strong><br />
-                @Model.Region
-            </div>
-            <div class="col-md-3">
-                <strong>Kabupaten/Kota</strong><br />
-                @Model.Kota
-            </div>
-            <div class="col-md-3">
-                <strong>Alamat SPBU</strong><br />
-                @Model.Alamat
-            </div>
+            <div class="col-md-3"><strong>Nomor SPBU</strong><br />@Model.SpbuNo</div>
+            <div class="col-md-3"><strong>Region</strong><br />@Model.Region</div>
+            <div class="col-md-3"><strong>Kabupaten/Kota</strong><br />@Model.Kota</div>
+            <div class="col-md-3"><strong>Alamat SPBU</strong><br />@Model.Alamat</div>
 
-            <div class="col-md-3">
-                <strong>Nama Pemilik SPBU</strong><br />
-                @Model.OwnerName
-            </div>
-            <div class="col-md-3">
-                <strong>Nama Manajer</strong><br />
-                @Model.ManagerName
-            </div>
-            <div class="col-md-3">
-                <strong>Tipe Kepemilikan</strong><br />
-                @Model.OwnershipType
-            </div>
-            <div class="col-md-3">
-                <strong>Quarter</strong><br />
-                @Model.Quarter
-            </div>
+            <div class="col-md-3"><strong>Nama Pemilik SPBU</strong><br />@Model.OwnerName</div>
+            <div class="col-md-3"><strong>Nama Manajer</strong><br />@Model.ManagerName</div>
+            <div class="col-md-3"><strong>Tipe Kepemilikan</strong><br />@Model.OwnershipType</div>
+            <div class="col-md-3"><strong>Quarter</strong><br />@Model.Quarter</div>
 
-            <div class="col-md-3">
-                <strong>Tahun</strong><br />
-                @Model.Year
-            </div>
-            <div class="col-md-3">
-                <strong>MOR</strong><br />
-                @Model.MOR
-            </div>
-            <div class="col-md-3">
-                <strong>Sales Area</strong><br />
-                @Model.SalesArea
-            </div>
-            <div class="col-md-3">
-                <strong>SBM</strong><br />
-                @Model.SBM
-            </div>
+            <div class="col-md-3"><strong>Tahun</strong><br />@Model.Year</div>
+            <div class="col-md-3"><strong>MOR</strong><br />@Model.MOR</div>
+            <div class="col-md-3"><strong>Sales Area</strong><br />@Model.SalesArea</div>
+            <div class="col-md-3"><strong>SBM</strong><br />@Model.SBM</div>
 
-            <div class="col-md-3">
-                <strong>Tipe Audit</strong><br />
-                @Model.AuditType
-            </div>
-            <div class="col-md-3">
-                <strong>Kelas SPBU</strong><br />
-                @Model.ClassSPBU
-            </div>
-            <div class="col-md-3">
-                <strong>Telepon</strong><br />
-                @Model.Phone
-            </div>
+            <div class="col-md-3"><strong>Tipe SPBU</strong><br />@Model.AuditType</div>
+            <div class="col-md-3"><strong>Kelas SPBU</strong><br />@Model.ClassSPBU</div>
+            <div class="col-md-3"><strong>Telepon</strong><br />@Model.Phone</div>
+        </div>
+
+        <!-- Informasi Kegiatan Audit -->
+        <h5 class="card-title mb-4 mt-5">Informasi Kegiatan Audit</h5>
+        <div class="row gy-3">
+            <div class="col-md-3"><strong>No. Report</strong><br />@Model.ReportNo</div>
+            <div class="col-md-3"><strong>Tanggal Audit</strong><br />@Model.TanggalSubmit?.ToString("dd/MM/yyyy, HH:mm 'WIB'")</div>
+            <div class="col-md-3"><strong>Waktu Audit</strong><br />@Model.TanggalSubmit?.ToString("dd/MM/yyyy, HH:mm:ss tt")</div>
+            <div class="col-md-3"><strong>Verifikator</strong><br />@Model.OwnerName</div>
+
+            <div class="col-md-3"><strong>Auditor 1</strong><br />@Model.NamaAuditor</div>
+            <div class="col-md-3"><strong>Auditor 2</strong><br />@Model.OwnerName</div>
+            <div class="col-md-3"><strong>Tipe Audit</strong><br />@Model.AuditType</div>
+            <div class="col-md-3"><strong>Next Audit</strong><br />@Model.AuditType</div>
+
+            <div class="col-md-3"><strong>Ko-ordinator</strong><br />@Model.ManagerName</div>
+            <div class="col-md-3"><strong>Sent Date</strong><br />@Model.TanggalSubmit?.ToString("dd/MM/yyyy, HH:mm 'WIB'")</div>
         </div>
     </div>
 </div>
+
 
 <!-- LAPORAN PENILAIAN (Skor dan Level) -->
 <div class="mb-5">
@@ -167,9 +158,10 @@
                 </tr>
             </thead>
             <tbody>
-                @foreach (var element in Model.Elements)
+                @for (int i = 0; i < Model.Elements.Count; i++)
                 {
-                    var scoreFraction = element.ScoreAF ?? 0m; // ScoreAF: nilai 0.00-1.00 dari elemen tersebut
+                    var element = Model.Elements[i];
+                    var scoreFraction = element.ScoreAF ?? 0m;
                     string level = "-";
                     string badgeClass = "bg-none";
 
@@ -189,6 +181,17 @@
                         badgeClass = "bg-improve";
                     }
 
+                    // Nilai minimum dinamis berdasarkan index
+                    decimal minValue = i switch
+                    {
+                        0 => 85.00m,
+                        1 => 85.00m,
+                        2 => 85.00m,
+                        3 => 20.00m,
+                        4 => 50.00m,
+                        _ => 80.00m
+                    };
+
                     <tr>
                         <td>
                             <strong>@element.Title</strong><br />
@@ -198,7 +201,7 @@
                             }
                         </td>
                         <td class="text-center">@((int)(element.Weight ?? 0))</td>
-                        <td class="text-center">85,00%</td> @* Nilai minimum (85%) ditampilkan statis *@
+                        <td class="text-center">@minValue.ToString("0.00")%</td>
                         <td class="text-center">
                             <div class="compliance-badge @badgeClass">
                                 @($"{(scoreFraction * 100):0.##}%")<br />
@@ -208,6 +211,7 @@
                     </tr>
                 }
             </tbody>
+
         </table>
     </div>
 
@@ -233,7 +237,7 @@
                 <thead class="table-light">
                     <tr>
                         <th style="width: 60%">Indikator Penilaian</th>
-                        <th style="width: 20%" class="text-center">Marks</th>
+                        <th style="width: 20%" class="text-center">Bobot Nilai</th>
                         <th style="width: 20%" class="text-center">Compliance Level</th>
                     </tr>
                 </thead>
@@ -422,9 +426,18 @@
 }
 
 <div class="text-end mt-5">
+    @if (!isSuperadmin)
+    {
+        <button class="btn btn-primary rounded-pill px-4 py-2" data-bs-toggle="modal" data-bs-target="#confirmModal">
+            Reassign Laporan Audit
+        </button>
+    }
+    else
+    {
         <a asp-action="Index" class="btn btn-secondary rounded-pill px-4 py-2">
             Back
         </a>
+    }
 </div>
 
 <!-- Modal Konfirmasi -->
@@ -436,10 +449,10 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Tutup"></button>
             </div>
             <div class="modal-body">
-                Apakah Anda yakin ingin menyetujui laporan audit ini?
+                Apakah Anda yakin ingin mengembalikan laporan audit ini?
             </div>
             <div class="modal-footer">
-                <form method="post" asp-action="Approve" asp-route-id="@Context.Request.RouteValues["id"]">
+                <form method="post" asp-action="Reassign" asp-route-id="@Context.Request.RouteValues["id"]">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Batal</button>
                     <button type="submit" class="btn btn-primary">Ya, Setujui</button>
                 </form>

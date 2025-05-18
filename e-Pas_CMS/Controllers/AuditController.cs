@@ -204,7 +204,10 @@ namespace e_Pas_CMS.Controllers
                         Status = item.Audit.status,
                         Komplain = item.Audit.status == "FAIL" ? "ADA" : "TIDAK ADA",
                         Banding = item.Audit.audit_level == "Re-Audit" ? "ADA" : "TIDAK ADA",
-                        Type = item.Audit.audit_type
+                        Type = item.Audit.audit_type,
+                        TanggalApprove = item.Audit.approval_date ?? DateTime.Now,
+                        Approver = string.IsNullOrWhiteSpace(item.Audit.approval_by) ? "-" : item.Audit.approval_by
+
                     });
                 }
 
@@ -601,10 +604,15 @@ namespace e_Pas_CMS.Controllers
         [HttpPost("audit/approve/{id}")]
         public async Task<IActionResult> Approve(string id)
         {
+            var currentUser = User.Identity?.Name;
             var audit = await _context.trx_audits.FirstOrDefaultAsync(x => x.id == id);
             if (audit == null)
                 return NotFound();
 
+            audit.approval_date = DateTime.UtcNow;
+            audit.approval_by = currentUser;
+            audit.updated_date = DateTime.UtcNow.AddHours(7);
+            audit.updated_by = currentUser;
             audit.status = "VERIFIED";
             _context.trx_audits.Update(audit);
             await _context.SaveChangesAsync();

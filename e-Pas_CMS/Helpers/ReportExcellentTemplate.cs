@@ -73,9 +73,7 @@ public class ReportExcellentTemplate : IDocument
             // Judul tengah
             row.RelativeItem(6).Column(center =>
             {
-                center.Item().AlignCenter().Text("SPBU EXCELLENT PERFORMANCE")
-                    .FontSize(13).Bold().FontColor(titleFontColor);
-                center.Item().AlignCenter().Text("AUDIT REPORT")
+                center.Item().AlignCenter().Text("PERFORMANCE AUDIT REPORT")
                     .FontSize(13).Bold().FontColor(titleFontColor);
                 center.Item().AlignCenter().Text("LAPORAN AUDIT PERFORMA")
                     .FontSize(11).FontColor(subTitleFontColor);
@@ -213,14 +211,21 @@ public class ReportExcellentTemplate : IDocument
             KomentarItem("Komentar Manajer SPBU", _model.KomentarManager);
 
             col.Item().PaddingTop(20).Text("DETAIL CHECKLIST").Bold().FontSize(12);
+            //foreach (var root in _model.Elements)
+            //{
+            //    col.Item().Text($"{root.Title} - {root.Description}").Bold().FontSize(10);
+            //    foreach (var child in root.Children)
+            //    {
+            //        //RenderChecklistStructured(col, child, root.Title + ".");
+            //        RenderChecklistStructured(col, child, child.Title, 1);
+            //    }
+            //}
+
             foreach (var root in _model.Elements)
-            {
-                col.Item().Text($"{root.Title} - {root.Description}").Bold().FontSize(10);
-                foreach (var child in root.Children)
-                {
-                    RenderChecklistStructured(col, child, root.Title + ".");
-                }
-            }
+{
+    RenderChecklistStructured(col, root, root.Title, 0);
+}
+
 
             col.Item().PageBreak();
 
@@ -293,28 +298,140 @@ public class ReportExcellentTemplate : IDocument
         }
     }
 
-    void RenderChecklistStructured(ColumnDescriptor col, AuditChecklistNode node, string prefix = "")
+    void RenderChecklistStructured(ColumnDescriptor col, AuditChecklistNode node, string prefix = "", int level = 0)
     {
-        var indent = prefix + node.Title;
+        string label = node.Title;
         string skorText;
+
+        decimal weight = node.Weight ?? 0;
+        decimal x = node.ScoreX ?? 0;
 
         if (node.Children != null && node.Children.Any())
         {
-            var af = node.ScoreAF;
-            skorText = af.HasValue ? $"{af.Value * 100:0.##}%" : "-";
+            decimal totalScore = 0;
+
+            void HitungSkorNode(AuditChecklistNode n)
+            {
+                if (n.Children != null && n.Children.Any())
+                {
+                    foreach (var c in n.Children)
+                        HitungSkorNode(c);
+                }
+                else
+                {
+                    var input = n.ScoreInput?.Trim().ToUpper();
+                    decimal cw = n.Weight ?? 0;
+
+                    if (input == "X")
+                    {
+                        totalScore += n.ScoreX ?? 0;
+                    }
+                    else if (input == "F" && n.IsRelaksasi == true)
+                    {
+                        totalScore += 1.00m * cw;
+                    }
+                    else
+                    {
+                        var map = new Dictionary<string, decimal>
+                        {
+                            ["A"] = 1.00m,
+                            ["B"] = 0.80m,
+                            ["C"] = 0.60m,
+                            ["D"] = 0.40m,
+                            ["E"] = 0.20m,
+                            ["F"] = 0.00m
+                        };
+
+                        if (map.TryGetValue(input ?? "", out var val))
+                            totalScore += val * cw;
+                    }
+                }
+            }
+
+            HitungSkorNode(node);
+
+            skorText = $"Skor: {totalScore:0.##}";
         }
         else
         {
-            skorText = !string.IsNullOrWhiteSpace(node.ScoreInput) ? node.ScoreInput : "-";
+            // --- Untuk Pertanyaan ---
+            if (!string.IsNullOrWhiteSpace(node.ScoreInput))
+            {
+                var input = node.ScoreInput.Trim().ToUpper();
+
+                if (node.IsRelaksasi == true && input == "F")
+                {
+                    skorText = $"Skor: {(1.00m * weight):0.##}";
+                }
+                else if (input == "X")
+                {
+                    skorText = $"Skor: {x:0.##}";
+                }
+                else
+                {
+                    var nilaiMap = new Dictionary<string, decimal>
+                    {
+                        ["A"] = 1.00m,
+                        ["B"] = 0.80m,
+                        ["C"] = 0.60m,
+                        ["D"] = 0.40m,
+                        ["E"] = 0.20m,
+                        ["F"] = 0.00m
+                    };
+                    if (nilaiMap.TryGetValue(input, out var val))
+                    {
+                        skorText = $"Skor: {(val * weight):0.##}";
+                    }
+                    else
+                    {
+                        skorText = "Skor: -";
+                    }
+                }
+            }
+            else
+            {
+                skorText = "Skor: -";
+            }
         }
 
-        col.Item().PaddingLeft(10).Text($"{indent}. {node.Description} | Skor: {skorText}").FontSize(9);
+        // Tentukan warna latar
+        string bgColor = (node.Type ?? "").ToLower() == "question"
+            ? "#DAE8FC"
+            : level switch
+            {
+                0 => "#F4B7C5",
+                1 => "#E2EFDA",
+                2 => "#FFF2CC",
+                _ => "#FFFFFF"
+            };
 
+        var leftPad = 10 * level;
+
+        col.Item().Background(bgColor)
+            .PaddingVertical(6)
+            .PaddingLeft(leftPad)
+            .Row(row =>
+            {
+                row.RelativeItem(8).Element(text =>
+                {
+                    var content = text.Text($"{label}. {node.Description}")
+                        .FontSize(9)
+                        .LineHeight(1.2f);
+
+                    if (level <= 1)
+                        content = content.Bold();
+                });
+
+                row.RelativeItem(4).AlignRight().Text(skorText)
+                    .FontSize(9).LineHeight(1.2f);
+            });
+
+        // Rekursif ke anak-anak
         if (node.Children != null && node.Children.Any())
         {
             foreach (var child in node.Children)
             {
-                RenderChecklistStructured(col, child, indent + ".");
+                RenderChecklistStructured(col, child, child.Title, level + 1);
             }
         }
     }
@@ -340,13 +457,17 @@ public class ReportExcellentTemplate : IDocument
                 columns.RelativeColumn(); // Density Var
             });
 
+            // HEADER
             table.Header(header =>
             {
                 void HeaderCell(string text) =>
-                    header.Cell().Background(Colors.Grey.Lighten2)
-                                 .Border(1)
-                                 .BorderColor(Colors.Grey.Medium)
-                                 .Text(text).Bold();
+                    header.Cell()//.PaddingVertical(1)
+                                 .Background(Colors.Grey.Lighten3)
+                                 .Border((float)0.5)
+                                 .BorderColor(Colors.Black)
+                                 .AlignCenter()
+                                 .AlignMiddle()
+                                 .Text(text).Bold().FontSize(7.5f);
 
                 HeaderCell("Nozzle Number");
                 HeaderCell("DU Make");
@@ -363,26 +484,30 @@ public class ReportExcellentTemplate : IDocument
                 HeaderCell("Density Var");
             });
 
+            // ISI DATA
             foreach (var qq in _model.QqChecks)
             {
                 void DataCell(string text) =>
-                    table.Cell().Border(1)
-                                .BorderColor(Colors.Grey.Medium)
-                                .Text(text);
+                    table.Cell()//.PaddingVertical(1)
+                                .Border((float)0.5)
+                                .BorderColor(Colors.Black)
+                                .AlignCenter()
+                                .AlignMiddle()
+                                .Text(text).FontSize(8);
 
                 DataCell(qq.NozzleNumber.ToString());
                 DataCell(qq.DuMake);
                 DataCell(qq.DuSerialNo);
                 DataCell(qq.Product);
                 DataCell(qq.Mode);
-                DataCell(qq.QuantityVariationWithMeasure.ToString());
+                DataCell($"{qq.QuantityVariationWithMeasure:0}");
                 DataCell($"{qq.QuantityVariationInPercentage:0.00}");
-                DataCell(qq.ObservedDensity.ToString());
-                DataCell(qq.ObservedTemp.ToString());
-                DataCell(qq.ObservedDensity15Degree.ToString());
-                DataCell(qq.ReferenceDensity15Degree.ToString());
-                DataCell(qq.TankNumber.ToString());
-                DataCell(qq.DensityVariation.ToString());
+                DataCell($"{qq.ObservedDensity:0.0000}");
+                DataCell($"{qq.ObservedTemp}");
+                DataCell($"{qq.ObservedDensity15Degree:0.0000}");
+                DataCell($"{qq.ReferenceDensity15Degree:0.0000}");
+                DataCell($"{qq.TankNumber}");
+                DataCell($"{qq.DensityVariation:0.0000}");
             }
         });
     }
@@ -463,15 +588,50 @@ public class ReportExcellentTemplate : IDocument
                 var af = modelElement?.ScoreAF ?? 0;
                 var marks = e.Weight * af;
                 var percent = af * 100;
+                string level;
+                string levelColor;
 
-                string level = percent >= 100 ? "Excellent" :
-                               percent >= 87.5m ? "Good" : "Needs Improvement";
+                if (percent <= 35)
+                {
+                    level = "Warning";
+                    levelColor = "#FF0000"; // merah
+                }
+                else if (percent <= 60)
+                {
+                    level = "Poor";
+                    levelColor = "#FFFF99"; // kuning
+                }
+                else if (percent <= 80)
+                {
+                    level = "Average";
+                    levelColor = "#CCF2F4"; // biru muda
+                }
+                else if (percent <= 95)
+                {
+                    level = "Good";
+                    levelColor = "#00FF00"; // hijau
+                }
+                else
+                {
+                    level = "Excellent";
+                    levelColor = "#FFA500"; // oranye
+                }
+
 
                 table.Cell().Text(e.Name).FontSize(9);
                 table.Cell().AlignCenter().Text($"{e.Weight:0}");
                 table.Cell().AlignCenter().Text($"{marks:0.##}");
                 table.Cell().AlignCenter().Text("85.00%");
-                table.Cell().AlignCenter().Text($"{percent:0.##}%\n{level}").FontSize(9);
+                table.Cell().AlignCenter()
+    .Background(levelColor)
+    .Padding(3)
+    .Height(40) // Tinggi tetap
+    .Width(80)  // Lebar tetap
+    .AlignMiddle()
+    .Text($"{percent:0.##}%\n{level}")
+    .FontSize(9)
+    .FontColor(Colors.Black);
+
             }
         });
     }
@@ -525,13 +685,50 @@ public class ReportExcellentTemplate : IDocument
                 var marks = weight * af;
                 var percent = af * 100;
 
-                string level = percent >= 100m ? "Excellent" :
-                               percent >= 87.5m ? "Good" : "Needs Improvement";
+                string level;
+                string levelColor;
+
+                if (percent <= 35)
+                {
+                    level = "Warning";
+                    levelColor = "#FF0000";
+                }
+                else if (percent <= 60)
+                {
+                    level = "Poor";
+                    levelColor = "#FFFF99";
+                }
+                else if (percent <= 80)
+                {
+                    level = "Average";
+                    levelColor = "#CCF2F4";
+                }
+                else if (percent <= 95)
+                {
+                    level = "Good";
+                    levelColor = "#00FF00";
+                }
+                else
+                {
+                    level = "Excellent";
+                    levelColor = "#FFA500";
+                }
+
 
                 table.Cell().Text(item.Description ?? "-").FontSize(9);
                 table.Cell().AlignCenter().Text($"{weight:0.##}");
                 table.Cell().AlignCenter().Text($"{marks:0.##}");
-                table.Cell().AlignCenter().Text($"{percent:0.##}%\n{level}").FontSize(9);
+                table.Cell().AlignCenter()
+    .Background(levelColor)
+    .Padding(3)
+    .Height(40) // Tinggi tetap
+    .Width(80)  // Lebar tetap
+    .AlignMiddle()
+    .Text($"{percent:0.##}%\n{level}")
+    .FontSize(9)
+    .FontColor(Colors.Black);
+
+
             }
         });
     }

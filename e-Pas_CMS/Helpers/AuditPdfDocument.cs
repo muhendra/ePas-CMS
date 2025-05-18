@@ -38,7 +38,7 @@ public class AuditPdfDocument : IDocument
 
                 col.Item().Text("\nTotal Score:")
                     .FontSize(12).Bold();
-                col.Item().Text($"{_model.TotalScore:0.00}% ({(_model.TotalScore >= _model.MinPassingScore ? "EXCELLENT" : "GOOD")})");
+                col.Item().Text($"{_model.TotalScore:0.00} ({(_model.TotalScore >= _model.MinPassingScore ? "EXCELLENT" : "GOOD")})");
 
                 // Komentar
                 col.Item().Text("\nKomentar Auditor:").FontSize(12).Bold();

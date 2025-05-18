@@ -161,10 +161,12 @@ namespace e_Pas_CMS.Controllers
                     SAM = a.spbu.sam,
                     Province = a.spbu.province_name,
                     Year = a.spbu.year ?? DateTime.Now.Year,
-                    AuditDate = a.audit_schedule_date?.ToDateTime(TimeOnly.MinValue),
-                    SubmitDate = a.audit_execution_time == DateTime.MinValue
-                    ? a.created_date
-                    : a.audit_execution_time,
+                    AuditDate = (a.audit_execution_time == null || a.audit_execution_time.Value == DateTime.MinValue)
+                            ? a.updated_date.Value
+                            : a.audit_execution_time.Value,
+                    SubmitDate = a.approval_date.GetValueOrDefault() == DateTime.MinValue
+                    ? a.updated_date
+                    : a.approval_date.GetValueOrDefault(),
                     Auditor = a.app_user.name,
                     GoodStatus = goodStatus,
                     ExcellentStatus = excellentStatus,
@@ -174,7 +176,9 @@ namespace e_Pas_CMS.Controllers
                     WMEF = a.spbu.wmef,
                     FormatFisik = a.spbu.format_fisik,
                     CPO = a.spbu.cpo,
-                    KelasSpbu = "Pasti Pas Excellent"
+                    KelasSpbu = "Pasti Pas Excellent",
+                    ApproveDate = a.approval_date ?? DateTime.Now,
+                    ApproveBy = string.IsNullOrWhiteSpace(a.approval_by) ? "-" : a.approval_by
                 });
             }
 
@@ -212,6 +216,11 @@ namespace e_Pas_CMS.Controllers
             var mediaList = await GetMediaPerNodeAsync(conn, id);
             model.Elements = BuildHierarchy(checklistData, mediaList);
 
+            foreach (var element in model.Elements)
+            {
+                AssignWeightRecursive(element);
+            }
+
             CalculateChecklistScores(model.Elements);
             CalculateOverallScore(model, checklistData);
 
@@ -230,8 +239,12 @@ namespace e_Pas_CMS.Controllers
             var pdfStream = new MemoryStream();
             document.GeneratePdf(pdfStream);
             pdfStream.Position = 0;
+            string spbuNo = model.SpbuNo?.Replace(" ", "") ?? "SPBU";
+            string tanggalAudit = model.TanggalSubmit?.ToString("yyyyMMdd") ?? "00000000";
+            string fileName = $"audit_{spbuNo}_{tanggalAudit}.pdf";
 
-            return File(pdfStream, "application/pdf", $"LaporanAudit_{id}.pdf");
+            return File(pdfStream, "application/pdf", fileName);
+
         }
 
         private async Task<DetailReportViewModel> GetDetailReportAsync(Guid id)
@@ -406,7 +419,10 @@ namespace e_Pas_CMS.Controllers
                 (SELECT all_comments FROM comment_per_elemen WHERE root_title = 'Elemen 2') AS KomentarQuality,
                 (SELECT all_comments FROM comment_per_elemen WHERE root_title = 'Elemen 3') AS KomentarHSSE,
                 (SELECT all_comments FROM comment_per_elemen WHERE root_title = 'Elemen 4') AS KomentarVisual,
-                (SELECT all_comments FROM comment_per_elemen WHERE root_title = 'Elemen 5') AS KomentarManager
+                audit_mom_final AS KomentarManager,
+                approval_date as ApproveDate,
+                approval_by as ApproveBy,
+                ta.updated_date as UpdateDate
             FROM trx_audit ta
             JOIN spbu s ON ta.spbu_id = s.id
             WHERE ta.id = @id";
@@ -420,7 +436,9 @@ namespace e_Pas_CMS.Controllers
                 AuditId = basic.Id,
                 ReportNo = basic.ReportNo,
                 AuditType = basic.AuditType == "Mystery Audit" ? "Regular Audit" : basic.AuditType,
-                TanggalSubmit = basic.SubmitDate,
+                TanggalSubmit = basic.ApproveDate.GetValueOrDefault() == DateTime.MinValue
+                ? basic.UpdatedDate
+                : basic.ApproveDate.GetValueOrDefault(),
                 Status = basic.Status,
                 Notes = basic.Notes,
                 SpbuNo = basic.SpbuNo,
@@ -549,6 +567,43 @@ namespace e_Pas_CMS.Controllers
                       );
         }
 
+        void RecalcScoreAFWeighted(AuditChecklistNode node)
+        {
+            if (node.Children != null && node.Children.Any())
+            {
+                // Rekursif ke setiap anak
+                foreach (var child in node.Children)
+                    RecalcScoreAFWeighted(child);
+
+                // Hitung total bobot dan nilai total
+                var validChildren = node.Children.Where(c => c.ScoreAF.HasValue && c.Weight > 0).ToList();
+                var totalWeight = validChildren.Sum(c => c.Weight);
+
+                if (totalWeight > 0)
+                {
+                    var weightedScore = validChildren.Sum(c => c.ScoreAF.Value * c.Weight);
+                    node.ScoreAF = weightedScore / totalWeight;
+                }
+                else
+                {
+                    node.ScoreAF = null;
+                }
+            }
+            else
+            {
+                // Leaf node (pertanyaan): ambil dari ScoreInput (misal "80" artinya 0.8)
+                if (decimal.TryParse(node.ScoreInput, out var parsedScore))
+                {
+                    node.ScoreAF = parsedScore / 100m;
+                }
+                else
+                {
+                    node.ScoreAF = null;
+                }
+            }
+        }
+
+
         private void CalculateChecklistScores(List<AuditChecklistNode> nodes)
         {
             var nilaiAF = new Dictionary<string, decimal>
@@ -676,6 +731,44 @@ namespace e_Pas_CMS.Controllers
             model.MinPassingScore = 85.00m;
         }
 
+        private void AssignWeightRecursive(AuditChecklistNode node)
+        {
+            if (node.Children?.Any() == true)
+            {
+                foreach (var child in node.Children)
+                {
+                    AssignWeightRecursive(child);
+                }
+
+                node.Weight = node.Children.Sum(c => c.Weight ?? 0m);
+            }
+        }
+
+        [HttpPost("auditreport/reassign/{id}")]
+        public async Task<IActionResult> Reassign(string id)
+        {
+            var currentUser = User.Identity?.Name;
+            var audit = await _context.trx_audits.FirstOrDefaultAsync(x => x.id == id);
+            if (audit == null)
+                return NotFound();
+
+            try
+            {
+                audit.status = "UNDER_REVIEW";
+                audit.updated_by = currentUser;
+                //audit.updated_date = DateTime.UtcNow;
+                _context.trx_audits.Update(audit);
+                await _context.SaveChangesAsync();
+
+                TempData["Success"] = "Laporan audit telah di dikembalikan ke review.";
+            }
+            catch (Exception ex)
+            {
+                ex.Message.ToString();
+            }
+            
+            return RedirectToAction("Detail", new { id });
+        }
         private List<AuditChecklistNode> BuildHierarchy(
     List<ChecklistFlatItem> flatList,
     Dictionary<string, List<MediaItem>> mediaList)

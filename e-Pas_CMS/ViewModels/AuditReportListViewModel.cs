@@ -39,5 +39,9 @@
         public List<AuditChecklistNode> Elements { get; set; } = new();
         public List<AuditQqCheckItem> QqChecks { get; set; } = new();
         public string Notes { get; set; }
+
+        public DateTime ApproveDate { get; set; }
+
+        public string ApproveBy { get; set; }
     }
 }
