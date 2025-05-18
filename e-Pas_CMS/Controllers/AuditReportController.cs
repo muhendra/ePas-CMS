@@ -748,25 +748,22 @@ namespace e_Pas_CMS.Controllers
         public async Task<IActionResult> Reassign(string id)
         {
             var currentUser = User.Identity?.Name;
-            var audit = await _context.trx_audits.FirstOrDefaultAsync(x => x.id == id);
-            if (audit == null)
+
+            string sql = @"
+        UPDATE trx_audit
+        SET approval_date = now(),
+            approval_by = @p0,
+            updated_date = now(),
+            updated_by = @p0,
+            status = 'VERIFIED'
+        WHERE id = @p1";
+
+            int affected = await _context.Database.ExecuteSqlRawAsync(sql, currentUser, id);
+
+            if (affected == 0)
                 return NotFound();
 
-            try
-            {
-                audit.status = "UNDER_REVIEW";
-                audit.updated_by = currentUser;
-                //audit.updated_date = DateTime.UtcNow;
-                _context.trx_audits.Update(audit);
-                await _context.SaveChangesAsync();
-
-                TempData["Success"] = "Laporan audit telah di dikembalikan ke review.";
-            }
-            catch (Exception ex)
-            {
-                ex.Message.ToString();
-            }
-            
+            TempData["Success"] = "Laporan audit telah Reassign ke Review.";
             return RedirectToAction("Detail", new { id });
         }
         private List<AuditChecklistNode> BuildHierarchy(

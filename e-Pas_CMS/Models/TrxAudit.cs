@@ -44,6 +44,8 @@ public partial class TrxAudit
     public string UpdatedBy { get; set; } = null!;
 
     public DateTime? UpdatedDate { get; set; }
+    public DateTime? approval_date { get; set; }
+    public string? approval_by { get; set; }
 
     public virtual AppUser? AppUser { get; set; }
 

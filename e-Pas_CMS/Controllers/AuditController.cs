@@ -605,21 +605,25 @@ namespace e_Pas_CMS.Controllers
         public async Task<IActionResult> Approve(string id)
         {
             var currentUser = User.Identity?.Name;
-            var audit = await _context.trx_audits.FirstOrDefaultAsync(x => x.id == id);
-            if (audit == null)
-                return NotFound();
 
-            audit.approval_date = DateTime.UtcNow;
-            audit.approval_by = currentUser;
-            audit.updated_date = DateTime.UtcNow.AddHours(7);
-            audit.updated_by = currentUser;
-            audit.status = "VERIFIED";
-            _context.trx_audits.Update(audit);
-            await _context.SaveChangesAsync();
+            string sql = @"
+        UPDATE trx_audit
+        SET approval_date = now(),
+            approval_by = @p0,
+            updated_date = now(),
+            updated_by = @p0,
+            status = 'VERIFIED'
+        WHERE id = @p1";
+
+            int affected = await _context.Database.ExecuteSqlRawAsync(sql, currentUser, id);
+
+            if (affected == 0)
+                return NotFound();
 
             TempData["Success"] = "Laporan audit telah disetujui.";
             return RedirectToAction("Detail", new { id });
         }
+
 
         [HttpPost]
         public async Task<IActionResult> UpdateScore([FromBody] UpdateScoreRequest request)
