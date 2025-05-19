@@ -41,8 +41,8 @@ namespace e_Pas_CMS.Controllers
                                     select aur.region)
                        .Distinct()
                        .Where(r => r != null)
-
                        .ToListAsync();
+
             var query = _context.trx_audits
                 .Include(a => a.spbu)
                 .Include(a => a.app_user)
@@ -82,71 +82,85 @@ namespace e_Pas_CMS.Controllers
 
             foreach (var a in pagedAudits)
             {
-                // Hitung final score berdasarkan checklist
                 var sql = @"
-            SELECT mqd.weight, tac.score_input
-            FROM master_questioner_detail mqd
-            LEFT JOIN trx_audit_checklist tac 
-                ON tac.master_questioner_detail_id = mqd.id 
-                AND tac.trx_audit_id = @id
-            WHERE mqd.master_questioner_id = (
-                SELECT master_questioner_checklist_id 
-                FROM trx_audit 
-                WHERE id = @id
-            )
-            AND mqd.type = 'QUESTION'";
+SELECT 
+    mqd.weight, 
+    tac.score_input, 
+    tac.score_x, 
+    mqd.is_relaksasi
+FROM master_questioner_detail mqd
+LEFT JOIN trx_audit_checklist tac 
+    ON tac.master_questioner_detail_id = mqd.id 
+    AND tac.trx_audit_id = @id
+WHERE mqd.master_questioner_id = (
+    SELECT master_questioner_checklist_id 
+    FROM trx_audit 
+    WHERE id = @id
+)
+AND mqd.type = 'QUESTION'";
 
-                var checklist = (await conn.QueryAsync<(decimal? weight, string score_input)>(sql, new { id = a.id }))
-                                    .ToList();
+                var checklist = (await conn.QueryAsync<(decimal? weight, string score_input, decimal? score_x, bool? is_relaksasi)>(sql, new { id = a.id }))
+                    .ToList();
 
-                decimal totalScore = 0, maxScore = 0;
+                decimal sumAF = 0, sumWeight = 0, sumX = 0;
 
                 foreach (var item in checklist)
                 {
                     decimal w = item.weight ?? 0;
-                    decimal v = item.score_input switch
+                    string input = item.score_input?.Trim().ToUpperInvariant() ?? "";
+
+                    if (input == "X")
                     {
-                        "A" => 1.00m,
-                        "B" => 0.80m,
-                        "C" => 0.60m,
-                        "D" => 0.40m,
-                        "E" => 0.20m,
-                        "F" => 0.00m,
-                        _ => 0.00m
-                    };
-                    totalScore += v * w;
-                    maxScore += w;
+                        sumX += w;
+                        sumAF += item.score_x ?? 0;
+                    }
+                    else if (input == "F" && item.is_relaksasi == true)
+                    {
+                        sumAF += 1.00m * w;
+                    }
+                    else
+                    {
+                        decimal af = input switch
+                        {
+                            "A" => 1.00m,
+                            "B" => 0.80m,
+                            "C" => 0.60m,
+                            "D" => 0.40m,
+                            "E" => 0.20m,
+                            "F" => 0.00m,
+                            _ => 0.00m
+                        };
+                        sumAF += af * w;
+                    }
+
+                    sumWeight += w;
                 }
 
-                decimal finalScore = maxScore > 0
-                    ? totalScore / maxScore * 100
+                decimal finalScore = (sumWeight - sumX) > 0
+                    ? (sumAF / (sumWeight - sumX)) * sumWeight
                     : 0m;
 
                 var penaltyQuery = @"
-                SELECT string_agg(mqd.penalty_alert, ', ') AS penalty_alerts
-                FROM trx_audit_checklist tac 
-                INNER JOIN master_questioner_detail mqd 
-                    ON mqd.id = tac.master_questioner_detail_id 
-                WHERE tac.trx_audit_id = @id 
-                  AND tac.score_input = 'F' 
-                  AND mqd.is_penalty = true;";
+SELECT STRING_AGG(mqd.penalty_alert, ', ') AS penalty_alerts
+FROM trx_audit_checklist tac
+INNER JOIN master_questioner_detail mqd ON mqd.id = tac.master_questioner_detail_id
+WHERE 
+    tac.trx_audit_id = @id AND
+    ((mqd.penalty_excellent_criteria = 'LT_1' AND tac.score_input <> 'A') OR
+     (mqd.penalty_excellent_criteria = 'EQ_0' AND tac.score_input = 'F')) AND
+    mqd.is_penalty = true;";
 
                 var penaltyResult = await conn.ExecuteScalarAsync<string>(penaltyQuery, new { id = a.id });
-
                 bool hasPenalty = !string.IsNullOrEmpty(penaltyResult);
 
                 string goodStatus = "NOT CERTIFIED";
-
                 string excellentStatus = "NOT CERTIFIED";
 
                 if (finalScore >= 80)
                 {
                     goodStatus = "CERTIFIED";
-
                     if (!hasPenalty)
-                    {
                         excellentStatus = "EXCELLENT";
-                    }
                 }
 
                 result.Add(new AuditReportListViewModel
@@ -162,11 +176,11 @@ namespace e_Pas_CMS.Controllers
                     Province = a.spbu.province_name,
                     Year = a.spbu.year ?? DateTime.Now.Year,
                     AuditDate = (a.audit_execution_time == null || a.audit_execution_time.Value == DateTime.MinValue)
-                            ? a.updated_date.Value
-                            : a.audit_execution_time.Value,
+                        ? a.updated_date.Value
+                        : a.audit_execution_time.Value,
                     SubmitDate = a.approval_date.GetValueOrDefault() == DateTime.MinValue
-                    ? a.updated_date
-                    : a.approval_date.GetValueOrDefault(),
+                        ? a.updated_date
+                        : a.approval_date.GetValueOrDefault(),
                     Auditor = a.app_user.name,
                     GoodStatus = goodStatus,
                     ExcellentStatus = excellentStatus,
@@ -460,6 +474,9 @@ WHERE
                 AuditId = basic.Id,
                 ReportNo = basic.ReportNo,
                 AuditType = basic.AuditType == "Mystery Audit" ? "Regular Audit" : basic.AuditType,
+                TanggalAudit = (basic.SubmitDate.GetValueOrDefault() == DateTime.MinValue)
+                ?basic.UpdatedDate
+                :basic.SubmitDate.GetValueOrDefault(),
                 TanggalSubmit = basic.ApproveDate.GetValueOrDefault() == DateTime.MinValue
                 ? basic.UpdatedDate
                 : basic.ApproveDate.GetValueOrDefault(),

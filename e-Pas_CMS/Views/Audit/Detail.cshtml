@@ -118,46 +118,71 @@
 {
     @if (!string.IsNullOrEmpty(Model.Notes) || (Model.MediaNotes != null && Model.MediaNotes.Any()))
     {
-        <div class="card p-4 mb-5 shadow-sm">
-            <h4 class="fw-bold mb-4">
-                @(Model.AuditType == "Mystery Guest" ? "Mystery Guest" : Model.AuditType == "Mystery Audit" ? "Mystery Audit" : "Catatan Audit")
-            </h4>
+        <div class="accordion mt-4 mb-4" id="mysteryAuditAccordion">
+            <div class="accordion-item shadow-sm">
+                <h2 class="accordion-header" id="mysteryAuditHeading">
+                    <button class="accordion-button collapsed d-flex justify-content-between align-items-center" type="button"
+                            data-bs-toggle="collapse"
+                            data-bs-target="#mysteryAuditCollapse"
+                            aria-expanded="false"
+                            aria-controls="mysteryAuditCollapse">
+                        <div class="d-flex flex-column">
+                            <span class="h5 fw-bold mb-0">
+                                @(Model.AuditType == "Mystery Guest" ? "Mystery Guest" : "Mystery Audit")
+                            </span>
+                            <small class="text-muted fst-italic">Klik untuk detail</small>
+                        </div>
+                    </button>
+                </h2>
+                <div id="mysteryAuditCollapse" class="accordion-collapse collapse"
+                     aria-labelledby="mysteryAuditHeading"
+                     data-bs-parent="#mysteryAuditAccordion">
+                    <div class="accordion-body">
 
-            @* Teks Catatan *@
-            @if (!string.IsNullOrEmpty(Model.Notes))
-            {
-                <div class="border rounded p-3 bg-light mb-4">
-                    @Model.Notes
-                </div>
-            }
+                        @* Teks Catatan *@
+                        @if (!string.IsNullOrEmpty(Model.Notes))
+                        {
+                            <div class="border rounded p-3 bg-light mb-4">
+                                @Model.Notes
+                            </div>
+                        }
 
-            @* Gambar/Video Catatan *@
-            @if (Model.MediaNotes != null && Model.MediaNotes.Any())
-            {
-                <div class="row row-cols-1 row-cols-md-2 g-4">
-                    @foreach (var media in Model.MediaNotes)
-                    {
-                        <div class="col d-flex justify-content-center">
-                            <div class="card h-100 p-3 d-flex align-items-center justify-content-center">
-                                @if (media.MediaType?.ToUpper() == "VIDEO" || media.MediaPath.EndsWith(".mp4", StringComparison.OrdinalIgnoreCase))
+                        @* Gambar/Video Catatan *@
+                        @if (Model.MediaNotes != null && Model.MediaNotes.Any())
+                        {
+                            <div class="row row-cols-1 row-cols-md-2 g-4">
+                                @foreach (var media in Model.MediaNotes)
                                 {
-                                    <video controls class="rounded shadow-sm" style="max-height:800px; width:auto; max-width:100%;">
-                                        <source src="@media.MediaPath" type="video/mp4" />
-                                        Your browser does not support the video tag.
-                                    </video>
-                                }
-                                else
-                                {
-                                    <img src="@media.MediaPath" alt="Foto Catatan Audit" class="rounded shadow-sm" style="max-height:800px; width:auto; max-width:100%;" />
+                                    <div class="col d-flex justify-content-center">
+                                        <div class="card h-100 p-3 d-flex align-items-center justify-content-center">
+                                            @if (media.MediaType?.ToUpper() == "VIDEO" || media.MediaPath.EndsWith(".mp4", StringComparison.OrdinalIgnoreCase))
+                                            {
+                                                <video controls class="rounded shadow-sm" style="max-height:800px; width:auto; max-width:100%;">
+                                                    <source src="@media.MediaPath" type="video/mp4" />
+                                                    Your browser does not support the video tag.
+                                                </video>
+                                            }
+                                            else
+                                            {
+                                                <img src="@media.MediaPath"
+                                                     alt="Foto Catatan Audit"
+                                                     class="rounded shadow-sm"
+                                                     style="max-height:800px; width:auto; max-width:100%;" />
+                                            }
+                                        </div>
+                                    </div>
                                 }
                             </div>
-                        </div>
-                    }
+                        }
+
+                    </div>
                 </div>
-            }
+            </div>
         </div>
     }
 }
+
+
 <!-- BERITA ACARA -->
 @if (Model.Status != "VERIFIED" && currentUser != "usermanagement1")
 {
