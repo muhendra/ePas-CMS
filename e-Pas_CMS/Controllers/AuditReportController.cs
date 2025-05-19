@@ -207,6 +207,16 @@ namespace e_Pas_CMS.Controllers
 
             var model = MapToViewModel(basic);
 
+            var penaltySql = @"
+        SELECT STRING_AGG(mqd.penalty_alert, ', ') AS penalty_alerts
+        FROM trx_audit_checklist tac 
+        INNER JOIN master_questioner_detail mqd ON mqd.id = tac.master_questioner_detail_id 
+        WHERE tac.trx_audit_id = @id
+          AND tac.score_input = 'F'
+          AND mqd.is_penalty = TRUE";
+
+            model.PenaltyAlerts = await conn.ExecuteScalarAsync<string>(penaltySql, new { id = id.ToString() });
+
             model.MediaNotes = await GetMediaNotesAsync(conn, id, "QUESTION");
             model.FinalDocuments = await GetMediaNotesAsync(conn, id, "FINAL");
 
@@ -807,7 +817,7 @@ namespace e_Pas_CMS.Controllers
             model.TotalScore = totalScore;
             model.MaxScore = maxScore;
             model.FinalScore = (maxScore > 0) ? (totalScore / maxScore) * 100m : 0m;
-            model.MinPassingScore = 85.00m;
+            model.MinPassingScore = 80.00m;
 
             // Log ke Output
             System.Diagnostics.Debug.WriteLine("[DEBUG] Perhitungan Total Skor:");

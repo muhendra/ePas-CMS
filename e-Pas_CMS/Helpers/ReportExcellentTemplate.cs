@@ -99,16 +99,9 @@ public class ReportExcellentTemplate : IDocument
     {
         container.Column(col =>
         {
-            // Warna dan teks box skor
-            string boxColor = "#CCCCCC";
+            bool isCertified0 = _model.TotalScore >= 85 && string.IsNullOrWhiteSpace(_model.PenaltyAlerts); // Atau pakai _model.MinPassingScore
+            string boxColor = isCertified0 ? "#FFC107" : "#F44336";
             string scoreFontColor = Colors.White;
-
-            if (_model.ExcellentStatus == "EXCELLENT")
-                boxColor = "#FFC107";
-            else if (_model.GoodStatus == "CERTIFIED")
-                boxColor = "#00A64F";
-            else if (_model.GoodStatus == "NOT CERTIFIED")
-                boxColor = "#F44336";
 
             col.Item()
    .PaddingTop(-18)
@@ -122,7 +115,7 @@ public class ReportExcellentTemplate : IDocument
            .Bold().FontColor(scoreFontColor).FontSize(9);
        score.Item().AlignLeft().Text($"{_model.TotalScore:0.00}")
            .FontSize(16).Bold().FontColor(scoreFontColor);
-       score.Item().AlignLeft().Text("Minimum Skor: 85")
+       score.Item().AlignLeft().Text("Minimum Skor: 80")
            .FontSize(8).FontColor(scoreFontColor);
    });
 
@@ -170,17 +163,21 @@ public class ReportExcellentTemplate : IDocument
 
             //col.Item().PaddingBottom(10).Text($"Catatan Auditor: {_model.Notes}").Italic().FontSize(9);
 
-            var statusBoxText = _model.ExcellentStatus == "EXCELLENT"
-                ? "PASTI PAS EXCELLENT!"
-                : _model.GoodStatus == "CERTIFIED"
-                    ? "PASTI PAS GOOD!"
-                    : "NOT CERTIFIED";
+            //var statusBoxText = _model.ExcellentStatus == "EXCELLENT"
+            //    ? "PASTI PAS EXCELLENT!"
+            //    : _model.GoodStatus == "CERTIFIED"
+            //        ? "PASTI PAS GOOD!"
+            //        : "NOT CERTIFIED";
 
-            var statusColor = _model.ExcellentStatus == "EXCELLENT"
-                ? "#FFC107"
-                : _model.GoodStatus == "CERTIFIED"
-                    ? "#00A64F"
-                    : "#F44336";
+            //var statusColor = _model.ExcellentStatus == "EXCELLENT"
+            //    ? "#FFC107"
+            //    : _model.GoodStatus == "CERTIFIED"
+            //        ? "#00A64F"
+            //        : "#F44336";
+
+            var isCertified = _model.TotalScore >= 80 && string.IsNullOrWhiteSpace(_model.PenaltyAlerts); // Atau ambil dari _model.MinPassingScore jika ada
+            var statusBoxText = isCertified ? "PASTI PAS EXCELLENT!" : "NOT CERTIFIED";
+            var statusColor = isCertified ? "#FFC107" : "#F44336";
 
             col.Item().Background(statusColor).Padding(10).Column(box =>
             {
@@ -189,23 +186,27 @@ public class ReportExcellentTemplate : IDocument
                     .FontSize(16).Bold()
                     .FontColor(Colors.White);
 
-                if (_model.GoodStatus == "NOT CERTIFIED" && !string.IsNullOrWhiteSpace(_model.PenaltyAlerts))
+                if (!isCertified && !string.IsNullOrWhiteSpace(_model.PenaltyAlerts))
                 {
                     box.Item().PaddingTop(5)
                         .AlignCenter()
-                        .Text($"{_model.PenaltyAlerts}")
+                        .Text($"Gagal di elemen: {_model.PenaltyAlerts}")
                         .FontSize(9)
                         .Italic()
                         .FontColor(Colors.White);
                 }
             });
 
-
+            // Jalankan RenderChecklistStructured secara diam-diam hanya untuk menghitung skor dan isi TotalScore tiap elemen
             foreach (var root in _model.Elements)
-                HitungTotalScore(root);
+            {
+                RenderChecklistStructured(new ColumnDescriptor(), root, root.Title, 0); // Render dummy (tidak ditampilkan), tapi akan mengisi node.TotalScore dengan logika benar
+            }
 
+            // Tampilkan tabel Element Compliance yang butuh node.TotalScore
             col.Item().PaddingVertical(10).Element(ComposeElementTable);
 
+            // Tampilkan tabel Sub-Element
             foreach (var element in _model.Elements.Where(x => !string.IsNullOrWhiteSpace(x.Description)))
             {
                 col.Item().PaddingTop(10).Text(element.Description).Bold().FontSize(11);

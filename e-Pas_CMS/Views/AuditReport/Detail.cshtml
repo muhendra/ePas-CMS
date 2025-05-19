@@ -7,6 +7,11 @@
     bool isVerified = Model.Status?.ToUpper() == "VERIFIED";
 
     var isSuperadmin = User.IsInRole("Report");
+
+    var isCertified = Model.TotalScore >= Model.MinPassingScore && string.IsNullOrWhiteSpace(Model.PenaltyAlerts);
+    var statusLabel = isCertified ? "EXCELLENT" : "NOT CERTIFIED";
+    var boxClass = isCertified ? "bg-warning" : "bg-danger text-white";
+    var showPenalty = !isCertified && !string.IsNullOrWhiteSpace(Model.PenaltyAlerts);
 }
 
 @Html.AntiForgeryToken()
@@ -71,7 +76,7 @@
 </div>
 
 <!-- STATUS -->
-@if (Model.TotalScore >= Model.MinPassingScore)
+@if (isCertified)
 {
     <div class="alert alert-success text-center py-2 mb-4">
         <strong>CERTIFIED</strong>
@@ -134,17 +139,24 @@ else
     <h4 class="fw-bold">Laporan Penilaian</h4>
 
     <!-- Total Score -->
-    <div class="@(Model.TotalScore < Model.MinPassingScore
-              ? "bg-danger text-white"
-              : "bg-warning") rounded-3 text-center py-2 mb-1">
+    <div class="@boxClass rounded-3 text-center py-2 mb-1">
         <strong>
             Total Score (TS): @Model.TotalScore.ToString("0.00")% &mdash;
-            @(Model.TotalScore < Model.MinPassingScore ? "NOT CERTIFIED" : "GOOD")
+            @statusLabel
         </strong>
+
+        @if (showPenalty)
+        {
+            <div class="mt-1 small">
+                <strong>Penalty:</strong> @Model.PenaltyAlerts
+            </div>
+        }
     </div>
+
     <div class="text-center text-muted mb-3">
         Nilai Minimum Pasti Pas: @Model.MinPassingScore.ToString("0.00")%
     </div>
+
 
     <!-- Level Konfirmasi Pertamina Way (Elemen) -->
     <h5 class="fw-bold mt-5">Level Konfirmasi Pertamina Way (Elemen)</h5>
