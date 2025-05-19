@@ -147,28 +147,28 @@ public class ReportExcellentTemplate : IDocument
             }
 
 
-            col.Item()
-            .Background(statusBgColor)
-            .Padding(8)
-            .AlignCenter()
-            .Text(statusText)
-            .FontSize(16)
-            .Bold()
-            .FontColor(Colors.White); 
+            //col.Item()
+            //.Background(statusBgColor)
+            //.Padding(8)
+            //.AlignCenter()
+            //.Text(statusText)
+            //.FontSize(16)
+            //.Bold()
+            //.FontColor(Colors.White); 
 
-            if (!string.IsNullOrWhiteSpace(_model.PenaltyAlerts))
-            {
-                col.Item()
-                    .PaddingTop(5)
-                    .Text($"Gagal di elemen: {_model.PenaltyAlerts}")
-                    .FontColor(Colors.Red.Darken2)
-                    .Italic()
-                    .FontSize(9);
-            }
+            //if (!string.IsNullOrWhiteSpace(_model.PenaltyAlerts))
+            //{
+            //    col.Item()
+            //        .PaddingTop(5)
+            //        .Text($"Gagal di elemen: {_model.PenaltyAlerts}")
+            //        .FontColor(Colors.Red.Darken2)
+            //        .Italic()
+            //        .FontSize(9);
+            //}
 
             col.Item().PaddingVertical(10).Element(ComposeInfoTable);
 
-            col.Item().PaddingBottom(10).Text($"Catatan Auditor: {_model.Notes}").Italic().FontSize(9);
+            //col.Item().PaddingBottom(10).Text($"Catatan Auditor: {_model.Notes}").Italic().FontSize(9);
 
             var statusBoxText = _model.ExcellentStatus == "EXCELLENT"
                 ? "PASTI PAS EXCELLENT!"
@@ -182,11 +182,24 @@ public class ReportExcellentTemplate : IDocument
                     ? "#00A64F"
                     : "#F44336";
 
-            col.Item().Background(statusColor).Padding(10)
-               .AlignCenter()
-               .Text(statusBoxText)
-               .FontSize(16).Bold()
-               .FontColor(Colors.White);
+            col.Item().Background(statusColor).Padding(10).Column(box =>
+            {
+                box.Item().AlignCenter()
+                    .Text(statusBoxText)
+                    .FontSize(16).Bold()
+                    .FontColor(Colors.White);
+
+                if (_model.GoodStatus == "NOT CERTIFIED" && !string.IsNullOrWhiteSpace(_model.PenaltyAlerts))
+                {
+                    box.Item().PaddingTop(5)
+                        .AlignCenter()
+                        .Text($"{_model.PenaltyAlerts}")
+                        .FontSize(9)
+                        .Italic()
+                        .FontColor(Colors.White);
+                }
+            });
+
 
             col.Item().PaddingVertical(10).Element(ComposeElementTable);
 
@@ -354,43 +367,14 @@ public class ReportExcellentTemplate : IDocument
         }
         else
         {
-            // --- Untuk Pertanyaan ---
+            // Tampilkan ScoreInput mentah (A, B, C, D, E, F, X) untuk question level terakhir
             if (!string.IsNullOrWhiteSpace(node.ScoreInput))
             {
-                var input = node.ScoreInput.Trim().ToUpper();
-
-                if (node.IsRelaksasi == true && input == "F")
-                {
-                    skorText = $"Skor: {(1.00m * weight):0.##}";
-                }
-                else if (input == "X")
-                {
-                    skorText = $"Skor: {x:0.##}";
-                }
-                else
-                {
-                    var nilaiMap = new Dictionary<string, decimal>
-                    {
-                        ["A"] = 1.00m,
-                        ["B"] = 0.80m,
-                        ["C"] = 0.60m,
-                        ["D"] = 0.40m,
-                        ["E"] = 0.20m,
-                        ["F"] = 0.00m
-                    };
-                    if (nilaiMap.TryGetValue(input, out var val))
-                    {
-                        skorText = $"Skor: {(val * weight):0.##}";
-                    }
-                    else
-                    {
-                        skorText = "Skor: -";
-                    }
-                }
+                skorText = $"Input: {node.ScoreInput.ToUpper()}";
             }
             else
             {
-                skorText = "Skor: -";
+                skorText = "Input: -";
             }
         }
 
@@ -568,7 +552,7 @@ public class ReportExcellentTemplate : IDocument
             {
                 c.RelativeColumn(2); // Indikator
                 c.RelativeColumn();  // Bobot
-                c.RelativeColumn();  // Marks
+                //c.RelativeColumn();  // Marks
                 c.RelativeColumn();  // Nilai Minimum
                 c.RelativeColumn();  // Compliance
             });
@@ -577,17 +561,19 @@ public class ReportExcellentTemplate : IDocument
             {
                 header.Cell().Text("Indikator Penilaian").Bold();
                 header.Cell().AlignCenter().Text("Bobot Nilai").Bold();
-                header.Cell().AlignCenter().Text("Marks").Bold();
+                //header.Cell().AlignCenter().Text("Marks").Bold();
                 header.Cell().AlignCenter().Text("Nilai Minimum").Bold();
                 header.Cell().AlignCenter().Text("Compliance Level").Bold();
             });
 
-            foreach (var e in elements)
+            for (int i = 0; i < elements.Length; i++)
             {
+                var e = elements[i];
                 var modelElement = _model.Elements.FirstOrDefault(x => x.Description.Contains(e.Name));
                 var af = modelElement?.ScoreAF ?? 0;
                 var marks = e.Weight * af;
                 var percent = af * 100;
+
                 string level;
                 string levelColor;
 
@@ -617,24 +603,33 @@ public class ReportExcellentTemplate : IDocument
                     levelColor = "#FFA500"; // oranye
                 }
 
+                string minText = i switch
+                {
+                    0 => "85.00%",
+                    1 => "85.00%",
+                    2 => "85.00%",
+                    3 => "20.00%",
+                    4 => "50.00%",
+                    _ => "80.00%"
+                };
 
                 table.Cell().Text(e.Name).FontSize(9);
                 table.Cell().AlignCenter().Text($"{e.Weight:0}");
-                table.Cell().AlignCenter().Text($"{marks:0.##}");
-                table.Cell().AlignCenter().Text("85.00%");
+                //table.Cell().AlignCenter().Text($"{marks:0.##}");
+                table.Cell().AlignCenter().Text(minText);
                 table.Cell().AlignCenter()
-    .Background(levelColor)
-    .Padding(3)
-    .Height(40) // Tinggi tetap
-    .Width(80)  // Lebar tetap
-    .AlignMiddle()
-    .Text($"{percent:0.##}%\n{level}")
-    .FontSize(9)
-    .FontColor(Colors.Black);
-
+                    .Background(levelColor)
+                    .Padding(3)
+                    .Height(40)
+                    .Width(80)
+                    .AlignMiddle()
+                    .Text($"{percent:0.##}%\n{level}")
+                    .FontSize(9)
+                    .FontColor(Colors.Black);
             }
         });
     }
+
 
     void ComposeSubElementTable(IContainer container, List<AuditChecklistNode> children)
     {
@@ -665,7 +660,6 @@ public class ReportExcellentTemplate : IDocument
             {
                 c.RelativeColumn(2); // Sub Elemen
                 c.RelativeColumn();  // Bobot
-                c.RelativeColumn();  // Marks
                 c.RelativeColumn();  // Compliance
             });
 
@@ -673,7 +667,6 @@ public class ReportExcellentTemplate : IDocument
             {
                 header.Cell().Text("Sub Elemen").Bold();
                 header.Cell().AlignCenter().Text("Bobot").Bold();
-                header.Cell().AlignCenter().Text("Marks").Bold();
                 header.Cell().AlignCenter().Text("Compliance").Bold();
             });
 
@@ -717,7 +710,6 @@ public class ReportExcellentTemplate : IDocument
 
                 table.Cell().Text(item.Description ?? "-").FontSize(9);
                 table.Cell().AlignCenter().Text($"{weight:0.##}");
-                table.Cell().AlignCenter().Text($"{marks:0.##}");
                 table.Cell().AlignCenter()
     .Background(levelColor)
     .Padding(3)

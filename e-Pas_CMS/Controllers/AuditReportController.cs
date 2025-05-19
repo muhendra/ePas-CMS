@@ -240,7 +240,7 @@ namespace e_Pas_CMS.Controllers
             document.GeneratePdf(pdfStream);
             pdfStream.Position = 0;
             string spbuNo = model.SpbuNo?.Replace(" ", "") ?? "SPBU";
-            string tanggalAudit = model.TanggalSubmit?.ToString("yyyyMMdd") ?? "00000000";
+            string tanggalAudit = model.TanggalAudit?.ToString("yyyyMMdd") ?? "00000000";
             string fileName = $"audit_{spbuNo}_{tanggalAudit}.pdf";
 
             return File(pdfStream, "application/pdf", fileName);
@@ -269,6 +269,13 @@ namespace e_Pas_CMS.Controllers
 
             CalculateChecklistScores(model.Elements);
             CalculateOverallScore(model, checklistData); // ini bisa dihapus kalau pakai finalScore baru
+
+            // Ambil audit_execution_time
+            var executionTimeSql = @"SELECT audit_execution_time FROM trx_audit WHERE id = @id";
+            var auditExecutionTime = await conn.ExecuteScalarAsync<DateTime?>(executionTimeSql, new { id = id.ToString() });
+
+            // Set ke model.TanggalSubmit agar bisa dipakai saat buat nama file
+            model.TanggalAudit = auditExecutionTime;
 
             // --- Hitung finalScore seperti di Index ---
             var scoreSql = @"
@@ -419,7 +426,10 @@ namespace e_Pas_CMS.Controllers
                 (SELECT all_comments FROM comment_per_elemen WHERE root_title = 'Elemen 2') AS KomentarQuality,
                 (SELECT all_comments FROM comment_per_elemen WHERE root_title = 'Elemen 3') AS KomentarHSSE,
                 (SELECT all_comments FROM comment_per_elemen WHERE root_title = 'Elemen 4') AS KomentarVisual,
-                audit_mom_final AS KomentarManager,
+                CASE 
+                    WHEN audit_mom_final IS NOT NULL AND audit_mom_final <> '' THEN audit_mom_final
+                    ELSE audit_mom_intro
+                END AS KomentarManager,
                 approval_date as ApproveDate,
                 approval_by as ApproveBy,
                 ta.updated_date as UpdateDate

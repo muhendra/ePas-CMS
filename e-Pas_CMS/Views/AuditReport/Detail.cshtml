@@ -71,7 +71,7 @@
 </div>
 
 <!-- STATUS -->
-@if (isVerified)
+@if (Model.TotalScore >= Model.MinPassingScore)
 {
     <div class="alert alert-success text-center py-2 mb-4">
         <strong>CERTIFIED</strong>
@@ -79,11 +79,10 @@
 }
 else
 {
-    <div class="alert alert-warning text-center py-2 mb-4">
-        <strong>UNDER REVIEW</strong>
+    <div class="alert alert-danger text-center py-2 mb-4">
+        <strong>NOT CERTIFIED</strong>
     </div>
 }
-
 
 <!-- INFORMASI SPBU --><div class="card mb-5 shadow-sm">
     <div class="card-body">
@@ -135,10 +134,12 @@ else
     <h4 class="fw-bold">Laporan Penilaian</h4>
 
     <!-- Total Score -->
-    <div class="bg-warning rounded-3 text-center py-2 mb-1">
+    <div class="@(Model.TotalScore < Model.MinPassingScore
+              ? "bg-danger text-white"
+              : "bg-warning") rounded-3 text-center py-2 mb-1">
         <strong>
             Total Score (TS): @Model.TotalScore.ToString("0.00")% &mdash;
-            @((Model.TotalScore >= Model.MinPassingScore) ? "EXCELLENT" : "GOOD")
+            @(Model.TotalScore < Model.MinPassingScore ? "NOT CERTIFIED" : "GOOD")
         </strong>
     </div>
     <div class="text-center text-muted mb-3">
