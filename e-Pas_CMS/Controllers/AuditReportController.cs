@@ -683,6 +683,10 @@ namespace e_Pas_CMS.Controllers
 
         private void CalculateOverallScore(DetailReportViewModel model, List<ChecklistFlatItem> flatItems)
         {
+            decimal totalScore = 0m;
+            decimal maxScore = 0m;
+            var debug = new List<string>();
+
             var nilaiAF = new Dictionary<string, decimal>
             {
                 ["A"] = 1.00m,
@@ -693,52 +697,123 @@ namespace e_Pas_CMS.Controllers
                 ["F"] = 0.00m
             };
 
-            decimal sumAF = 0m;
-            decimal sumX = 0m;
-            decimal sumWeight = 0m;
-
-            foreach (var q in flatItems.Where(x => x.type == "QUESTION"))
+            void HitungPerElemen(AuditChecklistNode node, int level)
             {
-                var input = q.score_input?.Trim();
-                decimal weight = q.weight ?? 0m;
-
-                var allowed = (q.score_option ?? "")
-                    .Split('/', StringSplitOptions.RemoveEmptyEntries)
-                    .SelectMany(opt =>
-                        opt == "A-F" ? new[] { "A", "B", "C", "D", "E", "F" } : new[] { opt.Trim() })
-                    .Concat(new[] { "X" })
-                    .Select(x => x.Trim())
-                    .Distinct()
-                    .ToList();
-
-                if (string.IsNullOrWhiteSpace(input) || !allowed.Contains(input))
-                    continue;
-
-                if (input == "X")
+                if (level == 0)
                 {
-                    sumX += weight;
-                }
-                else
-                {
-                    if(nilaiAF.TryGetValue(input, out var af))
+                    decimal skor = 0m;
+                    decimal localMax = 0m;
+                    bool isSpecialElement = node.Title?.Trim().ToUpperInvariant() == "ELEMEN 2" || node.Title?.Trim().ToUpperInvariant() == "ELEMEN 5";
+
+                    if (isSpecialElement)
                     {
-                        if (q.is_relaksasi == true)
+                        foreach (var child in node.Children ?? new())
                         {
-                            sumAF += 1.00m * weight;
+                            decimal sumAF = 0;
+                            decimal sumWeight = 0;
+                            decimal sumX = 0;
+
+                            void HitungPertanyaan(AuditChecklistNode q)
+                            {
+                                if (q.Children != null && q.Children.Any())
+                                {
+                                    foreach (var c in q.Children)
+                                        HitungPertanyaan(c);
+                                }
+                                else
+                                {
+                                    string input = q.ScoreInput?.Trim().ToUpper() ?? "";
+                                    decimal w = q.Weight ?? 0;
+
+                                    if (input == "X")
+                                    {
+                                        sumX += w;
+                                        sumAF += q.ScoreX ?? 0;
+                                    }
+                                    else if (input == "F" && q.IsRelaksasi == true)
+                                    {
+                                        sumAF += 1.00m * w;
+                                    }
+                                    else if (nilaiAF.TryGetValue(input, out var af))
+                                    {
+                                        sumAF += af * w;
+                                    }
+
+                                    sumWeight += w;
+                                }
+                            }
+
+                            HitungPertanyaan(child);
+                            decimal partial = (sumWeight - sumX) > 0 ? (sumAF / (sumWeight - sumX)) * sumWeight : 0;
+                            skor += partial;
+                            localMax += sumWeight;
                         }
-                        else
-                        {
-                            sumAF += af * weight;
-                        }
-                        sumWeight += weight;
                     }
+                    else
+                    {
+                        decimal sumAF = 0, sumWeight = 0, sumX = 0;
+
+                        void HitungSkor(AuditChecklistNode n)
+                        {
+                            if (n.Children != null && n.Children.Any())
+                            {
+                                foreach (var c in n.Children)
+                                    HitungSkor(c);
+                            }
+                            else
+                            {
+                                string input = n.ScoreInput?.Trim().ToUpper() ?? "";
+                                decimal w = n.Weight ?? 0;
+
+                                if (input == "X")
+                                {
+                                    sumX += w;
+                                    sumAF += n.ScoreX ?? 0;
+                                }
+                                else if (input == "F" && n.IsRelaksasi == true)
+                                {
+                                    sumAF += 1.00m * w;
+                                }
+                                else if (nilaiAF.TryGetValue(input, out var af))
+                                {
+                                    sumAF += af * w;
+                                }
+
+                                sumWeight += w;
+                            }
+                        }
+
+                        HitungSkor(node);
+                        skor = (sumWeight - sumX) > 0 ? (sumAF / (sumWeight - sumX)) * sumWeight : 0;
+                        localMax = sumWeight;
+                    }
+
+                    totalScore += skor;
+                    maxScore += localMax;
+                    debug.Add($"→ {node.Title} | Skor: {skor:0.##} dari {localMax:0.##}");
+                }
+
+                foreach (var child in node.Children ?? new())
+                {
+                    HitungPerElemen(child, level + 1);
                 }
             }
 
-            model.TotalScore = sumAF;
-            model.MaxScore = sumWeight;
-            model.FinalScore = (sumWeight - sumX) > 0 ? (sumAF / (sumWeight - sumX)) * 100m : 0m;
+            foreach (var root in model.Elements ?? new())
+            {
+                HitungPerElemen(root, 0);
+            }
+
+            model.TotalScore = totalScore;
+            model.MaxScore = maxScore;
+            model.FinalScore = (maxScore > 0) ? (totalScore / maxScore) * 100m : 0m;
             model.MinPassingScore = 85.00m;
+
+            // Log ke Output
+            System.Diagnostics.Debug.WriteLine("[DEBUG] Perhitungan Total Skor:");
+            foreach (var line in debug)
+                System.Diagnostics.Debug.WriteLine(line);
+            System.Diagnostics.Debug.WriteLine($"TOTAL: {totalScore:0.##} / {maxScore:0.##} = {model.FinalScore:0.##}%");
         }
 
         private void AssignWeightRecursive(AuditChecklistNode node)

@@ -541,17 +541,20 @@ else
         });
 
         // Hitung ulang satu node (rekursif)
+
         function recalcNode($li) {
             var nodeId = $li.attr('id').replace('node-', '');
             var weight = parseFloat($li.attr('data-weight')) || 0;
             var sumAF = 0;
             var sumWeight = 0;
             var sumX = 0;
+            var skor = 0;
 
             var map = { A: 1, B: 0.8, C: 0.6, D: 0.4, E: 0.2, F: 0 };
 
             var $grp = $li.find('.option-group[data-node-id="' + nodeId + '"]');
             var isRelaksasi = $grp.data('is-relaksasi');
+
             if ($grp.length) {
                 var letter = $grp.find('.option-btn.active').data('score') || '';
                 if (letter === 'X') {
@@ -559,27 +562,47 @@ else
                     sumX = weight;
                     sumAF = scoreX;
                 } else {
-                    if(isRelaksasi === 'True' && letter === 'F'){
+                    if (isRelaksasi === 'True' && letter === 'F') {
                         sumAF = 1 * weight;
-                    }else{
+                    } else {
                         sumAF = (map[letter] || 0) * weight;
                     }
                 }
                 sumWeight = weight;
+                skor = (sumWeight - sumX) > 0 ? (sumAF / (sumWeight - sumX)) * sumWeight : 0;
             } else {
-                $li.find('> .card > .collapse > .card-body > ul > li').each(function () {
+                var children = $li.find('> .card > .collapse > .card-body > ul > li');
+                children.each(function () {
                     var result = recalcNode($(this));
                     sumAF += result.af;
                     sumWeight += result.wt;
                     sumX += result.x;
                 });
+
+                var elementTitle = $li.find('> .card > .card-header span.fw-bold.text-dark').text().trim();
+
+                if (elementTitle === "Elemen 2" || elementTitle === "Elemen 5") {
+                    // console.log("🔍 Menjumlah langsung skor anak untuk:", elementTitle);
+                    var directSum = 0;
+                    children.each(function () {
+                        var rawScore = $(this).find('.score-x').text();
+                        var subScore = parseFloat(rawScore) || 0;
+                        directSum += subScore;
+                        console.log("   ↪ Sub skor:", subScore);
+                    });
+                    skor = directSum;
+                    sumAF = skor;
+                    sumWeight = 1;
+                    sumX = 0;
+                } else {
+                    skor = (sumWeight - sumX) > 0 ? (sumAF / (sumWeight - sumX)) * sumWeight : 0;
+                }
             }
 
-            var skor = (sumWeight - sumX) > 0
-            ? (sumAF / (sumWeight - sumX)) * sumWeight
-            : 0;
+            var $scoreElement = $li.find('.score-x[data-node-id="' + nodeId + '"]');
+            // console.log("📌 Node:", nodeId, "| Judul:", $li.find('.fw-bold.text-dark').text().trim(), "| Skor akhir:", skor.toFixed(2));
+            $scoreElement.text(skor.toFixed(2)); // TANPA 'Skor:' karena sudah ada di <small>
 
-            $li.find('.score-x[data-node-id="' + nodeId + '"]').text(skor.toFixed(2));
             return { af: sumAF, wt: sumWeight, x: sumX };
         }
 

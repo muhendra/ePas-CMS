@@ -315,70 +315,126 @@ public class ReportExcellentTemplate : IDocument
     {
         string label = node.Title;
         string skorText;
+        decimal skor = 0;
 
-        decimal weight = node.Weight ?? 0;
-        decimal x = node.ScoreX ?? 0;
+        var nilaiAF = new Dictionary<string, decimal>
+        {
+            ["A"] = 1.00m,
+            ["B"] = 0.80m,
+            ["C"] = 0.60m,
+            ["D"] = 0.40m,
+            ["E"] = 0.20m,
+            ["F"] = 0.00m
+        };
+
+        bool isSpecialElement = node.Title?.Trim().ToUpperInvariant() == "ELEMEN 2" || node.Title?.Trim().ToUpperInvariant() == "ELEMEN 5";
 
         if (node.Children != null && node.Children.Any())
         {
-            decimal totalScore = 0;
-
-            void HitungSkorNode(AuditChecklistNode n)
+            if (isSpecialElement && level == 0)
             {
-                if (n.Children != null && n.Children.Any())
-                {
-                    foreach (var c in n.Children)
-                        HitungSkorNode(c);
-                }
-                else
-                {
-                    var input = n.ScoreInput?.Trim().ToUpper();
-                    decimal cw = n.Weight ?? 0;
+                // Hitung skor final dari leaf-level (pertanyaan) di bawah setiap sub-elemen
+                List<string> debugLog = new();
 
-                    if (input == "X")
+                foreach (var child in node.Children)
+                {
+                    decimal sumAF = 0;
+                    decimal sumWeight = 0;
+                    decimal sumX = 0;
+
+                    void HitungPertanyaan(AuditChecklistNode q)
                     {
-                        totalScore += n.ScoreX ?? 0;
-                    }
-                    else if (input == "F" && n.IsRelaksasi == true)
-                    {
-                        totalScore += 1.00m * cw;
-                    }
-                    else
-                    {
-                        var map = new Dictionary<string, decimal>
+                        if (q.Children != null && q.Children.Any())
                         {
-                            ["A"] = 1.00m,
-                            ["B"] = 0.80m,
-                            ["C"] = 0.60m,
-                            ["D"] = 0.40m,
-                            ["E"] = 0.20m,
-                            ["F"] = 0.00m
-                        };
+                            foreach (var c in q.Children)
+                                HitungPertanyaan(c);
+                        }
+                        else
+                        {
+                            string input = q.ScoreInput?.Trim().ToUpper() ?? "";
+                            decimal w = q.Weight ?? 0;
 
-                        if (map.TryGetValue(input ?? "", out var val))
-                            totalScore += val * cw;
+                            if (input == "X")
+                            {
+                                sumX += w;
+                                sumAF += q.ScoreX ?? 0;
+                            }
+                            else if (input == "F" && q.IsRelaksasi == true)
+                            {
+                                sumAF += 1.00m * w;
+                            }
+                            else if (nilaiAF.TryGetValue(input, out var af))
+                            {
+                                sumAF += af * w;
+                            }
+
+                            sumWeight += w;
+                        }
                     }
+
+                    HitungPertanyaan(child);
+                    decimal partial = (sumWeight - sumX) > 0 ? (sumAF / (sumWeight - sumX)) * sumWeight : 0;
+                    skor += partial;
+                    //debugLog.Add($"→ {child.Title} | Skor Hitung eIe2 = {partial:0.##}");
                 }
-            }
 
-            HitungSkorNode(node);
+                skorText = $"Skor: {skor:0.##}";
 
-            skorText = $"Skor: {totalScore:0.##}";
-        }
-        else
-        {
-            // Tampilkan ScoreInput mentah (A, B, C, D, E, F, X) untuk question level terakhir
-            if (!string.IsNullOrWhiteSpace(node.ScoreInput))
-            {
-                skorText = $"Input: {node.ScoreInput.ToUpper()}";
+                //col.Item().PaddingLeft(10).Text("[DEBUG] Perhitungan Elemen:")
+                //    .FontColor(Colors.Grey.Medium).FontSize(7).Italic();
+
+                //foreach (var line in debugLog)
+                //{
+                //    col.Item().PaddingLeft(15).Text(line)
+                //        .FontColor(Colors.Grey.Medium).FontSize(7);
+                //}
             }
             else
             {
-                skorText = "Input: -";
+                decimal sumAF = 0, sumWeight = 0, sumX = 0;
+
+                void HitungSkor(AuditChecklistNode n)
+                {
+                    if (n.Children != null && n.Children.Any())
+                    {
+                        foreach (var c in n.Children)
+                            HitungSkor(c);
+                    }
+                    else
+                    {
+                        string input = n.ScoreInput?.Trim().ToUpper() ?? "";
+                        decimal w = n.Weight ?? 0;
+
+                        if (input == "X")
+                        {
+                            sumX += w;
+                            sumAF += n.ScoreX ?? 0;
+                        }
+                        else if (input == "F" && n.IsRelaksasi == true)
+                        {
+                            sumAF += 1.00m * w;
+                        }
+                        else if (nilaiAF.TryGetValue(input, out var af))
+                        {
+                            sumAF += af * w;
+                        }
+
+                        sumWeight += w;
+                    }
+                }
+
+                HitungSkor(node);
+                skor = (sumWeight - sumX) > 0 ? (sumAF / (sumWeight - sumX)) * sumWeight : 0;
+                skorText = $"Skor: {skor:0.##}";
             }
         }
+        else
+        {
+            skorText = !string.IsNullOrWhiteSpace(node.ScoreInput)
+                ? $"Input: {node.ScoreInput.ToUpper()}"
+                : "Input: -";
+        }
 
-        // Tentukan warna latar
         string bgColor = (node.Type ?? "").ToLower() == "question"
             ? "#DAE8FC"
             : level switch
@@ -410,7 +466,6 @@ public class ReportExcellentTemplate : IDocument
                     .FontSize(9).LineHeight(1.2f);
             });
 
-        // Rekursif ke anak-anak
         if (node.Children != null && node.Children.Any())
         {
             foreach (var child in node.Children)
@@ -522,7 +577,7 @@ public class ReportExcellentTemplate : IDocument
             InfoRow("NAMA PEMILIK", _model.OwnerName);
             InfoRow("NAMA MANAJER", _model.ManagerName);
             InfoRow("TIPE KEPEMILIKAN", _model.OwnershipType);
-            InfoRow("QUATER", _model.Quarter);
+            InfoRow("QUARTER", _model.Quarter);
 
             InfoRow("TAHUN", _model.Year.ToString());
             InfoRow("MOR", _model.MOR);
