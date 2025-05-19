@@ -18,6 +18,9 @@
         public string PenaltyAlert { get; set; }
         public bool IsRelaksasi { get; set; }
 
+        public decimal? TotalScore { get; set; }
+
+
         public List<AuditChecklistNode> Children { get; set; } = new();
         public List<MediaItem> MediaItems { get; set; }
     }

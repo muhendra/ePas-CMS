@@ -201,6 +201,9 @@ public class ReportExcellentTemplate : IDocument
             });
 
 
+            foreach (var root in _model.Elements)
+                HitungTotalScore(root);
+
             col.Item().PaddingVertical(10).Element(ComposeElementTable);
 
             foreach (var element in _model.Elements.Where(x => !string.IsNullOrWhiteSpace(x.Description)))
@@ -209,6 +212,7 @@ public class ReportExcellentTemplate : IDocument
                 col.Item().Element(c => ComposeSubElementTable(c, element.Children));
             }
 
+            col.Item().PageBreak();
             col.Item().PaddingTop(20).Text("KOMENTAR AUDITOR").Bold().FontSize(12);
 
             void KomentarItem(string label, string value)
@@ -313,9 +317,9 @@ public class ReportExcellentTemplate : IDocument
 
     void RenderChecklistStructured(ColumnDescriptor col, AuditChecklistNode node, string prefix = "", int level = 0)
     {
-        string label = node.Title;
-        string skorText;
+        string label = node.Title?.Trim() ?? "-";
         decimal skor = 0;
+        string skorText = "-";
 
         var nilaiAF = new Dictionary<string, decimal>
         {
@@ -327,27 +331,24 @@ public class ReportExcellentTemplate : IDocument
             ["F"] = 0.00m
         };
 
-        bool isSpecialElement = node.Title?.Trim().ToUpperInvariant() == "ELEMEN 2" || node.Title?.Trim().ToUpperInvariant() == "ELEMEN 5";
+        bool isSpecialElement = node.Title?.ToUpperInvariant() == "ELEMEN 2" || node.Title?.ToUpperInvariant() == "ELEMEN 5";
 
         if (node.Children != null && node.Children.Any())
         {
             if (isSpecialElement && level == 0)
             {
-                // Hitung skor final dari leaf-level (pertanyaan) di bawah setiap sub-elemen
-                List<string> debugLog = new();
+                skor = 0;
 
-                foreach (var child in node.Children)
+                foreach (var child in node.Children ?? new())
                 {
-                    decimal sumAF = 0;
-                    decimal sumWeight = 0;
-                    decimal sumX = 0;
+                    decimal sumAF = 0, sumWeight = 0, sumX = 0;
 
-                    void HitungPertanyaan(AuditChecklistNode q)
+                    void HitungLeaf(AuditChecklistNode q)
                     {
                         if (q.Children != null && q.Children.Any())
                         {
                             foreach (var c in q.Children)
-                                HitungPertanyaan(c);
+                                HitungLeaf(c);
                         }
                         else
                         {
@@ -372,25 +373,17 @@ public class ReportExcellentTemplate : IDocument
                         }
                     }
 
-                    HitungPertanyaan(child);
+                    HitungLeaf(child);
                     decimal partial = (sumWeight - sumX) > 0 ? (sumAF / (sumWeight - sumX)) * sumWeight : 0;
                     skor += partial;
-                    //debugLog.Add($"→ {child.Title} | Skor Hitung eIe2 = {partial:0.##}");
                 }
 
                 skorText = $"Skor: {skor:0.##}";
-
-                //col.Item().PaddingLeft(10).Text("[DEBUG] Perhitungan Elemen:")
-                //    .FontColor(Colors.Grey.Medium).FontSize(7).Italic();
-
-                //foreach (var line in debugLog)
-                //{
-                //    col.Item().PaddingLeft(15).Text(line)
-                //        .FontColor(Colors.Grey.Medium).FontSize(7);
-                //}
+                node.TotalScore = skor;
             }
             else
             {
+                // Normal hitung dari anak
                 decimal sumAF = 0, sumWeight = 0, sumX = 0;
 
                 void HitungSkor(AuditChecklistNode n)
@@ -426,15 +419,27 @@ public class ReportExcellentTemplate : IDocument
                 HitungSkor(node);
                 skor = (sumWeight - sumX) > 0 ? (sumAF / (sumWeight - sumX)) * sumWeight : 0;
                 skorText = $"Skor: {skor:0.##}";
+                node.TotalScore = skor;
             }
         }
         else
         {
-            skorText = !string.IsNullOrWhiteSpace(node.ScoreInput)
-                ? $"Input: {node.ScoreInput.ToUpper()}"
-                : "Input: -";
+            // Pertanyaan langsung
+            decimal w = node.Weight ?? 0;
+            string input = node.ScoreInput?.Trim().ToUpper() ?? "";
+
+            if (input == "X")
+                skor = node.ScoreX ?? 0;
+            else if (input == "F" && node.IsRelaksasi == true)
+                skor = 1.00m * w;
+            else if (nilaiAF.TryGetValue(input, out var af))
+                skor = af * w;
+
+            node.TotalScore = skor;
+            skorText = !string.IsNullOrWhiteSpace(node.ScoreInput) ? $"Input: {node.ScoreInput.ToUpper()}" : "Input: -";
         }
 
+        // Pewarnaan sesuai level
         string bgColor = (node.Type ?? "").ToLower() == "question"
             ? "#DAE8FC"
             : level switch
@@ -447,6 +452,7 @@ public class ReportExcellentTemplate : IDocument
 
         var leftPad = 10 * level;
 
+        // Tampilkan baris dengan warna dan skor
         col.Item().Background(bgColor)
             .PaddingVertical(6)
             .PaddingLeft(leftPad)
@@ -454,7 +460,7 @@ public class ReportExcellentTemplate : IDocument
             {
                 row.RelativeItem(8).Element(text =>
                 {
-                    var content = text.Text($"{label}. {node.Description}")
+                    var content = text.Text($"{label}. {node.Description ?? "-"}")
                         .FontSize(9)
                         .LineHeight(1.2f);
 
@@ -466,12 +472,10 @@ public class ReportExcellentTemplate : IDocument
                     .FontSize(9).LineHeight(1.2f);
             });
 
-        if (node.Children != null && node.Children.Any())
+        // Render child (jika ada)
+        foreach (var child in node.Children ?? new())
         {
-            foreach (var child in node.Children)
-            {
-                RenderChecklistStructured(col, child, child.Title, level + 1);
-            }
+            RenderChecklistStructured(col, child, child.Title, level + 1);
         }
     }
 
@@ -607,7 +611,6 @@ public class ReportExcellentTemplate : IDocument
             {
                 c.RelativeColumn(2); // Indikator
                 c.RelativeColumn();  // Bobot
-                //c.RelativeColumn();  // Marks
                 c.RelativeColumn();  // Nilai Minimum
                 c.RelativeColumn();  // Compliance
             });
@@ -616,122 +619,21 @@ public class ReportExcellentTemplate : IDocument
             {
                 header.Cell().Text("Indikator Penilaian").Bold();
                 header.Cell().AlignCenter().Text("Bobot Nilai").Bold();
-                //header.Cell().AlignCenter().Text("Marks").Bold();
                 header.Cell().AlignCenter().Text("Nilai Minimum").Bold();
                 header.Cell().AlignCenter().Text("Compliance Level").Bold();
             });
 
-            for (int i = 0; i < elements.Length; i++)
+            foreach (var e in elements)
             {
-                var e = elements[i];
-                var modelElement = _model.Elements.FirstOrDefault(x => x.Description.Contains(e.Name));
-                var af = modelElement?.ScoreAF ?? 0;
-                var marks = e.Weight * af;
-                var percent = af * 100;
+                var modelElement = _model.Elements.FirstOrDefault(x =>
+                    (x.Title?.Trim().ToUpperInvariant().Contains(e.Name.Trim().ToUpperInvariant()) ?? false) ||
+                    (x.Description?.Trim().ToUpperInvariant().Contains(e.Name.Trim().ToUpperInvariant()) ?? false)
+                );
 
-                string level;
-                string levelColor;
+                decimal skor = modelElement?.TotalScore ?? 0;
+                decimal percent = (e.Weight > 0) ? (skor / e.Weight) * 100 : 0;
 
-                if (percent <= 35)
-                {
-                    level = "Warning";
-                    levelColor = "#FF0000"; // merah
-                }
-                else if (percent <= 60)
-                {
-                    level = "Poor";
-                    levelColor = "#FFFF99"; // kuning
-                }
-                else if (percent <= 80)
-                {
-                    level = "Average";
-                    levelColor = "#CCF2F4"; // biru muda
-                }
-                else if (percent <= 95)
-                {
-                    level = "Good";
-                    levelColor = "#00FF00"; // hijau
-                }
-                else
-                {
-                    level = "Excellent";
-                    levelColor = "#FFA500"; // oranye
-                }
-
-                string minText = i switch
-                {
-                    0 => "85.00%",
-                    1 => "85.00%",
-                    2 => "85.00%",
-                    3 => "20.00%",
-                    4 => "50.00%",
-                    _ => "80.00%"
-                };
-
-                table.Cell().Text(e.Name).FontSize(9);
-                table.Cell().AlignCenter().Text($"{e.Weight:0}");
-                //table.Cell().AlignCenter().Text($"{marks:0.##}");
-                table.Cell().AlignCenter().Text(minText);
-                table.Cell().AlignCenter()
-                    .Background(levelColor)
-                    .Padding(3)
-                    .Height(40)
-                    .Width(80)
-                    .AlignMiddle()
-                    .Text($"{percent:0.##}%\n{level}")
-                    .FontSize(9)
-                    .FontColor(Colors.Black);
-            }
-        });
-    }
-
-
-    void ComposeSubElementTable(IContainer container, List<AuditChecklistNode> children)
-    {
-        // Hardcoded bobot berdasarkan urutan baris di Excel
-        var weights = new decimal[]
-        {
-        10.00m, // 1. Standar Kebersihan
-        20.00m, // 2. Prosedur Pelayanan
-
-        7.00m,  // 3. Peralatan
-        23.00m, // 4. Prosedur Monitoring
-
-        14.50m, // 5. Kebersihan Harian
-        4.50m,  // 6. Pemeliharaan berkala
-        1.00m,  // 7. Uraian pemeliharaan kerusakan
-
-        4.00m,  // 8. Identitas Visual Ritel
-        2.00m,  // 9. Dispenser Unit
-        4.00m,  // 10. Lain-lain
-
-        2.00m,  // 11. Penawaran BBM
-        8.00m   // 12. Penawaran Non-BBM
-        };
-
-        container.Table(table =>
-        {
-            table.ColumnsDefinition(c =>
-            {
-                c.RelativeColumn(2); // Sub Elemen
-                c.RelativeColumn();  // Bobot
-                c.RelativeColumn();  // Compliance
-            });
-
-            table.Header(header =>
-            {
-                header.Cell().Text("Sub Elemen").Bold();
-                header.Cell().AlignCenter().Text("Bobot").Bold();
-                header.Cell().AlignCenter().Text("Compliance").Bold();
-            });
-
-            for (int i = 0; i < children.Count; i++)
-            {
-                var item = children[i];
-                var weight = i < weights.Length ? weights[i] : 0;
-                var af = item.ScoreAF ?? 0;
-                var marks = weight * af;
-                var percent = af * 100;
+                System.Diagnostics.Debug.WriteLine($"[TABEL] Matching: {e.Name} → {(modelElement != null ? "FOUND" : "NOT FOUND")}, Title: {modelElement?.Title}, Score: {skor:0.##}, Percent: {percent:0.##}");
 
                 string level;
                 string levelColor;
@@ -762,23 +664,178 @@ public class ReportExcellentTemplate : IDocument
                     levelColor = "#FFA500";
                 }
 
+                string minText = e.Name switch
+                {
+                    "Skilled Staff & Services" => "85.00%",
+                    "Exact Quality & Quantity" => "85.00%",
+                    "Reliable Facilities & Safety" => "85.00%",
+                    "Visual Format Consistency" => "20.00%",
+                    "Expansive Product Offer" => "50.00%",
+                    _ => "80.00%"
+                };
 
-                table.Cell().Text(item.Description ?? "-").FontSize(9);
-                table.Cell().AlignCenter().Text($"{weight:0.##}");
+                table.Cell().Text(e.Name).FontSize(9);
+                table.Cell().AlignCenter().Text($"{e.Weight:0}");
+                table.Cell().AlignCenter().Text(minText);
                 table.Cell().AlignCenter()
-    .Background(levelColor)
-    .Padding(3)
-    .Height(40) // Tinggi tetap
-    .Width(80)  // Lebar tetap
-    .AlignMiddle()
-    .Text($"{percent:0.##}%\n{level}")
-    .FontSize(9)
-    .FontColor(Colors.Black);
-
-
+                    .Background(levelColor)
+                    .Padding(3)
+                    .Height(40)
+                    .Width(80)
+                    .AlignMiddle()
+                    .Text($"{percent:0.##}%\n{level}")
+                    .FontSize(9)
+                    .FontColor(Colors.Black);
             }
         });
     }
 
+    void ComposeSubElementTable(IContainer container, List<AuditChecklistNode> children)
+    {
+        var subElementWeights = new Dictionary<string, decimal>(StringComparer.OrdinalIgnoreCase)
+    {
+        { "Sub-Elemen 1.1", 10.00m },
+        { "Sub-Elemen 1.2", 20.00m },
+        { "Sub-Elemen 2.1", 7.00m },
+        { "Sub-Elemen 2.2", 23.00m },
+        { "Sub-Elemen 3.1", 14.50m },
+        { "Sub-Elemen 3.2", 4.50m },
+        { "Sub-Elemen 3.3", 1.00m },
+        { "Sub-Element 3.3", 1.00m },
+        { "Sub-Elemen 4.1", 4.00m },
+        { "Sub-Elemen 4.2", 2.00m },
+        { "Sub-Elemen 4.3", 4.00m },
+        { "Sub-Elemen 5.1", 2.00m },
+        { "Sub-Elemen 5.2", 8.00m }
+    };
+
+        container.Table(table =>
+        {
+            table.ColumnsDefinition(c =>
+            {
+                c.RelativeColumn(2);
+                c.RelativeColumn();
+                c.RelativeColumn();
+            });
+
+            table.Header(header =>
+            {
+                header.Cell().Text("Sub Elemen").Bold();
+                header.Cell().AlignCenter().Text("Bobot").Bold();
+                header.Cell().AlignCenter().Text("Compliance").Bold();
+            });
+
+            foreach (var item in children)
+            {
+                // ✅ Wajib hitung ulang skor
+                HitungTotalScore(item);
+
+                // Ambil bobot
+                decimal weight = 0;
+                if (!string.IsNullOrWhiteSpace(item.Title))
+                    subElementWeights.TryGetValue(item.Title.Trim(), out weight);
+                if (weight == 0 && !string.IsNullOrWhiteSpace(item.Description))
+                    subElementWeights.TryGetValue(item.Description.Trim(), out weight);
+
+                var skor = item.TotalScore ?? 0;
+                var percent = (weight > 0) ? (skor / weight) * 100 : 0;
+
+                // ✅ DEBUG
+                System.Diagnostics.Debug.WriteLine($"[SUB-ELEMENT] {item.Title} → Score: {skor:0.##}, Weight: {weight}, Percent: {percent:0.##}");
+
+                string level;
+                string levelColor;
+
+                if (percent <= 35)
+                {
+                    level = "Warning";
+                    levelColor = "#FF0000";
+                }
+                else if (percent <= 60)
+                {
+                    level = "Poor";
+                    levelColor = "#FFFF99";
+                }
+                else if (percent <= 80)
+                {
+                    level = "Average";
+                    levelColor = "#CCF2F4";
+                }
+                else if (percent <= 95)
+                {
+                    level = "Good";
+                    levelColor = "#00FF00";
+                }
+                else
+                {
+                    level = "Excellent";
+                    levelColor = "#FFA500";
+                }
+
+                table.Cell().Text(item.Description ?? "-").FontSize(9);
+                table.Cell().AlignCenter().Text($"{weight:0.##}");
+                table.Cell().AlignCenter()
+                    .Background(levelColor)
+                    .Padding(3)
+                    .Height(40)
+                    .Width(80)
+                    .AlignMiddle()
+                    .Text($"{percent:0.##}%\n{level}")
+                    .FontSize(9)
+                    .FontColor(Colors.Black);
+            }
+        });
+    }
+
+    void HitungTotalScore(AuditChecklistNode node)
+    {
+        var nilaiAF = new Dictionary<string, decimal>
+        {
+            ["A"] = 1.00m,
+            ["B"] = 0.80m,
+            ["C"] = 0.60m,
+            ["D"] = 0.40m,
+            ["E"] = 0.20m,
+            ["F"] = 0.00m
+        };
+
+        decimal sumAF = 0, sumWeight = 0, sumX = 0;
+
+        void Traverse(AuditChecklistNode n)
+        {
+            if (n.Children != null && n.Children.Any())
+            {
+                foreach (var c in n.Children)
+                    Traverse(c);
+            }
+            else
+            {
+                string input = n.ScoreInput?.Trim().ToUpper() ?? "";
+                decimal w = n.Weight ?? 0;
+
+                if (input == "X")
+                {
+                    sumX += w;
+                    sumAF += n.ScoreX ?? 0;
+                }
+                else if (input == "F" && n.IsRelaksasi == true)
+                {
+                    sumAF += 1.00m * w;
+                }
+                else if (nilaiAF.TryGetValue(input, out var af))
+                {
+                    sumAF += af * w;
+                }
+
+                sumWeight += w;
+            }
+        }
+
+        Traverse(node);
+        var skor = (sumWeight - sumX) > 0 ? (sumAF / (sumWeight - sumX)) * sumWeight : 0;
+        node.TotalScore = skor;
+
+        System.Diagnostics.Debug.WriteLine($"[CALC-FINAL] {node.Title} → TotalScore: {skor:0.##}");
+    }
 
 }
