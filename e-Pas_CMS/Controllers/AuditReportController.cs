@@ -328,11 +328,13 @@ namespace e_Pas_CMS.Controllers
             // --- Penalty ---
             var penaltySql = @"
         SELECT STRING_AGG(mqd.penalty_alert, ', ') AS penalty_alerts
-        FROM trx_audit_checklist tac 
-        INNER JOIN master_questioner_detail mqd ON mqd.id = tac.master_questioner_detail_id 
-        WHERE tac.trx_audit_id = @id
-          AND tac.score_input = 'F'
-          AND mqd.is_penalty = TRUE";
+FROM trx_audit_checklist tac
+INNER JOIN master_questioner_detail mqd ON mqd.id = tac.master_questioner_detail_id
+WHERE 
+    tac.trx_audit_id = @id and
+    ((mqd.penalty_excellent_criteria = 'LT_1' and tac.score_input <> 'A') or
+    (mqd.penalty_excellent_criteria = 'EQ_0' and tac.score_input = 'F')) and
+    mqd.is_penalty = true";
 
             model.PenaltyAlerts = await conn.ExecuteScalarAsync<string>(penaltySql, new { id = id.ToString() });
             bool hasPenalty = !string.IsNullOrEmpty(model.PenaltyAlerts);
