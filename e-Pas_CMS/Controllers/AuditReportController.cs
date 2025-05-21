@@ -273,6 +273,25 @@ WHERE
 
         }
 
+        public async Task<IActionResult> DownloadPdfQuestGood(Guid id)
+        {
+            var model = await GetDetailReportAsync(id);
+
+            var json = JsonConvert.SerializeObject(model);
+
+            var document = new ReportGoodTemplate(model);
+
+            var pdfStream = new MemoryStream();
+            document.GeneratePdf(pdfStream);
+            pdfStream.Position = 0;
+            string spbuNo = model.SpbuNo?.Replace(" ", "") ?? "SPBU";
+            string tanggalAudit = model.TanggalAudit?.ToString("yyyyMMdd") ?? "00000000";
+            string fileName = $"audit_{spbuNo}_{tanggalAudit}.pdf";
+
+            return File(pdfStream, "application/pdf", fileName);
+
+        }
+
         private async Task<DetailReportViewModel> GetDetailReportAsync(Guid id)
         {
             using var conn = _context.Database.GetDbConnection();

@@ -8,11 +8,11 @@ using SkiaSharp;
 using QuestPDF.Drawing;   // Wajib agar ImageData dikenali
 using QuestPDF.Helpers;   // Untuk ImageScaling
 
-public class ReportExcellentTemplate : IDocument
+public class ReportGoodTemplate : IDocument
 {
     private readonly DetailReportViewModel _model;
 
-    public ReportExcellentTemplate(DetailReportViewModel model)
+    public ReportGoodTemplate(DetailReportViewModel model)
     {
         _model = model;
     }
@@ -58,7 +58,7 @@ public class ReportExcellentTemplate : IDocument
         var rightImagePath = Path.Combine(basePath, "intertek.png");
 
         bool isNotCertified = _model.GoodStatus == "NOT CERTIFIED";
-        var titleFontColor =  Colors.Blue.Medium;
+        var titleFontColor = Colors.Blue.Medium;
         var subTitleFontColor = Colors.Blue.Medium;
         var descFontColor = Colors.Black;
 
@@ -77,9 +77,8 @@ public class ReportExcellentTemplate : IDocument
                     .FontSize(13).Bold().FontColor(titleFontColor);
                 center.Item().AlignCenter().Text("LAPORAN AUDIT PERFORMA")
                     .FontSize(11).FontColor(subTitleFontColor);
-                center.Item().AlignCenter().Text("SPBU EXCELLENT")
+                center.Item().AlignCenter().Text("SPBU GOOD")
                 .FontSize(11).FontColor(subTitleFontColor);
-
                 center.Item().AlignCenter().Text("Report ini merupakan dokumen elektronik sehingga tidak membutuhkan tanda tangan dan cap perusahaan")
                     .Italic().FontSize(6).FontColor(descFontColor).LineHeight(1);
 
@@ -114,7 +113,7 @@ public class ReportExcellentTemplate : IDocument
            .Bold().FontColor(scoreFontColor).FontSize(9);
        score.Item().AlignLeft().Text($"{_model.TotalScore:0.00}")
            .FontSize(16).Bold().FontColor(scoreFontColor);
-       score.Item().AlignLeft().Text("Minimum Skor: 80")
+       score.Item().AlignLeft().Text("Minimum Skor: 75")
            .FontSize(8).FontColor(scoreFontColor);
    });
 
@@ -122,7 +121,7 @@ public class ReportExcellentTemplate : IDocument
             var statusText = "UNKNOWN";
             string statusBgColor = "#F8D7DA";
 
-            if (_model.ExcellentStatus == "EXCELLENT")
+            if (_model.GoodStatus == "Good")
             {
                 statusText = "CERTIFIED";
                 statusBgColor = "#FFC107";
@@ -162,20 +161,20 @@ public class ReportExcellentTemplate : IDocument
 
             //col.Item().PaddingBottom(10).Text($"Catatan Auditor: {_model.Notes}").Italic().FontSize(9);
 
-            //var statusBoxText = _model.ExcellentStatus == "EXCELLENT"
-            //    ? "PASTI PAS EXCELLENT!"
+            //var statusBoxText = _model.GoodStatus == "Good"
+            //    ? "PASTI PAS Good!"
             //    : _model.GoodStatus == "CERTIFIED"
             //        ? "PASTI PAS GOOD!"
             //        : "NOT CERTIFIED";
 
-            //var statusColor = _model.ExcellentStatus == "EXCELLENT"
+            //var statusColor = _model.GoodStatus == "Good"
             //    ? "#FFC107"
             //    : _model.GoodStatus == "CERTIFIED"
             //        ? "#00A64F"
             //        : "#F44336";
 
-            var isCertified = _model.TotalScore >= 80 && string.IsNullOrWhiteSpace(_model.PenaltyAlerts); // Atau ambil dari _model.MinPassingScore jika ada
-            var statusBoxText = isCertified ? "PASTI PAS EXCELLENT!" : "NOT CERTIFIED";
+            var isCertified = _model.TotalScore >= 75 && string.IsNullOrWhiteSpace(_model.PenaltyAlerts); // Atau ambil dari _model.MinPassingScore jika ada
+            var statusBoxText = isCertified ? "PASTI PAS Good!" : "NOT CERTIFIED";
             var statusColor = isCertified ? "#FFC107" : "#F44336";
 
             col.Item().Background(statusColor).Padding(10).Column(box =>
@@ -239,9 +238,9 @@ public class ReportExcellentTemplate : IDocument
             //}
 
             foreach (var root in _model.Elements)
-{
-    RenderChecklistStructured(col, root, root.Title, 0);
-}
+            {
+                RenderChecklistStructured(col, root, root.Title, 0);
+            }
 
 
             col.Item().PageBreak();
@@ -275,7 +274,7 @@ public class ReportExcellentTemplate : IDocument
                         }
                         catch
                         {
-                            continue; 
+                            continue;
                         }
 
                         if (!System.IO.File.Exists(fullPath))
@@ -437,6 +436,7 @@ public class ReportExcellentTemplate : IDocument
 
             node.TotalScore = skor;
             skorText = !string.IsNullOrWhiteSpace(node.ScoreInput) ? node.ScoreInput.ToUpper() : "-";
+
         }
 
         // Pewarnaan sesuai level
@@ -648,7 +648,7 @@ public class ReportExcellentTemplate : IDocument
                     level = "Poor";
                     levelColor = "#FFFF99";
                 }
-                else if (percent <= 80)
+                else if (percent <= 75)
                 {
                     level = "Average";
                     levelColor = "#CCF2F4";
@@ -660,7 +660,7 @@ public class ReportExcellentTemplate : IDocument
                 }
                 else
                 {
-                    level = "Excellent";
+                    level = "Good";
                     levelColor = "#FFA500";
                 }
 
@@ -671,7 +671,7 @@ public class ReportExcellentTemplate : IDocument
                     "Reliable Facilities & Safety" => "85.00%",
                     "Visual Format Consistency" => "20.00%",
                     "Expansive Product Offer" => "50.00%",
-                    _ => "80.00%"
+                    _ => "75.00%"
                 };
 
                 table.Cell().Text(e.Name).FontSize(9);
@@ -756,7 +756,7 @@ public class ReportExcellentTemplate : IDocument
                     level = "Poor";
                     levelColor = "#FFFF99";
                 }
-                else if (percent <= 80)
+                else if (percent <= 75)
                 {
                     level = "Average";
                     levelColor = "#CCF2F4";
@@ -768,7 +768,7 @@ public class ReportExcellentTemplate : IDocument
                 }
                 else
                 {
-                    level = "Excellent";
+                    level = "Good";
                     levelColor = "#FFA500";
                 }
 

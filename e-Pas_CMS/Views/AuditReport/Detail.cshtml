@@ -69,10 +69,17 @@
 
         </div>
     </div>
-    <a class="btn btn-outline-primary"
-       href="@Url.Action("DownloadPdfQuest", "AuditReport", new { id = Context.Request.RouteValues["id"] })">
-        <i class="bi bi-file-earmark-pdf"></i> Download PDF
-    </a>
+    <div class="d-flex gap-2">
+        <a class="btn btn-outline-success"
+           href="@Url.Action("DownloadPdfQuestGood", "AuditReport", new { id = Context.Request.RouteValues["id"], type = "good" })">
+            <i class="bi bi-check-circle-fill"></i> Report Good
+        </a>
+        <a class="btn btn-outline-warning"
+           href="@Url.Action("DownloadPdfQuest", "AuditReport", new { id = Context.Request.RouteValues["id"], type = "excellent" })">
+            <i class="bi bi-star-fill"></i> Report Excellent
+        </a>
+    </div>
+
 </div>
 
 <!-- STATUS -->
