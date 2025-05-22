@@ -97,8 +97,8 @@ public class ReportGoodTemplate : IDocument
     {
         container.Column(col =>
         {
-            bool isCertified0 = _model.TotalScore >= 85 && string.IsNullOrWhiteSpace(_model.PenaltyAlerts); // Atau pakai _model.MinPassingScore
-            string boxColor = isCertified0 ? "#FFC107" : "#F44336";
+            bool isCertified0 = _model.TotalScore >= 85 && string.IsNullOrWhiteSpace(_model.PenaltyAlertsGood); // Atau pakai _model.MinPassingScore
+            string boxColor = isCertified0 ? "#1aa31f" : "#F44336";
             string scoreFontColor = Colors.White;
 
             col.Item()
@@ -124,7 +124,7 @@ public class ReportGoodTemplate : IDocument
             if (_model.GoodStatus == "Good")
             {
                 statusText = "CERTIFIED";
-                statusBgColor = "#FFC107";
+                statusBgColor = "#1aa31f";
             }
             else if (_model.GoodStatus == "CERTIFIED")
             {
@@ -147,11 +147,11 @@ public class ReportGoodTemplate : IDocument
             //.Bold()
             //.FontColor(Colors.White); 
 
-            //if (!string.IsNullOrWhiteSpace(_model.PenaltyAlerts))
+            //if (!string.IsNullOrWhiteSpace(_model.PenaltyAlertsGood))
             //{
             //    col.Item()
             //        .PaddingTop(5)
-            //        .Text($"Gagal di elemen: {_model.PenaltyAlerts}")
+            //        .Text($"Gagal di elemen: {_model.PenaltyAlertsGood}")
             //        .FontColor(Colors.Red.Darken2)
             //        .Italic()
             //        .FontSize(9);
@@ -168,14 +168,14 @@ public class ReportGoodTemplate : IDocument
             //        : "NOT CERTIFIED";
 
             //var statusColor = _model.GoodStatus == "Good"
-            //    ? "#FFC107"
+            //    ? "#1aa31f"
             //    : _model.GoodStatus == "CERTIFIED"
             //        ? "#00A64F"
             //        : "#F44336";
 
-            var isCertified = _model.TotalScore >= 75 && string.IsNullOrWhiteSpace(_model.PenaltyAlerts); // Atau ambil dari _model.MinPassingScore jika ada
+            var isCertified = _model.TotalScore >= 75 && string.IsNullOrWhiteSpace(_model.PenaltyAlertsGood); // Atau ambil dari _model.MinPassingScore jika ada
             var statusBoxText = isCertified ? "PASTI PAS Good!" : "NOT CERTIFIED";
-            var statusColor = isCertified ? "#FFC107" : "#F44336";
+            var statusColor = isCertified ? "#1aa31f" : "#F44336";
 
             col.Item().Background(statusColor).Padding(10).Column(box =>
             {
@@ -184,11 +184,11 @@ public class ReportGoodTemplate : IDocument
                     .FontSize(16).Bold()
                     .FontColor(Colors.White);
 
-                if (!isCertified && !string.IsNullOrWhiteSpace(_model.PenaltyAlerts))
+                if (!isCertified && !string.IsNullOrWhiteSpace(_model.PenaltyAlertsGood))
                 {
                     box.Item().PaddingTop(5)
                         .AlignCenter()
-                        .Text($"Gagal di elemen: {_model.PenaltyAlerts}")
+                        .Text($"Gagal di elemen: {_model.PenaltyAlertsGood}")
                         .FontSize(9)
                         .Italic()
                         .FontColor(Colors.White);

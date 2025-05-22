@@ -28,29 +28,24 @@
 </div>
 
 <table id="audit-table" class="table table-bordered table-striped nowrap w-100">
-    <thead class="table-light">
+    <thead class="table-light text-center align-middle">
         <tr>
             <th>Aksi</th>
-            <th>No</th>
-            <th>No. SPBU</th>
+            <th>No SPBU</th>
             <th>Region</th>
-            <th>Kota</th>
-            <th>Alamat</th>
             <th>SBM</th>
-            <th>SAM</th>
-            <th>Tahun</th>
-            <th>Tanggal Audit</th>
-            <th>Tanggal Submit</th>
-            <th>Auditor</th>
-            <th>Score</th>
-            <th>Good</th>
-            <th>Excellent</th>
-            <th>WTMS</th>
-            <th>Q&Q</th>
-            <th>WMEF</th>
-            <th>Format Fisik</th>
-            <th>CPO</th>
+            <th style="min-width: 250px; white-space: normal;">Alamat</th>
             <th>Kelas SPBU</th>
+            <th>Type Audit</th>
+            <th>Tanggal Audit</th>
+            <th>Total Score</th>
+            <th>Good</th>
+            <th>Excelent</th>
+            <th>SSS</th>
+            <th>EQnQ</th>
+            <th>RFS</th>
+            <th>VFC</th>
+            <th>EPO</th>
         </tr>
     </thead>
     <tbody>
@@ -64,26 +59,21 @@
                         <i class="bi bi-eye"></i> Detail
                     </a>
                 </td>
-                <td>@(i + 1 + ((Model.PageNumber - 1) * Model.PageSize))</td>
                 <td>@item.SpbuNo</td>
                 <td>@item.Region</td>
-                <td>@item.City</td>
-                <td>@item.Address</td>
                 <td>@item.SBM</td>
-                <td>@item.SAM</td>
-                <td>@item.Year</td>
+                <td style="white-space: normal;">@item.Address</td>
+                <td>@item.KelasSpbu</td>
+                <td>@item.AuditType</td>
                 <td>@item.AuditDate?.ToString("dd/MM/yyyy")</td>
-                <td>@item.SubmitDate?.ToString("dd/MM/yyyy HH:mm")</td>
-                <td>@item.Auditor</td>
                 <td>@item.Score?.ToString("0.00")</td>
                 <td class="fw-bold @(item.GoodStatus == "CERTIFIED" ? "text-success" : "text-danger")">@item.GoodStatus</td>
                 <td class="fw-bold @(item.ExcellentStatus == "EXCELLENT" ? "text-success" : "text-danger")">@item.ExcellentStatus</td>
-                <td>@item.WTMS</td>
-                <td>@item.QQ</td>
-                <td>@item.WMEF</td>
-                <td>@item.FormatFisik</td>
-                <td>@item.CPO</td>
-                <td>@item.KelasSpbu</td>
+                <td>@item.SSS</td>
+                <td>@item.EQnQ</td>
+                <td>@item.RFS</td>
+                <td>@item.VFC</td>
+                <td>@item.EPO</td>
             </tr>
         }
     </tbody>

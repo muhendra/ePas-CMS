@@ -9,7 +9,7 @@
     var isSuperadmin = User.IsInRole("Report");
 
     var isCertified = Model.TotalScore >= Model.MinPassingScore && string.IsNullOrWhiteSpace(Model.PenaltyAlerts);
-    var statusLabel = isCertified ? "EXCELLENT" : "NOT CERTIFIED";
+    var statusLabel = isCertified ? "EXCELLENT" : "NOT CERTIFIED EXCELLENT";
     var boxClass = isCertified ? "bg-warning" : "bg-danger text-white";
     var showPenalty = !isCertified && !string.IsNullOrWhiteSpace(Model.PenaltyAlerts);
 }
@@ -22,6 +22,10 @@
 }
 
 <style>
+    .option-group .option-btn {
+        display: none !important;
+    }
+
     /* Gaya tampilan badge compliance */
     .compliance-badge {
         display: inline-block;
@@ -57,7 +61,7 @@
     <div>
         <h2 class="fw-bold mb-1">
             Detail Laporan Audit Performa SPBU
-            <small class="text-muted">(@Model.AuditType)</small>
+            <small class="text-muted">(Regular Audit)</small>
         </h2>
         <div>
             <a class="text-primary text-decoration-none"
@@ -92,7 +96,7 @@
 else
 {
     <div class="alert alert-danger text-center py-2 mb-4">
-        <strong>NOT CERTIFIED</strong>
+        <strong>NOT CERTIFIED EXCELLENT</strong>
     </div>
 }
 
@@ -116,7 +120,6 @@ else
             <div class="col-md-3"><strong>Sales Area</strong><br />@Model.SalesArea</div>
             <div class="col-md-3"><strong>SBM</strong><br />@Model.SBM</div>
 
-            <div class="col-md-3"><strong>Tipe SPBU</strong><br />@Model.AuditType</div>
             <div class="col-md-3"><strong>Kelas SPBU</strong><br />@Model.ClassSPBU</div>
             <div class="col-md-3"><strong>Telepon</strong><br />@Model.Phone</div>
         </div>
@@ -797,7 +800,7 @@ else
                         <div class="ms-auto d-flex align-items-center flex-wrap gap-2 w-100 justify-content-between">
                             <!-- Pilihan A-F -->
                             <div class="d-flex align-items-center flex-wrap gap-2">
-                                <div class="option-group"
+                                <div class="option-group d-none"
                                      data-node-id="@node.Id"
                                      data-is-relaksasi="@node.IsRelaksasi"
                                      data-score-option="@node.ScoreOption">
@@ -828,9 +831,8 @@ else
                                                 data-node-id="@node.Id"
                                                 data-score="@opt"
                                                 disabled>
-                                            @(opt == "X" ? "X" : $"{opt} ({(node.IsRelaksasi && opt == "F" ? 1 : val):0.00})")
+                                            @(opt == "X" ? "X" : opt)
                                         </button>
-
                                     }
                                 </div>
 

@@ -33,6 +33,11 @@
         public decimal TotalScore { get; set; }
         public decimal MaxScore { get; set; }
         public decimal FinalScore { get; set; }
+        public decimal SSS { get; set; }
+        public decimal EQnQ { get; set; }
+        public decimal RFS { get; set; }
+        public decimal VFC { get; set; }
+        public decimal EPO { get; set; }
         public string AuditType { get; set; }
         public List<MediaItem> MediaNotes { get; set; } = new();
         public List<MediaItem> FinalDocuments { get; set; } = new();

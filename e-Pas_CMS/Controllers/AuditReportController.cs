@@ -83,21 +83,21 @@ namespace e_Pas_CMS.Controllers
             foreach (var a in pagedAudits)
             {
                 var sql = @"
-SELECT 
-    mqd.weight, 
-    tac.score_input, 
-    tac.score_x, 
-    mqd.is_relaksasi
-FROM master_questioner_detail mqd
-LEFT JOIN trx_audit_checklist tac 
-    ON tac.master_questioner_detail_id = mqd.id 
-    AND tac.trx_audit_id = @id
-WHERE mqd.master_questioner_id = (
-    SELECT master_questioner_checklist_id 
-    FROM trx_audit 
-    WHERE id = @id
-)
-AND mqd.type = 'QUESTION'";
+                SELECT 
+                    mqd.weight, 
+                    tac.score_input, 
+                    tac.score_x, 
+                    mqd.is_relaksasi
+                FROM master_questioner_detail mqd
+                LEFT JOIN trx_audit_checklist tac 
+                    ON tac.master_questioner_detail_id = mqd.id 
+                    AND tac.trx_audit_id = @id
+                WHERE mqd.master_questioner_id = (
+                    SELECT master_questioner_checklist_id 
+                    FROM trx_audit 
+                    WHERE id = @id
+                )
+                AND mqd.type = 'QUESTION'";
 
                 var checklist = (await conn.QueryAsync<(decimal? weight, string score_input, decimal? score_x, bool? is_relaksasi)>(sql, new { id = a.id }))
                     .ToList();
@@ -140,28 +140,105 @@ AND mqd.type = 'QUESTION'";
                     ? (sumAF / (sumWeight - sumX)) * sumWeight
                     : 0m;
 
-                var penaltyQuery = @"
-SELECT STRING_AGG(mqd.penalty_alert, ', ') AS penalty_alerts
-FROM trx_audit_checklist tac
-INNER JOIN master_questioner_detail mqd ON mqd.id = tac.master_questioner_detail_id
-WHERE 
-    tac.trx_audit_id = @id AND
-    ((mqd.penalty_excellent_criteria = 'LT_1' AND tac.score_input <> 'A') OR
-     (mqd.penalty_excellent_criteria = 'EQ_0' AND tac.score_input = 'F')) AND
-    mqd.is_penalty = true;";
+                var penaltyExcellentQuery = @"
+                SELECT STRING_AGG(mqd.penalty_alert, ', ') AS penalty_alerts
+                FROM trx_audit_checklist tac
+                INNER JOIN master_questioner_detail mqd ON mqd.id = tac.master_questioner_detail_id
+                WHERE 
+                    tac.trx_audit_id = @id AND
+                    ((mqd.penalty_excellent_criteria = 'LT_1' AND tac.score_input <> 'A') OR
+                     (mqd.penalty_excellent_criteria = 'EQ_0' AND tac.score_input = 'F')) AND
+                    mqd.is_penalty = true;";
 
-                var penaltyResult = await conn.ExecuteScalarAsync<string>(penaltyQuery, new { id = a.id });
-                bool hasPenalty = !string.IsNullOrEmpty(penaltyResult);
+                var penaltyGoodQuery = @"
+                SELECT STRING_AGG(mqd.penalty_alert, ', ') AS penalty_alerts
+                FROM trx_audit_checklist tac
+                INNER JOIN master_questioner_detail mqd ON mqd.id = tac.master_questioner_detail_id
+                WHERE 
+                    tac.trx_audit_id = @id AND
+                    tac.score_input = 'F' AND
+                    mqd.is_penalty = true AND 
+                    (mqd.is_relaksasi = false OR mqd.is_relaksasi IS NULL);";
+
+                var penaltyExcellentResult = await conn.ExecuteScalarAsync<string>(penaltyExcellentQuery, new { id = a.id });
+                var penaltyGoodResult = await conn.ExecuteScalarAsync<string>(penaltyGoodQuery, new { id = a.id });
+
+                bool hasExcellentPenalty = !string.IsNullOrEmpty(penaltyExcellentResult);
+                bool hasGoodPenalty = !string.IsNullOrEmpty(penaltyGoodResult);
 
                 string goodStatus = "NOT CERTIFIED";
                 string excellentStatus = "NOT CERTIFIED";
 
-                if (finalScore >= 80)
+                if (finalScore >= 75 && !hasGoodPenalty)
                 {
                     goodStatus = "CERTIFIED";
-                    if (!hasPenalty)
-                        excellentStatus = "EXCELLENT";
                 }
+                if (finalScore >= 80 && !hasExcellentPenalty)
+                {
+                    goodStatus = "EXCELLENT";
+                    excellentStatus = "EXCELLENT";
+                }
+
+
+                var elementScoresQuery = @"
+                SELECT
+                    root_title,
+                    SUM(CASE 
+                        WHEN tac.score_input = 'X' THEN 0
+                        WHEN tac.score_input = 'F' AND mqd.is_relaksasi = true THEN 1.0 * mqd.weight
+                        ELSE 
+                            (CASE tac.score_input
+                                WHEN 'A' THEN 1.00
+                                WHEN 'B' THEN 0.80
+                                WHEN 'C' THEN 0.60
+                                WHEN 'D' THEN 0.40
+                                WHEN 'E' THEN 0.20
+                                WHEN 'F' THEN 0.00
+                                ELSE 0.00
+                            END) * mqd.weight
+                    END) AS total_score,
+                    SUM(CASE WHEN tac.score_input = 'X' THEN 0 ELSE mqd.weight END) AS total_weight
+                FROM (
+                    WITH RECURSIVE question_hierarchy AS (
+                        SELECT 
+                            mqd.id,
+                            mqd.title,
+                            mqd.parent_id,
+                            mqd.title AS root_title
+                        FROM master_questioner_detail mqd
+                        WHERE mqd.title IN ('Elemen 1', 'Elemen 2', 'Elemen 3', 'Elemen 4', 'Elemen 5')
+                        UNION ALL
+                        SELECT 
+                            mqd.id,
+                            mqd.title,
+                            mqd.parent_id,
+                            qh.root_title
+                        FROM master_questioner_detail mqd
+                        INNER JOIN question_hierarchy qh ON mqd.parent_id = qh.id
+                    )
+                    SELECT qh.root_title, qh.id
+                    FROM question_hierarchy qh
+                ) AS q
+                JOIN master_questioner_detail mqd ON mqd.id = q.id
+                LEFT JOIN trx_audit_checklist tac ON tac.master_questioner_detail_id = mqd.id AND tac.trx_audit_id = @id
+                WHERE mqd.type = 'QUESTION'
+                GROUP BY root_title";
+
+                var elementScores = (await conn.QueryAsync<(string root_title, decimal total_score, decimal total_weight)>(elementScoresQuery, new { id = a.id })).ToList();
+
+                decimal? GetComplianceLevel(string elementTitle)
+                {
+                    var ele = elementScores.FirstOrDefault(x => x.root_title.Trim().ToUpperInvariant() == elementTitle.Trim().ToUpperInvariant());
+                    if (ele.total_weight == 0) return 0;
+                    return (ele.total_score / ele.total_weight) * 100;
+                }
+
+                var SSS = GetComplianceLevel("Elemen 1") ?? 0;
+                var EQnQ = GetComplianceLevel("Elemen 2") ?? 0;
+                var RFS = GetComplianceLevel("Elemen 3") ?? 0;
+                var VFC = GetComplianceLevel("Elemen 4") ?? 0;
+                var EPO = GetComplianceLevel("Elemen 5") ?? 0;
+
 
                 result.Add(new AuditReportListViewModel
                 {
@@ -190,9 +267,14 @@ WHERE
                     WMEF = a.spbu.wmef,
                     FormatFisik = a.spbu.format_fisik,
                     CPO = a.spbu.cpo,
-                    KelasSpbu = "Pasti Pas Excellent",
+                    KelasSpbu = a.spbu.level,
                     ApproveDate = a.approval_date ?? DateTime.Now,
-                    ApproveBy = string.IsNullOrWhiteSpace(a.approval_by) ? "-" : a.approval_by
+                    ApproveBy = string.IsNullOrWhiteSpace(a.approval_by) ? "-" : a.approval_by,
+                    SSS = Math.Round(SSS, 2),
+                    EQnQ = Math.Round(EQnQ, 2),
+                    RFS = Math.Round(RFS, 2),
+                    VFC = Math.Round(VFC, 2),
+                    EPO = Math.Round(EPO, 2)
                 });
             }
 
@@ -222,16 +304,29 @@ WHERE
             var model = MapToViewModel(basic);
 
             var penaltySql = @"
-        SELECT STRING_AGG(mqd.penalty_alert, ', ') AS penalty_alerts
-FROM trx_audit_checklist tac
-INNER JOIN master_questioner_detail mqd ON mqd.id = tac.master_questioner_detail_id
-WHERE 
-    tac.trx_audit_id = @id and
-    ((mqd.penalty_excellent_criteria = 'LT_1' and tac.score_input <> 'A') or
-    (mqd.penalty_excellent_criteria = 'EQ_0' and tac.score_input = 'F')) and
-    mqd.is_penalty = true;";
+            SELECT STRING_AGG(mqd.penalty_alert, ', ') AS penalty_alerts
+            FROM trx_audit_checklist tac
+            INNER JOIN master_questioner_detail mqd ON mqd.id = tac.master_questioner_detail_id
+            WHERE 
+                tac.trx_audit_id = @id and
+                ((mqd.penalty_excellent_criteria = 'LT_1' and tac.score_input <> 'A') or
+                (mqd.penalty_excellent_criteria = 'EQ_0' and tac.score_input = 'F')) and
+                mqd.is_penalty = true;";
 
             model.PenaltyAlerts = await conn.ExecuteScalarAsync<string>(penaltySql, new { id = id.ToString() });
+
+
+            var penaltySqlGood = @"
+            SELECT STRING_AGG(mqd.penalty_alert, ', ') AS penalty_alerts
+            FROM trx_audit_checklist tac
+            INNER JOIN master_questioner_detail mqd ON mqd.id = tac.master_questioner_detail_id
+            WHERE 
+                tac.trx_audit_id = @id AND
+                tac.score_input = 'F' AND
+                mqd.is_penalty = true AND 
+                (mqd.is_relaksasi = false OR mqd.is_relaksasi IS NULL);";
+            
+            model.PenaltyAlertsGood = await conn.ExecuteScalarAsync<string>(penaltySqlGood, new { id = id.ToString() });
 
             model.MediaNotes = await GetMediaNotesAsync(conn, id, "QUESTION");
             model.FinalDocuments = await GetMediaNotesAsync(conn, id, "FINAL");
@@ -455,6 +550,7 @@ WHERE
                 ta.audit_execution_time               AS SubmitDate,
                 ta.status,
                 ta.audit_mom_intro                    AS Notes,
+                ta.audit_level,
                 s.spbu_no                             AS SpbuNo,
                 s.region,
                 s.city_name                           AS Kota,

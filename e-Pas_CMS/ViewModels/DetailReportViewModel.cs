@@ -44,6 +44,7 @@
         public string Phone { get; set; }
         public decimal MinPassingScore { get; set; }    // nilai minimum Pasti Pas
         public string PenaltyAlerts { get; set; }
+        public string PenaltyAlertsGood { get; set; }
         public string GoodStatus { get; set; }
         public string ExcellentStatus { get; set; }
 
@@ -64,6 +65,7 @@
         public string Id { get; set; }
         public string ReportNo { get; set; }
         public string AuditType { get; set; }
+        public string Auditlevel { get; set; }
         public DateTime? SubmitDate { get; set; }
         public string Status { get; set; }
         public string Notes { get; set; }
