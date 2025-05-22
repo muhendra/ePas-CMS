@@ -175,7 +175,6 @@ namespace e_Pas_CMS.Controllers
                 }
                 if (finalScore >= 80 && !hasExcellentPenalty)
                 {
-                    goodStatus = "EXCELLENT";
                     excellentStatus = "EXCELLENT";
                 }
 
