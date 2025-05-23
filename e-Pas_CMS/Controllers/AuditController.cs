@@ -814,24 +814,24 @@ VALUES
             if (file == null || file.Length == 0)
                 return BadRequest("File tidak ditemukan atau kosong.");
 
-            var uploadsPath = Path.Combine("/var/www/epas-api", "wwwroot", "uploads", auditId);
+            var uploadsPath = Path.Combine("/var/www/epas-api", "wwwroot", "uploads", auditId, nodeId);
 
             if (!Directory.Exists(uploadsPath))
             {
                 Directory.CreateDirectory(uploadsPath);
-
-                // Set permission to 2775
-                var chmod = new ProcessStartInfo
-                {
-                    FileName = "chmod",
-                    Arguments = $"2775 \"{uploadsPath}\"",
-                    RedirectStandardOutput = true,
-                    RedirectStandardError = true,
-                    UseShellExecute = false,
-                    CreateNoWindow = true
-                };
-                Process.Start(chmod)?.WaitForExit();
             }
+
+            // Selalu set permission ke 2775, baik folder baru maupun lama
+            var chmod = new ProcessStartInfo
+            {
+                FileName = "chmod",
+                Arguments = $"2775 \"{uploadsPath}\"",
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            };
+            Process.Start(chmod)?.WaitForExit();
 
             var fileName = Path.GetFileName(file.FileName);
             var filePath = Path.Combine(uploadsPath, fileName);
@@ -858,7 +858,7 @@ VALUES
                 auditId,
                 nodeId,
                 mediaType = Path.GetExtension(fileName).Trim('.').ToLower(),
-                mediaPath = $"/uploads/{auditId}/{fileName}",
+                mediaPath = $"/uploads/{auditId}/{nodeId}/{fileName}",
                 createdBy = User.Identity?.Name ?? "anonymous"
             });
 
