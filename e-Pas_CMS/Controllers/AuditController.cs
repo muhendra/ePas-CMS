@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Data;
+using System.Diagnostics;
 using System.Linq;
 using System.Threading.Tasks;
 using Dapper;
@@ -764,15 +765,73 @@ VALUES
             );
         }
 
+        //        [HttpPost("Audit/UploadDocument")]
+        //        public async Task<IActionResult> UploadDocument(IFormFile file, string nodeId, string auditId)
+        //        {
+        //            if (file == null || file.Length == 0)
+        //                return BadRequest("File tidak ditemukan atau kosong.");
+
+        //            // Direktori penyimpanan
+        //            var uploadsPath = Path.Combine("/var/www/epas-api", "wwwroot", "uploads", auditId);
+        //            Directory.CreateDirectory(uploadsPath);
+
+        //            var fileName = Path.GetFileName(file.FileName);
+        //            var filePath = Path.Combine(uploadsPath, fileName);
+
+        //            // Simpan file fisik
+        //            using (var stream = new FileStream(filePath, FileMode.Create))
+        //            {
+        //                await file.CopyToAsync(stream);
+        //            }
+
+        //            // Simpan informasi file ke database
+        //            using var conn = _context.Database.GetDbConnection();
+        //            if (conn.State != ConnectionState.Open)
+        //                await conn.OpenAsync();
+
+        //            var insertSql = @"
+        //INSERT INTO trx_audit_media 
+        //    (id, trx_audit_id, master_questioner_detail_id, media_type, media_path, type, status, created_date, created_by, updated_date, updated_by)
+        //VALUES 
+        //    (uuid_generate_v4(), @auditId, @nodeId, @mediaType, @mediaPath, 'QUESTION', 'ACTIVE', NOW(), @createdBy, NOW(), @createdBy)";
+
+
+        //            await conn.ExecuteAsync(insertSql, new
+        //            {
+        //                auditId,
+        //                nodeId,
+        //                mediaType = Path.GetExtension(fileName).Trim('.').ToLower(),
+        //                mediaPath = $"/uploads/{auditId}/{fileName}",
+        //                createdBy = User.Identity?.Name ?? "anonymous"
+        //            });
+
+        //            return RedirectToAction("Detail", new { id = auditId });
+        //        }
+
         [HttpPost("Audit/UploadDocument")]
         public async Task<IActionResult> UploadDocument(IFormFile file, string nodeId, string auditId)
         {
             if (file == null || file.Length == 0)
                 return BadRequest("File tidak ditemukan atau kosong.");
 
-            // Direktori penyimpanan
             var uploadsPath = Path.Combine("/var/www/epas-api", "wwwroot", "uploads", auditId);
-            Directory.CreateDirectory(uploadsPath);
+
+            if (!Directory.Exists(uploadsPath))
+            {
+                Directory.CreateDirectory(uploadsPath);
+
+                // Set permission to 2775
+                var chmod = new ProcessStartInfo
+                {
+                    FileName = "chmod",
+                    Arguments = $"2775 \"{uploadsPath}\"",
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    UseShellExecute = false,
+                    CreateNoWindow = true
+                };
+                Process.Start(chmod)?.WaitForExit();
+            }
 
             var fileName = Path.GetFileName(file.FileName);
             var filePath = Path.Combine(uploadsPath, fileName);
@@ -793,7 +852,6 @@ INSERT INTO trx_audit_media
     (id, trx_audit_id, master_questioner_detail_id, media_type, media_path, type, status, created_date, created_by, updated_date, updated_by)
 VALUES 
     (uuid_generate_v4(), @auditId, @nodeId, @mediaType, @mediaPath, 'QUESTION', 'ACTIVE', NOW(), @createdBy, NOW(), @createdBy)";
-
 
             await conn.ExecuteAsync(insertSql, new
             {
