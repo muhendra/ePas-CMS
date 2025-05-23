@@ -771,7 +771,7 @@ VALUES
                 return BadRequest("File tidak ditemukan atau kosong.");
 
             // Direktori penyimpanan
-            var uploadsPath = Path.Combine("/var/www/epas-api", "wwwroot", "uploads", auditId, nodeId);
+            var uploadsPath = Path.Combine("/var/www/epas-api", "wwwroot", "uploads", auditId);
             Directory.CreateDirectory(uploadsPath);
 
             var fileName = Path.GetFileName(file.FileName);
@@ -800,7 +800,7 @@ VALUES
                 auditId,
                 nodeId,
                 mediaType = Path.GetExtension(fileName).Trim('.').ToLower(),
-                mediaPath = $"/uploads/{auditId}/{nodeId}/{fileName}",
+                mediaPath = $"/uploads/{auditId}/{fileName}",
                 createdBy = User.Identity?.Name ?? "anonymous"
             });
 
