@@ -253,6 +253,8 @@ public class ReportExcellentTemplate : IDocument
             //    col.Item().Text(doc.MediaPath).FontSize(8);
             //}
 
+            col.Item().PageBreak();
+
             col.Item().Element(container =>
             {
                 container.Grid(grid =>
@@ -262,32 +264,21 @@ public class ReportExcellentTemplate : IDocument
                     foreach (var foto in _model.FotoTemuan)
                     {
                         if (foto == null || string.IsNullOrWhiteSpace(foto.Path))
-                        {
-                            grid.Item().Text("[DEBUG] Foto kosong atau path kosong").FontSize(6).FontColor(Colors.Red.Medium);
                             continue;
-                        }
 
-                        string fullPath = null;
+                        string fullPath;
                         try
                         {
-                            // Pastikan path tidak diawali slash agar Path.Combine tidak gagal
                             var relativePath = foto.Path.TrimStart('/');
                             fullPath = Path.Combine("/var/www/epas-api/wwwroot", relativePath);
                         }
-                        catch (Exception ex)
+                        catch
                         {
-                            grid.Item().Text($"[DEBUG] Error join path: {ex.Message}").FontSize(6).FontColor(Colors.Red.Medium);
                             continue;
                         }
 
                         if (!System.IO.File.Exists(fullPath))
-                        {
-                            grid.Item().Text($"[DEBUG] File tidak ditemukan:\n{fullPath}")
-                                .FontSize(6)
-                                .FontColor(Colors.Red.Medium)
-                                .WrapAnywhere();
                             continue;
-                        }
 
                         try
                         {
@@ -300,19 +291,15 @@ public class ReportExcellentTemplate : IDocument
 
                                 item.Item().PaddingTop(4)
                                     .Text(foto.Caption ?? "Foto Temuan").FontSize(8).AlignCenter();
-
-                                item.Item().Text($"[DEBUG] Loaded path:\n{foto.Path}").FontSize(6).FontColor(Colors.Grey.Darken2).WrapAnywhere();
-                                item.Item().Text($"[DEBUG] Full path:\n{fullPath}").FontSize(6).FontColor(Colors.Blue.Medium).WrapAnywhere();
                             });
                         }
-                        catch (Exception ex)
+                        catch
                         {
-                            grid.Item().Text($"[DEBUG] Gagal render gambar: {ex.Message}").FontSize(6).FontColor(Colors.Red.Medium);
+                            continue;
                         }
                     }
                 });
             });
-
 
 
         });
