@@ -270,7 +270,9 @@ public class ReportExcellentTemplate : IDocument
                         string fullPath = null;
                         try
                         {
-                            fullPath = Path.Combine("/var/www/epas-api/wwwroot", foto.Path);
+                            // Pastikan path tidak diawali slash agar Path.Combine tidak gagal
+                            var relativePath = foto.Path.TrimStart('/');
+                            fullPath = Path.Combine("/var/www/epas-api/wwwroot", relativePath);
                         }
                         catch (Exception ex)
                         {
@@ -280,7 +282,10 @@ public class ReportExcellentTemplate : IDocument
 
                         if (!System.IO.File.Exists(fullPath))
                         {
-                            grid.Item().Text($"[DEBUG] File tidak ditemukan: {fullPath}").FontSize(6).FontColor(Colors.Red.Medium);
+                            grid.Item().Text($"[DEBUG] File tidak ditemukan:\n{fullPath}")
+                                .FontSize(6)
+                                .FontColor(Colors.Red.Medium)
+                                .WrapAnywhere();
                             continue;
                         }
 
@@ -296,7 +301,8 @@ public class ReportExcellentTemplate : IDocument
                                 item.Item().PaddingTop(4)
                                     .Text(foto.Caption ?? "Foto Temuan").FontSize(8).AlignCenter();
 
-                                item.Item().Text($"[DEBUG] Loaded: {foto.Path}").FontSize(6).FontColor(Colors.Grey.Darken2);
+                                item.Item().Text($"[DEBUG] Loaded path:\n{foto.Path}").FontSize(6).FontColor(Colors.Grey.Darken2).WrapAnywhere();
+                                item.Item().Text($"[DEBUG] Full path:\n{fullPath}").FontSize(6).FontColor(Colors.Blue.Medium).WrapAnywhere();
                             });
                         }
                         catch (Exception ex)
@@ -306,6 +312,7 @@ public class ReportExcellentTemplate : IDocument
                     }
                 });
             });
+
 
 
         });
