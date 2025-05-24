@@ -252,23 +252,24 @@ public class ReportGoodTemplate : IDocument
             //    col.Item().Text(doc.MediaPath).FontSize(8);
             //}
 
+            col.Item().PageBreak();
             col.Item().Element(container =>
             {
-                container.Grid(grid =>
+                container.PaddingVertical(10).Grid(grid =>
                 {
                     grid.Columns(3);
+                    grid.Spacing(10); // Fixed: hanya satu nilai
 
                     foreach (var foto in _model.FotoTemuan)
                     {
                         if (foto == null || string.IsNullOrWhiteSpace(foto.Path))
                             continue;
 
-
-                        string fullPath = null;
+                        string fullPath;
                         try
                         {
-                            fullPath = Path.Combine("/var/www/epas-api/wwwroot", foto.Path);
-
+                            var relativePath = foto.Path.TrimStart('/');
+                            fullPath = Path.Combine("/var/www/epas-api/wwwroot", relativePath);
                         }
                         catch
                         {
@@ -278,19 +279,28 @@ public class ReportGoodTemplate : IDocument
                         if (!System.IO.File.Exists(fullPath))
                             continue;
 
-                        grid.Item().Padding(5).Column(item =>
+                        try
                         {
-                            item.Item().Height(100).Element(e =>
+                            grid.Item().Padding(5).Column(item =>
                             {
-                                e.Image(Image.FromFile(fullPath)).FitArea();
-                            });
+                                item.Item().Height(120).AlignCenter().AlignMiddle().Element(e =>
+                                {
+                                    e.Image(Image.FromFile(fullPath)).FitArea();
+                                });
 
-                            item.Item().PaddingTop(4)
-                                .Text(foto.Caption ?? "Foto Temuan").FontSize(8).AlignCenter();
-                        });
+                                item.Item().PaddingTop(5).Text(foto.Caption ?? "IMAGE")
+                                    .FontSize(8)
+                                    .AlignCenter();
+                            });
+                        }
+                        catch
+                        {
+                            continue;
+                        }
                     }
                 });
             });
+
 
 
 

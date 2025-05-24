@@ -254,12 +254,12 @@ public class ReportExcellentTemplate : IDocument
             //}
 
             col.Item().PageBreak();
-
             col.Item().Element(container =>
             {
-                container.Grid(grid =>
+                container.PaddingVertical(10).Grid(grid =>
                 {
                     grid.Columns(3);
+                    grid.Spacing(10); // Fixed: hanya satu nilai
 
                     foreach (var foto in _model.FotoTemuan)
                     {
@@ -284,13 +284,14 @@ public class ReportExcellentTemplate : IDocument
                         {
                             grid.Item().Padding(5).Column(item =>
                             {
-                                item.Item().Height(100).Element(e =>
+                                item.Item().Height(120).AlignCenter().AlignMiddle().Element(e =>
                                 {
                                     e.Image(Image.FromFile(fullPath)).FitArea();
                                 });
 
-                                item.Item().PaddingTop(4)
-                                    .Text(foto.Caption ?? "Foto Temuan").FontSize(8).AlignCenter();
+                                item.Item().PaddingTop(5).Text(foto.Caption ?? "IMAGE")
+                                    .FontSize(8)
+                                    .AlignCenter();
                             });
                         }
                         catch
@@ -300,6 +301,8 @@ public class ReportExcellentTemplate : IDocument
                     }
                 });
             });
+
+
 
 
         });
