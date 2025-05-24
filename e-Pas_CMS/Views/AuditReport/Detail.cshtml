@@ -9,7 +9,7 @@
     var isSuperadmin = User.IsInRole("Report");
 
     var isCertified = Model.TotalScore >= Model.MinPassingScore && string.IsNullOrWhiteSpace(Model.PenaltyAlerts);
-    var statusLabel = isCertified ? "EXCELLENT" : "NOT CERTIFIED EXCELLENT";
+    var statusLabel = isCertified ? "EXCELLENT" : "NOT CERTIFIED";
     var boxClass = isCertified ? "bg-warning" : "bg-danger text-white";
     var showPenalty = !isCertified && !string.IsNullOrWhiteSpace(Model.PenaltyAlerts);
 }
@@ -102,7 +102,7 @@
 else
 {
     <div class="alert alert-danger text-center py-2 mb-4">
-        <strong>NOT CERTIFIED EXCELLENT</strong>
+        <strong>NOT CERTIFIED</strong>
     </div>
 }
 
