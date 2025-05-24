@@ -30,30 +30,36 @@
     .compliance-badge {
         display: inline-block;
         min-width: 90px;
-        font-size: 0.75rem;
+        color: black !important;
+        font-weight: bold; 
+        font-size: 0.95rem; 
         font-weight: 600;
         border-radius: 0.5rem;
         padding: 0.25rem 0.5rem;
         text-align: center;
         line-height: 1.2;
-        color: white;
     }
 
-    .bg-excellent {
-        background-color: #f0ad4e; /* orange */
+    .bg-warning {
+        background-color: #FF0000 !important;
+    }
+
+    .bg-poor {
+        background-color: #FFFF99 !important;
     }
 
     .bg-good {
-        background-color: #5cb85c; /* green */
+        background-color: #00FF00 !important;
     }
 
-    .bg-improve {
-        background-color: #d9534f; /* red */
+    .bg-excellent {
+        background-color: #FFA500 !important;
     }
 
     .bg-none {
-        background-color: #6c757d; /* gray */
+        background-color: transparent !important;
     }
+
 </style>
 
 <!-- HEADER ATAS -->
@@ -188,20 +194,25 @@ else
                     string level = "-";
                     string badgeClass = "bg-none";
 
-                    if (scoreFraction >= 1.00m)
+                    if (scoreFraction <= 0.35m)
+                    {
+                        level = "Warning";
+                        badgeClass = "bg-warning";
+                    }
+                    else if (scoreFraction <= 0.80m)
+                    {
+                        level = "Poor";
+                        badgeClass = "bg-poor";
+                    }
+                    // else if (scoreFraction <= 0.95m)
+                    // {
+                    //     level = "Good";
+                    //     badgeClass = "bg-good";
+                    // }
+                    else
                     {
                         level = "Excellent";
                         badgeClass = "bg-excellent";
-                    }
-                    else if (scoreFraction >= 0.875m)
-                    {
-                        level = "Good";
-                        badgeClass = "bg-good";
-                    }
-                    else
-                    {
-                        level = "Needs Improvement";
-                        badgeClass = "bg-improve";
                     }
 
                     // Nilai minimum dinamis berdasarkan index
@@ -277,22 +288,28 @@ else
                             var scorePercent = af.Value * 100;
                             scoreDisplay = $"{scorePercent:0.##}%";
 
-                            if (scorePercent >= 100m)
+                            if (scorePercent <= 35m)
+                            {
+                                level = "Warning";
+                                badgeClass = "bg-warning";
+                            }
+                            else if (scorePercent <= 80m)
+                            {
+                                level = "Poor";
+                                badgeClass = "bg-poor";
+                            }
+                            @* else if (scorePercent <= 95m)
+                            {
+                                level = "Good";
+                                badgeClass = "bg-good";
+                            } *@
+                            else
                             {
                                 level = "Excellent";
                                 badgeClass = "bg-excellent";
                             }
-                            else if (scorePercent >= 87.5m)
-                            {
-                                level = "Good";
-                                badgeClass = "bg-good";
-                            }
-                            else
-                            {
-                                level = "Needs Improvement";
-                                badgeClass = "bg-improve";
-                            }
                         }
+
 
                         <tr>
                             <td>@child.Description</td>
@@ -399,7 +416,11 @@ else
                         <td>@qq.Product</td>
                         <td>@qq.Mode</td>
                         <td>@qq.QuantityVariationWithMeasure</td>
-                        <td>@qq.QuantityVariationInPercentage</td>
+                        <td style="
+                        background-color: @(qq.QuantityVariationInPercentage < -0.003m ? "#ff0000" : 
+                                           qq.QuantityVariationInPercentage > 0.003m ? "#ffff00" : "transparent");">
+                        @qq.QuantityVariationInPercentage
+                        </td>
                         <td>@qq.ObservedDensity</td>
                         <td>@qq.ObservedTemp</td>
                         <td>@qq.ObservedDensity15Degree</td>
@@ -839,7 +860,7 @@ else
                                 <!-- Skor -->
                                 <div class="text-end">
                                     <small>skor :</small><br />
-                                    <strong class="score-x text-primary" data-node-id="@node.Id"></strong>
+                                    <strong class="text-primary">@node.ScoreInput</strong>
                                 </div>
                             </div>
 

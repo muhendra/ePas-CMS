@@ -267,6 +267,7 @@ namespace e_Pas_CMS.Controllers
                     FormatFisik = a.spbu.format_fisik,
                     CPO = a.spbu.cpo,
                     KelasSpbu = a.spbu.level,
+                    Auditlevel = a.audit_level,
                     ApproveDate = a.approval_date ?? DateTime.Now,
                     ApproveBy = string.IsNullOrWhiteSpace(a.approval_by) ? "-" : a.approval_by,
                     SSS = Math.Round(SSS, 2),

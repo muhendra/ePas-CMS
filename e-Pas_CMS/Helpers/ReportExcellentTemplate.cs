@@ -212,7 +212,6 @@ public class ReportExcellentTemplate : IDocument
                 col.Item().Element(c => ComposeSubElementTable(c, element.Children));
             }
 
-            col.Item().PageBreak();
             col.Item().PaddingTop(20).Text("KOMENTAR AUDITOR").Bold().FontSize(12);
 
             void KomentarItem(string label, string value)
@@ -239,10 +238,9 @@ public class ReportExcellentTemplate : IDocument
             //}
 
             foreach (var root in _model.Elements)
-{
-    RenderChecklistStructured(col, root, root.Title, 0);
-}
-
+            {
+                RenderChecklistStructured(col, root, root.Title, 0);
+            }
 
             col.Item().PageBreak();
 
@@ -264,38 +262,50 @@ public class ReportExcellentTemplate : IDocument
                     foreach (var foto in _model.FotoTemuan)
                     {
                         if (foto == null || string.IsNullOrWhiteSpace(foto.Path))
+                        {
+                            grid.Item().Text("[DEBUG] Foto kosong atau path kosong").FontSize(6).FontColor(Colors.Red.Medium);
                             continue;
-
+                        }
 
                         string fullPath = null;
                         try
                         {
                             fullPath = Path.Combine("/var/www/epas-api/wwwroot", foto.Path);
-
                         }
-                        catch
+                        catch (Exception ex)
                         {
-                            continue; 
+                            grid.Item().Text($"[DEBUG] Error join path: {ex.Message}").FontSize(6).FontColor(Colors.Red.Medium);
+                            continue;
                         }
 
                         if (!System.IO.File.Exists(fullPath))
-                            continue;
-
-                        grid.Item().Padding(5).Column(item =>
                         {
-                            item.Item().Height(100).Element(e =>
-                            {
-                                e.Image(Image.FromFile(fullPath)).FitArea();
-                            });
+                            grid.Item().Text($"[DEBUG] File tidak ditemukan: {fullPath}").FontSize(6).FontColor(Colors.Red.Medium);
+                            continue;
+                        }
 
-                            item.Item().PaddingTop(4)
-                                .Text(foto.Caption ?? "Foto Temuan").FontSize(8).AlignCenter();
-                        });
+                        try
+                        {
+                            grid.Item().Padding(5).Column(item =>
+                            {
+                                item.Item().Height(100).Element(e =>
+                                {
+                                    e.Image(Image.FromFile(fullPath)).FitArea();
+                                });
+
+                                item.Item().PaddingTop(4)
+                                    .Text(foto.Caption ?? "Foto Temuan").FontSize(8).AlignCenter();
+
+                                item.Item().Text($"[DEBUG] Loaded: {foto.Path}").FontSize(6).FontColor(Colors.Grey.Darken2);
+                            });
+                        }
+                        catch (Exception ex)
+                        {
+                            grid.Item().Text($"[DEBUG] Gagal render gambar: {ex.Message}").FontSize(6).FontColor(Colors.Red.Medium);
+                        }
                     }
                 });
             });
-
-
 
 
         });
@@ -504,13 +514,13 @@ public class ReportExcellentTemplate : IDocument
             table.Header(header =>
             {
                 void HeaderCell(string text) =>
-                    header.Cell()//.PaddingVertical(1)
-                                 .Background(Colors.Grey.Lighten3)
-                                 .Border((float)0.5)
-                                 .BorderColor(Colors.Black)
-                                 .AlignCenter()
-                                 .AlignMiddle()
-                                 .Text(text).Bold().FontSize(7.5f);
+                    header.Cell()
+                          .Background(Colors.Grey.Lighten3)
+                          .Border(0.5f)
+                          .BorderColor(Colors.Black)
+                          .AlignCenter()
+                          .AlignMiddle()
+                          .Text(text).Bold().FontSize(7.5f);
 
                 HeaderCell("Nozzle Number");
                 HeaderCell("DU Make");
@@ -531,12 +541,13 @@ public class ReportExcellentTemplate : IDocument
             foreach (var qq in _model.QqChecks)
             {
                 void DataCell(string text) =>
-                    table.Cell()//.PaddingVertical(1)
-                                .Border((float)0.5)
-                                .BorderColor(Colors.Black)
-                                .AlignCenter()
-                                .AlignMiddle()
-                                .Text(text).FontSize(8);
+                    table.Cell()
+                         .Border(0.5f)
+                         .BorderColor(Colors.Black)
+                         .AlignCenter()
+                         .AlignMiddle()
+                         .Padding(2)
+                         .Text(text).FontSize(8);
 
                 DataCell(qq.NozzleNumber.ToString());
                 DataCell(qq.DuMake);
@@ -544,7 +555,26 @@ public class ReportExcellentTemplate : IDocument
                 DataCell(qq.Product);
                 DataCell(qq.Mode);
                 DataCell($"{qq.QuantityVariationWithMeasure:0}");
-                DataCell($"{qq.QuantityVariationInPercentage:0.00}");
+
+                // Kolom Qty Var (%) dengan warna background penuh
+                var qtyVarPercent = qq.QuantityVariationInPercentage;
+                var qtyVarColor = qtyVarPercent < -0.003m ? "#ff0000" :  // merah
+                                  qtyVarPercent > 0.003m ? "#ffff00" :  // kuning
+                                  "#ffffff";                            // putih
+                var qtyTextColor = qtyVarPercent < -0.003m ? Colors.White : Colors.Black;
+
+                table.Cell()
+                     .Background(qtyVarColor)
+                     .Border(0.5f)
+                     .BorderColor(Colors.Black)
+                     .AlignCenter()
+                     .AlignMiddle()
+                     .Padding(2)
+                     .Text($"{qtyVarPercent:0.00}")
+                        .FontColor(qtyTextColor)
+                        .FontSize(8)
+                        .SemiBold();
+
                 DataCell($"{qq.ObservedDensity:0.0000}");
                 DataCell($"{qq.ObservedTemp}");
                 DataCell($"{qq.ObservedDensity15Degree:0.0000}");
@@ -554,6 +584,7 @@ public class ReportExcellentTemplate : IDocument
             }
         });
     }
+
 
     void ComposeInfoTable(IContainer container)
     {
@@ -609,10 +640,10 @@ public class ReportExcellentTemplate : IDocument
         {
             table.ColumnsDefinition(c =>
             {
-                c.RelativeColumn(2); // Indikator
-                c.RelativeColumn();  // Bobot
-                c.RelativeColumn();  // Nilai Minimum
-                c.RelativeColumn();  // Compliance
+                c.RelativeColumn(2);
+                c.RelativeColumn();
+                c.RelativeColumn();
+                c.ConstantColumn(70);
             });
 
             table.Header(header =>
@@ -633,36 +664,19 @@ public class ReportExcellentTemplate : IDocument
                 decimal skor = modelElement?.TotalScore ?? 0;
                 decimal percent = (e.Weight > 0) ? (skor / e.Weight) * 100 : 0;
 
-                System.Diagnostics.Debug.WriteLine($"[TABEL] Matching: {e.Name} → {(modelElement != null ? "FOUND" : "NOT FOUND")}, Title: {modelElement?.Title}, Score: {skor:0.##}, Percent: {percent:0.##}");
-
                 string level;
                 string levelColor;
 
                 if (percent <= 35)
-                {
-                    level = "Warning";
-                    levelColor = "#FF0000";
-                }
-                else if (percent <= 60)
-                {
-                    level = "Poor";
-                    levelColor = "#FFFF99";
-                }
+                    (level, levelColor) = ("Warning", "#FF0000");
                 else if (percent <= 80)
-                {
-                    level = "Average";
-                    levelColor = "#CCF2F4";
-                }
-                else if (percent <= 95)
-                {
-                    level = "Good";
-                    levelColor = "#00FF00";
-                }
+                    (level, levelColor) = ("Poor", "#FFFF99");
+                //else if (percent <= 80)
+                //    (level, levelColor) = ("Average", "#CCF2F4");
+                //else if (percent <= 95)
+                //    (level, levelColor) = ("Good", "#00FF00");
                 else
-                {
-                    level = "Excellent";
-                    levelColor = "#FFA500";
-                }
+                    (level, levelColor) = ("Excellent", "#FFA500");
 
                 string minText = e.Name switch
                 {
@@ -671,21 +685,22 @@ public class ReportExcellentTemplate : IDocument
                     "Reliable Facilities & Safety" => "85.00%",
                     "Visual Format Consistency" => "20.00%",
                     "Expansive Product Offer" => "50.00%",
-                    _ => "80.00%"
+                    _ => "75.00%"
                 };
 
                 table.Cell().Text(e.Name).FontSize(9);
                 table.Cell().AlignCenter().Text($"{e.Weight:0}");
                 table.Cell().AlignCenter().Text(minText);
-                table.Cell().AlignCenter()
-                    .Background(levelColor)
-                    .Padding(3)
-                    .Height(40)
-                    .Width(80)
-                    .AlignMiddle()
-                    .Text($"{percent:0.##}%\n{level}")
-                    .FontSize(9)
-                    .FontColor(Colors.Black);
+                table.Cell().Border(2).BorderColor(Colors.White).Padding(2).Element(cell =>
+                    cell.Container().Background(levelColor)
+                        .PaddingVertical(2).PaddingHorizontal(2)
+                        .AlignCenter().AlignMiddle()
+                        .Column(col =>
+                        {
+                            col.Item().Text($"{percent:0.##}%").FontSize(8).Bold().AlignCenter();
+                            col.Item().Text(level).FontSize(7).AlignCenter();
+                        })
+                );
             }
         });
     }
@@ -715,7 +730,7 @@ public class ReportExcellentTemplate : IDocument
             {
                 c.RelativeColumn(2);
                 c.RelativeColumn();
-                c.RelativeColumn();
+                c.ConstantColumn(70);
             });
 
             table.Header(header =>
@@ -727,10 +742,8 @@ public class ReportExcellentTemplate : IDocument
 
             foreach (var item in children)
             {
-                // ✅ Wajib hitung ulang skor
                 HitungTotalScore(item);
 
-                // Ambil bobot
                 decimal weight = 0;
                 if (!string.IsNullOrWhiteSpace(item.Title))
                     subElementWeights.TryGetValue(item.Title.Trim(), out weight);
@@ -740,49 +753,32 @@ public class ReportExcellentTemplate : IDocument
                 var skor = item.TotalScore ?? 0;
                 var percent = (weight > 0) ? (skor / weight) * 100 : 0;
 
-                // ✅ DEBUG
-                System.Diagnostics.Debug.WriteLine($"[SUB-ELEMENT] {item.Title} → Score: {skor:0.##}, Weight: {weight}, Percent: {percent:0.##}");
-
                 string level;
                 string levelColor;
 
                 if (percent <= 35)
-                {
-                    level = "Warning";
-                    levelColor = "#FF0000";
-                }
-                else if (percent <= 60)
-                {
-                    level = "Poor";
-                    levelColor = "#FFFF99";
-                }
+                    (level, levelColor) = ("Warning", "#FF0000");
                 else if (percent <= 80)
-                {
-                    level = "Average";
-                    levelColor = "#CCF2F4";
-                }
-                else if (percent <= 95)
-                {
-                    level = "Good";
-                    levelColor = "#00FF00";
-                }
+                    (level, levelColor) = ("Poor", "#FFFF99");
+                //else if (percent <= 80)
+                //    (level, levelColor) = ("Average", "#CCF2F4");
+                //else if (percent <= 95)
+                //    (level, levelColor) = ("Good", "#00FF00");
                 else
-                {
-                    level = "Excellent";
-                    levelColor = "#FFA500";
-                }
+                    (level, levelColor) = ("Excellent", "#FFA500");
 
                 table.Cell().Text(item.Description ?? "-").FontSize(9);
                 table.Cell().AlignCenter().Text($"{weight:0.##}");
-                table.Cell().AlignCenter()
-                    .Background(levelColor)
-                    .Padding(3)
-                    .Height(40)
-                    .Width(80)
-                    .AlignMiddle()
-                    .Text($"{percent:0.##}%\n{level}")
-                    .FontSize(9)
-                    .FontColor(Colors.Black);
+                table.Cell().Border(2).BorderColor(Colors.White).Padding(2).Element(cell =>
+                    cell.Container().Background(levelColor)
+                        .PaddingVertical(2).PaddingHorizontal(2)
+                        .AlignCenter().AlignMiddle()
+                        .Column(col =>
+                        {
+                            col.Item().Text($"{percent:0.##}%").FontSize(8).Bold().AlignCenter();
+                            col.Item().Text(level).FontSize(7).AlignCenter();
+                        })
+                );
             }
         });
     }
