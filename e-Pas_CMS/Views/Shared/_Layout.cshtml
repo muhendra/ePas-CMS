@@ -10,6 +10,8 @@
     <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/e_Pas_CMS.styles.css" asp-append-version="true" />
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css" />
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
 
     @RenderSection("Styles", required: false)
 
@@ -144,6 +146,8 @@
                         </a>
                     </li>
                 }
+
+                <!-- Audit Menu -->
                 <li class="nav-item mt-3">
                     <a class="nav-link d-flex justify-content-between align-items-center" data-bs-toggle="collapse" href="#menu-audit">
                         <strong>Audit</strong>
@@ -156,6 +160,21 @@
                                 <li class="nav-item"><a class="nav-link" asp-controller="Audit" asp-action="Index">Review Audit</a></li>
                             }
                             <li class="nav-item"><a class="nav-link" asp-controller="AuditReport" asp-action="Index">Report</a></li>
+                        </ul>
+                    </div>
+                </li>
+
+                <!-- Master Menu -->
+                <li class="nav-item mt-3">
+                    <a class="nav-link d-flex justify-content-between align-items-center" data-bs-toggle="collapse" href="#menu-master">
+                        <strong>Master</strong>
+                        <i class="bi bi-caret-down-fill"></i>
+                    </a>
+                    <div class="collapse" id="menu-master">
+                        <ul class="nav flex-column ms-3 mt-2">
+                            <li class="nav-item">
+                                <a class="nav-link" asp-controller="Spbu" asp-action="Index">SPBU</a>
+                            </li>
                         </ul>
                     </div>
                 </li>

@@ -12,6 +12,8 @@
     var statusLabel = isCertified ? "EXCELLENT" : "NOT CERTIFIED";
     var boxClass = isCertified ? "bg-warning" : "bg-danger text-white";
     var showPenalty = !isCertified && !string.IsNullOrWhiteSpace(Model.PenaltyAlerts);
+
+    var boxStyle = statusLabel == "EXCELLENT" ? "background-color:#FFA500 !important;" : "";
 }
 
 @Html.AntiForgeryToken()
@@ -155,7 +157,7 @@ else
     <h4 class="fw-bold">Laporan Penilaian</h4>
 
     <!-- Total Score -->
-    <div class="@boxClass rounded-3 text-center py-2 mb-1">
+    <div class="@boxClass rounded-3 text-center py-2 mb-1" style="@boxStyle">
         <strong>
             Total Score (TS): @Model.TotalScore.ToString("0.00")% &mdash;
             @statusLabel
@@ -172,7 +174,6 @@ else
     <div class="text-center text-muted mb-3">
         Nilai Minimum Pasti Pas: @Model.MinPassingScore.ToString("0.00")%
     </div>
-
 
     <!-- Level Konfirmasi Pertamina Way (Elemen) -->
     <h5 class="fw-bold mt-5">Level Konfirmasi Pertamina Way (Elemen)</h5>

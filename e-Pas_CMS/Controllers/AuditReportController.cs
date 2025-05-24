@@ -16,6 +16,7 @@ using Microsoft.AspNetCore.Mvc.ViewFeatures;
 using QuestPDF.Fluent;
 using Newtonsoft.Json;
 using System.Xml.Linq;
+using Npgsql;
 
 namespace e_Pas_CMS.Controllers
 {
@@ -238,6 +239,36 @@ namespace e_Pas_CMS.Controllers
                 var VFC = GetComplianceLevel("Elemen 4") ?? 0;
                 var EPO = GetComplianceLevel("Elemen 5") ?? 0;
 
+                var sqlSum = @"
+                SELECT 
+                    mqd.weight, 
+                    tac.score_input, 
+                    tac.score_x, 
+                    mqd.is_relaksasi
+                FROM master_questioner_detail mqd
+                LEFT JOIN trx_audit_checklist tac 
+                    ON tac.master_questioner_detail_id = mqd.id 
+                    AND tac.trx_audit_id = @id
+                WHERE mqd.master_questioner_id = (
+                    SELECT master_questioner_checklist_id 
+                    FROM trx_audit 
+                    WHERE id = @id
+                )
+                AND mqd.type = 'QUESTION'";
+
+                var checklistRaw = await conn.QueryAsync<(decimal? weight, string score_input, decimal? score_x, bool? is_relaksasi, string root_element_title, string parent_id)>(sql, new { id = a.id });
+
+                var checklistSum = checklistRaw.Select(x => new ChecklistFlatSum
+                {
+                    Weight = x.weight,
+                    ScoreInput = x.score_input,
+                    ScoreX = x.score_x,
+                    IsRelaksasi = x.is_relaksasi,
+                    RootElementTitle = x.root_element_title,
+                    ParentId = x.parent_id
+                }).ToList();
+
+                decimal totalScore = HitungFinalScore(checklistSum);
 
                 result.Add(new AuditReportListViewModel
                 {
@@ -260,7 +291,9 @@ namespace e_Pas_CMS.Controllers
                     Auditor = a.app_user.name,
                     GoodStatus = goodStatus,
                     ExcellentStatus = excellentStatus,
-                    Score = finalScore,
+                    Score = (a.spbu.audit_current_score.HasValue && a.spbu.audit_current_score.Value != 0)
+                    ? a.spbu.audit_current_score.Value
+                    : finalScore,
                     WTMS = a.spbu.wtms,
                     QQ = a.spbu.qq,
                     WMEF = a.spbu.wmef,
@@ -346,6 +379,18 @@ namespace e_Pas_CMS.Controllers
             CalculateOverallScore(model, checklistData);
 
             ViewBag.AuditId = id;
+
+            var updateSql = @"
+            UPDATE spbu
+            SET audit_current_score = @score
+            WHERE spbu_no = @spbuNo";
+
+            await conn.ExecuteAsync(updateSql, new
+            {
+                score = Math.Round(model.TotalScore, 2),
+                spbuNo = model.SpbuNo
+            });
+
             return View(model);
         }
 
@@ -826,6 +871,109 @@ WHERE
             foreach (var root in nodes)
                 HitungScore(root);
         }
+
+        public decimal HitungFinalScore(List<ChecklistFlatSum> flatItems)
+        {
+            var nilaiAF = new Dictionary<string, decimal>
+            {
+                ["A"] = 1.00m,
+                ["B"] = 0.80m,
+                ["C"] = 0.60m,
+                ["D"] = 0.40m,
+                ["E"] = 0.20m,
+                ["F"] = 0.00m
+            };
+
+            decimal totalScore = 0m;
+            decimal totalWeight = 0m;
+
+            var groupedByElement = flatItems
+                .GroupBy(x => x.RootElementTitle?.Trim().ToUpperInvariant())
+                .ToList();
+
+            foreach (var elementGroup in groupedByElement)
+            {
+                string element = elementGroup.Key;
+                bool isSpecial = element == "ELEMEN 2" || element == "ELEMEN 5";
+
+                if (isSpecial)
+                {
+                    var groupedByParent = elementGroup
+                        .GroupBy(x => x.ParentId)
+                        .ToList();
+
+                    foreach (var subGroup in groupedByParent)
+                    {
+                        decimal sumAF = 0, sumW = 0, sumX = 0;
+
+                        foreach (var item in subGroup)
+                        {
+                            string input = item.ScoreInput?.Trim().ToUpper() ?? "";
+                            decimal w = item.Weight ?? 0;
+
+                            if (input == "X")
+                            {
+                                sumX += w;
+                                sumAF += item.ScoreX ?? 0;
+                            }
+                            else if (input == "F" && item.IsRelaksasi == true)
+                            {
+                                sumAF += 1.00m * w;
+                            }
+                            else if (nilaiAF.TryGetValue(input, out var af))
+                            {
+                                sumAF += af * w;
+                            }
+
+                            sumW += w;
+                        }
+
+                        if (sumW - sumX > 0)
+                        {
+                            decimal partialScore = (sumAF / (sumW - sumX)) * sumW;
+                            totalScore += partialScore;
+                            totalWeight += sumW;
+                        }
+                    }
+                }
+                else
+                {
+                    decimal sumAF = 0, sumW = 0, sumX = 0;
+
+                    foreach (var item in elementGroup)
+                    {
+                        string input = item.ScoreInput?.Trim().ToUpper() ?? "";
+                        decimal w = item.Weight ?? 0;
+
+                        if (input == "X")
+                        {
+                            sumX += w;
+                            sumAF += item.ScoreX ?? 0;
+                        }
+                        else if (input == "F" && item.IsRelaksasi == true)
+                        {
+                            sumAF += 1.00m * w;
+                        }
+                        else if (nilaiAF.TryGetValue(input, out var af))
+                        {
+                            sumAF += af * w;
+                        }
+
+                        sumW += w;
+                    }
+
+                    if (sumW - sumX > 0)
+                    {
+                        decimal score = (sumAF / (sumW - sumX)) * sumW;
+                        totalScore += score;
+                        totalWeight += sumW;
+                    }
+                }
+            }
+
+            return totalWeight > 0 ? (totalScore / totalWeight) * 100m : 0m;
+        }
+
 
         private void CalculateOverallScore(DetailReportViewModel model, List<ChecklistFlatItem> flatItems)
         {

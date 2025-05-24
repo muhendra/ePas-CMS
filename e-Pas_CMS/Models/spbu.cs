@@ -1,18 +1,25 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
+using Microsoft.AspNetCore.Mvc.ModelBinding;
 
 namespace e_Pas_CMS.Models;
 
 public partial class spbu
 {
+    [BindNever] // ⛔ jangan divalidasi dari form
     public string id { get; set; } = null!;
 
+    [Required]
     public string spbu_no { get; set; } = null!;
 
+    [Required]
     public string region { get; set; } = null!;
 
+    [Required]
     public string province_name { get; set; } = null!;
 
+    [Required]
     public string city_name { get; set; } = null!;
 
     public string? address { get; set; }
@@ -59,25 +66,34 @@ public partial class spbu
 
     public DateTime? audit_current_time { get; set; }
 
+    [Required]
     public string status { get; set; } = null!;
 
+    [BindNever] // ⛔ isi manual
+    [Required]
     public string created_by { get; set; } = null!;
 
+    [BindNever]
+    [Required]
     public DateTime created_date { get; set; }
 
+    [BindNever]
+    [Required]
     public string updated_by { get; set; } = null!;
 
+    [BindNever]
     public DateTime? updated_date { get; set; }
 
     public decimal wtms { get; set; }
 
-    public decimal qq {  get; set; }
+    public decimal qq { get; set; }
 
     public decimal wmef { get; set; }
 
     public decimal format_fisik { get; set; }
 
     public decimal cpo { get; set; }
+
     public virtual ICollection<app_user_role> app_user_roles { get; set; } = new List<app_user_role>();
 
     public virtual ICollection<spbu_image> spbu_images { get; set; } = new List<spbu_image>();
