@@ -14,6 +14,7 @@
     var showPenalty = !isCertified && !string.IsNullOrWhiteSpace(Model.PenaltyAlerts);
 
     var boxStyle = statusLabel == "EXCELLENT" ? "background-color:#FFA500 !important;" : "";
+
 }
 
 @Html.AntiForgeryToken()
@@ -24,6 +25,7 @@
 }
 
 <style>
+
     .option-group .option-btn {
         display: none !important;
     }
@@ -94,19 +96,19 @@
 
 </div>
 
+<!-- Toggle Switch Report Mode -->
+<div class="d-flex justify-content-end mb-3">
+    <div class="form-check form-switch d-flex align-items-center">
+        <input class="form-check-input" type="checkbox" id="toggleReportMode" style="transform: scale(1.5); margin-right: 20px;">
+        <label class="form-check-label fw-bold" for="toggleReportMode">Report Excellent</label>
+    </div>
+</div>
+
+
 <!-- STATUS -->
-@if (isCertified)
-{
-    <div class="alert alert-success text-center py-2 mb-4">
-        <strong>CERTIFIED</strong>
-    </div>
-}
-else
-{
-    <div class="alert alert-danger text-center py-2 mb-4">
-        <strong>NOT CERTIFIED</strong>
-    </div>
-}
+<div id="certStatusBox" class="alert text-center py-2 mb-4">
+    <strong id="certStatusLabel">@((Model.TotalScore >= Model.MinPassingScore && string.IsNullOrWhiteSpace(Model.PenaltyAlerts)) ? "CERTIFIED" : "NOT CERTIFIED")</strong>
+</div>
 
 <!-- INFORMASI SPBU --><div class="card mb-5 shadow-sm">
     <div class="card-body">
@@ -157,18 +159,15 @@ else
     <h4 class="fw-bold">Laporan Penilaian</h4>
 
     <!-- Total Score -->
-    <div class="@boxClass rounded-3 text-center py-2 mb-1" style="@boxStyle">
+    <div class="box-total-score rounded-3 text-center py-2 mb-1 @boxClass" style="@boxStyle">
         <strong>
             Total Score (TS): @Model.TotalScore.ToString("0.00")% &mdash;
             @statusLabel
         </strong>
 
-        @if (showPenalty)
-        {
-            <div class="mt-1 small">
-                <strong>Penalty:</strong> @Model.PenaltyAlerts
-            </div>
-        }
+        <div class="box-penalty mt-1 small" style="@(showPenalty ? "" : "display:none")">
+            <strong>Penalty:</strong> @Model.PenaltyAlerts
+        </div>
     </div>
 
     <div class="text-center text-muted mb-3">
@@ -236,7 +235,7 @@ else
                             }
                         </td>
                         <td class="text-center">@((int)(element.Weight ?? 0))</td>
-                        <td class="text-center">@minValue.ToString("0.00")%</td>
+                        <td class="text-center min-nilai">@minValue.ToString("0.00")%</td>
                         <td class="text-center">
                             <div class="compliance-badge @badgeClass">
                                 @($"{(scoreFraction * 100):0.##}%")<br />
@@ -572,203 +571,178 @@ else
 
 @section Scripts {
     <script>
-        $(function() {
-        // Toggle pilihan jawaban
-        $(document).on('click', '.option-btn', function() {
-        var nodeId = $(this).data('node-id');
-        $('.option-btn[data-node-id="'+nodeId+'"]')
-        .removeClass('active bg-success text-white')
-        .addClass('btn-outline-secondary');
-        $(this)
-        .removeClass('btn-outline-secondary')
-        .addClass('active bg-success text-white');
-        });
+        $(function () {
+            const mode = localStorage.getItem('reportMode') || 'good';
+            const toggle = $('#toggleReportMode');
 
-        // Hitung ulang satu node (rekursif)
+            toggle.prop('checked', mode === 'excellent');
+            updateUI(mode);
 
-        function recalcNode($li) {
-            var nodeId = $li.attr('id').replace('node-', '');
-            var weight = parseFloat($li.attr('data-weight')) || 0;
-            var sumAF = 0;
-            var sumWeight = 0;
-            var sumX = 0;
-            var skor = 0;
+            toggle.on('change', function () {
+                const newMode = this.checked ? 'excellent' : 'good';
+                localStorage.setItem('reportMode', newMode);
+                updateUI(newMode);
+            });
 
-            var map = { A: 1, B: 0.8, C: 0.6, D: 0.4, E: 0.2, F: 0 };
+                    function updateUI(mode) {
+            const minScoresGood = [75, 80, 85, 15, 25];
+            const minScoresExcellent = [85, 85, 85, 20, 50];
 
-            var $grp = $li.find('.option-group[data-node-id="' + nodeId + '"]');
-            var isRelaksasi = $grp.data('is-relaksasi');
+            const minScores = mode === 'excellent' ? minScoresExcellent : minScoresGood;
 
-            if ($grp.length) {
-                var letter = $grp.find('.option-btn.active').data('score') || '';
-                if (letter === 'X') {
-                    var scoreX = parseFloat($li.attr('data-score-x')) || 0;
-                    sumX = weight;
-                    sumAF = scoreX;
-                } else {
-                    if (isRelaksasi === 'True' && letter === 'F') {
-                        sumAF = 1 * weight;
-                    } else {
-                        sumAF = (map[letter] || 0) * weight;
-                    }
+            // Pakai nilai minimum dari server (embedded Razor)
+            const minPassingGood = @Model.MinPassingScoreGood;
+            const minPassingExcellent = @Model.MinPassingScore;
+
+            const penaltyGood = "@Model.PenaltyAlertsGood".trim();
+            const penaltyExcellent = "@Model.PenaltyAlerts".trim();
+
+            const totalScore = parseFloat('@Model.TotalScore');
+
+            const minPassing = mode === 'excellent' ? minPassingExcellent : minPassingGood;
+            const penalty = mode === 'excellent' ? penaltyExcellent : penaltyGood;
+
+            const isCertified = (totalScore >= minPassing && penalty === "");
+            const statusLabel = isCertified ? "CERTIFIED" : "NOT CERTIFIED";
+
+            // Update nilai minimum per elemen
+            $('td.min-nilai').each(function (i) {
+                if (i < minScores.length) {
+                    $(this).text(minScores[i].toFixed(2) + '%');
                 }
-                sumWeight = weight;
-                skor = (sumWeight - sumX) > 0 ? (sumAF / (sumWeight - sumX)) * sumWeight : 0;
+            });
+
+            // Update warna dan label box total score
+            const boxClass = isCertified
+                ? (mode === 'excellent' ? 'bg-warning' : 'bg-success')
+                : 'bg-danger text-white';
+
+            const boxStyle = isCertified
+                ? (mode === 'excellent' ? 'background-color:#FFA500 !important;' : 'background-color:#28a745 !important;')
+                : 'background-color:#dc3545 !important; color:#fff;';
+
+            $('.box-total-score')
+                .removeClass('bg-warning bg-success bg-danger text-white')
+                .addClass(boxClass)
+                .attr('style', boxStyle);
+
+            $('.score-label').html(`Total Score (TS): ${totalScore.toFixed(2)}% &mdash; ${statusLabel}`);
+
+            if (isCertified) {
+                $('.box-penalty').hide();
             } else {
-                var children = $li.find('> .card > .collapse > .card-body > ul > li');
-                children.each(function () {
-                    var result = recalcNode($(this));
-                    sumAF += result.af;
-                    sumWeight += result.wt;
-                    sumX += result.x;
-                });
-
-                var elementTitle = $li.find('> .card > .card-header span.fw-bold.text-dark').text().trim();
-
-                if (elementTitle === "Elemen 2" || elementTitle === "Elemen 5") {
-                    // console.log("🔍 Menjumlah langsung skor anak untuk:", elementTitle);
-                    var directSum = 0;
-                    children.each(function () {
-                        var rawScore = $(this).find('.score-x').text();
-                        var subScore = parseFloat(rawScore) || 0;
-                        directSum += subScore;
-                        console.log("   ↪ Sub skor:", subScore);
-                    });
-                    skor = directSum;
-                    sumAF = skor;
-                    sumWeight = 1;
-                    sumX = 0;
-                } else {
-                    skor = (sumWeight - sumX) > 0 ? (sumAF / (sumWeight - sumX)) * sumWeight : 0;
-                }
+                $('.box-penalty').show().html(`<strong>Penalty:</strong> ${penalty}`);
             }
 
-            var $scoreElement = $li.find('.score-x[data-node-id="' + nodeId + '"]');
-            // console.log("📌 Node:", nodeId, "| Judul:", $li.find('.fw-bold.text-dark').text().trim(), "| Skor akhir:", skor.toFixed(2));
-            $scoreElement.text(skor.toFixed(2)); // TANPA 'Skor:' karena sudah ada di <small>
-
-            return { af: sumAF, wt: sumWeight, x: sumX };
+            // Update bagian status CERTIFIED/NOT CERTIFIED (jika ada)
+            $('#certStatusBox').removeClass('alert-success alert-danger')
+                .addClass(isCertified ? 'alert-success' : 'alert-danger');
+            $('#certStatusLabel').text(statusLabel);
         }
 
-        function recalcAll() {
-        $('#auditChecklist > li[id^="node-"]').each(function () {
-        recalcNode($(this));
+            // PILIHAN NILAI A-F
+            $(document).on('click', '.option-btn', function () {
+                var nodeId = $(this).data('node-id');
+                $('.option-btn[data-node-id="' + nodeId + '"]')
+                    .removeClass('active bg-success text-white')
+                    .addClass('btn-outline-secondary');
+                $(this)
+                    .removeClass('btn-outline-secondary')
+                    .addClass('active bg-success text-white');
+            });
+
+            // Hitung ulang semua skor
+            function recalcNode($li) {
+                var nodeId = $li.attr('id').replace('node-', '');
+                var weight = parseFloat($li.attr('data-weight')) || 0;
+                var sumAF = 0, sumWeight = 0, sumX = 0, skor = 0;
+                var map = { A: 1, B: 0.8, C: 0.6, D: 0.4, E: 0.2, F: 0 };
+
+                var $grp = $li.find('.option-group[data-node-id="' + nodeId + '"]');
+                var isRelaksasi = $grp.data('is-relaksasi');
+
+                if ($grp.length) {
+                    var letter = $grp.find('.option-btn.active').data('score') || '';
+                    if (letter === 'X') {
+                        var scoreX = parseFloat($li.attr('data-score-x')) || 0;
+                        sumX = weight;
+                        sumAF = scoreX;
+                    } else {
+                        sumAF = (isRelaksasi === 'True' && letter === 'F') ? weight : (map[letter] || 0) * weight;
+                    }
+                    sumWeight = weight;
+                    skor = (sumWeight - sumX) > 0 ? (sumAF / (sumWeight - sumX)) * sumWeight : 0;
+                } else {
+                    var children = $li.find('> .card > .collapse > .card-body > ul > li');
+                    children.each(function () {
+                        var result = recalcNode($(this));
+                        sumAF += result.af;
+                        sumWeight += result.wt;
+                        sumX += result.x;
+                    });
+
+                    var elementTitle = $li.find('> .card > .card-header span.fw-bold.text-dark').text().trim();
+                    if (elementTitle === "Elemen 2" || elementTitle === "Elemen 5") {
+                        var directSum = 0;
+                        children.each(function () {
+                            var rawScore = $(this).find('.score-x').text();
+                            directSum += parseFloat(rawScore) || 0;
+                        });
+                        skor = directSum;
+                        sumAF = skor; sumWeight = 1; sumX = 0;
+                    } else {
+                        skor = (sumWeight - sumX) > 0 ? (sumAF / (sumWeight - sumX)) * sumWeight : 0;
+                    }
+                }
+
+                $li.find('.score-x[data-node-id="' + nodeId + '"]').text(skor.toFixed(2));
+                return { af: sumAF, wt: sumWeight, x: sumX };
+            }
+
+            function recalcAll() {
+                $('#auditChecklist > li[id^="node-"]').each(function () {
+                    recalcNode($(this));
+                });
+            }
+
+            $(document).on('click', '.update-score-btn', function () {
+                var nodeId = $(this).data('node-id');
+                var auditId = $(this).data('audit-id');
+                var score = $('.option-btn[data-node-id="' + nodeId + '"].active').data('score');
+                var token = $('input[name="__RequestVerificationToken"]').val();
+                if (!score) return alert('Pilih jawaban dulu!');
+                fetch('/Audit/UpdateScore', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'RequestVerificationToken': token
+                    },
+                    body: JSON.stringify({ NodeId: nodeId, AuditId: auditId, Score: score })
+                })
+                .then(res => res.ok ? recalcAll() : res.text().then(t => Promise.reject(t)))
+                .catch(err => {
+                    console.error(err);
+                    alert('Gagal update nilai: ' + err);
+                });
+            });
+
+            $('#auditChecklist').on('shown.bs.collapse hidden.bs.collapse', function () {
+                recalcAll();
+            });
+
+            // Inisialisasi
+            recalcAll();
         });
-        }
 
-        // recalc saat update
-        $(document).on('click', '.update-score-btn', function() {
-        var nodeId  = $(this).data('node-id');
-        var auditId = $(this).data('audit-id');
-        var score   = $('.option-btn[data-node-id="'+nodeId+'"].active').data('score');
-        var token   = $('input[name="__RequestVerificationToken"]').val();
-        if (!score) return alert('Pilih jawaban dulu!');
-        fetch('/Audit/UpdateScore', {
-        method: 'POST',
-        headers: {
-        'Content-Type': 'application/json',
-        'RequestVerificationToken': token
-        },
-        body: JSON.stringify({ NodeId: nodeId, AuditId: auditId, Score: score })
-        })
-        .then(res => res.ok ? recalcAll() : res.text().then(t => Promise.reject(t)))
-        .catch(err => {
-        console.error(err);
-        alert('Gagal update nilai: ' + err);
-        });
-        });
-
-        // Recalc juga setelah collapse toggle (open/close)
-        $('#auditChecklist').on('shown.bs.collapse hidden.bs.collapse', function(){
-        recalcAll();
-        });
-
-        // Inisialisasi pertama
-        recalcAll();
-        });
-        function showMediaPopup(mediaItems) {
-        const container = document.getElementById('mediaModalBody');
-        container.innerHTML = '';
-
-        if (!mediaItems || mediaItems.length === 0) {
-        container.innerHTML = '<p class="text-muted">Tidak ada media tersedia.</p>';
-        }
-        else if (mediaItems.length === 1) {
-        const item = mediaItems[0];
-        let el = document.createElement(item.MediaType?.toUpperCase() === 'VIDEO' || item.MediaPath?.endsWith('.mp4')
-        ? 'video' : 'img');
-
-        if (el.tagName === 'IMG') {
-        el.src = item.MediaPath;
-        el.alt = '';
-        el.className = 'img-fluid rounded';
-        } else {
-        el.src = item.MediaPath;
-        el.controls = true;
-        el.className = 'w-100 rounded';
-        }
-        container.appendChild(el);
-        }
-        else {
-        const carouselId = 'mediaCarousel';
-        const indicators = [];
-        const innerItems = [];
-
-        mediaItems.forEach((item, index) => {
-        const isActive = index === 0 ? 'active' : '';
-        const mediaTag = item.MediaType?.toUpperCase() === 'VIDEO' || item.MediaPath?.endsWith('.mp4')
-        ? `<video controls class="d-block w-100 rounded"><source src="${item.MediaPath}" type="video/mp4"></video>`
-        : `<img src="${item.MediaPath}" class="d-block w-100 rounded" alt="">`;
-
-        indicators.push(`<button type="button" data-bs-target="#${carouselId}" data-bs-slide-to="${index}" class="${isActive}" aria-current="${isActive ? 'true' : ''}" aria-label="Slide ${index + 1}"></button>`);
-        innerItems.push(`<div class="carousel-item ${isActive}">${mediaTag}</div>`);
-        });
-
-        container.innerHTML = `
-        <div id="${carouselId}" class="carousel slide" data-bs-ride="carousel">
-        <div class="carousel-indicators">
-        ${indicators.join('')}
-        </div>
-        <div class="carousel-inner">
-        ${innerItems.join('')}
-        </div>
-        <button class="carousel-control-prev" type="button" data-bs-target="#${carouselId}" data-bs-slide="prev">
-        <span class="carousel-control-prev-icon" aria-hidden="true"></span>
-        <span class="visually-hidden">Previous</span>
-        </button>
-        <button class="carousel-control-next" type="button" data-bs-target="#${carouselId}" data-bs-slide="next">
-        <span class="carousel-control-next-icon" aria-hidden="true"></span>
-        <span class="visually-hidden">Next</span>
-        </button>
-        </div>`;
-        }
-
-                const modalEl = document.getElementById('mediaModal');
-        const modal = new bootstrap.Modal(modalEl, {
-            backdrop: 'static',
-            keyboard: false,
-            focus: false // <== mencegah scroll auto ke dalam modal
-        });
-        modal.show();
-
-        }
-
-        function showFinalMediaPopup(mediaItems) {
-        showMediaPopup(mediaItems);
-        }
-
-            document.getElementById('btnDownloadPdf')?.addEventListener('click', function () {
+        // PDF download
+        document.getElementById('btnDownloadPdf')?.addEventListener('click', function () {
             const auditId = '@Context.Request.RouteValues["id"]';
-
             fetch(`/AuditReport/DownloadPdfQuest?id=${auditId}`, {
                 method: 'GET',
-                headers: {
-                    'Accept': 'application/pdf'
-                }
+                headers: { 'Accept': 'application/pdf' }
             })
             .then(response => {
                 if (!response.ok) throw new Error('Gagal mengunduh PDF');
-
                 return response.blob();
             })
             .then(blob => {
@@ -786,9 +760,9 @@ else
                 alert('Gagal mengunduh PDF');
             });
         });
-
     </script>
 }
+
 
 @functions {
     async Task RenderChecklistNode(AuditChecklistNode node, int level, bool isVerified, bool isReadonlyUser)

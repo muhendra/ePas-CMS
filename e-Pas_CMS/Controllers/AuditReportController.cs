@@ -84,21 +84,21 @@ namespace e_Pas_CMS.Controllers
             foreach (var a in pagedAudits)
             {
                 var sql = @"
-                SELECT 
-                    mqd.weight, 
-                    tac.score_input, 
-                    tac.score_x, 
-                    mqd.is_relaksasi
-                FROM master_questioner_detail mqd
-                LEFT JOIN trx_audit_checklist tac 
-                    ON tac.master_questioner_detail_id = mqd.id 
-                    AND tac.trx_audit_id = @id
-                WHERE mqd.master_questioner_id = (
-                    SELECT master_questioner_checklist_id 
-                    FROM trx_audit 
-                    WHERE id = @id
-                )
-                AND mqd.type = 'QUESTION'";
+        SELECT 
+            mqd.weight, 
+            tac.score_input, 
+            tac.score_x, 
+            mqd.is_relaksasi
+        FROM master_questioner_detail mqd
+        LEFT JOIN trx_audit_checklist tac 
+            ON tac.master_questioner_detail_id = mqd.id 
+            AND tac.trx_audit_id = @id
+        WHERE mqd.master_questioner_id = (
+            SELECT master_questioner_checklist_id 
+            FROM trx_audit 
+            WHERE id = @id
+        )
+        AND mqd.type = 'QUESTION'";
 
                 var checklist = (await conn.QueryAsync<(decimal? weight, string score_input, decimal? score_x, bool? is_relaksasi)>(sql, new { id = a.id }))
                     .ToList();
@@ -141,25 +141,21 @@ namespace e_Pas_CMS.Controllers
                     ? (sumAF / (sumWeight - sumX)) * sumWeight
                     : 0m;
 
-                var penaltyExcellentQuery = @"
-                SELECT STRING_AGG(mqd.penalty_alert, ', ') AS penalty_alerts
-                FROM trx_audit_checklist tac
-                INNER JOIN master_questioner_detail mqd ON mqd.id = tac.master_questioner_detail_id
-                WHERE 
-                    tac.trx_audit_id = @id AND
-                    ((mqd.penalty_excellent_criteria = 'LT_1' AND tac.score_input <> 'A') OR
-                     (mqd.penalty_excellent_criteria = 'EQ_0' AND tac.score_input = 'F')) AND
-                    mqd.is_penalty = true;";
+                var penaltyExcellentQuery = @"SELECT STRING_AGG(mqd.penalty_alert, ', ') AS penalty_alerts
+        FROM trx_audit_checklist tac
+        INNER JOIN master_questioner_detail mqd ON mqd.id = tac.master_questioner_detail_id
+        WHERE tac.trx_audit_id = @id AND
+              ((mqd.penalty_excellent_criteria = 'LT_1' AND tac.score_input <> 'A') OR
+               (mqd.penalty_excellent_criteria = 'EQ_0' AND tac.score_input = 'F'))
+              AND mqd.is_penalty = true;";
 
-                var penaltyGoodQuery = @"
-                SELECT STRING_AGG(mqd.penalty_alert, ', ') AS penalty_alerts
-                FROM trx_audit_checklist tac
-                INNER JOIN master_questioner_detail mqd ON mqd.id = tac.master_questioner_detail_id
-                WHERE 
-                    tac.trx_audit_id = @id AND
-                    tac.score_input = 'F' AND
-                    mqd.is_penalty = true AND 
-                    (mqd.is_relaksasi = false OR mqd.is_relaksasi IS NULL);";
+                var penaltyGoodQuery = @"SELECT STRING_AGG(mqd.penalty_alert, ', ') AS penalty_alerts
+        FROM trx_audit_checklist tac
+        INNER JOIN master_questioner_detail mqd ON mqd.id = tac.master_questioner_detail_id
+        WHERE tac.trx_audit_id = @id AND
+              tac.score_input = 'F' AND
+              mqd.is_penalty = true AND 
+              (mqd.is_relaksasi = false OR mqd.is_relaksasi IS NULL);";
 
                 var penaltyExcellentResult = await conn.ExecuteScalarAsync<string>(penaltyExcellentQuery, new { id = a.id });
                 var penaltyGoodResult = await conn.ExecuteScalarAsync<string>(penaltyGoodQuery, new { id = a.id });
@@ -167,108 +163,22 @@ namespace e_Pas_CMS.Controllers
                 bool hasExcellentPenalty = !string.IsNullOrEmpty(penaltyExcellentResult);
                 bool hasGoodPenalty = !string.IsNullOrEmpty(penaltyGoodResult);
 
-                string goodStatus = "NOT CERTIFIED";
-                string excellentStatus = "NOT CERTIFIED";
+                string goodStatus = (finalScore >= 75 && !hasGoodPenalty) ? "CERTIFIED" : "NOT CERTIFIED";
+                string excellentStatus = (finalScore >= 80 && !hasExcellentPenalty) ? "EXCELLENT" : "NOT CERTIFIED";
 
-                if (finalScore >= 75 && !hasGoodPenalty)
+                // ========== GUNAKAN HIRARKI UNTUK COMPLIANCE LEVEL ==========
+                var checklistData = await GetChecklistDataAsync(conn, a.id);
+                var mediaList = await GetMediaPerNodeAsync(conn, a.id);
+                var elements = BuildHierarchy(checklistData, mediaList);
+                foreach (var element in elements)
                 {
-                    goodStatus = "CERTIFIED";
+                    AssignWeightRecursive(element);
                 }
-                if (finalScore >= 80 && !hasExcellentPenalty)
-                {
-                    excellentStatus = "EXCELLENT";
-                }
+                CalculateChecklistScores(elements);
+                CalculateOverallScore(new DetailReportViewModel { Elements = elements }, checklistData);
+                var compliance = HitungComplianceLevelDariElements(elements);
 
-
-                var elementScoresQuery = @"
-                SELECT
-                    root_title,
-                    SUM(CASE 
-                        WHEN tac.score_input = 'X' THEN 0
-                        WHEN tac.score_input = 'F' AND mqd.is_relaksasi = true THEN 1.0 * mqd.weight
-                        ELSE 
-                            (CASE tac.score_input
-                                WHEN 'A' THEN 1.00
-                                WHEN 'B' THEN 0.80
-                                WHEN 'C' THEN 0.60
-                                WHEN 'D' THEN 0.40
-                                WHEN 'E' THEN 0.20
-                                WHEN 'F' THEN 0.00
-                                ELSE 0.00
-                            END) * mqd.weight
-                    END) AS total_score,
-                    SUM(CASE WHEN tac.score_input = 'X' THEN 0 ELSE mqd.weight END) AS total_weight
-                FROM (
-                    WITH RECURSIVE question_hierarchy AS (
-                        SELECT 
-                            mqd.id,
-                            mqd.title,
-                            mqd.parent_id,
-                            mqd.title AS root_title
-                        FROM master_questioner_detail mqd
-                        WHERE mqd.title IN ('Elemen 1', 'Elemen 2', 'Elemen 3', 'Elemen 4', 'Elemen 5')
-                        UNION ALL
-                        SELECT 
-                            mqd.id,
-                            mqd.title,
-                            mqd.parent_id,
-                            qh.root_title
-                        FROM master_questioner_detail mqd
-                        INNER JOIN question_hierarchy qh ON mqd.parent_id = qh.id
-                    )
-                    SELECT qh.root_title, qh.id
-                    FROM question_hierarchy qh
-                ) AS q
-                JOIN master_questioner_detail mqd ON mqd.id = q.id
-                LEFT JOIN trx_audit_checklist tac ON tac.master_questioner_detail_id = mqd.id AND tac.trx_audit_id = @id
-                WHERE mqd.type = 'QUESTION'
-                GROUP BY root_title";
-
-                var elementScores = (await conn.QueryAsync<(string root_title, decimal total_score, decimal total_weight)>(elementScoresQuery, new { id = a.id })).ToList();
-
-                decimal? GetComplianceLevel(string elementTitle)
-                {
-                    var ele = elementScores.FirstOrDefault(x => x.root_title.Trim().ToUpperInvariant() == elementTitle.Trim().ToUpperInvariant());
-                    if (ele.total_weight == 0) return 0;
-                    return (ele.total_score / ele.total_weight) * 100;
-                }
-
-                var SSS = GetComplianceLevel("Elemen 1") ?? 0;
-                var EQnQ = GetComplianceLevel("Elemen 2") ?? 0;
-                var RFS = GetComplianceLevel("Elemen 3") ?? 0;
-                var VFC = GetComplianceLevel("Elemen 4") ?? 0;
-                var EPO = GetComplianceLevel("Elemen 5") ?? 0;
-
-                var sqlSum = @"
-                SELECT 
-                    mqd.weight, 
-                    tac.score_input, 
-                    tac.score_x, 
-                    mqd.is_relaksasi
-                FROM master_questioner_detail mqd
-                LEFT JOIN trx_audit_checklist tac 
-                    ON tac.master_questioner_detail_id = mqd.id 
-                    AND tac.trx_audit_id = @id
-                WHERE mqd.master_questioner_id = (
-                    SELECT master_questioner_checklist_id 
-                    FROM trx_audit 
-                    WHERE id = @id
-                )
-                AND mqd.type = 'QUESTION'";
-
-                var checklistRaw = await conn.QueryAsync<(decimal? weight, string score_input, decimal? score_x, bool? is_relaksasi, string root_element_title, string parent_id)>(sql, new { id = a.id });
-
-                var checklistSum = checklistRaw.Select(x => new ChecklistFlatSum
-                {
-                    Weight = x.weight,
-                    ScoreInput = x.score_input,
-                    ScoreX = x.score_x,
-                    IsRelaksasi = x.is_relaksasi,
-                    RootElementTitle = x.root_element_title,
-                    ParentId = x.parent_id
-                }).ToList();
-
-                decimal totalScore = HitungFinalScore(checklistSum);
+                // ============================================================
 
                 result.Add(new AuditReportListViewModel
                 {
@@ -292,8 +202,8 @@ namespace e_Pas_CMS.Controllers
                     GoodStatus = goodStatus,
                     ExcellentStatus = excellentStatus,
                     Score = (a.spbu.audit_current_score.HasValue && a.spbu.audit_current_score.Value != 0)
-                    ? a.spbu.audit_current_score.Value
-                    : finalScore,
+                        ? a.spbu.audit_current_score.Value
+                        : finalScore,
                     WTMS = a.spbu.wtms,
                     QQ = a.spbu.qq,
                     WMEF = a.spbu.wmef,
@@ -303,11 +213,11 @@ namespace e_Pas_CMS.Controllers
                     Auditlevel = a.audit_level,
                     ApproveDate = a.approval_date ?? DateTime.Now,
                     ApproveBy = string.IsNullOrWhiteSpace(a.approval_by) ? "-" : a.approval_by,
-                    SSS = Math.Round(SSS, 2),
-                    EQnQ = Math.Round(EQnQ, 2),
-                    RFS = Math.Round(RFS, 2),
-                    VFC = Math.Round(VFC, 2),
-                    EPO = Math.Round(EPO, 2)
+                    SSS = Math.Round(compliance.SSS ?? 0, 2),
+                    EQnQ = Math.Round(compliance.EQnQ ?? 0, 2),
+                    RFS = Math.Round(compliance.RFS ?? 0, 2),
+                    VFC = Math.Round(compliance.VFC ?? 0, 2),
+                    EPO = Math.Round(compliance.EPO ?? 0, 2)
                 });
             }
 
@@ -681,11 +591,12 @@ WHERE
 
         private async Task<List<FotoTemuan>> GetMediaReportFAsync(IDbConnection conn, string id)
         {
-            string sql = @"SELECT am.media_type,am.media_path
+            string sql = @"SELECT mqd.title,am.media_path
                         FROM trx_audit_media am
                         JOIN trx_audit_checklist ac
                           ON am.trx_audit_id = ac.trx_audit_id
                           AND am.master_questioner_detail_id = ac.master_questioner_detail_id
+                         join master_questioner_detail mqd on mqd.id  = ac.master_questioner_detail_id 
                         WHERE ac.score_input = 'F'
                           AND am.trx_audit_id = @id";
 
@@ -1102,6 +1013,7 @@ WHERE
             model.MaxScore = maxScore;
             model.FinalScore = (maxScore > 0) ? (totalScore / maxScore) * 100m : 0m;
             model.MinPassingScore = 80.00m;
+            model.MinPassingScoreGood = 75.00m;
 
             // Log ke Output
             System.Diagnostics.Debug.WriteLine("[DEBUG] Perhitungan Total Skor:");
@@ -1109,6 +1021,21 @@ WHERE
                 System.Diagnostics.Debug.WriteLine(line);
             System.Diagnostics.Debug.WriteLine($"TOTAL: {totalScore:0.##} / {maxScore:0.##} = {model.FinalScore:0.##}%");
         }
+
+        private (decimal? SSS, decimal? EQnQ, decimal? RFS, decimal? VFC, decimal? EPO) HitungComplianceLevelDariElements(List<AuditChecklistNode> elements)
+        {
+            decimal? Ambil(string title) =>
+                elements.FirstOrDefault(e => e.Title?.Trim().ToUpperInvariant() == title.Trim().ToUpperInvariant())?.ScoreAF * 100;
+
+            return (
+                SSS: Ambil("Elemen 1"),
+                EQnQ: Ambil("Elemen 2"),
+                RFS: Ambil("Elemen 3"),
+                VFC: Ambil("Elemen 4"),
+                EPO: Ambil("Elemen 5")
+            );
+        }
+
 
         private void AssignWeightRecursive(AuditChecklistNode node)
         {

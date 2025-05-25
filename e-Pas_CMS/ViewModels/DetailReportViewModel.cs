@@ -43,6 +43,7 @@
         public string ClassSPBU { get; set; }
         public string Phone { get; set; }
         public decimal MinPassingScore { get; set; }    // nilai minimum Pasti Pas
+        public decimal MinPassingScoreGood { get; set; }
         public string PenaltyAlerts { get; set; }
         public string PenaltyAlertsGood { get; set; }
         public string GoodStatus { get; set; }

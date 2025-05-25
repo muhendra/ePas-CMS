@@ -35,14 +35,14 @@ public class ReportExcellentTemplate : IDocument
                 container.Column(col =>
                 {
                     // SERVE hanya muncul di halaman pertama (karena berada di awal dokumen)
-                    col.Item().PaddingTop(-8).Row(row =>
-                    {
-                        row.RelativeItem(3).Text("SERVE")
-                            .FontColor("#ED7D7D")
-                            .Bold()
-                            .FontSize(28)
-                            .LineHeight(1f);
-                    });
+                    //col.Item().PaddingTop(-8).Row(row =>
+                    //{
+                    //    row.RelativeItem(3).Text("SERVE")
+                    //        .FontColor("#ED7D7D")
+                    //        .Bold()
+                    //        .FontSize(28)
+                    //        .LineHeight(1f);
+                    //});
 
                     // Konten utama audit
                     col.Item().Element(ComposeContent);
@@ -98,7 +98,7 @@ public class ReportExcellentTemplate : IDocument
     {
         container.Column(col =>
         {
-            bool isCertified0 = _model.TotalScore >= 85 && string.IsNullOrWhiteSpace(_model.PenaltyAlerts); // Atau pakai _model.MinPassingScore
+            bool isCertified0 = _model.TotalScore >= 80 && string.IsNullOrWhiteSpace(_model.PenaltyAlerts); // Atau pakai _model.MinPassingScore
             string boxColor = isCertified0 ? "#FFC107" : "#F44336";
             string scoreFontColor = Colors.White;
 
@@ -226,6 +226,8 @@ public class ReportExcellentTemplate : IDocument
             KomentarItem("Tampilan Fisik Seragam", _model.KomentarVisual);
             KomentarItem("Komentar Manajer SPBU", _model.KomentarManager);
 
+            col.Item().PageBreak();
+
             col.Item().PaddingTop(20).Text("DETAIL CHECKLIST").Bold().FontSize(12);
             //foreach (var root in _model.Elements)
             //{
@@ -258,8 +260,8 @@ public class ReportExcellentTemplate : IDocument
             {
                 container.PaddingVertical(10).Grid(grid =>
                 {
-                    grid.Columns(3);
-                    grid.Spacing(10); // Fixed: hanya satu nilai
+                    grid.Columns(2); // Diubah jadi 2 kolom per baris
+                    grid.Spacing(10);
 
                     foreach (var foto in _model.FotoTemuan)
                     {
@@ -289,9 +291,13 @@ public class ReportExcellentTemplate : IDocument
                                     e.Image(Image.FromFile(fullPath)).FitArea();
                                 });
 
-                                item.Item().PaddingTop(5).Text(foto.Caption ?? "IMAGE")
-                                    .FontSize(8)
-                                    .AlignCenter();
+                                // Caption dengan MaxWidth dan WrapAnywhere
+                                item.Item().PaddingTop(5).Element(c =>
+                                {
+                                    c.Container().MaxWidth(250).AlignCenter().Text(foto.Caption ?? "IMAGE")
+                                        .FontSize(8)
+                                        .WrapAnywhere();
+                                });
                             });
                         }
                         catch
@@ -301,6 +307,8 @@ public class ReportExcellentTemplate : IDocument
                     }
                 });
             });
+
+
 
 
 
