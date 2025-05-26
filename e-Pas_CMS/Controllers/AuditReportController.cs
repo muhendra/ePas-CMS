@@ -533,7 +533,9 @@ WHERE
                 END AS KomentarManager,
                 approval_date as ApproveDate,
                 approval_by as ApproveBy,
-                ta.updated_date as UpdateDate
+                ta.updated_date as UpdateDate,
+                s.audit_current as AuditCurrent,
+                s.audit_next as AuditNext
             FROM trx_audit ta
             JOIN spbu s ON ta.spbu_id = s.id
             WHERE ta.id = @id";
@@ -573,7 +575,10 @@ WHERE
                 KomentarQuality = basic.KomentarQuality,
                 KomentarHSSE = basic.KomentarHSSE,
                 KomentarVisual = basic.KomentarVisual,
-                KomentarManager = basic.KomentarManager
+                KomentarManager = basic.KomentarManager,
+                AuditCurrent = basic.AuditCurrent,
+                AuditNext = basic.AuditNext,
+                ApproveBy = basic.ApproveBy
             };
         }
 

@@ -192,7 +192,7 @@ namespace e_Pas_CMS.Controllers
                         TipeSpbu = item.Spbu.type,
                         Tahun = item.Audit.created_date.ToString("yyyy"),
                         Audit = item.Audit.audit_level,
-                        Score = finalScore,
+                        Score = Math.Round(finalScore, 2),
                         Good = goodStatus,
                         Excelent = excellentStatus,
                         Provinsi = item.Spbu.province_name,

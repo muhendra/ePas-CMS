@@ -1,4 +1,6 @@
-﻿namespace e_Pas_CMS.ViewModels
+﻿using Microsoft.EntityFrameworkCore.Storage.ValueConversion.Internal;
+
+namespace e_Pas_CMS.ViewModels
 {
     public class DetailReportViewModel
     {
@@ -49,9 +51,15 @@
         public string GoodStatus { get; set; }
         public string ExcellentStatus { get; set; }
 
+        public string AuditCurrent { get; set; }
+
+        public string AuditNext { get; set; }
+
+        public string? ApproveBy { get; set; }
         public List<AuditLevelSummaryGroup> LevelSummaryGroups { get; set; }
 
         public List<FotoTemuan> FotoTemuan { get; set; } = new();
+
     }
 
     public class FotoTemuan
@@ -90,12 +98,15 @@
         public string KomentarVisual { get; set; }
         public string KomentarManager { get; set; }
 
+        public string AuditCurrent { get; set; }
+
+        public string AuditNext { get; set; }
+
         public DateTime? ApproveDate { get; set; }
 
-
+        public string? ApproveBy { get; set; }
         public DateTime? UpdatedDate { get; set; }
 
-        public string? ApproveBy { get; set; }
     }
 
 
