@@ -171,7 +171,7 @@
     </div>
 
     <div class="text-center text-muted mb-3">
-        Nilai Minimum Pasti Pas: @Model.MinPassingScore.ToString("0.00")%
+        Nilai Minimum Pasti Pas: <span id="minPassingDisplay">@Model.MinPassingScore.ToString("0.00")%</span>
     </div>
 
     <!-- Level Konfirmasi Pertamina Way (Elemen) -->
@@ -572,25 +572,24 @@
 @section Scripts {
     <script>
         $(function () {
-            const mode = localStorage.getItem('reportMode') || 'good';
-            const toggle = $('#toggleReportMode');
+        const mode = localStorage.getItem('reportMode') || 'good';
+        const toggle = $('#toggleReportMode');
 
-            toggle.prop('checked', mode === 'excellent');
-            updateUI(mode);
+        toggle.prop('checked', mode === 'excellent');
+        updateUI(mode);
 
-            toggle.on('change', function () {
-                const newMode = this.checked ? 'excellent' : 'good';
-                localStorage.setItem('reportMode', newMode);
-                updateUI(newMode);
-            });
+        toggle.on('change', function () {
+            const newMode = this.checked ? 'excellent' : 'good';
+            localStorage.setItem('reportMode', newMode);
+            updateUI(newMode);
+        });
 
-                    function updateUI(mode) {
+        function updateUI(mode) {
             const minScoresGood = [75, 80, 85, 15, 25];
             const minScoresExcellent = [85, 85, 85, 20, 50];
 
             const minScores = mode === 'excellent' ? minScoresExcellent : minScoresGood;
 
-            // Pakai nilai minimum dari server (embedded Razor)
             const minPassingGood = @Model.MinPassingScoreGood;
             const minPassingExcellent = @Model.MinPassingScore;
 
@@ -612,13 +611,18 @@
                 }
             });
 
-            // Update warna dan label box total score
+            // 🔁 Update nilai minimum global
+            $('#minPassingDisplay').text(minPassing.toFixed(2) + '%');
+
+            // Update box class dan style
             const boxClass = isCertified
                 ? (mode === 'excellent' ? 'bg-warning' : 'bg-success')
                 : 'bg-danger text-white';
 
             const boxStyle = isCertified
-                ? (mode === 'excellent' ? 'background-color:#FFA500 !important;' : 'background-color:#28a745 !important;')
+                ? (mode === 'excellent'
+                    ? 'background-color:#FFA500 !important;'
+                    : 'background-color:#28a745 !important;')
                 : 'background-color:#dc3545 !important; color:#fff;';
 
             $('.box-total-score')
@@ -626,19 +630,23 @@
                 .addClass(boxClass)
                 .attr('style', boxStyle);
 
+            // Update text "Total Score"
             $('.score-label').html(`Total Score (TS): ${totalScore.toFixed(2)}% &mdash; ${statusLabel}`);
 
+            // Update penalty visibility
             if (isCertified) {
                 $('.box-penalty').hide();
             } else {
                 $('.box-penalty').show().html(`<strong>Penalty:</strong> ${penalty}`);
             }
 
-            // Update bagian status CERTIFIED/NOT CERTIFIED (jika ada)
-            $('#certStatusBox').removeClass('alert-success alert-danger')
+            // Update status box atas
+            $('#certStatusBox')
+                .removeClass('alert-success alert-danger')
                 .addClass(isCertified ? 'alert-success' : 'alert-danger');
             $('#certStatusLabel').text(statusLabel);
         }
+
 
             // PILIHAN NILAI A-F
             $(document).on('click', '.option-btn', function () {
