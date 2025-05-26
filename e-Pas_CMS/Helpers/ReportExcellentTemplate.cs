@@ -632,7 +632,6 @@ public class ReportExcellentTemplate : IDocument
             InfoRow("SALES AREA", _model.SalesArea);
             InfoRow("SBM", _model.SBM);
 
-            InfoRow("TIPE AUDIT", "Audit");
             InfoRow("KELAS SPBU", _model.ClassSPBU);
             InfoRow("TELEPON", _model.Phone);
         });
