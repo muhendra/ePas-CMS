@@ -721,8 +721,8 @@ public class ReportGoodTemplate : IDocument
 
                 string minText = e.Name switch
                 {
-                    "Skilled Staff & Services" => "75.00%",
-                    "Exact Quality & Quantity" => "80.00%",
+                    "Skilled Staff & Services" => "80.00%",
+                    "Exact Quality & Quantity" => "85.00%",
                     "Reliable Facilities & Safety" => "85.00%",
                     "Visual Format Consistency" => "15.00%",
                     "Expansive Product Offer" => "25.00%",
