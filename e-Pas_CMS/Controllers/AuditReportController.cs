@@ -458,6 +458,21 @@ WHERE
             model.PenaltyAlerts = await conn.ExecuteScalarAsync<string>(penaltySql, new { id = id.ToString() });
             bool hasPenalty = !string.IsNullOrEmpty(model.PenaltyAlerts);
 
+
+
+            var penaltySqlGood = @"
+            SELECT STRING_AGG(mqd.penalty_alert, ', ') AS penalty_alerts
+            FROM trx_audit_checklist tac
+            INNER JOIN master_questioner_detail mqd ON mqd.id = tac.master_questioner_detail_id
+            WHERE 
+                tac.trx_audit_id = @id AND
+                tac.score_input = 'F' AND
+                mqd.is_penalty = true AND 
+                (mqd.is_relaksasi = false OR mqd.is_relaksasi IS NULL);";
+
+            model.PenaltyAlertsGood = await conn.ExecuteScalarAsync<string>(penaltySqlGood, new { id = id.ToString() });
+
+
             // --- GoodStatus dan ExcellentStatus ---
             model.GoodStatus = "NOT CERTIFIED";
             model.ExcellentStatus = "NOT CERTIFIED";

@@ -340,7 +340,7 @@ public class ReportGoodTemplate : IDocument
 
     void RenderChecklistStructured(ColumnDescriptor col, AuditChecklistNode node, string prefix = "", int level = 0)
     {
-        string label = node.Title?.Trim() ?? "-";
+        string label = (!string.IsNullOrWhiteSpace(node.number) ? node.number.Trim() + " " : "") + (node.Title?.Trim() ?? "-");
         decimal skor = 0;
         string skorText = "-";
 
@@ -406,7 +406,6 @@ public class ReportGoodTemplate : IDocument
             }
             else
             {
-                // Normal hitung dari anak
                 decimal sumAF = 0, sumWeight = 0, sumX = 0;
 
                 void HitungSkor(AuditChecklistNode n)
@@ -447,7 +446,6 @@ public class ReportGoodTemplate : IDocument
         }
         else
         {
-            // Pertanyaan langsung
             decimal w = node.Weight ?? 0;
             string input = node.ScoreInput?.Trim().ToUpper() ?? "";
 
@@ -460,10 +458,8 @@ public class ReportGoodTemplate : IDocument
 
             node.TotalScore = skor;
             skorText = !string.IsNullOrWhiteSpace(node.ScoreInput) ? node.ScoreInput.ToUpper() : "-";
-
         }
 
-        // Pewarnaan sesuai level
         string bgColor = (node.Type ?? "").ToLower() == "question"
             ? "#DAE8FC"
             : level switch
@@ -476,7 +472,6 @@ public class ReportGoodTemplate : IDocument
 
         var leftPad = 10 * level;
 
-        // Tampilkan baris dengan warna dan skor
         col.Item().Background(bgColor)
             .PaddingVertical(6)
             .PaddingLeft(leftPad)
@@ -496,7 +491,6 @@ public class ReportGoodTemplate : IDocument
                     .FontSize(9).LineHeight(1.2f);
             });
 
-        // Render child (jika ada)
         foreach (var child in node.Children ?? new())
         {
             RenderChecklistStructured(col, child, child.Title, level + 1);
