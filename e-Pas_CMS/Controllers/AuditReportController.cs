@@ -146,7 +146,8 @@ namespace e_Pas_CMS.Controllers
         INNER JOIN master_questioner_detail mqd ON mqd.id = tac.master_questioner_detail_id
         WHERE tac.trx_audit_id = @id AND
               ((mqd.penalty_excellent_criteria = 'LT_1' AND tac.score_input <> 'A') OR
-               (mqd.penalty_excellent_criteria = 'EQ_0' AND tac.score_input = 'F'))
+               (mqd.penalty_excellent_criteria = 'EQ_0' AND tac.score_input = 'F')) and
+    (mqd.is_relaksasi = false or mqd.is_relaksasi is null)
               AND mqd.is_penalty = true;";
 
                 var penaltyGoodQuery = @"SELECT STRING_AGG(mqd.penalty_alert, ', ') AS penalty_alerts
@@ -210,7 +211,7 @@ namespace e_Pas_CMS.Controllers
                     FormatFisik = a.spbu.format_fisik,
                     CPO = a.spbu.cpo,
                     KelasSpbu = a.spbu.level,
-                    Auditlevel = a.audit_level,
+                    Auditlevel = a.spbu.audit_current,
                     ApproveDate = a.approval_date ?? DateTime.Now,
                     ApproveBy = string.IsNullOrWhiteSpace(a.approval_by) ? "-" : a.approval_by,
                     SSS = Math.Round(compliance.SSS ?? 0, 2),
@@ -254,6 +255,7 @@ namespace e_Pas_CMS.Controllers
                 tac.trx_audit_id = @id and
                 ((mqd.penalty_excellent_criteria = 'LT_1' and tac.score_input <> 'A') or
                 (mqd.penalty_excellent_criteria = 'EQ_0' and tac.score_input = 'F')) and
+                (mqd.is_relaksasi = false or mqd.is_relaksasi is null) and
                 mqd.is_penalty = true;";
 
             model.PenaltyAlerts = await conn.ExecuteScalarAsync<string>(penaltySql, new { id = id.ToString() });
@@ -419,6 +421,7 @@ WHERE
     tac.trx_audit_id = @id and
     ((mqd.penalty_excellent_criteria = 'LT_1' and tac.score_input <> 'A') or
     (mqd.penalty_excellent_criteria = 'EQ_0' and tac.score_input = 'F')) and
+    (mqd.is_relaksasi = false or mqd.is_relaksasi is null) and
     mqd.is_penalty = true";
 
             model.PenaltyAlerts = await conn.ExecuteScalarAsync<string>(penaltySql, new { id = id.ToString() });

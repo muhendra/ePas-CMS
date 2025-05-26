@@ -205,7 +205,7 @@ namespace e_Pas_CMS.Controllers
                         Status = item.Audit.status,
                         Komplain = item.Audit.status == "FAIL" ? "ADA" : "TIDAK ADA",
                         Banding = item.Audit.audit_level == "Re-Audit" ? "ADA" : "TIDAK ADA",
-                        Type = item.Audit.audit_type,
+                        Type = item.Spbu.audit_current,
                         TanggalApprove = item.Audit.approval_date ?? DateTime.Now,
                         Approver = string.IsNullOrWhiteSpace(item.Audit.approval_by) ? "-" : item.Audit.approval_by
 

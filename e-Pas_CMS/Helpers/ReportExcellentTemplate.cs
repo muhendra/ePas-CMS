@@ -158,7 +158,18 @@ public class ReportExcellentTemplate : IDocument
             //        .FontSize(9);
             //}
 
-            col.Item().PaddingVertical(10).Element(ComposeInfoTable);
+            // Judul: Informasi SPBU
+            col.Item().PaddingTop(15).PaddingBottom(5)
+    .Text("Informasi SPBU").Bold().FontSize(12);
+
+            col.Item().PaddingBottom(15).Element(ComposeInfoTable); // Lebih longgar
+
+            col.Item().PaddingBottom(5)
+                .Text("Informasi Kegiatan Audit").Bold().FontSize(12);
+
+            col.Item().PaddingBottom(20).Element(ComposeAuditInfoTable); // Tambahkan spasi antar bagian
+
+            col.Item().PaddingBottom(15); // Spacer kosong sebelum box CERTIFIED/NOT CERTIFIED
 
             //col.Item().PaddingBottom(10).Text($"Catatan Auditor: {_model.Notes}").Italic().FontSize(9);
 
@@ -195,6 +206,8 @@ public class ReportExcellentTemplate : IDocument
                         .FontColor(Colors.White);
                 }
             });
+
+            col.Item().Height(20); // Spacer setelah box sertifikasi
 
             // Jalankan RenderChecklistStructured secara diam-diam hanya untuk menghitung skor dan isi TotalScore tiap elemen
             foreach (var root in _model.Elements)
@@ -629,6 +642,40 @@ public class ReportExcellentTemplate : IDocument
             InfoRow("TELEPON", _model.Phone);
         });
     }
+
+    void ComposeAuditInfoTable(IContainer container)
+    {
+        container.Table(table =>
+        {
+            table.ColumnsDefinition(columns =>
+            {
+                columns.RelativeColumn();
+                columns.RelativeColumn();
+                columns.RelativeColumn();
+                columns.RelativeColumn();
+            });
+
+            void InfoRow(string label, string value)
+            {
+                table.Cell().Text(label).SemiBold();
+                table.Cell().Text(value ?? "-");
+            }
+
+            InfoRow("No. Report", _model.ReportNo);
+            InfoRow("Tanggal Audit", _model.TanggalSubmit?.ToString("dd/MM/yyyy, HH:mm 'WIB'"));
+            InfoRow("Waktu Audit", _model.TanggalSubmit?.ToString("dd/MM/yyyy, HH:mm:ss tt"));
+            InfoRow("Verifikator", _model.OwnerName);
+
+            InfoRow("Auditor 1", _model.NamaAuditor);
+            InfoRow("Auditor 2", _model.OwnerName); // Ganti jika ada properti khusus
+            InfoRow("Tipe Audit", _model.AuditType);
+            InfoRow("Next Audit", _model.AuditType); // Ganti jika ada properti khusus
+
+            InfoRow("Ko-ordinator", "Sabar Kembaren");
+            InfoRow("Sent Date", _model.TanggalSubmit?.ToString("dd/MM/yyyy, HH:mm 'WIB'"));
+        });
+    }
+
 
     void ComposeElementTable(IContainer container)
     {
