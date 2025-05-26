@@ -138,17 +138,16 @@
         <h5 class="card-title mb-4 mt-5">Informasi Kegiatan Audit</h5>
         <div class="row gy-3">
             <div class="col-md-3"><strong>No. Report</strong><br />@Model.ReportNo</div>
-            <div class="col-md-3"><strong>Tanggal Audit</strong><br />@Model.TanggalSubmit?.ToString("dd/MM/yyyy, HH:mm 'WIB'")</div>
-            <div class="col-md-3"><strong>Waktu Audit</strong><br />@Model.TanggalSubmit?.ToString("dd/MM/yyyy, HH:mm:ss tt")</div>
-            <div class="col-md-3"><strong>Verifikator</strong><br />@Model.OwnerName</div>
+            <div class="col-md-3"><strong>Tanggal Audit</strong><br />@Model.TanggalAudit?.ToString("dd/MM/yyyy")</div>
+            <div class="col-md-3"><strong>Verifikator</strong><br />@Model.ApproveBy</div>
 
             <div class="col-md-3"><strong>Auditor 1</strong><br />@Model.NamaAuditor</div>
-            <div class="col-md-3"><strong>Auditor 2</strong><br />@Model.OwnerName</div>
+            <div class="col-md-3"><strong>Auditor 2</strong><br />-</div>
             <div class="col-md-3"><strong>Tipe Audit</strong><br />@Model.AuditCurrent</div>
             <div class="col-md-3"><strong>Next Audit</strong><br />@Model.AuditNext</div>
 
             <div class="col-md-3"><strong>Ko-ordinator</strong><br />Sabar Kembaren</div>
-            <div class="col-md-3"><strong>Sent Date</strong><br />@Model.TanggalSubmit?.ToString("dd/MM/yyyy, HH:mm 'WIB'")</div>
+            <div class="col-md-3"><strong>Sent Date</strong><br />@Model.TanggalSubmit?.ToString("dd/MM/yyyy")</div>
         </div>
     </div>
 </div>

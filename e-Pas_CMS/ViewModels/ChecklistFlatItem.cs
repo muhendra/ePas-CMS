@@ -23,6 +23,8 @@
 
         public bool is_relaksasi { get; set; }
 
+        public string number { get; set; }
+
     }
 
 }

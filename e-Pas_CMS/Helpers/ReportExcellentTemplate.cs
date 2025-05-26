@@ -345,7 +345,7 @@ public class ReportExcellentTemplate : IDocument
 
     void RenderChecklistStructured(ColumnDescriptor col, AuditChecklistNode node, string prefix = "", int level = 0)
     {
-        string label = node.Title?.Trim() ?? "-";
+        string label = (!string.IsNullOrWhiteSpace(node.number) ? node.number.Trim() + " " : "") + (node.Title?.Trim() ?? "-");
         decimal skor = 0;
         string skorText = "-";
 
@@ -411,7 +411,6 @@ public class ReportExcellentTemplate : IDocument
             }
             else
             {
-                // Normal hitung dari anak
                 decimal sumAF = 0, sumWeight = 0, sumX = 0;
 
                 void HitungSkor(AuditChecklistNode n)
@@ -452,7 +451,6 @@ public class ReportExcellentTemplate : IDocument
         }
         else
         {
-            // Pertanyaan langsung
             decimal w = node.Weight ?? 0;
             string input = node.ScoreInput?.Trim().ToUpper() ?? "";
 
@@ -467,7 +465,6 @@ public class ReportExcellentTemplate : IDocument
             skorText = !string.IsNullOrWhiteSpace(node.ScoreInput) ? node.ScoreInput.ToUpper() : "-";
         }
 
-        // Pewarnaan sesuai level
         string bgColor = (node.Type ?? "").ToLower() == "question"
             ? "#DAE8FC"
             : level switch
@@ -480,7 +477,6 @@ public class ReportExcellentTemplate : IDocument
 
         var leftPad = 10 * level;
 
-        // Tampilkan baris dengan warna dan skor
         col.Item().Background(bgColor)
             .PaddingVertical(6)
             .PaddingLeft(leftPad)
@@ -500,7 +496,6 @@ public class ReportExcellentTemplate : IDocument
                     .FontSize(9).LineHeight(1.2f);
             });
 
-        // Render child (jika ada)
         foreach (var child in node.Children ?? new())
         {
             RenderChecklistStructured(col, child, child.Title, level + 1);
@@ -662,17 +657,16 @@ public class ReportExcellentTemplate : IDocument
             }
 
             InfoRow("No. Report", _model.ReportNo);
-            InfoRow("Tanggal Audit", _model.TanggalSubmit?.ToString("dd/MM/yyyy, HH:mm 'WIB'"));
-            InfoRow("Waktu Audit", _model.TanggalSubmit?.ToString("dd/MM/yyyy, HH:mm:ss tt"));
-            InfoRow("Verifikator", _model.OwnerName);
+            InfoRow("Tanggal Audit", _model.TanggalSubmit?.ToString("dd/MM/yyyy"));
+            InfoRow("Verifikator", _model.ApproveBy);
 
             InfoRow("Auditor 1", _model.NamaAuditor);
-            InfoRow("Auditor 2", _model.OwnerName); // Ganti jika ada properti khusus
-            InfoRow("Tipe Audit", _model.AuditType);
-            InfoRow("Next Audit", _model.AuditType); // Ganti jika ada properti khusus
+            InfoRow("Auditor 2", "-"); // Ganti jika ada properti khusus
+            InfoRow("Tipe Audit", _model.AuditCurrent);
+            InfoRow("Next Audit", _model.AuditNext); // Ganti jika ada properti khusus
 
             InfoRow("Ko-ordinator", "Sabar Kembaren");
-            InfoRow("Sent Date", _model.TanggalSubmit?.ToString("dd/MM/yyyy, HH:mm 'WIB'"));
+            InfoRow("Sent Date", _model.TanggalSubmit?.ToString("dd/MM/yyyy"));
         });
     }
 

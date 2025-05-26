@@ -658,17 +658,16 @@ public class ReportGoodTemplate : IDocument
             }
 
             InfoRow("No. Report", _model.ReportNo);
-            InfoRow("Tanggal Audit", _model.TanggalSubmit?.ToString("dd/MM/yyyy, HH:mm 'WIB'"));
-            InfoRow("Waktu Audit", _model.TanggalSubmit?.ToString("dd/MM/yyyy, HH:mm:ss tt"));
-            InfoRow("Verifikator", _model.OwnerName);
+            InfoRow("Tanggal Audit", _model.TanggalSubmit?.ToString("dd/MM/yyyy"));
+            InfoRow("Verifikator", _model.ApproveBy);
 
             InfoRow("Auditor 1", _model.NamaAuditor);
-            InfoRow("Auditor 2", _model.OwnerName); // ganti jika ada field spesifik
-            InfoRow("Tipe Audit", _model.AuditType);
-            InfoRow("Next Audit", _model.AuditType); // ganti jika ada field spesifik
+            InfoRow("Auditor 2", "-"); // ganti jika ada field spesifik
+            InfoRow("Tipe Audit", _model.AuditCurrent);
+            InfoRow("Next Audit", _model.AuditNext); // ganti jika ada field spesifik
 
             InfoRow("Ko-ordinator", "Sabar Kembaren");
-            InfoRow("Sent Date", _model.TanggalSubmit?.ToString("dd/MM/yyyy, HH:mm 'WIB'"));
+            InfoRow("Sent Date", _model.TanggalSubmit?.ToString("dd/MM/yyyy"));
         });
     }
 

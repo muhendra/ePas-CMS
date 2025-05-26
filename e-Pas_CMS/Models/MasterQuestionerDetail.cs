@@ -39,6 +39,7 @@ public partial class MasterQuestionerDetail
 
     public bool is_relaksasi { get; set; }
 
+    public string? number { get; set; }
     public virtual ICollection<MasterQuestionerDetail> InverseParent { get; set; } = new List<MasterQuestionerDetail>();
 
     public virtual MasterQuestioner MasterQuestioner { get; set; } = null!;

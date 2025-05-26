@@ -107,6 +107,10 @@ namespace e_Pas_CMS.ViewModels
         public string? ApproveBy { get; set; }
         public DateTime? UpdatedDate { get; set; }
 
+        public decimal score { get; set; }
+
+        public string NamaAuditor { get; set; }
+
     }
 
 

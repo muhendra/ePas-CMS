@@ -17,6 +17,7 @@ using QuestPDF.Fluent;
 using Newtonsoft.Json;
 using System.Xml.Linq;
 using Npgsql;
+using System.Reflection.Emit;
 
 namespace e_Pas_CMS.Controllers
 {
@@ -84,21 +85,21 @@ namespace e_Pas_CMS.Controllers
             foreach (var a in pagedAudits)
             {
                 var sql = @"
-        SELECT 
-            mqd.weight, 
-            tac.score_input, 
-            tac.score_x, 
-            mqd.is_relaksasi
-        FROM master_questioner_detail mqd
-        LEFT JOIN trx_audit_checklist tac 
-            ON tac.master_questioner_detail_id = mqd.id 
-            AND tac.trx_audit_id = @id
-        WHERE mqd.master_questioner_id = (
-            SELECT master_questioner_checklist_id 
-            FROM trx_audit 
-            WHERE id = @id
-        )
-        AND mqd.type = 'QUESTION'";
+SELECT 
+    mqd.weight, 
+    tac.score_input, 
+    tac.score_x, 
+    mqd.is_relaksasi
+FROM master_questioner_detail mqd
+LEFT JOIN trx_audit_checklist tac 
+    ON tac.master_questioner_detail_id = mqd.id 
+    AND tac.trx_audit_id = @id
+WHERE mqd.master_questioner_id = (
+    SELECT master_questioner_checklist_id 
+    FROM trx_audit 
+    WHERE id = @id
+)
+AND mqd.type = 'QUESTION'";
 
                 var checklist = (await conn.QueryAsync<(decimal? weight, string score_input, decimal? score_x, bool? is_relaksasi)>(sql, new { id = a.id }))
                     .ToList();
@@ -142,21 +143,21 @@ namespace e_Pas_CMS.Controllers
                     : 0m;
 
                 var penaltyExcellentQuery = @"SELECT STRING_AGG(mqd.penalty_alert, ', ') AS penalty_alerts
-        FROM trx_audit_checklist tac
-        INNER JOIN master_questioner_detail mqd ON mqd.id = tac.master_questioner_detail_id
-        WHERE tac.trx_audit_id = @id AND
-              ((mqd.penalty_excellent_criteria = 'LT_1' AND tac.score_input <> 'A') OR
-               (mqd.penalty_excellent_criteria = 'EQ_0' AND tac.score_input = 'F')) and
-    (mqd.is_relaksasi = false or mqd.is_relaksasi is null)
-              AND mqd.is_penalty = true;";
+FROM trx_audit_checklist tac
+INNER JOIN master_questioner_detail mqd ON mqd.id = tac.master_questioner_detail_id
+WHERE tac.trx_audit_id = @id AND
+      ((mqd.penalty_excellent_criteria = 'LT_1' AND tac.score_input <> 'A') OR
+       (mqd.penalty_excellent_criteria = 'EQ_0' AND tac.score_input = 'F')) AND
+      (mqd.is_relaksasi = false OR mqd.is_relaksasi IS NULL) AND 
+      mqd.is_penalty = true;";
 
                 var penaltyGoodQuery = @"SELECT STRING_AGG(mqd.penalty_alert, ', ') AS penalty_alerts
-        FROM trx_audit_checklist tac
-        INNER JOIN master_questioner_detail mqd ON mqd.id = tac.master_questioner_detail_id
-        WHERE tac.trx_audit_id = @id AND
-              tac.score_input = 'F' AND
-              mqd.is_penalty = true AND 
-              (mqd.is_relaksasi = false OR mqd.is_relaksasi IS NULL);";
+FROM trx_audit_checklist tac
+INNER JOIN master_questioner_detail mqd ON mqd.id = tac.master_questioner_detail_id
+WHERE tac.trx_audit_id = @id AND
+      tac.score_input = 'F' AND
+      mqd.is_penalty = true AND 
+      (mqd.is_relaksasi = false OR mqd.is_relaksasi IS NULL);";
 
                 var penaltyExcellentResult = await conn.ExecuteScalarAsync<string>(penaltyExcellentQuery, new { id = a.id });
                 var penaltyGoodResult = await conn.ExecuteScalarAsync<string>(penaltyGoodQuery, new { id = a.id });
@@ -165,9 +166,40 @@ namespace e_Pas_CMS.Controllers
                 bool hasGoodPenalty = !string.IsNullOrEmpty(penaltyGoodResult);
 
                 string goodStatus = (finalScore >= 75 && !hasGoodPenalty) ? "CERTIFIED" : "NOT CERTIFIED";
-                string excellentStatus = (finalScore >= 80 && !hasExcellentPenalty) ? "EXCELLENT" : "NOT CERTIFIED";
+                string excellentStatus = (finalScore >= 80 && !hasExcellentPenalty) ? "CERTIFIED" : "NOT CERTIFIED";
 
-                // ========== GUNAKAN HIRARKI UNTUK COMPLIANCE LEVEL ==========
+                // === Ambil audit_next ===
+                string auditNext = null;
+
+                var auditFlowSql = @"SELECT * FROM master_audit_flow WHERE audit_level = @level LIMIT 1;";
+                var auditFlow = await conn.QueryFirstOrDefaultAsync<dynamic>(auditFlowSql, new { level = a.spbu.audit_current });
+
+                if (auditFlow != null)
+                {
+                    string passedGood = auditFlow.passed_good;
+                    string passedExcellent = auditFlow.passed_excellent;
+                    string passedAuditLevel = auditFlow.passed_audit_level;
+                    string failed_audit_level = auditFlow.failed_audit_level;
+
+                    if (string.IsNullOrWhiteSpace(passedGood) && string.IsNullOrWhiteSpace(passedExcellent))
+                    {
+                        auditNext = passedAuditLevel;
+                    }
+                    else if (goodStatus == "CERTIFIED" && excellentStatus == "NOT CERTIFIED")
+                    {
+                        auditNext = passedGood;
+                    }
+                    else if (goodStatus == "CERTIFIED" && excellentStatus == "CERTIFIED")
+                    {
+                        auditNext = passedExcellent;
+                    }
+                    else if (goodStatus == "NOT CERTIFIED" && excellentStatus == "NOT CERTIFIED")
+                    {
+                        auditNext = passedExcellent;
+                    }
+                }
+
+                // === Hitung Compliance dari Hierarki ===
                 var checklistData = await GetChecklistDataAsync(conn, a.id);
                 var mediaList = await GetMediaPerNodeAsync(conn, a.id);
                 var elements = BuildHierarchy(checklistData, mediaList);
@@ -178,8 +210,6 @@ namespace e_Pas_CMS.Controllers
                 CalculateChecklistScores(elements);
                 CalculateOverallScore(new DetailReportViewModel { Elements = elements }, checklistData);
                 var compliance = HitungComplianceLevelDariElements(elements);
-
-                // ============================================================
 
                 result.Add(new AuditReportListViewModel
                 {
@@ -212,6 +242,7 @@ namespace e_Pas_CMS.Controllers
                     CPO = a.spbu.cpo,
                     KelasSpbu = a.spbu.level,
                     Auditlevel = a.spbu.audit_current,
+                    AuditNext = auditNext,
                     ApproveDate = a.approval_date ?? DateTime.Now,
                     ApproveBy = string.IsNullOrWhiteSpace(a.approval_by) ? "-" : a.approval_by,
                     SSS = Math.Round(compliance.SSS ?? 0, 2),
@@ -473,73 +504,182 @@ WHERE
 
         private async Task<AuditHeaderDto> GetAuditHeaderAsync(IDbConnection conn, string id)
         {
-            string sql = @"WITH RECURSIVE question_hierarchy AS (
-                SELECT 
-                    mqd.id,
-                    mqd.title,
-                    mqd.parent_id,
-                    mqd.title AS root_title
-                FROM master_questioner_detail mqd
-                WHERE mqd.title IN ('Elemen 1', 'Elemen 2', 'Elemen 3', 'Elemen 4', 'Elemen 5')
-                UNION ALL
-                SELECT 
-                    mqd.id,
-                    mqd.title,
-                    mqd.parent_id,
-                    qh.root_title
-                FROM master_questioner_detail mqd
-                INNER JOIN question_hierarchy qh ON mqd.parent_id = qh.id
-            ),
-            comment_per_elemen AS (
-                SELECT
-                    qh.root_title,
-                    string_agg(tac.comment, E'\n') AS all_comments
-                FROM question_hierarchy qh
-                JOIN trx_audit_checklist tac ON tac.master_questioner_detail_id = qh.id
-                WHERE tac.trx_audit_id = @id
-                  AND tac.comment IS NOT NULL
-                  AND trim(tac.comment) <> ''
-                GROUP BY qh.root_title
-            )
-            SELECT 
-                ta.id,
-                ta.report_no                          AS ReportNo,
-                ta.audit_type                         AS AuditType,
-                ta.audit_execution_time               AS SubmitDate,
-                ta.status,
-                ta.audit_mom_intro                    AS Notes,
-                ta.audit_level,
-                s.spbu_no                             AS SpbuNo,
-                s.region,
-                s.city_name                           AS Kota,
-                s.address                             AS Alamat,
-                s.owner_name                          AS OwnerName,
-                s.manager_name                        AS ManagerName,
-                s.owner_type                          AS OwnershipType,
-                s.quater                              AS Quarter,
-                s.""year""                              AS Year,
-                s.mor                                 AS Mor,
-                s.sales_area                          AS SalesArea,
-                s.sbm                                 AS Sbm,
-                s.""level""                           AS ClassSpbu,
-                s.phone_number_1                      AS Phone,
-                (SELECT all_comments FROM comment_per_elemen WHERE root_title = 'Elemen 1') AS KomentarStaf,
-                (SELECT all_comments FROM comment_per_elemen WHERE root_title = 'Elemen 2') AS KomentarQuality,
-                (SELECT all_comments FROM comment_per_elemen WHERE root_title = 'Elemen 3') AS KomentarHSSE,
-                (SELECT all_comments FROM comment_per_elemen WHERE root_title = 'Elemen 4') AS KomentarVisual,
-                CASE 
-                    WHEN audit_mom_final IS NOT NULL AND audit_mom_final <> '' THEN audit_mom_final
-                    ELSE audit_mom_intro
-                END AS KomentarManager,
-                approval_date as ApproveDate,
-                approval_by as ApproveBy,
-                ta.updated_date as UpdateDate,
-                s.audit_current as AuditCurrent,
-                s.audit_next as AuditNext
-            FROM trx_audit ta
-            JOIN spbu s ON ta.spbu_id = s.id
-            WHERE ta.id = @id";
-            return await conn.QueryFirstOrDefaultAsync<AuditHeaderDto>(sql, new { id });
+            string sql = @"
+    WITH RECURSIVE question_hierarchy AS (
+        SELECT 
+            mqd.id,
+            mqd.title,
+            mqd.parent_id,
+            mqd.title AS root_title
+        FROM master_questioner_detail mqd
+        WHERE mqd.title IN ('Elemen 1', 'Elemen 2', 'Elemen 3', 'Elemen 4', 'Elemen 5')
+        UNION ALL
+        SELECT 
+            mqd.id,
+            mqd.title,
+            mqd.parent_id,
+            qh.root_title
+        FROM master_questioner_detail mqd
+        INNER JOIN question_hierarchy qh ON mqd.parent_id = qh.id
+    ),
+    comment_per_elemen AS (
+        SELECT
+            qh.root_title,
+            string_agg(tac.comment, E'\n') AS all_comments
+        FROM question_hierarchy qh
+        JOIN trx_audit_checklist tac ON tac.master_questioner_detail_id = qh.id
+        WHERE tac.trx_audit_id = @id
+          AND tac.comment IS NOT NULL
+          AND trim(tac.comment) <> ''
+        GROUP BY qh.root_title
+    )
+    SELECT 
+        ta.id,
+        ta.report_no                          AS ReportNo,
+        ta.audit_type                         AS AuditType,
+        ta.audit_execution_time               AS SubmitDate,
+        ta.status,
+        ta.audit_mom_intro                    AS Notes,
+        ta.audit_level,
+        s.spbu_no                             AS SpbuNo,
+        s.region,
+        s.city_name                           AS Kota,
+        s.address                             AS Alamat,
+        s.owner_name                          AS OwnerName,
+        s.manager_name                        AS ManagerName,
+        s.owner_type                          AS OwnershipType,
+        s.quater                              AS Quarter,
+        s.""year""                              AS Year,
+        s.mor                                 AS Mor,
+        s.sales_area                          AS SalesArea,
+        s.sbm                                 AS Sbm,
+        s.""level""                           AS ClassSpbu,
+        s.phone_number_1                      AS Phone,
+        (SELECT all_comments FROM comment_per_elemen WHERE root_title = 'Elemen 1') AS KomentarStaf,
+        (SELECT all_comments FROM comment_per_elemen WHERE root_title = 'Elemen 2') AS KomentarQuality,
+        (SELECT all_comments FROM comment_per_elemen WHERE root_title = 'Elemen 3') AS KomentarHSSE,
+        (SELECT all_comments FROM comment_per_elemen WHERE root_title = 'Elemen 4') AS KomentarVisual,
+        CASE 
+            WHEN audit_mom_final IS NOT NULL AND audit_mom_final <> '' THEN audit_mom_final
+            ELSE audit_mom_intro
+        END AS KomentarManager,
+        approval_date as ApproveDate,
+        (select name from app_user where username = ta.approval_by) as ApproveBy,
+        ta.updated_date as UpdateDate,
+        s.audit_current as AuditCurrent,
+        s.audit_next as AuditNext,
+        au.name as NamaAuditor
+    FROM trx_audit ta
+    JOIN spbu s ON ta.spbu_id = s.id
+    join app_user au on au.id = ta.app_user_id
+    WHERE ta.id = @id";
+
+         var a = await conn.QueryFirstOrDefaultAsync<AuditHeaderDto>(sql, new { id });
+            if (a == null)
+                return null;
+
+            // --- Hitung finalScore seperti di Index ---
+            var scoreSql = @"
+        SELECT mqd.weight, tac.score_input, mqd.is_relaksasi
+        FROM master_questioner_detail mqd
+        LEFT JOIN trx_audit_checklist tac 
+            ON tac.master_questioner_detail_id = mqd.id 
+            AND tac.trx_audit_id = @id
+        WHERE mqd.master_questioner_id = (
+            SELECT master_questioner_checklist_id 
+            FROM trx_audit 
+            WHERE id = @id
+        )
+        AND mqd.type = 'QUESTION'";
+            var checklist = (await conn.QueryAsync<(decimal? weight, string score_input, bool? is_relaksasi)>(scoreSql, new { id = id.ToString() })).ToList();
+
+            decimal totalScore = 0, maxScore = 0;
+            foreach (var item in checklist)
+            {
+                decimal w = item.weight ?? 0;
+                decimal v = item.is_relaksasi == true
+                    ? 1.00m
+                    : item.score_input switch
+                    {
+                        "A" => 1.00m,
+                        "B" => 0.80m,
+                        "C" => 0.60m,
+                        "D" => 0.40m,
+                        "E" => 0.20m,
+                        "F" => 0.00m,
+                        _ => 0.00m
+                    };
+                totalScore += v * w;
+                maxScore += w;
+            }
+
+            decimal finalScore = maxScore > 0 ? totalScore / maxScore * 100 : 0m;
+            a.score = finalScore; // simpan di model
+
+            // Penalty queries
+            var penaltyExcellentQuery = @"
+        SELECT STRING_AGG(mqd.penalty_alert, ', ')
+        FROM trx_audit_checklist tac
+        INNER JOIN master_questioner_detail mqd ON mqd.id = tac.master_questioner_detail_id
+        WHERE tac.trx_audit_id = @id AND
+              ((mqd.penalty_excellent_criteria = 'LT_1' AND tac.score_input <> 'A') OR
+               (mqd.penalty_excellent_criteria = 'EQ_0' AND tac.score_input = 'F')) AND
+              (mqd.is_relaksasi = false OR mqd.is_relaksasi IS NULL) AND
+              mqd.is_penalty = true";
+
+            var penaltyGoodQuery = @"
+        SELECT STRING_AGG(mqd.penalty_alert, ', ')
+        FROM trx_audit_checklist tac
+        INNER JOIN master_questioner_detail mqd ON mqd.id = tac.master_questioner_detail_id
+        WHERE tac.trx_audit_id = @id AND
+              tac.score_input = 'F' AND
+              mqd.is_penalty = true AND 
+              (mqd.is_relaksasi = false OR mqd.is_relaksasi IS NULL)";
+
+            var penaltyExcellentResult = await conn.ExecuteScalarAsync<string>(penaltyExcellentQuery, new { id });
+            var penaltyGoodResult = await conn.ExecuteScalarAsync<string>(penaltyGoodQuery, new { id });
+
+            bool hasExcellentPenalty = !string.IsNullOrEmpty(penaltyExcellentResult);
+            bool hasGoodPenalty = !string.IsNullOrEmpty(penaltyGoodResult);
+
+            string goodStatus = (finalScore >= 75 && !hasGoodPenalty) ? "CERTIFIED" : "NOT CERTIFIED";
+            string excellentStatus = (finalScore >= 80 && !hasExcellentPenalty) ? "CERTIFIED" : "NOT CERTIFIED";
+
+            // Ambil nilai dari ketiga kolom dulu
+            var flowSql = @"
+            SELECT passed_good, passed_excellent, passed_audit_level 
+            FROM master_audit_flow 
+            WHERE audit_level = (select s.audit_current from trx_audit ta 
+            join spbu s on ta.spbu_id  = s.id 
+            where ta.id = @id) 
+            LIMIT 1";
+
+            var flow = await conn.QueryFirstOrDefaultAsync<dynamic>(flowSql, new { id });
+
+            string column;
+
+            // Cek apakah passed_good dan passed_excellent kosong/null
+            if (string.IsNullOrWhiteSpace((string)flow?.passed_good) && string.IsNullOrWhiteSpace((string)flow?.passed_excellent))
+            {
+                column = "passed_audit_level";
+            }
+            else
+            {
+                column = (goodStatus == "CERTIFIED" && excellentStatus == "NOT CERTIFIED") ? "passed_good"
+                       : (goodStatus == "CERTIFIED" && excellentStatus == "CERTIFIED") ? "passed_excellent"
+                       : (goodStatus == "NOT CERTIFIED" && excellentStatus == "NOT CERTIFIED") ? "failed_audit_level"
+                       : "passed_audit_level";
+            }
+
+            // Gunakan kolom yang dipilih dalam query berikutnya
+            var auditNextQuery = $"SELECT {column} FROM master_audit_flow WHERE audit_level = @level LIMIT 1";
+
+            var auditNext = await conn.ExecuteScalarAsync<string>(auditNextQuery, new { level = a.AuditCurrent });
+
+            // Isi ke DTO
+            a.AuditNext = auditNext;
+
+            return a;
         }
 
         private DetailReportViewModel MapToViewModel(AuditHeaderDto basic)
@@ -578,7 +718,8 @@ WHERE
                 KomentarManager = basic.KomentarManager,
                 AuditCurrent = basic.AuditCurrent,
                 AuditNext = basic.AuditNext,
-                ApproveBy = basic.ApproveBy
+                ApproveBy = basic.ApproveBy,
+                NamaAuditor = basic.NamaAuditor
             };
         }
 
@@ -652,7 +793,8 @@ WHERE
                   tac.score_af,
                   tac.score_x,
                   mqd.order_no,
-                  mqd.is_relaksasi
+                  mqd.is_relaksasi,
+                  mqd.number
                 FROM master_questioner_detail mqd
                 LEFT JOIN trx_audit_checklist tac
                   ON tac.master_questioner_detail_id = mqd.id
@@ -1093,6 +1235,7 @@ WHERE
                 {
                     Id = item.id,
                     Title = item.title,
+                    number = item.number,
                     Description = item.description,
                     Type = item.type,
                     Weight = item.weight,

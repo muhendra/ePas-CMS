@@ -39,6 +39,7 @@
         public decimal VFC { get; set; }
         public decimal EPO { get; set; }
         public string AuditType { get; set; }
+        public string AuditNext { get; set; }
         public string Auditlevel { get; set; }
         public List<MediaItem> MediaNotes { get; set; } = new();
         public List<MediaItem> FinalDocuments { get; set; } = new();

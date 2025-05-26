@@ -30,13 +30,13 @@
 <table id="audit-table" class="table table-bordered table-striped nowrap w-100">
     <thead class="table-light text-center align-middle">
         <tr>
-            <th>Aksi</th>
             <th>No SPBU</th>
             <th>Region</th>
-            <th>SBM</th>
-            <th style="min-width: 250px; white-space: normal;">Alamat</th>
+            <th style="max-width: 150px; white-space: normal; word-break: break-word;">SBM</th>
+            <th style="max-width: 150px; white-space: normal; word-break: break-word;">Alamat</th>
             <th>Kelas SPBU</th>
             <th>Type Audit</th>
+            <th>Next Audit</th>
             <th>Tanggal Audit</th>
             <th>Total Score</th>
             <th>Good</th>
@@ -46,6 +46,7 @@
             <th>RFS</th>
             <th>VFC</th>
             <th>EPO</th>
+            <th>Aksi</th>
         </tr>
     </thead>
     <tbody>
@@ -53,18 +54,13 @@
         {
             var item = Model.Items[i];
             <tr>
-                <td>
-                    <a class="btn btn-sm btn-outline-primary fw-semibold"
-                       asp-controller="AuditReport" asp-action="Detail" asp-route-id="@item.TrxAuditId">
-                        <i class="bi bi-eye"></i> Detail
-                    </a>
-                </td>
                 <td>@item.SpbuNo</td>
                 <td>@item.Region</td>
-                <td>@item.SBM</td>
-                <td style="white-space: normal;">@item.Address</td>
+                <td style="max-width: 150px; white-space: normal; word-break: break-word;">@item.SBM</td>
+                <td style="max-width: 150px; white-space: normal; word-break: break-word;">@item.Address</td>
                 <td>@item.KelasSpbu</td>
                 <td>@item.Auditlevel</td>
+                <td>@item.AuditNext</td>
                 <td>@item.AuditDate?.ToString("dd/MM/yyyy")</td>
                 <td>@item.Score?.ToString("0.00")</td>
                 <td class="fw-bold @(item.GoodStatus == "CERTIFIED" ? "text-success" : "text-danger")">@item.GoodStatus</td>
@@ -74,9 +70,16 @@
                 <td>@item.RFS</td>
                 <td>@item.VFC</td>
                 <td>@item.EPO</td>
+                <td>
+                    <a class="btn btn-sm btn-outline-primary fw-semibold"
+                       asp-controller="AuditReport" asp-action="Detail" asp-route-id="@item.TrxAuditId">
+                        <i class="bi bi-eye"></i> Detail
+                    </a>
+                </td>
             </tr>
         }
     </tbody>
+
 </table>
 
 @{
