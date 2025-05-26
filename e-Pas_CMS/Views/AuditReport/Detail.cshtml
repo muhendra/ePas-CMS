@@ -107,7 +107,10 @@
 
 <!-- STATUS -->
 <div id="certStatusBox" class="alert text-center py-2 mb-4">
-    <strong id="certStatusLabel">@((Model.TotalScore >= Model.MinPassingScore && string.IsNullOrWhiteSpace(Model.PenaltyAlerts)) ? "CERTIFIED" : "NOT CERTIFIED")</strong>
+    <strong id="certStatusLabel" class="score-label">
+        Total Score (TS): @Model.TotalScore.ToString("0.00")% &mdash;
+        NOT CERTIFIED <!-- default sementara, akan diubah JS -->
+    </strong>
 </div>
 
 <!-- INFORMASI SPBU --><div class="card mb-5 shadow-sm">
@@ -158,16 +161,16 @@
     <h4 class="fw-bold">Laporan Penilaian</h4>
 
     <!-- Total Score -->
-    <div class="box-total-score rounded-3 text-center py-2 mb-1 @boxClass" style="@boxStyle">
-        <strong>
+    <div class="box-total-score rounded-3 text-center py-2 mb-1 bg-danger text-white">
+        <strong class="score-label">
             Total Score (TS): @Model.TotalScore.ToString("0.00")% &mdash;
-            @statusLabel
+            NOT CERTIFIED
         </strong>
-
-        <div class="box-penalty mt-1 small" style="@(showPenalty ? "" : "display:none")">
-            <strong>Penalty:</strong> @Model.PenaltyAlerts
+        <div class="box-penalty mt-1 small" style="display:none">
+            <strong>Penalty:</strong> -
         </div>
     </div>
+
 
     <div class="text-center text-muted mb-3">
         Nilai Minimum Pasti Pas: <span id="minPassingDisplay">@Model.MinPassingScore.ToString("0.00")%</span>
