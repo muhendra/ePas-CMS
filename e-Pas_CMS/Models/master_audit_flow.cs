@@ -22,4 +22,6 @@ public partial class master_audit_flow
     public string updated_by { get; set; } = null!;
 
     public DateTime? updated_date { get; set; }
+
+    public string audit_level_class { get; set; }
 }

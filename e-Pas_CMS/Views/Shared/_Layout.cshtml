@@ -45,10 +45,10 @@
                 padding-left: 0.75rem;
             }
 
-                .sidebar .nav-link:hover {
-                    background-color: #140F10;
-                    color: white;
-                }
+            .sidebar .nav-link:hover {
+                background-color: #140F10;
+                color: white;
+            }
 
             .sidebar strong {
                 font-size: 0.9rem;
@@ -170,13 +170,16 @@
                         <strong>Master</strong>
                         <i class="bi bi-caret-down-fill"></i>
                     </a>
-                    <div class="collapse" id="menu-master">
-                        <ul class="nav flex-column ms-3 mt-2">
-                            <li class="nav-item">
-                                <a class="nav-link" asp-controller="Spbu" asp-action="Index">SPBU</a>
-                            </li>
-                        </ul>
-                    </div>
+                    @if (!User.IsInRole("Superadmin"))
+                    {
+                        <div class="collapse" id="menu-master">
+                            <ul class="nav flex-column ms-3 mt-2">
+                                <li class="nav-item">
+                                    <a class="nav-link" asp-controller="Spbu" asp-action="Index">SPBU</a>
+                                </li>
+                            </ul>
+                        </div>
+                    }
                 </li>
             </ul>
         </div>

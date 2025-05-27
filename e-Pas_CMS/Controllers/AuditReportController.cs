@@ -85,21 +85,21 @@ namespace e_Pas_CMS.Controllers
             foreach (var a in pagedAudits)
             {
                 var sql = @"
-SELECT 
-    mqd.weight, 
-    tac.score_input, 
-    tac.score_x, 
-    mqd.is_relaksasi
-FROM master_questioner_detail mqd
-LEFT JOIN trx_audit_checklist tac 
-    ON tac.master_questioner_detail_id = mqd.id 
-    AND tac.trx_audit_id = @id
-WHERE mqd.master_questioner_id = (
-    SELECT master_questioner_checklist_id 
-    FROM trx_audit 
-    WHERE id = @id
-)
-AND mqd.type = 'QUESTION'";
+                SELECT 
+                    mqd.weight, 
+                    tac.score_input, 
+                    tac.score_x, 
+                    mqd.is_relaksasi
+                FROM master_questioner_detail mqd
+                LEFT JOIN trx_audit_checklist tac 
+                    ON tac.master_questioner_detail_id = mqd.id 
+                    AND tac.trx_audit_id = @id
+                WHERE mqd.master_questioner_id = (
+                    SELECT master_questioner_checklist_id 
+                    FROM trx_audit 
+                    WHERE id = @id
+                )
+                AND mqd.type = 'QUESTION'";
 
                 var checklist = (await conn.QueryAsync<(decimal? weight, string score_input, decimal? score_x, bool? is_relaksasi)>(sql, new { id = a.id }))
                     .ToList();
@@ -143,21 +143,22 @@ AND mqd.type = 'QUESTION'";
                     : 0m;
 
                 var penaltyExcellentQuery = @"SELECT STRING_AGG(mqd.penalty_alert, ', ') AS penalty_alerts
-FROM trx_audit_checklist tac
-INNER JOIN master_questioner_detail mqd ON mqd.id = tac.master_questioner_detail_id
-WHERE tac.trx_audit_id = @id AND
-      ((mqd.penalty_excellent_criteria = 'LT_1' AND tac.score_input <> 'A') OR
-       (mqd.penalty_excellent_criteria = 'EQ_0' AND tac.score_input = 'F')) AND
-      (mqd.is_relaksasi = false OR mqd.is_relaksasi IS NULL) AND 
-      mqd.is_penalty = true;";
+                FROM trx_audit_checklist tac
+                INNER JOIN master_questioner_detail mqd ON mqd.id = tac.master_questioner_detail_id
+                WHERE 
+                    tac.trx_audit_id = @id and
+                    ((mqd.penalty_excellent_criteria = 'LT_1' and tac.score_input <> 'A') or
+                    (mqd.penalty_excellent_criteria = 'EQ_0' and tac.score_input = 'F')) and
+                    (mqd.is_relaksasi = false or mqd.is_relaksasi is null) and
+                    mqd.is_penalty = true;";
 
                 var penaltyGoodQuery = @"SELECT STRING_AGG(mqd.penalty_alert, ', ') AS penalty_alerts
-FROM trx_audit_checklist tac
-INNER JOIN master_questioner_detail mqd ON mqd.id = tac.master_questioner_detail_id
-WHERE tac.trx_audit_id = @id AND
-      tac.score_input = 'F' AND
-      mqd.is_penalty = true AND 
-      (mqd.is_relaksasi = false OR mqd.is_relaksasi IS NULL);";
+                FROM trx_audit_checklist tac
+                INNER JOIN master_questioner_detail mqd ON mqd.id = tac.master_questioner_detail_id
+                WHERE tac.trx_audit_id = @id AND
+                      tac.score_input = 'F' AND
+                      mqd.is_penalty = true AND 
+                      (mqd.is_relaksasi = false OR mqd.is_relaksasi IS NULL);";
 
                 var penaltyExcellentResult = await conn.ExecuteScalarAsync<string>(penaltyExcellentQuery, new { id = a.id });
                 var penaltyGoodResult = await conn.ExecuteScalarAsync<string>(penaltyGoodQuery, new { id = a.id });
@@ -170,9 +171,10 @@ WHERE tac.trx_audit_id = @id AND
 
                 // === Ambil audit_next ===
                 string auditNext = null;
+                string levelspbu = null;
 
                 var auditFlowSql = @"SELECT * FROM master_audit_flow WHERE audit_level = @level LIMIT 1;";
-                var auditFlow = await conn.QueryFirstOrDefaultAsync<dynamic>(auditFlowSql, new { level = a.spbu.audit_current });
+                var auditFlow = await conn.QueryFirstOrDefaultAsync<dynamic>(auditFlowSql, new { level = a.audit_level });
 
                 if (auditFlow != null)
                 {
@@ -195,8 +197,14 @@ WHERE tac.trx_audit_id = @id AND
                     }
                     else if (goodStatus == "NOT CERTIFIED" && excellentStatus == "NOT CERTIFIED")
                     {
-                        auditNext = passedExcellent;
+                        auditNext = failed_audit_level;
                     }
+
+
+                    var auditlevelClassSql = @"SELECT audit_level_class FROM master_audit_flow WHERE audit_level = @level LIMIT 1;";
+                    var auditlevelClass = await conn.QueryFirstOrDefaultAsync<dynamic>(auditlevelClassSql, new { level = auditNext });
+
+                    levelspbu = auditlevelClass.audit_level_class;
                 }
 
                 // === Hitung Compliance dari Hierarki ===
@@ -240,8 +248,8 @@ WHERE tac.trx_audit_id = @id AND
                     WMEF = a.spbu.wmef,
                     FormatFisik = a.spbu.format_fisik,
                     CPO = a.spbu.cpo,
-                    KelasSpbu = a.spbu.level,
-                    Auditlevel = a.spbu.audit_current,
+                    KelasSpbu = levelspbu,
+                    Auditlevel = a.audit_level,
                     AuditNext = auditNext,
                     ApproveDate = a.approval_date ?? DateTime.Now,
                     ApproveBy = string.IsNullOrWhiteSpace(a.approval_by) ? "-" : a.approval_by,
@@ -322,6 +330,44 @@ WHERE tac.trx_audit_id = @id AND
             CalculateOverallScore(model, checklistData);
 
             ViewBag.AuditId = id;
+
+            string auditNext = null;
+            string levelspbu = null;
+
+            var auditFlowSql = @"SELECT * FROM master_audit_flow WHERE audit_level = @level LIMIT 1;";
+            var auditFlow = await conn.QueryFirstOrDefaultAsync<dynamic>(auditFlowSql, new { level = model.AuditCurrent });
+
+            if (auditFlow != null)
+            {
+                string passedGood = auditFlow.passed_good;
+                string passedExcellent = auditFlow.passed_excellent;
+                string passedAuditLevel = auditFlow.passed_audit_level;
+                string failed_audit_level = auditFlow.failed_audit_level;
+
+                if (string.IsNullOrWhiteSpace(passedGood) && string.IsNullOrWhiteSpace(passedExcellent))
+                {
+                    model.AuditNext = passedAuditLevel;
+                }
+                else if (model.GoodStatus == "CERTIFIED" && model.ExcellentStatus == "NOT CERTIFIED")
+                {
+                    model.AuditNext = passedGood;
+                }
+                else if (model.GoodStatus == "CERTIFIED" && model.ExcellentStatus == "CERTIFIED")
+                {
+                    model.AuditNext = passedExcellent;
+                }
+                else if (model.GoodStatus == "NOT CERTIFIED" && model.ExcellentStatus == "NOT CERTIFIED")
+                {
+                    model.AuditNext = failed_audit_level;
+                }
+
+                var auditlevelClassSql = @"SELECT audit_level_class FROM master_audit_flow WHERE audit_level = @level LIMIT 1;";
+                var auditlevelClass = await conn.QueryFirstOrDefaultAsync<dynamic>(auditlevelClassSql, new { level = model.AuditNext });
+
+                levelspbu = auditlevelClass.audit_level_class;
+            }
+
+            model.ClassSPBU = levelspbu;
 
             var updateSql = @"
             UPDATE spbu
@@ -486,6 +532,44 @@ WHERE
                 }
             }
 
+            string auditNext = null;
+            string levelspbu = null;
+
+            var auditFlowSql = @"SELECT * FROM master_audit_flow WHERE audit_level = @level LIMIT 1;";
+            var auditFlow = await conn.QueryFirstOrDefaultAsync<dynamic>(auditFlowSql, new { level = model.AuditCurrent });
+
+            if (auditFlow != null)
+            {
+                string passedGood = auditFlow.passed_good;
+                string passedExcellent = auditFlow.passed_excellent;
+                string passedAuditLevel = auditFlow.passed_audit_level;
+                string failed_audit_level = auditFlow.failed_audit_level;
+
+                if (string.IsNullOrWhiteSpace(passedGood) && string.IsNullOrWhiteSpace(passedExcellent))
+                {
+                    model.AuditNext = passedAuditLevel;
+                }
+                else if (model.GoodStatus == "CERTIFIED" && model.ExcellentStatus == "NOT CERTIFIED")
+                {
+                    model.AuditNext = passedGood;
+                }
+                else if (model.GoodStatus == "CERTIFIED" && model.ExcellentStatus == "CERTIFIED")
+                {
+                    model.AuditNext = passedExcellent;
+                }
+                else if (model.GoodStatus == "NOT CERTIFIED" && model.ExcellentStatus == "NOT CERTIFIED")
+                {
+                    model.AuditNext = failed_audit_level;
+                }
+
+                var auditlevelClassSql = @"SELECT audit_level_class FROM master_audit_flow WHERE audit_level = @level LIMIT 1;";
+                var auditlevelClass = await conn.QueryFirstOrDefaultAsync<dynamic>(auditlevelClassSql, new { level = model.AuditNext });
+
+                levelspbu = auditlevelClass.audit_level_class;
+            }
+
+            model.ClassSPBU = levelspbu;
+
             return model;
         }
 
@@ -581,7 +665,7 @@ WHERE
         approval_date as ApproveDate,
         (select name from app_user where username = ta.approval_by) as ApproveBy,
         ta.updated_date as UpdateDate,
-        s.audit_current as AuditCurrent,
+        ta.audit_level as AuditCurrent,
         s.audit_next as AuditNext,
         au.name as NamaAuditor
     FROM trx_audit ta
@@ -674,25 +758,25 @@ WHERE
             string column;
 
             // Cek apakah passed_good dan passed_excellent kosong/null
-            if (string.IsNullOrWhiteSpace((string)flow?.passed_good) && string.IsNullOrWhiteSpace((string)flow?.passed_excellent))
-            {
-                column = "passed_audit_level";
-            }
-            else
-            {
-                column = (goodStatus == "CERTIFIED" && excellentStatus == "NOT CERTIFIED") ? "passed_good"
-                       : (goodStatus == "CERTIFIED" && excellentStatus == "CERTIFIED") ? "passed_excellent"
-                       : (goodStatus == "NOT CERTIFIED" && excellentStatus == "NOT CERTIFIED") ? "failed_audit_level"
-                       : "passed_audit_level";
-            }
+            //if (string.IsNullOrWhiteSpace((string)flow?.passed_good) && string.IsNullOrWhiteSpace((string)flow?.passed_excellent))
+            //{
+            //    column = "passed_audit_level";
+            //}
+            //else
+            //{
+            //    column = (goodStatus == "CERTIFIED" && excellentStatus == "NOT CERTIFIED") ? "passed_good"
+            //           : (goodStatus == "CERTIFIED" && excellentStatus == "CERTIFIED") ? "passed_excellent"
+            //           : (goodStatus == "NOT CERTIFIED" && excellentStatus == "NOT CERTIFIED") ? "failed_audit_level"
+            //           : "passed_audit_level";
+            //}
 
-            // Gunakan kolom yang dipilih dalam query berikutnya
-            var auditNextQuery = $"SELECT {column} FROM master_audit_flow WHERE audit_level = @level LIMIT 1";
+            //// Gunakan kolom yang dipilih dalam query berikutnya
+            //var auditNextQuery = $"SELECT {column} FROM master_audit_flow WHERE audit_level = @level LIMIT 1";
 
-            var auditNext = await conn.ExecuteScalarAsync<string>(auditNextQuery, new { level = a.AuditCurrent });
+            //var auditNext = await conn.ExecuteScalarAsync<string>(auditNextQuery, new { level = a.AuditCurrent });
 
-            // Isi ke DTO
-            a.AuditNext = auditNext;
+            //// Isi ke DTO
+            //a.AuditNext = auditNext;
 
             return a;
         }
