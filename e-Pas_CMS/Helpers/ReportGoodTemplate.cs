@@ -354,78 +354,36 @@ public class ReportGoodTemplate : IDocument
             ["F"] = 0.00m
         };
 
-        bool isSpecialElement = node.Title?.ToUpperInvariant() == "ELEMEN 2" || node.Title?.ToUpperInvariant() == "ELEMEN 5";
-
-        if (node.Children != null && node.Children.Any())
+        if ((node.Children?.Any() ?? false) && (node.Type ?? "").ToLower() != "question")
         {
-            if (isSpecialElement && level == 0)
+            // Jika semua anak punya TotalScore, langsung jumlahkan saja
+            if (node.Children.All(c => c.TotalScore.HasValue))
             {
-                skor = 0;
-
-                foreach (var child in node.Children ?? new())
-                {
-                    decimal sumAF = 0, sumWeight = 0, sumX = 0;
-
-                    void HitungLeaf(AuditChecklistNode q)
-                    {
-                        if (q.Children != null && q.Children.Any())
-                        {
-                            foreach (var c in q.Children)
-                                HitungLeaf(c);
-                        }
-                        else
-                        {
-                            string input = q.ScoreInput?.Trim().ToUpper() ?? "";
-                            decimal w = q.Weight ?? 0;
-
-                            if (input == "X")
-                            {
-                                sumX += w;
-                                sumAF += q.ScoreX ?? 0;
-                            }
-                            else if (input == "F" && q.IsRelaksasi == true)
-                            {
-                                sumAF += 1.00m * w;
-                            }
-                            else if (nilaiAF.TryGetValue(input, out var af))
-                            {
-                                sumAF += af * w;
-                            }
-
-                            sumWeight += w;
-                        }
-                    }
-
-                    HitungLeaf(child);
-                    decimal partial = (sumWeight - sumX) > 0 ? (sumAF / (sumWeight - sumX)) * sumWeight : 0;
-                    skor += partial;
-                }
-
-                skorText = $"Skor: {skor:0.##}";
-                node.TotalScore = skor;
+                skor = node.Children.Sum(c => c.TotalScore ?? 0);
             }
             else
             {
+                // Fallback: hitung ulang dari leaf
                 decimal sumAF = 0, sumWeight = 0, sumX = 0;
 
-                void HitungSkor(AuditChecklistNode n)
+                void HitungLeafLangsung(AuditChecklistNode q)
                 {
-                    if (n.Children != null && n.Children.Any())
+                    if (q.Children != null && q.Children.Any())
                     {
-                        foreach (var c in n.Children)
-                            HitungSkor(c);
+                        foreach (var c in q.Children)
+                            HitungLeafLangsung(c);
                     }
                     else
                     {
-                        string input = n.ScoreInput?.Trim().ToUpper() ?? "";
-                        decimal w = n.Weight ?? 0;
+                        string input = q.ScoreInput?.Trim().ToUpper() ?? "";
+                        decimal w = q.Weight ?? 0;
 
                         if (input == "X")
                         {
                             sumX += w;
-                            sumAF += n.ScoreX ?? 0;
+                            sumAF += q.ScoreX ?? 0;
                         }
-                        else if (input == "F" && n.IsRelaksasi == true)
+                        else if (input == "F" && q.IsRelaksasi == true)
                         {
                             sumAF += 1.00m * w;
                         }
@@ -438,14 +396,16 @@ public class ReportGoodTemplate : IDocument
                     }
                 }
 
-                HitungSkor(node);
+                HitungLeafLangsung(node);
                 skor = (sumWeight - sumX) > 0 ? (sumAF / (sumWeight - sumX)) * sumWeight : 0;
-                skorText = $"Skor: {skor:0.##}";
-                node.TotalScore = skor;
             }
+
+            skorText = $"Skor: {skor:0.##}";
+            node.TotalScore = skor;
         }
         else
         {
+            // Ini QUESTION (leaf)
             decimal w = node.Weight ?? 0;
             string input = node.ScoreInput?.Trim().ToUpper() ?? "";
 
