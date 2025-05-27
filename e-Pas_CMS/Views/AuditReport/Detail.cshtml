@@ -662,58 +662,46 @@
             });
 
             // Hitung ulang semua skor
-            function recalcNode($li) {
-                var nodeId = $li.attr('id').replace('node-', '');
+             // Hitung ulang satu node (rekursif)
+                function recalcNode($li) {
+            var weight = parseFloat($li.attr('data-weight')) || 0;
+            var skor = 0;
+
+            // Jika leaf node (memiliki .option-group)
+            var $grp = $li.find('>.option-group');
+            if ($grp.length) {
+                var letter = $grp.find('.option-btn.active').data('score');
+                var isRelaksasi = $grp.data('is-relaksasi');
                 var weight = parseFloat($li.attr('data-weight')) || 0;
-                var sumAF = 0, sumWeight = 0, sumX = 0, skor = 0;
+                var scoreX = parseFloat($li.attr('data-score-x')) || 0;
                 var map = { A: 1, B: 0.8, C: 0.6, D: 0.4, E: 0.2, F: 0 };
 
-                var $grp = $li.find('.option-group[data-node-id="' + nodeId + '"]');
-                var isRelaksasi = $grp.data('is-relaksasi');
-
-                if ($grp.length) {
-                    var letter = $grp.find('.option-btn.active').data('score') || '';
-                    if (letter === 'X') {
-                        var scoreX = parseFloat($li.attr('data-score-x')) || 0;
-                        sumX = weight;
-                        sumAF = scoreX;
-                    } else {
-                        sumAF = (isRelaksasi === 'True' && letter === 'F') ? weight : (map[letter] || 0) * weight;
-                    }
-                    sumWeight = weight;
-                    skor = (sumWeight - sumX) > 0 ? (sumAF / (sumWeight - sumX)) * sumWeight : 0;
+                if (letter === 'X') {
+                    skor = scoreX;
+                } else if (isRelaksasi && letter === 'F') {
+                    skor = 1.0;
                 } else {
-                    var children = $li.find('> .card > .collapse > .card-body > ul > li');
-                    children.each(function () {
-                        var result = recalcNode($(this));
-                        sumAF += result.af;
-                        sumWeight += result.wt;
-                        sumX += result.x;
-                    });
-
-                    var elementTitle = $li.find('> .card > .card-header span.fw-bold.text-dark').text().trim();
-                    if (elementTitle === "Elemen 2" || elementTitle === "Elemen 5") {
-                        var directSum = 0;
-                        children.each(function () {
-                            var rawScore = $(this).find('.score-x').text();
-                            directSum += parseFloat(rawScore) || 0;
-                        });
-                        skor = directSum;
-                        sumAF = skor; sumWeight = 1; sumX = 0;
-                    } else {
-                        skor = (sumWeight - sumX) > 0 ? (sumAF / (sumWeight - sumX)) * sumWeight : 0;
-                    }
+                    skor = map[letter] || 0;
                 }
 
-                $li.find('.score-x[data-node-id="' + nodeId + '"]').text(skor.toFixed(2));
-                return { af: sumAF, wt: sumWeight, x: sumX };
+                return skor * weight;
             }
 
-            function recalcAll() {
-                $('#auditChecklist > li[id^="node-"]').each(function () {
-                    recalcNode($(this));
-                });
-            }
+            // Jika bukan leaf node, rekursif ke anak
+            var sum = 0;
+            $li.children('ul').children('li').each(function () {
+                sum += recalcNode($(this));
+            });
+
+            return sum;
+        }
+
+
+        function recalcAll() {
+        $('#auditChecklist > li[id^="node-"]').each(function () {
+        recalcNode($(this));
+        });
+        }
 
             $(document).on('click', '.update-score-btn', function () {
                 var nodeId = $(this).data('node-id');
@@ -872,13 +860,16 @@
                         </div>
                     }
 
-                    else if (node.ScoreInput != "X")
+                    else
                     {
+                        decimal totalScore = node.ScoreAF.HasValue ? node.ScoreAF.Value * (node.Weight ?? 0) : 0;
                         <div class="ms-auto text-end">
                             <small>Skor:</small>
-                            <strong class="score-x" data-node-id="@node.Id">0.00</strong>
+                            <strong class="score-x text-dark" data-node-id="@node.Id">@totalScore.ToString("0.00")</strong>
                         </div>
                     }
+
+
                 </div>
 
 
