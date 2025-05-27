@@ -212,8 +212,11 @@ public class ReportExcellentTemplate : IDocument
             // Jalankan RenderChecklistStructured secara diam-diam hanya untuk menghitung skor dan isi TotalScore tiap elemen
             foreach (var root in _model.Elements)
             {
-                RenderChecklistStructured(new ColumnDescriptor(), root, root.Title, 0); // Render dummy (tidak ditampilkan), tapi akan mengisi node.TotalScore dengan logika benar
+                RenderChecklistStructured(new ColumnDescriptor(), root, root.Title, 0);
             }
+
+            // Pastikan hanya satu kali baris ini:
+            _model.TotalScore = Math.Round(_model.Elements.Sum(x => x.TotalScore ?? 0), 2);
 
             // Tampilkan tabel Element Compliance yang butuh node.TotalScore
             col.Item().PaddingVertical(10).Element(ComposeElementTable);
@@ -359,16 +362,24 @@ public class ReportExcellentTemplate : IDocument
             ["F"] = 0.00m
         };
 
-        if ((node.Children?.Any() ?? false) && (node.Type ?? "").ToLower() != "question")
+        bool isQuestion = (node.Type ?? "").ToLower() == "question";
+
+        if ((node.Children?.Any() ?? false) && !isQuestion)
         {
-            // Jika semua anak punya TotalScore, langsung jumlahkan saja
-            if (node.Children.All(c => c.TotalScore.HasValue))
+            // Rekursif ke anak-anak dulu untuk memastikan nilai anak-anak sudah dihitung
+            foreach (var child in node.Children)
+                RenderChecklistStructured(new ColumnDescriptor(), child, child.Title, level + 1);
+
+            bool semuaAnakAdaTotalScore = node.Children.All(c => c.TotalScore.HasValue);
+            bool adaAnakX = node.Children.Any(c => string.Equals(c.ScoreInput?.Trim(), "X", StringComparison.OrdinalIgnoreCase));
+
+            if (semuaAnakAdaTotalScore && !adaAnakX)
             {
                 skor = node.Children.Sum(c => c.TotalScore ?? 0);
             }
             else
             {
-                // Fallback: hitung ulang dari leaf
+                // Hitung ulang dari leaf: baik karena ada "X" atau sebagian anak belum punya TotalScore
                 decimal sumAF = 0, sumWeight = 0, sumX = 0;
 
                 void HitungLeafLangsung(AuditChecklistNode q)
@@ -402,32 +413,36 @@ public class ReportExcellentTemplate : IDocument
                 }
 
                 HitungLeafLangsung(node);
-                skor = (sumWeight - sumX) > 0 ? (sumAF / (sumWeight - sumX)) * sumWeight : 0;
+
+                skor = (sumWeight > 0 && (sumWeight - sumX) > 0)
+                    ? (sumAF / (sumWeight - sumX)) * sumWeight
+                    : 0;
             }
 
-            skorText = $"Skor: {skor:0.##}";
-            node.TotalScore = skor;
+
+            node.TotalScore = Math.Round(skor, 2);
+            skorText = $"Skor: {node.TotalScore:0.##}";
         }
         else
         {
-            // Ini QUESTION (leaf)
+            // Hitung skor langsung jika leaf (question)
             decimal w = node.Weight ?? 0;
             string input = node.ScoreInput?.Trim().ToUpper() ?? "";
 
             if (input == "X")
-                skor = node.ScoreX ?? 0;
+                skor = node.ScoreX ?? w;
             else if (input == "F" && node.IsRelaksasi == true)
                 skor = 1.00m * w;
             else if (nilaiAF.TryGetValue(input, out var af))
                 skor = af * w;
 
-            node.TotalScore = skor;
+            node.TotalScore = Math.Round(skor, 2);
             skorText = !string.IsNullOrWhiteSpace(node.ScoreInput) ? node.ScoreInput.ToUpper() : "-";
         }
 
-        string bgColor = (node.Type ?? "").ToLower() == "question"
-            ? "#DAE8FC"
-            : level switch
+        // Tampilan
+        string bgColor = isQuestion ? "#DAE8FC" :
+            level switch
             {
                 0 => "#F4B7C5",
                 1 => "#E2EFDA",
@@ -435,11 +450,9 @@ public class ReportExcellentTemplate : IDocument
                 _ => "#FFFFFF"
             };
 
-        var leftPad = 10 * level;
-
         col.Item().Background(bgColor)
             .PaddingVertical(6)
-            .PaddingLeft(leftPad)
+            .PaddingLeft(10 * level)
             .Row(row =>
             {
                 row.RelativeItem(8).Element(text =>
@@ -449,17 +462,14 @@ public class ReportExcellentTemplate : IDocument
                         .LineHeight(1.2f);
 
                     if (level <= 1)
-                        content = content.Bold();
+                        content.Bold();
                 });
 
-                row.RelativeItem(4).AlignRight().Text(skorText)
-                    .FontSize(9).LineHeight(1.2f);
+                row.RelativeItem(4).AlignRight().Text(skorText).FontSize(9).LineHeight(1.2f);
             });
 
         foreach (var child in node.Children ?? new())
-        {
             RenderChecklistStructured(col, child, child.Title, level + 1);
-        }
     }
 
     void ComposeQqTable(IContainer container)
