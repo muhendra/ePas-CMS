@@ -189,7 +189,7 @@ namespace e_Pas_CMS.Controllers
                     }
                     else if (string.IsNullOrWhiteSpace(passedGood) && string.IsNullOrWhiteSpace(passedExcellent) && goodStatus == "CERTIFIED" && excellentStatus == "NOT CERTIFIED")
                     {
-                        auditNext = failed_audit_level;
+                        auditNext = passedAuditLevel;
                     }
                     else if (string.IsNullOrWhiteSpace(passedGood) && string.IsNullOrWhiteSpace(passedExcellent) && goodStatus == "NOT CERTIFIED" && excellentStatus == "NOT CERTIFIED")
                     {
@@ -390,7 +390,7 @@ namespace e_Pas_CMS.Controllers
                 }
                 else if (string.IsNullOrWhiteSpace(passedGood) && string.IsNullOrWhiteSpace(passedExcellent) && goodStatus == "CERTIFIED" && excellentStatus == "NOT CERTIFIED")
                 {
-                    model.AuditNext = failed_audit_level;
+                    model.AuditNext = passedAuditLevel;
                 }
                 else if (string.IsNullOrWhiteSpace(passedGood) && string.IsNullOrWhiteSpace(passedExcellent) && goodStatus == "NOT CERTIFIED" && excellentStatus == "NOT CERTIFIED")
                 {
@@ -636,7 +636,7 @@ namespace e_Pas_CMS.Controllers
                 }
                 else if (string.IsNullOrWhiteSpace(passedGood) && string.IsNullOrWhiteSpace(passedExcellent) && goodStatus == "CERTIFIED" && excellentStatus == "NOT CERTIFIED")
                 {
-                    model.AuditNext = failed_audit_level;
+                    model.AuditNext = passedAuditLevel;
                 }
                 else if (string.IsNullOrWhiteSpace(passedGood) && string.IsNullOrWhiteSpace(passedExcellent) && goodStatus == "NOT CERTIFIED" && excellentStatus == "NOT CERTIFIED")
                 {
