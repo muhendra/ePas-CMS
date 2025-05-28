@@ -183,9 +183,13 @@ namespace e_Pas_CMS.Controllers
                     string passedAuditLevel = auditFlow.passed_audit_level;
                     string failed_audit_level = auditFlow.failed_audit_level;
 
-                    if (string.IsNullOrWhiteSpace(passedGood) && string.IsNullOrWhiteSpace(passedExcellent) && finalScore >= 75)
+                    if (string.IsNullOrWhiteSpace(passedGood) && string.IsNullOrWhiteSpace(passedExcellent))
                     {
                         auditNext = passedAuditLevel;
+                    }
+                    else if (goodStatus == "NOT CERTIFIED" && excellentStatus == "NOT CERTIFIED")
+                    {
+                        auditNext = failed_audit_level;
                     }
                     else if (goodStatus == "CERTIFIED" && excellentStatus == "NOT CERTIFIED")
                     {
@@ -195,20 +199,21 @@ namespace e_Pas_CMS.Controllers
                     {
                         auditNext = passedExcellent;
                     }
-                    else if (goodStatus == "NOT CERTIFIED" && excellentStatus == "NOT CERTIFIED")
+                    else if (string.IsNullOrWhiteSpace(passedGood) && string.IsNullOrWhiteSpace(passedExcellent) && finalScore >= 75)
                     {
-                        auditNext = failed_audit_level;
+                        auditNext = passedAuditLevel;
                     }
                     else
                     {
                         auditNext = failed_audit_level;
                     }
 
-
                     var auditlevelClassSql = @"SELECT audit_level_class FROM master_audit_flow WHERE audit_level = @level LIMIT 1;";
                     var auditlevelClass = await conn.QueryFirstOrDefaultAsync<dynamic>(auditlevelClassSql, new { level = auditNext });
+                    levelspbu = auditlevelClass != null
+                    ? (auditlevelClass.audit_level_class ?? "null")
+                    : "null";
 
-                    levelspbu = auditlevelClass.audit_level_class;
                 }
 
                 // === Hitung Compliance dari Hierarki ===
@@ -335,6 +340,33 @@ namespace e_Pas_CMS.Controllers
 
             ViewBag.AuditId = id;
 
+            var penaltyExcellentQuery = @"SELECT STRING_AGG(mqd.penalty_alert, ', ') AS penalty_alerts
+                FROM trx_audit_checklist tac
+                INNER JOIN master_questioner_detail mqd ON mqd.id = tac.master_questioner_detail_id
+                WHERE 
+                    tac.trx_audit_id = @id and
+                    ((mqd.penalty_excellent_criteria = 'LT_1' and tac.score_input <> 'A') or
+                    (mqd.penalty_excellent_criteria = 'EQ_0' and tac.score_input = 'F')) and
+                    (mqd.is_relaksasi = false or mqd.is_relaksasi is null) and
+                    mqd.is_penalty = true;";
+
+            var penaltyGoodQuery = @"SELECT STRING_AGG(mqd.penalty_alert, ', ') AS penalty_alerts
+                FROM trx_audit_checklist tac
+                INNER JOIN master_questioner_detail mqd ON mqd.id = tac.master_questioner_detail_id
+                WHERE tac.trx_audit_id = @id AND
+                      tac.score_input = 'F' AND
+                      mqd.is_penalty = true AND 
+                      (mqd.is_relaksasi = false OR mqd.is_relaksasi IS NULL);";
+
+            var penaltyExcellentResult = await conn.ExecuteScalarAsync<string>(penaltyExcellentQuery, new { id = model.AuditId });
+            var penaltyGoodResult = await conn.ExecuteScalarAsync<string>(penaltyGoodQuery, new { id = model.AuditId });
+
+            bool hasExcellentPenalty = !string.IsNullOrEmpty(penaltyExcellentResult);
+            bool hasGoodPenalty = !string.IsNullOrEmpty(penaltyGoodResult);
+
+            string goodStatus = (model.TotalScore >= 75 && !hasGoodPenalty) ? "CERTIFIED" : "NOT CERTIFIED";
+            string excellentStatus = (model.TotalScore >= 80 && !hasExcellentPenalty) ? "CERTIFIED" : "NOT CERTIFIED";
+
             string auditNext = null;
             string levelspbu = null;
 
@@ -348,21 +380,25 @@ namespace e_Pas_CMS.Controllers
                 string passedAuditLevel = auditFlow.passed_audit_level;
                 string failed_audit_level = auditFlow.failed_audit_level;
 
-                if (string.IsNullOrWhiteSpace(passedGood) && string.IsNullOrWhiteSpace(passedExcellent) && model.TotalScore >= 75)
+                if (string.IsNullOrWhiteSpace(passedGood) && string.IsNullOrWhiteSpace(passedExcellent))
                 {
                     model.AuditNext = passedAuditLevel;
                 }
-                else if (model.GoodStatus == "CERTIFIED" && model.ExcellentStatus == "NOT CERTIFIED")
+                else if(goodStatus == "NOT CERTIFIED" && excellentStatus == "NOT CERTIFIED")
+                {
+                    model.AuditNext = failed_audit_level;
+                }
+                else if (goodStatus == "CERTIFIED" && excellentStatus == "NOT CERTIFIED")
                 {
                     model.AuditNext = passedGood;
                 }
-                else if (model.GoodStatus == "CERTIFIED" && model.ExcellentStatus == "CERTIFIED")
+                else if (goodStatus == "CERTIFIED" && excellentStatus == "CERTIFIED")
                 {
                     model.AuditNext = passedExcellent;
                 }
-                else if (model.GoodStatus == "NOT CERTIFIED" && model.ExcellentStatus == "NOT CERTIFIED")
+                else if(string.IsNullOrWhiteSpace(passedGood) && string.IsNullOrWhiteSpace(passedExcellent) && model.TotalScore >= 75)
                 {
-                    model.AuditNext = failed_audit_level;
+                    model.AuditNext = passedAuditLevel;
                 }
                 else
                 {
@@ -497,17 +533,18 @@ namespace e_Pas_CMS.Controllers
             decimal finalScore = maxScore > 0 ? totalScore / maxScore * 100 : 0m;
             model.Score = finalScore; // simpan di model
 
+
             // --- Penalty ---
             var penaltySql = @"
         SELECT STRING_AGG(mqd.penalty_alert, ', ') AS penalty_alerts
-FROM trx_audit_checklist tac
-INNER JOIN master_questioner_detail mqd ON mqd.id = tac.master_questioner_detail_id
-WHERE 
-    tac.trx_audit_id = @id and
-    ((mqd.penalty_excellent_criteria = 'LT_1' and tac.score_input <> 'A') or
-    (mqd.penalty_excellent_criteria = 'EQ_0' and tac.score_input = 'F')) and
-    (mqd.is_relaksasi = false or mqd.is_relaksasi is null) and
-    mqd.is_penalty = true";
+                FROM trx_audit_checklist tac
+                INNER JOIN master_questioner_detail mqd ON mqd.id = tac.master_questioner_detail_id
+                WHERE 
+                    tac.trx_audit_id = @id and
+                    ((mqd.penalty_excellent_criteria = 'LT_1' and tac.score_input <> 'A') or
+                    (mqd.penalty_excellent_criteria = 'EQ_0' and tac.score_input = 'F')) and
+                    (mqd.is_relaksasi = false or mqd.is_relaksasi is null) and
+                    mqd.is_penalty = true;";
 
             model.PenaltyAlerts = await conn.ExecuteScalarAsync<string>(penaltySql, new { id = id.ToString() });
             bool hasPenalty = !string.IsNullOrEmpty(model.PenaltyAlerts);
@@ -540,6 +577,33 @@ WHERE
                 }
             }
 
+            var penaltyExcellentQuery = @"SELECT STRING_AGG(mqd.penalty_alert, ', ') AS penalty_alerts
+                FROM trx_audit_checklist tac
+                INNER JOIN master_questioner_detail mqd ON mqd.id = tac.master_questioner_detail_id
+                WHERE 
+                    tac.trx_audit_id = @id and
+                    ((mqd.penalty_excellent_criteria = 'LT_1' and tac.score_input <> 'A') or
+                    (mqd.penalty_excellent_criteria = 'EQ_0' and tac.score_input = 'F')) and
+                    (mqd.is_relaksasi = false or mqd.is_relaksasi is null) and
+                    mqd.is_penalty = true;";
+
+            var penaltyGoodQuery = @"SELECT STRING_AGG(mqd.penalty_alert, ', ') AS penalty_alerts
+                FROM trx_audit_checklist tac
+                INNER JOIN master_questioner_detail mqd ON mqd.id = tac.master_questioner_detail_id
+                WHERE tac.trx_audit_id = @id AND
+                      tac.score_input = 'F' AND
+                      mqd.is_penalty = true AND 
+                      (mqd.is_relaksasi = false OR mqd.is_relaksasi IS NULL);";
+
+            var penaltyExcellentResult = await conn.ExecuteScalarAsync<string>(penaltyExcellentQuery, new { id = model.AuditId });
+            var penaltyGoodResult = await conn.ExecuteScalarAsync<string>(penaltyGoodQuery, new { id = model.AuditId });
+
+            bool hasExcellentPenalty = !string.IsNullOrEmpty(penaltyExcellentResult);
+            bool hasGoodPenalty = !string.IsNullOrEmpty(penaltyGoodResult);
+
+            string goodStatus = (model.TotalScore >= 75 && !hasGoodPenalty) ? "CERTIFIED" : "NOT CERTIFIED";
+            string excellentStatus = (model.TotalScore >= 80 && !hasExcellentPenalty) ? "CERTIFIED" : "NOT CERTIFIED";
+
             string auditNext = null;
             string levelspbu = null;
 
@@ -553,27 +617,30 @@ WHERE
                 string passedAuditLevel = auditFlow.passed_audit_level;
                 string failed_audit_level = auditFlow.failed_audit_level;
 
-                if (string.IsNullOrWhiteSpace(passedGood) && string.IsNullOrWhiteSpace(passedExcellent) && model.TotalScore >= 75)
+                if (string.IsNullOrWhiteSpace(passedGood) && string.IsNullOrWhiteSpace(passedExcellent))
                 {
                     model.AuditNext = passedAuditLevel;
                 }
-                else if (model.GoodStatus == "CERTIFIED" && model.ExcellentStatus == "NOT CERTIFIED")
+                else if (goodStatus == "NOT CERTIFIED" && excellentStatus == "NOT CERTIFIED")
+                {
+                    model.AuditNext = failed_audit_level;
+                }
+                else if (goodStatus == "CERTIFIED" && excellentStatus == "NOT CERTIFIED")
                 {
                     model.AuditNext = passedGood;
                 }
-                else if (model.GoodStatus == "CERTIFIED" && model.ExcellentStatus == "CERTIFIED")
+                else if (goodStatus == "CERTIFIED" && excellentStatus == "CERTIFIED")
                 {
                     model.AuditNext = passedExcellent;
                 }
-                else if (model.GoodStatus == "NOT CERTIFIED" && model.ExcellentStatus == "NOT CERTIFIED")
+                else if (string.IsNullOrWhiteSpace(passedGood) && string.IsNullOrWhiteSpace(passedExcellent) && model.TotalScore >= 75)
                 {
-                    model.AuditNext = failed_audit_level;
+                    model.AuditNext = passedAuditLevel;
                 }
                 else
                 {
                     model.AuditNext = failed_audit_level;
                 }
-
 
                 var auditlevelClassSql = @"SELECT audit_level_class FROM master_audit_flow WHERE audit_level = @level LIMIT 1;";
                 var auditlevelClass = await conn.QueryFirstOrDefaultAsync<dynamic>(auditlevelClassSql, new { level = model.AuditNext });
