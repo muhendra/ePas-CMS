@@ -386,15 +386,15 @@ namespace e_Pas_CMS.Controllers
 
                 if (string.IsNullOrWhiteSpace(passedGood) && string.IsNullOrWhiteSpace(passedExcellent) && goodStatus == "CERTIFIED" && excellentStatus == "CERTIFIED")
                 {
-                    auditNext = passedAuditLevel;
+                    model.AuditNext = passedAuditLevel;
                 }
                 else if (string.IsNullOrWhiteSpace(passedGood) && string.IsNullOrWhiteSpace(passedExcellent) && goodStatus == "CERTIFIED" && excellentStatus == "NOT CERTIFIED")
                 {
-                    auditNext = failed_audit_level;
+                    model.AuditNext = failed_audit_level;
                 }
                 else if (string.IsNullOrWhiteSpace(passedGood) && string.IsNullOrWhiteSpace(passedExcellent) && goodStatus == "NOT CERTIFIED" && excellentStatus == "NOT CERTIFIED")
                 {
-                    auditNext = failed_audit_level;
+                    model.AuditNext = failed_audit_level;
                 }
                 else if(goodStatus == "NOT CERTIFIED" && excellentStatus == "NOT CERTIFIED")
                 {
@@ -418,7 +418,7 @@ namespace e_Pas_CMS.Controllers
                 }
 
                 var auditlevelClassSql = @"SELECT audit_level_class FROM master_audit_flow WHERE audit_level = @level LIMIT 1;";
-                var auditlevelClass = await conn.QueryFirstOrDefaultAsync<dynamic>(auditlevelClassSql, new { level = auditNext });
+                var auditlevelClass = await conn.QueryFirstOrDefaultAsync<dynamic>(auditlevelClassSql, new { level = model.AuditNext });
                 levelspbu = auditlevelClass != null
                 ? (auditlevelClass.audit_level_class ?? "")
                 : "";
@@ -632,15 +632,15 @@ namespace e_Pas_CMS.Controllers
 
                 if (string.IsNullOrWhiteSpace(passedGood) && string.IsNullOrWhiteSpace(passedExcellent) && goodStatus == "CERTIFIED" && excellentStatus == "CERTIFIED")
                 {
-                    auditNext = passedAuditLevel;
+                    model.AuditNext = passedAuditLevel;
                 }
                 else if (string.IsNullOrWhiteSpace(passedGood) && string.IsNullOrWhiteSpace(passedExcellent) && goodStatus == "CERTIFIED" && excellentStatus == "NOT CERTIFIED")
                 {
-                    auditNext = failed_audit_level;
+                    model.AuditNext = failed_audit_level;
                 }
                 else if (string.IsNullOrWhiteSpace(passedGood) && string.IsNullOrWhiteSpace(passedExcellent) && goodStatus == "NOT CERTIFIED" && excellentStatus == "NOT CERTIFIED")
                 {
-                    auditNext = failed_audit_level;
+                    model.AuditNext = failed_audit_level;
                 }
                 else if (goodStatus == "NOT CERTIFIED" && excellentStatus == "NOT CERTIFIED")
                 {
@@ -664,7 +664,7 @@ namespace e_Pas_CMS.Controllers
                 }
 
                 var auditlevelClassSql = @"SELECT audit_level_class FROM master_audit_flow WHERE audit_level = @level LIMIT 1;";
-                var auditlevelClass = await conn.QueryFirstOrDefaultAsync<dynamic>(auditlevelClassSql, new { level = auditNext });
+                var auditlevelClass = await conn.QueryFirstOrDefaultAsync<dynamic>(auditlevelClassSql, new { level = model.AuditNext });
                 levelspbu = auditlevelClass != null
                 ? (auditlevelClass.audit_level_class ?? "")
                 : "";
