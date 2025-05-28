@@ -183,7 +183,7 @@ namespace e_Pas_CMS.Controllers
                     string passedAuditLevel = auditFlow.passed_audit_level;
                     string failed_audit_level = auditFlow.failed_audit_level;
 
-                    if (string.IsNullOrWhiteSpace(passedGood) && string.IsNullOrWhiteSpace(passedExcellent))
+                    if (string.IsNullOrWhiteSpace(passedGood) && string.IsNullOrWhiteSpace(passedExcellent) && finalScore >= 75)
                     {
                         auditNext = passedAuditLevel;
                     }
@@ -196,6 +196,10 @@ namespace e_Pas_CMS.Controllers
                         auditNext = passedExcellent;
                     }
                     else if (goodStatus == "NOT CERTIFIED" && excellentStatus == "NOT CERTIFIED")
+                    {
+                        auditNext = failed_audit_level;
+                    }
+                    else
                     {
                         auditNext = failed_audit_level;
                     }
@@ -344,7 +348,7 @@ namespace e_Pas_CMS.Controllers
                 string passedAuditLevel = auditFlow.passed_audit_level;
                 string failed_audit_level = auditFlow.failed_audit_level;
 
-                if (string.IsNullOrWhiteSpace(passedGood) && string.IsNullOrWhiteSpace(passedExcellent))
+                if (string.IsNullOrWhiteSpace(passedGood) && string.IsNullOrWhiteSpace(passedExcellent) && model.TotalScore >= 75)
                 {
                     model.AuditNext = passedAuditLevel;
                 }
@@ -357,6 +361,10 @@ namespace e_Pas_CMS.Controllers
                     model.AuditNext = passedExcellent;
                 }
                 else if (model.GoodStatus == "NOT CERTIFIED" && model.ExcellentStatus == "NOT CERTIFIED")
+                {
+                    model.AuditNext = failed_audit_level;
+                }
+                else
                 {
                     model.AuditNext = failed_audit_level;
                 }
@@ -545,7 +553,7 @@ WHERE
                 string passedAuditLevel = auditFlow.passed_audit_level;
                 string failed_audit_level = auditFlow.failed_audit_level;
 
-                if (string.IsNullOrWhiteSpace(passedGood) && string.IsNullOrWhiteSpace(passedExcellent))
+                if (string.IsNullOrWhiteSpace(passedGood) && string.IsNullOrWhiteSpace(passedExcellent) && model.TotalScore >= 75)
                 {
                     model.AuditNext = passedAuditLevel;
                 }
@@ -561,6 +569,11 @@ WHERE
                 {
                     model.AuditNext = failed_audit_level;
                 }
+                else
+                {
+                    model.AuditNext = failed_audit_level;
+                }
+
 
                 var auditlevelClassSql = @"SELECT audit_level_class FROM master_audit_flow WHERE audit_level = @level LIMIT 1;";
                 var auditlevelClass = await conn.QueryFirstOrDefaultAsync<dynamic>(auditlevelClassSql, new { level = model.AuditNext });
