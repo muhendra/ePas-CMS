@@ -69,7 +69,7 @@ public partial class spbu
     [Required]
     public string status { get; set; } = null!;
 
-    [BindNever] // ⛔ isi manual
+    [BindNever]
     [Required]
     public string created_by { get; set; } = null!;
 
@@ -84,14 +84,19 @@ public partial class spbu
     [BindNever]
     public DateTime? updated_date { get; set; }
 
+    [Required]
     public decimal wtms { get; set; }
 
+    [Required]
     public decimal qq { get; set; }
 
+    [Required]
     public decimal wmef { get; set; }
 
+    [Required]
     public decimal format_fisik { get; set; }
 
+    [Required]
     public decimal cpo { get; set; }
 
     public virtual ICollection<app_user_role> app_user_roles { get; set; } = new List<app_user_role>();

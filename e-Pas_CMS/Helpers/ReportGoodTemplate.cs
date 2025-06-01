@@ -621,7 +621,7 @@ public class ReportGoodTemplate : IDocument
             }
 
             InfoRow("No. Report", _model.ReportNo);
-            InfoRow("Tanggal Audit", _model.TanggalSubmit?.ToString("dd/MM/yyyy"));
+            InfoRow("Tanggal Audit", _model.TanggalAudit?.ToString("dd/MM/yyyy"));
             InfoRow("Verifikator", _model.ApproveBy);
 
             InfoRow("Auditor 1", _model.NamaAuditor);

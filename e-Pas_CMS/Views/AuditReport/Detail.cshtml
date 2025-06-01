@@ -732,6 +732,71 @@
             recalcAll();
         });
 
+                function showMediaPopup(mediaItems) {
+            const container = document.getElementById('mediaModalBody');
+            container.innerHTML = '';
+
+            if (!mediaItems || mediaItems.length === 0) {
+                container.innerHTML = '<p class="text-muted">Tidak ada media tersedia.</p>';
+            } else if (mediaItems.length === 1) {
+                const item = mediaItems[0];
+                const isVideo = item.MediaType?.toUpperCase() === 'VIDEO' || item.MediaPath?.toLowerCase().endsWith('.mp4');
+                const el = document.createElement(isVideo ? 'video' : 'img');
+
+                if (isVideo) {
+                    el.src = item.MediaPath;
+                    el.controls = true;
+                    el.className = 'w-100 rounded';
+                } else {
+                    el.src = item.MediaPath;
+                    el.alt = '';
+                    el.className = 'img-fluid rounded';
+                }
+
+                container.appendChild(el);
+            } else {
+                const carouselId = 'mediaCarousel';
+                const indicators = [];
+                const innerItems = [];
+
+                mediaItems.forEach((item, index) => {
+                    const isActive = index === 0 ? 'active' : '';
+                    const isVideo = item.MediaType?.toUpperCase() === 'VIDEO' || item.MediaPath?.toLowerCase().endsWith('.mp4');
+                    const mediaTag = isVideo
+                        ? `<video controls class="d-block w-100 rounded"><source src="${item.MediaPath}" type="video/mp4"></video>`
+                        : `<img src="${item.MediaPath}" class="d-block w-100 rounded" alt="">`;
+
+                    indicators.push(`<button type="button" data-bs-target="#${carouselId}" data-bs-slide-to="${index}" class="${isActive}" aria-current="${isActive ? 'true' : ''}" aria-label="Slide ${index + 1}"></button>`);
+                    innerItems.push(`<div class="carousel-item ${isActive}">${mediaTag}</div>`);
+                });
+
+                container.innerHTML = `
+                <div id="${carouselId}" class="carousel slide" data-bs-ride="carousel">
+                    <div class="carousel-indicators">
+                        ${indicators.join('')}
+                    </div>
+                    <div class="carousel-inner">
+                        ${innerItems.join('')}
+                    </div>
+                    <button class="carousel-control-prev" type="button" data-bs-target="#${carouselId}" data-bs-slide="prev">
+                        <span class="carousel-control-prev-icon custom-arrow" aria-hidden="true"></span>
+                        <span class="visually-hidden">Previous</span>
+                    </button>
+                    <button class="carousel-control-next" type="button" data-bs-target="#${carouselId}" data-bs-slide="next">
+                        <span class="carousel-control-next-icon custom-arrow" aria-hidden="true"></span>
+                        <span class="visually-hidden">Next</span>
+                    </button>
+                </div>`;
+            }
+
+            const modalEl = document.getElementById('mediaModal');
+            const modal = new bootstrap.Modal(modalEl, {
+                backdrop: 'static',
+                keyboard: false,
+                focus: false
+            });
+            modal.show();
+        }
         // PDF download
         document.getElementById('btnDownloadPdf')?.addEventListener('click', function () {
             const auditId = '@Context.Request.RouteValues["id"]';

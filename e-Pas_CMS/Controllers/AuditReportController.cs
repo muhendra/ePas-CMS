@@ -18,6 +18,7 @@ using Newtonsoft.Json;
 using System.Xml.Linq;
 using Npgsql;
 using System.Reflection.Emit;
+using e_Pas_CMS.Models;
 
 namespace e_Pas_CMS.Controllers
 {
