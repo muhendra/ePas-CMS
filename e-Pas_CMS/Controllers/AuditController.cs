@@ -443,7 +443,7 @@ namespace e_Pas_CMS.Controllers
                     .Select(x => new MediaItem
                     {
                         MediaType = x.media_type,
-                        MediaPath = "https://epas.zarata.co.id" + x.media_path
+                        MediaPath = "https://epas-assets.zarata.co.id" + x.media_path
                     })
                     .ToList();
             }
@@ -501,7 +501,7 @@ namespace e_Pas_CMS.Controllers
                     g => g.Select(m => new MediaItem
                     {
                         MediaType = m.media_type,
-                        MediaPath = "https://epas.zarata.co.id" + m.media_path
+                        MediaPath = "https://epas-assets.zarata.co.id" + m.media_path
                     }).ToList()
                 );
 
@@ -594,7 +594,7 @@ namespace e_Pas_CMS.Controllers
                 .Select(x => new MediaItem
                 {
                     MediaType = x.media_type,
-                    MediaPath = "https://epas.zarata.co.id" + x.media_path
+                    MediaPath = "https://epas-assets.zarata.co.id" + x.media_path
                 })
                 .ToList();
 

@@ -765,17 +765,17 @@ else if (!string.IsNullOrEmpty(Model.Notes) || (Model.FinalDocuments != null && 
 
                         if (isVideo) {
                             const video = document.createElement('video');
-                            video.src = 'https://epas.zarata.co.id' + item.mediaPath;
+                            video.src = 'https://epas-assets.zarata.co.id' + item.mediaPath;
                             video.className = 'rounded';
                             video.style.objectFit = 'cover';
                             mediaContainer.appendChild(video);
                         } else {
                             const img = document.createElement('img');
-                            img.src = 'https://epas.zarata.co.id' + item.mediaPath;
+                            img.src = 'https://epas-assets.zarata.co.id' + item.mediaPath;
                             img.className = 'rounded';
                             img.style.objectFit = 'cover';
                             img.onerror = () => {
-                                img.src = 'https://epas.zarata.co.id/images/image-not-found.png';
+                                img.src = 'https://epas-assets.zarata.co.id/images/image-not-found.png';
                                 img.alt = 'Gambar tidak ditemukan';
                             };
                             mediaContainer.appendChild(img);
@@ -798,13 +798,13 @@ else if (!string.IsNullOrEmpty(Model.Notes) || (Model.FinalDocuments != null && 
 
                             if (isVideo) {
                                 const video = document.createElement('video');
-                                video.src = 'https://epas.zarata.co.id' + item.mediaPath;
+                                video.src = 'https://epas-assets.zarata.co.id' + item.mediaPath;
                                 video.controls = true;
                                 video.className = 'w-100 rounded';
                                 fullSizeContainer.appendChild(video);
                             } else {
                                 const img = document.createElement('img');
-                                img.src = 'https://epas.zarata.co.id' + item.mediaPath;
+                                img.src = 'https://epas-assets.zarata.co.id' + item.mediaPath;
                                 img.className = 'img-fluid rounded';
                                 fullSizeContainer.appendChild(img);
                             }
