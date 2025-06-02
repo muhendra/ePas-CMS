@@ -288,7 +288,7 @@ public class ReportExcellentTemplate : IDocument
                         try
                         {
                             var relativePath = foto.Path.TrimStart('/');
-                            fullPath = Path.Combine("/var/www/epasasset/wwwroot", relativePath);
+                            fullPath = Path.Combine("/var/www/epas-asset/wwwroot", relativePath);
                         }
                         catch
                         {

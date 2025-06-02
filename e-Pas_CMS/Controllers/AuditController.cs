@@ -672,7 +672,7 @@ namespace e_Pas_CMS.Controllers
                 return BadRequest("File tidak ditemukan atau kosong.");
 
             var generatedNodeId = Guid.NewGuid().ToString();
-            var uploadsPath = Path.Combine("/var/www/epasasset", "wwwroot", "uploads", auditId, generatedNodeId);
+            var uploadsPath = Path.Combine("/var/www/epas-asset", "wwwroot", "uploads", auditId, generatedNodeId);
 
             Directory.CreateDirectory(uploadsPath);
 
@@ -772,7 +772,7 @@ VALUES
         //                return BadRequest("File tidak ditemukan atau kosong.");
 
         //            // Direktori penyimpanan
-        //            var uploadsPath = Path.Combine("/var/www/epasasset", "wwwroot", "uploads", auditId);
+        //            var uploadsPath = Path.Combine("/var/www/epas-asset", "wwwroot", "uploads", auditId);
         //            Directory.CreateDirectory(uploadsPath);
 
         //            var fileName = Path.GetFileName(file.FileName);
@@ -814,7 +814,7 @@ VALUES
             if (file == null || file.Length == 0)
                 return BadRequest("File tidak ditemukan atau kosong.");
 
-            var uploadsPath = Path.Combine("/var/www/epasasset", "wwwroot", "uploads", auditId, nodeId);
+            var uploadsPath = Path.Combine("/var/www/epas-asset", "wwwroot", "uploads", auditId, nodeId);
 
             if (!Directory.Exists(uploadsPath))
             {
@@ -905,9 +905,9 @@ VALUES
         {
             //var libraryDir = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads", "library");
 
-            //var libraryDir = "/var/www/epasasset/uploads/library";
+            //var libraryDir = "/var/www/epas-asset/uploads/library";
 
-            var libraryDir = Path.Combine("/var/www/epasasset", "wwwroot", "uploads", "library");
+            var libraryDir = Path.Combine("/var/www/epas-asset", "wwwroot", "uploads", "library");
 
             _logger.LogInformation("Gallery requested. Page: {Page}, PageSize: {PageSize}, Search: {Search}", page, pageSize, search);
 
@@ -983,12 +983,12 @@ VALUES
                 var fileName = Path.GetFileName(request.MediaPath);
                 _logger.LogInformation("UpdateMediaPath: Processing file: {FileName}", fileName);
                 
-                var destinationDir = Path.Combine("/var/www/epasasset", "wwwroot", "uploads", request.AuditId, request.NodeId);
+                var destinationDir = Path.Combine("/var/www/epas-asset", "wwwroot", "uploads", request.AuditId, request.NodeId);
                 _logger.LogInformation("UpdateMediaPath: Creating destination directory: {DestinationDir}", destinationDir);
                 Directory.CreateDirectory(destinationDir);
                 
                 // var sourcePath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", request.MediaPath.TrimStart('/'));
-                var sourcePath = Path.Combine("/var/www/epasasset", "wwwroot", "uploads", "library", fileName);
+                var sourcePath = Path.Combine("/var/www/epas-asset", "wwwroot", "uploads", "library", fileName);
                 var destinationPath = Path.Combine(destinationDir, fileName);
                 _logger.LogInformation("UpdateMediaPath: Source path: {SourcePath}, Destination path: {DestinationPath}", sourcePath, destinationPath);
 
