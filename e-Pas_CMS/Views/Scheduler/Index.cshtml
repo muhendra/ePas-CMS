@@ -1,0 +1,91 @@
+﻿@using e_Pas_CMS.ViewModels
+@model SchedulerIndexViewModel
+@{
+    Layout = "~/Views/Shared/_Layout.cshtml";
+}
+
+<div class="mt-4 ps-4 pe-4">
+    <h3 class="fw-bold mb-4">Penjadwalan</h3>
+
+    <form method="get" class="row g-2 mb-3">
+        <div class="col-md-4">
+            <input type="text" name="searchTerm" value="@Model.SearchTerm" class="form-control" placeholder="Cari no. SPBU atau auditor..." />
+        </div>
+        <div class="col-md-auto">
+            <button type="submit" class="btn btn-primary">Cari</button>
+            <a href="@Url.Action("Index")" class="btn btn-secondary ms-1">Reset</a>
+        </div>
+        <div class="col text-end">
+            <a href="@Url.Action("Add", "Scheduler")" class="btn btn-info text-white">+ Add Scheduler</a>
+        </div>
+    </form>
+
+    <table class="table table-bordered table-striped align-middle text-center">
+        <thead class="table-light">
+            <tr>
+                <th>#</th>
+                <th>Status</th>
+                <th>Schedule</th>
+                <th>Auditor</th>
+                <th>Tanggal Audit</th>
+                <th>Tipe Audit</th>
+                <th>Level</th>
+                <th>SPBU</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            @{
+                int index = (Model.CurrentPage - 1) * 10 + 1;
+            }
+            @foreach (var item in Model.Items)
+            {
+                <tr>
+                    <td>@index</td>
+                    <td class="fw-semibold" style="color:@GetStatusColor(item.Status)">
+                        @item.Status
+                    </td>
+                    <td>-</td> @* Ganti '-' jika ingin jadwal tertentu *@
+                    <td>@item.AppUserName</td>
+                    <td>@item.AuditScheduleDate.ToString("dd/MM/yyyy")</td>
+                    <td>@item.AuditType</td>
+                    <td>@item.AuditLevel</td>
+                    <td>@item.SpbuNo</td>
+                    <td><a href="@Url.Action("Detail", "Audit", new { id = item.Id })">Lihat Detail</a></td>
+                </tr>
+                index++;
+            }
+        </tbody>
+    </table>
+
+    <!-- Pagination -->
+    <nav>
+        <ul class="pagination justify-content-start">
+            @{
+                int maxPage = Math.Min(10, Model.TotalPages); // maksimal 10 halaman
+            }
+            @for (int i = 1; i <= maxPage; i++)
+            {
+                <li class="page-item @(i == Model.CurrentPage ? "active" : "")">
+                    <a class="page-link" href="@Url.Action("Index", new { pageNumber = i, searchTerm = Model.SearchTerm })">@i</a>
+                </li>
+            }
+        </ul>
+    </nav>
+
+</div>
+
+@functions {
+    string GetStatusColor(string status)
+    {
+        return status switch
+        {
+            "Belum Dimulai" => "#000000",
+            "Sedang Berlangsung (Input)" => "#fbbf24",
+            "Sedang Berlangsung (Submit)" => "#f59e0b",
+            "Sedang Ditinjau" => "#3b82f6",
+            "Terverifikasi" => "#10b981",
+            _ => "#000"
+        };
+    }
+}

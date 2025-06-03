@@ -20,13 +20,59 @@ namespace e_Pas_CMS.Controllers
             _context = context;
         }
 
+        public async Task<IActionResult> Index(int pageNumber = 1, int pageSize = 10, string searchTerm = "")
+        {
+            var query = _context.trx_audits
+            .Include(a => a.app_user)
+            .Include(a => a.spbu)
+            .Where(a => a.status == "NOT_STARTED");
+
+            if (!string.IsNullOrWhiteSpace(searchTerm))
+            {
+                searchTerm = searchTerm.ToLower();
+                query = query.Where(a =>
+                    a.app_user.name.ToLower().Contains(searchTerm) ||
+                    a.spbu.spbu_no.ToLower().Contains(searchTerm));
+            }
+
+            query = query.OrderByDescending(a => a.created_date);
+
+            var totalItems = await query.CountAsync();
+            var items = await query
+                .OrderByDescending(x => x.audit_schedule_date)
+                .Skip((pageNumber - 1) * pageSize)
+                .Take(pageSize)
+                .Select(a => new SchedulerItemViewModel
+                {
+                    Id = a.id,
+                    Status = a.status,
+                    AppUserName = a.app_user.name,
+                    AuditScheduleDate = a.audit_schedule_date.HasValue ? a.audit_schedule_date.Value.ToDateTime(new TimeOnly()) : DateTime.MinValue,
+                    AuditType = a.audit_type,
+                    AuditLevel = a.audit_level,
+                    SpbuNo = a.spbu.spbu_no
+                })
+                .ToListAsync();
+
+            var vm = new SchedulerIndexViewModel
+            {
+                Items = items,
+                CurrentPage = pageNumber,
+                TotalPages = (int)Math.Ceiling((double)totalItems / pageSize),
+                PageSize = pageSize,
+                SearchTerm = searchTerm
+            };
+
+            return View(vm);
+        }
+
+        [HttpGet("Add")]
         public IActionResult Add()
         {
             return View();
         }
 
-        // POST: /Scheduler/Add
-        [HttpPost]
+        [HttpPost("Add")]
         [ValidateAntiForgeryToken]
         public IActionResult Add(SchedulerViewModel model)
         {
