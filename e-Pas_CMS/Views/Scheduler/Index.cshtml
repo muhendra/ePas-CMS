@@ -25,7 +25,7 @@
             <tr>
                 <th>#</th>
                 <th>Status</th>
-                <th>Schedule</th>
+                @* <th>Schedule</th> *@
                 <th>Auditor</th>
                 <th>Tanggal Audit</th>
                 <th>Tipe Audit</th>
@@ -45,7 +45,7 @@
                     <td class="fw-semibold" style="color:@GetStatusColor(item.Status)">
                         @item.Status
                     </td>
-                    <td>-</td> @* Ganti '-' jika ingin jadwal tertentu *@
+                    @* <td>-</td> *@
                     <td>@item.AppUserName</td>
                     <td>@item.AuditScheduleDate.ToString("dd/MM/yyyy")</td>
                     <td>@item.AuditType</td>
