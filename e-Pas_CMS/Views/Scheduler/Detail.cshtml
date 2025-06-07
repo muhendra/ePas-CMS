@@ -3,56 +3,95 @@
     Layout = "~/Views/Shared/_Layout.cshtml";
 }
 
-<div class="mt-4 px-4">
+<style>
+    body {
+        background-color: #f8fafc;
+    }
+
+    .card-detail {
+        border-radius: 1rem;
+        box-shadow: 0 6px 20px rgba(0, 0, 0, 0.08);
+        padding: 2rem;
+        background-color: #ffffff;
+    }
+
+    .detail-label {
+        font-size: 0.9rem;
+        color: #6c757d;
+        margin-bottom: 0.25rem;
+    }
+
+    .detail-value {
+        font-size: 1.1rem;
+        font-weight: 600;
+        margin-bottom: 1.5rem;
+    }
+
+    .badge-status {
+        font-size: 1rem;
+        padding: 0.6rem 1rem;
+        border-radius: 0.75rem;
+        font-weight: 500;
+    }
+
+    .back-button {
+        border-radius: 0.6rem;
+    }
+
+    @@media (max-width: 768px) {
+        .detail-value
+
+    {
+        font-size: 1rem;
+    }
+
+    .card-detail {
+        padding: 1.25rem;
+    }
+
+    }
+</style>
+
+<div class="container py-4">
     <div class="d-flex justify-content-between align-items-center mb-4">
-        <h3 class="fw-bold">Detail Audit Schedule</h3>
-        <a href="@Url.Action("Index", "Scheduler")" class="btn btn-outline-secondary">
+        <h2 class="fw-bold mb-0">Detail Audit Schedule</h2>
+        <a href="@Url.Action("Index", "Scheduler")" class="btn btn-outline-secondary back-button">
             <i class="bi bi-arrow-left me-1"></i> Kembali
         </a>
     </div>
 
-    <div class="card shadow-sm border-0">
-        <div class="card-body">
-            <div class="row mb-3">
-                <div class="col-md-6">
-                    <label class="text-muted">SPBU</label>
-                    <div class="fw-semibold">@Model.SpbuNo</div>
-                    <small class="text-muted">@Model.SpbuAddress</small>
-                </div>
-            </div>
+    <div class="card-detail">
+        <div class="mb-3">
+            <div class="detail-label">SPBU</div>
+            <div class="detail-value">@Model.SpbuNo</div>
+            <div class="text-muted">@Model.SpbuAddress</div>
+        </div>
 
-            <div class="row mb-3">
-                <div class="col-md-6">
-                    <label class="text-muted">Auditor</label>
-                    <div class="fw-semibold">@Model.AppUserName</div>
-                </div>
-                <div class="col-md-6">
-                    <label class="text-muted">Tanggal Audit</label>
-                    <div class="fw-semibold">@Model.AuditScheduleDate?.ToString("dd MMMM yyyy")</div>
-                </div>
-            </div>
+        <div class="mb-3">
+            <div class="detail-label">Auditor</div>
+            <div class="detail-value">@Model.AppUserName</div>
+        </div>
 
-            <div class="row mb-3">
-                <div class="col-md-6">
-                    <label class="text-muted">Audit Type</label>
-                    <div class="fw-semibold">@Model.AuditType</div>
-                </div>
-                <div class="col-md-6">
-                    <label class="text-muted">Audit Level</label>
-                    <div class="fw-semibold">@Model.AuditLevel</div>
-                </div>
-            </div>
+        <div class="mb-3">
+            <div class="detail-label">Tanggal Audit</div>
+            <div class="detail-value">@Model.AuditScheduleDate?.ToString("dd MMMM yyyy")</div>
+        </div>
 
-            <div class="row mb-4">
-                <div class="col-md-6">
-                    <label class="text-muted">Status</label>
-                    <div>
-                        <span class="badge px-3 py-2" style="background-color:@GetStatusColor(Model.Status); color: #fff;">
-                            @Model.Status
-                        </span>
-                    </div>
-                </div>
-            </div>
+        <div class="mb-3">
+            <div class="detail-label">Audit Type</div>
+            <div class="detail-value">@Model.AuditType</div>
+        </div>
+
+        <div class="mb-3">
+            <div class="detail-label">Audit Level</div>
+            <div class="detail-value">@Model.AuditLevel</div>
+        </div>
+
+        <div class="mb-3">
+            <div class="detail-label">Status</div>
+            <span class="badge badge-status" style="background-color:@GetStatusColor(Model.Status); color: #fff;">
+                @Model.Status
+            </span>
         </div>
     </div>
 </div>

@@ -423,8 +423,8 @@ namespace e_Pas_CMS.Controllers
                 var trxAudit = new trx_audit
                 {
                     id = Guid.NewGuid().ToString(),
-                    report_prefix = null,
-                    report_no = null,                          
+                    report_prefix = "",
+                    report_no = "",                          
                     spbu_id = spbuId,
                     app_user_id = userId,
                     master_questioner_intro_id = "7e3dca2d-2d99-4a8d-9fc0-9b80cb4c3a79",        
@@ -435,8 +435,8 @@ namespace e_Pas_CMS.Controllers
                     audit_execution_time = null,
                     audit_media_upload = 0,
                     audit_media_total = 0,
-                    audit_mom_intro = null,
-                    audit_mom_final = null,
+                    audit_mom_intro = "",
+                    audit_mom_final = "",
                     status = "NOT_STARTED",
                     created_by = currentUser,
                     created_date = currentTime,
