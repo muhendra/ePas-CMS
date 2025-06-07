@@ -1,0 +1,73 @@
+﻿@model e_Pas_CMS.ViewModels.SchedulerDetailViewModel
+@{
+    Layout = "~/Views/Shared/_Layout.cshtml";
+}
+
+<div class="mt-4 px-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h3 class="fw-bold">Detail Audit Schedule</h3>
+        <a href="@Url.Action("Index", "Scheduler")" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left me-1"></i> Kembali
+        </a>
+    </div>
+
+    <div class="card shadow-sm border-0">
+        <div class="card-body">
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    <label class="text-muted">SPBU</label>
+                    <div class="fw-semibold">@Model.SpbuNo</div>
+                    <small class="text-muted">@Model.SpbuAddress</small>
+                </div>
+            </div>
+
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    <label class="text-muted">Auditor</label>
+                    <div class="fw-semibold">@Model.AppUserName</div>
+                </div>
+                <div class="col-md-6">
+                    <label class="text-muted">Tanggal Audit</label>
+                    <div class="fw-semibold">@Model.AuditScheduleDate?.ToString("dd MMMM yyyy")</div>
+                </div>
+            </div>
+
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    <label class="text-muted">Audit Type</label>
+                    <div class="fw-semibold">@Model.AuditType</div>
+                </div>
+                <div class="col-md-6">
+                    <label class="text-muted">Audit Level</label>
+                    <div class="fw-semibold">@Model.AuditLevel</div>
+                </div>
+            </div>
+
+            <div class="row mb-4">
+                <div class="col-md-6">
+                    <label class="text-muted">Status</label>
+                    <div>
+                        <span class="badge px-3 py-2" style="background-color:@GetStatusColor(Model.Status); color: #fff;">
+                            @Model.Status
+                        </span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@functions {
+    string GetStatusColor(string status)
+    {
+        return status switch
+        {
+            "Belum Dimulai" => "#6c757d", // gray
+            "Sedang Berlangsung (Input)" => "#fbbf24", // yellow
+            "Sedang Berlangsung (Submit)" => "#f59e0b", // amber
+            "Sedang Ditinjau" => "#3b82f6", // blue
+            "Terverifikasi" => "#10b981", // green
+            _ => "#6c757d"
+        };
+    }
+}

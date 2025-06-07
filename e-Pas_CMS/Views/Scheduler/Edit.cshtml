@@ -1,0 +1,180 @@
+﻿@model e_Pas_CMS.ViewModels.AuditEditViewModel
+@{
+    Layout = "~/Views/Shared/_Layout.cshtml";
+}
+
+<div class="mt-4 ps-4 pe-4">
+    <h3 class="fw-bold mb-4">Edit Audit</h3>
+
+    <form asp-action="Edit" method="post" class="row g-3">
+        @Html.HiddenFor(m => m.Id)
+        @Html.HiddenFor(m => m.SpbuId, new { id = "SpbuId" })
+        @Html.HiddenFor(m => m.AppUserId, new { id = "AppUserId" })
+
+        <div class="col-md-6">
+            <label class="form-label">SPBU</label>
+            <div class="input-group">
+                <input type="text" class="form-control" id="SpbuInfo" value="@Model.SpbuList.FirstOrDefault(x => x.Value == Model.SpbuId)?.Text" readonly />
+                <button type="button" class="btn btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#spbuModal">Pilih SPBU</button>
+            </div>
+        </div>
+
+        <div class="col-md-6">
+            <label class="form-label">Auditor</label>
+            <div class="input-group">
+                <input type="text" class="form-control" id="AuditorInfo" value="@Model.UserList.FirstOrDefault(x => x.Value == Model.AppUserId)?.Text" readonly />
+                <button type="button" class="btn btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#auditorModal">Pilih Auditor</button>
+            </div>
+        </div>
+
+        <div class="col-md-6">
+            <label class="form-label">Audit Level</label>
+            @Html.TextBoxFor(m => m.AuditLevel, new { @class = "form-control" })
+        </div>
+
+        <div class="col-md-6">
+            <label class="form-label">Audit Type</label>
+            @Html.TextBoxFor(m => m.AuditType, new { @class = "form-control" })
+        </div>
+
+        <div class="col-md-6">
+            <label class="form-label">Tanggal Audit</label>
+            @Html.TextBoxFor(m => m.AuditScheduleDate, "{0:yyyy-MM-dd}", new { @class = "form-control", type = "date" })
+        </div>
+
+        <div class="col-12">
+            <button type="submit" class="btn btn-success">Simpan</button>
+            <a href="@Url.Action("Index", "Scheduler")" class="btn btn-secondary ms-2">Batal</a>
+        </div>
+    </form>
+</div>
+
+<!-- Modal SPBU -->
+<div class="modal fade" id="spbuModal" tabindex="-1" aria-labelledby="spbuModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Pilih SPBU</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Tutup"></button>
+            </div>
+            <div class="modal-body">
+                <input type="text" id="searchSpbu" class="form-control mb-3" placeholder="Cari SPBU...">
+                <div id="spbuList"></div>
+                <div class="d-flex justify-content-between mt-2">
+                    <button type="button" class="btn btn-outline-primary btn-sm" onclick="prevSpbu()">Previous</button>
+                    <button type="button" class="btn btn-outline-primary btn-sm" onclick="nextSpbu()">Next</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Auditor -->
+<div class="modal fade" id="auditorModal" tabindex="-1" aria-labelledby="auditorModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Pilih Auditor</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Tutup"></button>
+            </div>
+            <div class="modal-body">
+                <input type="text" id="searchAuditor" class="form-control mb-3" placeholder="Cari Auditor...">
+                <div id="auditorList"></div>
+                <div class="d-flex justify-content-between mt-2">
+                    <button type="button" class="btn btn-outline-primary btn-sm" onclick="prevAuditor()">Previous</button>
+                    <button type="button" class="btn btn-outline-primary btn-sm" onclick="nextAuditor()">Next</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        let spbuPage = 1;
+        let auditorPage = 1;
+
+        function loadSpbuList(search = "") {
+            $.get("@Url.Action("GetSpbuList", "Scheduler")", { search: search, page: spbuPage }, function (data) {
+                let html = "<ul class='list-group'>";
+                data.items.forEach(item => {
+                    html += `<li class='list-group-item list-group-item-action' style='cursor:pointer'
+                            onclick="selectSpbu('${item.id}', '${item.spbu_no} - ${item.address}')">
+                            ${item.spbu_no} - ${item.address}</li>`;
+                });
+                html += "</ul>";
+                $("#spbuList").html(html);
+            });
+        }
+
+        function loadAuditorList(search = "") {
+            $.get("@Url.Action("GetAuditorList", "Scheduler")", { search: search, page: auditorPage }, function (data) {
+                let html = "<ul class='list-group'>";
+                data.items.forEach(item => {
+                    html += `<li class='list-group-item list-group-item-action' style='cursor:pointer'
+                            onclick="selectAuditor('${item.id}', '${item.text}')">${item.text}</li>`;
+                });
+                html += "</ul>";
+                $("#auditorList").html(html);
+            });
+        }
+
+        function selectSpbu(id, text) {
+            $("#SpbuId").val(id);
+            $("#SpbuInfo").val(text);
+            const modal = bootstrap.Modal.getInstance(document.getElementById('spbuModal'));
+            modal.hide();
+        }
+
+        function selectAuditor(id, text) {
+            $("#AppUserId").val(id);
+            $("#AuditorInfo").val(text);
+            const modal = bootstrap.Modal.getInstance(document.getElementById('auditorModal'));
+            modal.hide();
+        }
+
+        function nextSpbu() {
+            spbuPage++;
+            loadSpbuList($("#searchSpbu").val());
+        }
+
+        function prevSpbu() {
+            if (spbuPage > 1) {
+                spbuPage--;
+                loadSpbuList($("#searchSpbu").val());
+            }
+        }
+
+        function nextAuditor() {
+            auditorPage++;
+            loadAuditorList($("#searchAuditor").val());
+        }
+
+        function prevAuditor() {
+            if (auditorPage > 1) {
+                auditorPage--;
+                loadAuditorList($("#searchAuditor").val());
+            }
+        }
+
+        $(document).ready(function () {
+            $("#searchSpbu").on("input", function () {
+                spbuPage = 1;
+                loadSpbuList($(this).val());
+            });
+
+            $("#searchAuditor").on("input", function () {
+                auditorPage = 1;
+                loadAuditorList($(this).val());
+            });
+
+            loadSpbuList();
+            loadAuditorList();
+
+            document.addEventListener('hidden.bs.modal', function () {
+                document.body.classList.remove('modal-open');
+                document.querySelectorAll('.modal-backdrop').forEach(e => e.remove());
+            });
+        });
+    </script>
+}

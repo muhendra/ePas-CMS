@@ -6,6 +6,7 @@ using Microsoft.EntityFrameworkCore;
 using e_Pas_CMS.Models;
 using System.Data;
 using Dapper;
+using Microsoft.AspNetCore.Mvc.Rendering;
 
 namespace e_Pas_CMS.Controllers
 {
@@ -120,6 +121,88 @@ namespace e_Pas_CMS.Controllers
                 totalPages = totalPages,
                 items
             });
+        }
+
+        [HttpGet("Edit/{id}")]
+        public ActionResult Edit(string id)
+        {
+            var audit = _context.trx_audits.Find(id);
+            if (audit == null) return HttpNotFound();
+
+            var viewModel = new AuditEditViewModel
+            {
+                Id = audit.id,
+                SpbuId = audit.spbu_id,
+                AppUserId = audit.app_user_id,
+                AuditLevel = audit.audit_level,
+                AuditType = audit.audit_type,
+                AuditScheduleDate = audit.audit_schedule_date,
+                SpbuList = _context.spbus.Select(s => new SelectListItem { Value = s.id, Text = s.spbu_no }),
+                UserList = _context.app_users.Select(u => new SelectListItem { Value = u.id, Text = u.name })
+            };
+
+            return View(viewModel);
+        }
+
+        [HttpPost("Edit/{id}")]
+        public ActionResult Edit(AuditEditViewModel model)
+        {
+            var audit = _context.trx_audits.FirstOrDefault(a => a.id == model.Id);
+            if (audit == null)
+                return NotFound();
+
+            // Update semua field yang pasti dikirim dari form (non-nullable)
+            audit.spbu_id = model.SpbuId;
+            audit.app_user_id = model.AppUserId;
+            audit.audit_level = model.AuditLevel;
+            audit.audit_type = model.AuditType;
+            audit.audit_schedule_date = model.AuditScheduleDate;
+            audit.audit_mom_intro = model.AuditMomIntro;
+            audit.audit_mom_final = model.AuditMomFinal;
+            audit.status = audit.status;
+
+            // Metadata update
+            audit.updated_date = DateTime.Now;
+            audit.updated_by = User.Identity.Name;
+
+            _context.SaveChanges();
+
+            TempData["Success"] = "Data berhasil diperbarui.";
+            return RedirectToAction("Index");
+        }
+
+
+        private ActionResult HttpNotFound()
+        {
+            throw new NotImplementedException();
+        }
+
+        [HttpGet("Detail/{id}")]
+        public async Task<IActionResult> Detail(string id)
+        {
+            var data = await _context.trx_audits
+                .Include(a => a.spbu)
+                .Include(a => a.app_user)
+                .FirstOrDefaultAsync(a => a.id == id);
+
+            if (data == null)
+                return NotFound();
+
+            var vm = new SchedulerDetailViewModel
+            {
+                Id = data.id,
+                SpbuNo = data.spbu.spbu_no,
+                SpbuAddress = data.spbu.address,
+                AppUserName = data.app_user?.name,
+                AuditScheduleDate = data.audit_schedule_date?.ToDateTime(new TimeOnly()),
+                AuditType = data.audit_type,
+                AuditLevel = data.audit_level,
+                Status = data.status,
+                AuditMomIntro = data.audit_mom_intro,
+                AuditMomFinal = data.audit_mom_final
+            };
+
+            return View(vm);
         }
 
 
@@ -354,7 +437,7 @@ namespace e_Pas_CMS.Controllers
                     audit_media_total = 0,
                     audit_mom_intro = null,
                     audit_mom_final = null,
-                    status = "NOT STARTED",
+                    status = "NOT_STARTED",
                     created_by = currentUser,
                     created_date = currentTime,
                     updated_by = currentUser,

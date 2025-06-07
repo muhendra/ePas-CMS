@@ -2,10 +2,28 @@
 @model SchedulerIndexViewModel
 @{
     Layout = "~/Views/Shared/_Layout.cshtml";
+
+    int totalPages = Model.TotalPages;
+    int currentPage = Model.CurrentPage;
+    int windowSize = 10;
+
+    // Hitung window saat ini (mulai dari halaman ke-1, 11, 21, dst)
+    int currentWindow = (int)Math.Ceiling((double)currentPage / windowSize);
+    int startPage = (currentWindow - 1) * windowSize + 1;
+    int endPage = Math.Min(startPage + windowSize - 1, totalPages);
 }
 
 <div class="mt-4 ps-4 pe-4">
     <h3 class="fw-bold mb-4">Penjadwalan</h3>
+
+    @if (TempData["Success"] != null)
+{
+    <div class="alert alert-success alert-dismissible fade show" role="alert">
+        @TempData["Success"]
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+}
+
 
     <form method="get" class="row g-2 mb-3">
         <div class="col-md-4">
@@ -23,7 +41,7 @@
     <table class="table table-bordered table-striped align-middle text-center">
         <thead class="table-light">
             <tr>
-                <th>#</th>
+                <th>No</th>
                 <th>Status</th>
                 @* <th>Schedule</th> *@
                 <th>Auditor</th>
@@ -51,7 +69,10 @@
                     <td>@item.AuditType</td>
                     <td>@item.AuditLevel</td>
                     <td>@item.SpbuNo</td>
-                    <td><a href="@Url.Action("Detail", "Audit", new { id = item.Id })">Lihat Detail</a></td>
+                    <td>
+                        <a href="@Url.Action("Detail", "Scheduler", new { id = item.Id })" class="btn btn-sm btn-outline-primary me-1">Detail</a>
+                        <a href="@Url.Action("Edit", "Scheduler", new { id = item.Id })" class="btn btn-sm btn-outline-secondary">Edit</a>
+                    </td>
                 </tr>
                 index++;
             }
@@ -61,19 +82,44 @@
     <!-- Pagination -->
     <nav>
         <ul class="pagination justify-content-start">
-            @{
-                int maxPage = Math.Min(10, Model.TotalPages); // maksimal 10 halaman
-            }
-            @for (int i = 1; i <= maxPage; i++)
+            @if (startPage > 1)
             {
-                <li class="page-item @(i == Model.CurrentPage ? "active" : "")">
+                <li class="page-item">
+                    <a class="page-link" href="@Url.Action("Index", new { pageNumber = startPage - 1, searchTerm = Model.SearchTerm })">« Prev</a>
+                </li>
+            }
+
+            @for (int i = startPage; i <= endPage; i++)
+            {
+                <li class="page-item @(i == currentPage ? "active" : "")">
                     <a class="page-link" href="@Url.Action("Index", new { pageNumber = i, searchTerm = Model.SearchTerm })">@i</a>
+                </li>
+            }
+
+            @if (endPage < totalPages)
+            {
+                <li class="page-item">
+                    <a class="page-link" href="@Url.Action("Index", new { pageNumber = endPage + 1, searchTerm = Model.SearchTerm })">Next »</a>
                 </li>
             }
         </ul>
     </nav>
 
+
 </div>
+
+@section Scripts {
+    <script>
+        setTimeout(function () {
+            var alert = document.querySelector('.alert');
+            if (alert) {
+                var bsAlert = bootstrap.Alert.getOrCreateInstance(alert);
+                bsAlert.close();
+            }
+        }, 5000);
+    </script>
+}
+
 
 @functions {
     string GetStatusColor(string status)

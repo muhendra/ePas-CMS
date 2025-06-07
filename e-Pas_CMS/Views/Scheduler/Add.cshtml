@@ -53,7 +53,7 @@
             <div class="row g-4">
                 <div class="col-md-6">
                     <label for="tanggalAudit" class="form-label">Tanggal Audit</label>
-                    <input type="datetime-local" class="form-control" id="tanggalAudit" name="TanggalAudit" />
+                    <input type="date" class="form-control" id="tanggalAudit" name="TanggalAudit" />
                 </div>
 
                 <div class="col-md-6">
@@ -82,6 +82,9 @@
             </div>
 
             <div class="mt-4 text-end">
+                <a href="@Url.Action("Index", "Scheduler")" class="btn btn-secondary px-4 py-2">
+                    <i class="bi bi-arrow-left-circle"></i> Kembali
+                </a>
                 <button type="submit" class="btn btn-info text-white px-4 py-2">
                     <i class="bi bi-plus-circle"></i> Add Scheduler
                 </button>
@@ -185,7 +188,7 @@
             spbuList.forEach(spbu => {
                 const row = document.createElement('tr');
                 row.innerHTML = `
-                    <td><input type="checkbox" value="${spbu.id}" data-no="${spbu.spbu_no}"></td>
+                <td><input type="radio" name="spbuOption" value="${spbu.id}" data-no="${spbu.spbu_no}"></td>
                     <td>${spbu.spbu_no}</td>
                     <td>${spbu.region}</td>
                     <td>${spbu.province_name}</td>
@@ -217,12 +220,17 @@
         });
 
         document.getElementById('btnPilihSpbu').addEventListener('click', function () {
-            const checked = document.querySelectorAll('#spbuTable input[type=checkbox]:checked');
-            const ids = Array.from(checked).map(cb => cb.value);
-            const labels = Array.from(checked).map(cb => cb.dataset.no);
+        const selected = document.querySelector('#spbuTable input[name="spbuOption"]:checked');
+        if (!selected) {
+            alert("Silakan pilih SPBU terlebih dahulu.");
+            return;
+        }
+        const id = selected.value;
+        const no = selected.dataset.no;
 
-            document.getElementById('selectedSpbuText').innerText = labels.join(', ');
-            document.getElementById('selectedSpbuIds').value = ids.join(',');
+        document.getElementById('selectedSpbuText').innerText = no;
+        document.getElementById('selectedSpbuIds').value = id;
+
 
             const instance = bootstrap.Modal.getInstance(modalEl);
             if (instance) instance.hide();
@@ -311,11 +319,11 @@
                 }, 300);
             });
 
-            // ✅ SET WAKTU DEFAULT TANGGAL + JAM AUDIT
-            const now = new Date();
-            const localISOTime = now.toISOString().slice(0, 16); // yyyy-MM-ddTHH:mm
-            const tanggalInput = document.getElementById('tanggalAudit');
-            if (tanggalInput) tanggalInput.value = localISOTime;
+        const now = new Date();
+        const todayOnly = now.toISOString().split('T')[0]; // yyyy-MM-dd
+        const tanggalInput = document.getElementById('tanggalAudit');
+        if (tanggalInput) tanggalInput.value = todayOnly;
+
         });
     </script>
 
