@@ -3,6 +3,13 @@
 
 @{
     ViewData["Title"] = "Audit Report Index";
+
+    int totalPages = (int)Math.Ceiling((decimal)Model.TotalItems / 10);
+    int currentPage = Model.PageNumber;
+    int windowSize = 10;
+    int currentWindow = (int)Math.Ceiling((double)currentPage / windowSize);
+    int startPage = (currentWindow - 1) * windowSize + 1;
+    int endPage = Math.Min(startPage + windowSize - 1, totalPages);
 }
 
 @section Styles {
@@ -12,28 +19,51 @@
             overflow-x: auto;
         }
 
-        table.dataTable {
-            width: 100% !important;
+        .table thead th {
+            background-color: #f1f3f5;
+            font-weight: 600;
+            text-align: center;
+            vertical-align: middle;
+        }
+
+        .table td,
+        .table th {
+            vertical-align: middle !important;
+            font-size: 14px;
+        }
+
+        .table-hover tbody tr:hover {
+            background-color: #f8f9fa;
+        }
+
+        .dataTables_wrapper .dataTables_filter {
+            display: none;
+        }
+
+        .pagination .page-link {
+            font-weight: 500;
         }
     </style>
 }
 
 <h3 class="mb-4 fw-bold">Audit Report</h3>
 
-<div class="mb-3">
+<div class="mb-3 form-search">
     <form method="get" asp-controller="AuditReport" asp-action="Index" class="d-flex gap-2">
         <input type="text" name="searchTerm" value="@ViewBag.SearchTerm" class="form-control" placeholder="🔍 Cari SPBU, Auditor, Status...">
-        <button type="submit" class="btn btn-outline-primary"><i class="bi bi-search"></i> Cari</button>
+        <button type="submit" class="btn btn-outline-primary">
+            <i class="bi bi-search"></i> Cari
+        </button>
     </form>
 </div>
 
-<table id="audit-table" class="table table-bordered table-striped nowrap w-100">
-    <thead class="table-light text-center align-middle">
+<table id="audit-table" class="table table-bordered table-hover align-middle nowrap w-100">
+    <thead>
         <tr>
             <th>No SPBU</th>
             <th>Region</th>
-            <th style="min-width: 150px; max-width: 150px; white-space: normal;">SBM</th>
-            <th style="min-width: 150px; max-width: 150px; white-space: normal;">Alamat</th>
+            <th style="min-width: 150px;">SBM</th>
+            <th style="min-width: 150px;">Alamat</th>
             <th>Kelas SPBU</th>
             <th>Type Audit</th>
             <th>Next Audit</th>
@@ -56,8 +86,8 @@
             <tr>
                 <td>@item.SpbuNo</td>
                 <td>@item.Region</td>
-                <td style="min-width: 150px; max-width: 150px; white-space: normal;">@item.SBM</td>
-                <td style="min-width: 150px; max-width: 150px; white-space: normal;">@item.Address</td>
+                <td>@item.SBM</td>
+                <td>@item.Address</td>
                 <td>@item.KelasSpbu</td>
                 <td>@item.Auditlevel</td>
                 <td>@item.AuditNext</td>
@@ -79,20 +109,12 @@
             </tr>
         }
     </tbody>
-
 </table>
-
-@{
-    int totalPages = (int)Math.Ceiling((decimal)Model.TotalItems / 10);
-    int currentPage = Model.PageNumber;
-    int startPage = Math.Max(1, currentPage - 2);
-    int endPage = Math.Min(totalPages, currentPage + 2);
-}
 
 @if (totalPages > 1)
 {
     <nav class="mt-4">
-        <ul class="pagination justify-content-center">
+        <ul class="pagination justify-content-start flex-wrap">
             @if (currentPage > 1)
             {
                 <li class="page-item">

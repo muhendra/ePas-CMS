@@ -111,7 +111,7 @@
             border-radius: 12px;
             overflow: hidden;
             box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-            margin-bottom: 2rem;
+            margin-bottom: 0.5rem;
             background: white;
             height: 100%;
         }
@@ -172,10 +172,11 @@
         }
 
         .pagination {
-            margin-top: 1.5rem;
-            justify-content: flex-end;
+            margin-top: 0rem;
+            justify-content: flex-start;
             gap: 0.25rem;
         }
+
 
         .pagination .page-item.active .page-link {
             background-color: #21B6D7;
@@ -548,59 +549,75 @@
 
     @if (Model.TotalPages > 1)
     {
-        <nav aria-label="Page navigation" class="px-3">
-            <ul class="pagination">
-                <li class="page-item @(!Model.HasPreviousPage ? "disabled" : "")">
-                    <a class="page-link" href="@Url.Action("Index", new { pageNumber = Model.PageNumber - 1, pageSize = Model.PageSize, searchTerm = ViewBag.SearchTerm, sortColumn = ViewBag.SortColumn, sortDirection = ViewBag.SortDirection })" aria-label="Previous">
-                        <span aria-hidden="true">&laquo;</span>
-                    </a>
-                </li>
-                @{
-                    var startPage = Math.Max(1, Model.PageNumber - 2);
-                    var endPage = Math.Min(Model.TotalPages, startPage + 4);
-                    if (endPage - startPage < 4)
-                    {
-                        startPage = Math.Max(1, endPage - 4);
-                    }
-                }
-                @if (startPage > 1)
+        <nav aria-label="Page navigation" class="px-3 mt-1">
+            <ul class="pagination justify-content-start flex-wrap">
+                @if (Model.PageNumber > 1)
                 {
                     <li class="page-item">
-                        <a class="page-link" href="@Url.Action("Index", new { pageNumber = 1, pageSize = Model.PageSize, searchTerm = ViewBag.SearchTerm, sortColumn = ViewBag.SortColumn, sortDirection = ViewBag.SortDirection })">1</a>
+                        <a class="page-link" href="@Url.Action("Index", new {
+                        pageNumber = 1,
+                        pageSize = Model.PageSize,
+                        searchTerm = ViewBag.SearchTerm,
+                        sortColumn = ViewBag.SortColumn,
+                        sortDirection = ViewBag.SortDirection
+                    })">First</a>
                     </li>
-                    if (startPage > 2)
-                    {
-                        <li class="page-item disabled">
-                            <span class="page-link">...</span>
-                        </li>
-                    }
+                    <li class="page-item">
+                        <a class="page-link" href="@Url.Action("Index", new {
+                        pageNumber = Model.PageNumber - 1,
+                        pageSize = Model.PageSize,
+                        searchTerm = ViewBag.SearchTerm,
+                        sortColumn = ViewBag.SortColumn,
+                        sortDirection = ViewBag.SortDirection
+                    })">&laquo;</a>
+                    </li>
                 }
+
+                @{
+                    int windowSize = 10;
+                    int currentWindow = (int)Math.Ceiling((double)Model.PageNumber / windowSize);
+                    int startPage = (currentWindow - 1) * windowSize + 1;
+                    int endPage = Math.Min(startPage + windowSize - 1, Model.TotalPages);
+                }
+
                 @for (int i = startPage; i <= endPage; i++)
                 {
                     <li class="page-item @(i == Model.PageNumber ? "active" : "")">
-                        <a class="page-link" href="@Url.Action("Index", new { pageNumber = i, pageSize = Model.PageSize, searchTerm = ViewBag.SearchTerm, sortColumn = ViewBag.SortColumn, sortDirection = ViewBag.SortDirection })">@i</a>
+                        <a class="page-link" href="@Url.Action("Index", new {
+                        pageNumber = i,
+                        pageSize = Model.PageSize,
+                        searchTerm = ViewBag.SearchTerm,
+                        sortColumn = ViewBag.SortColumn,
+                        sortDirection = ViewBag.SortDirection
+                    })">@i</a>
                     </li>
                 }
-                @if (endPage < Model.TotalPages)
+
+                @if (Model.PageNumber < Model.TotalPages)
                 {
-                    if (endPage < Model.TotalPages - 1)
-                    {
-                        <li class="page-item disabled">
-                            <span class="page-link">...</span>
-                        </li>
-                    }
                     <li class="page-item">
-                        <a class="page-link" href="@Url.Action("Index", new { pageNumber = Model.TotalPages, pageSize = Model.PageSize, searchTerm = ViewBag.SearchTerm, sortColumn = ViewBag.SortColumn, sortDirection = ViewBag.SortDirection })">@Model.TotalPages</a>
+                        <a class="page-link" href="@Url.Action("Index", new {
+                        pageNumber = Model.PageNumber + 1,
+                        pageSize = Model.PageSize,
+                        searchTerm = ViewBag.SearchTerm,
+                        sortColumn = ViewBag.SortColumn,
+                        sortDirection = ViewBag.SortDirection
+                    })">&raquo;</a>
+                    </li>
+                    <li class="page-item">
+                        <a class="page-link" href="@Url.Action("Index", new {
+                        pageNumber = Model.TotalPages,
+                        pageSize = Model.PageSize,
+                        searchTerm = ViewBag.SearchTerm,
+                        sortColumn = ViewBag.SortColumn,
+                        sortDirection = ViewBag.SortDirection
+                    })">Last</a>
                     </li>
                 }
-                <li class="page-item @(!Model.HasNextPage ? "disabled" : "")">
-                    <a class="page-link" href="@Url.Action("Index", new { pageNumber = Model.PageNumber + 1, pageSize = Model.PageSize, searchTerm = ViewBag.SearchTerm, sortColumn = ViewBag.SortColumn, sortDirection = ViewBag.SortDirection })" aria-label="Next">
-                        <span aria-hidden="true">&raquo;</span>
-                    </a>
-                </li>
             </ul>
         </nav>
     }
+
 </div>
 
 @section Scripts {

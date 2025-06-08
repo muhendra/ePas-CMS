@@ -370,7 +370,7 @@ namespace e_Pas_CMS.Controllers
                 string excellentStatus = (finalScore >= 80 && !hasExcellentPenalty) ? "CERTIFIED" : "NOT CERTIFIED";
 
                 // === Ambil audit_next ===
-                string auditNext = null;
+                string auditNext = "IA";
                 string levelspbu = null;
 
                 var auditFlowSql = @"SELECT * FROM master_audit_flow WHERE audit_level = @level LIMIT 1;";
@@ -464,6 +464,20 @@ namespace e_Pas_CMS.Controllers
             return RedirectToAction("Add");
         }
 
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public ActionResult Delete(string id)
+        {
+            var audit = _context.trx_audits.FirstOrDefault(a => a.id == id && a.status != "DELETED");
+            if (audit != null)
+            {
+                audit.status = "DELETED";
+                audit.updated_date = DateTime.Now;
+                _context.SaveChanges();
+                TempData["Success"] = "Jadwal audit berhasil dihapus.";
+            }
+            return RedirectToAction("Index");
+        }
 
     }
 }

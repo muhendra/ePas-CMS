@@ -220,16 +220,16 @@
         });
 
         document.getElementById('btnPilihSpbu').addEventListener('click', function () {
-        const selected = document.querySelector('#spbuTable input[name="spbuOption"]:checked');
-        if (!selected) {
-            alert("Silakan pilih SPBU terlebih dahulu.");
-            return;
-        }
-        const id = selected.value;
-        const no = selected.dataset.no;
+const selected = document.querySelector('#spbuTable input[name="spbuOption"]:checked');
+if (!selected) {
+    alert("Silakan pilih SPBU terlebih dahulu.");
+    return;
+}
+const id = selected.value;
+const no = selected.dataset.no;
 
-        document.getElementById('selectedSpbuText').innerText = no;
-        document.getElementById('selectedSpbuIds').value = id;
+document.getElementById('selectedSpbuText').innerText = no;
+document.getElementById('selectedSpbuIds').value = id;
 
 
             const instance = bootstrap.Modal.getInstance(modalEl);
