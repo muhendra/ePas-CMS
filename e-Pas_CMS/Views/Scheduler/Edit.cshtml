@@ -40,8 +40,13 @@
             </div>
 
             <div class="form-floating mb-3">
-                @Html.TextBoxFor(m => m.AuditType, new { @class = "form-control", placeholder = "Audit Type" })
-                <label>Audit Type</label>
+                @Html.DropDownListFor(m => m.AuditType, new SelectList(new[]
+                         {
+                new { Value = "Regular Audit", Text = "Regular Audit" },
+                new { Value = "Mystery Audit", Text = "Mystery Audit" },
+                new { Value = "Basic Operational", Text = "Basic Operational" }
+                }, "Value", "Text", Model.AuditType), new { @class = "form-select", id = "AuditType" })
+                <label for="AuditType">Audit Type</label>
             </div>
 
             <div class="form-floating mb-3">
