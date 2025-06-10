@@ -257,7 +257,8 @@ namespace e_Pas_CMS.Controllers
             {
                 return BadRequest("Data tidak lengkap.");
             }
-
+            
+            string nextauditsspbu = "";
             var spbuIdList = selectedSpbuIds.Split(',', StringSplitOptions.RemoveEmptyEntries);
             var userId = AuditorId;
             var currentUser = User.Identity?.Name ?? "system";
@@ -274,10 +275,20 @@ namespace e_Pas_CMS.Controllers
                     .OrderByDescending(x => x.created_date)
                     .FirstOrDefaultAsync();
 
+                var existingSPBU = await _context.spbus
+                    .Where(x => x.id == spbuId)
+                    .OrderByDescending(x => x.created_date)
+                    .FirstOrDefaultAsync();
+
                 if (existingAudit != null)
                 {
                     tid = existingAudit.id;
                     audit_level = existingAudit.audit_level;
+                }
+
+                if (existingSPBU != null)
+                {
+                    nextauditsspbu = existingSPBU.audit_next;
                 }
 
                 var conn = _context.Database.GetDbConnection();
@@ -370,7 +381,7 @@ namespace e_Pas_CMS.Controllers
                 string excellentStatus = (finalScore >= 80 && !hasExcellentPenalty) ? "CERTIFIED" : "NOT CERTIFIED";
 
                 // === Ambil audit_next ===
-                string auditNext = "IA";
+                string auditNext = nextauditsspbu;
                 string levelspbu = null;
 
                 var auditFlowSql = @"SELECT * FROM master_audit_flow WHERE audit_level = @level LIMIT 1;";
@@ -429,7 +440,7 @@ namespace e_Pas_CMS.Controllers
                     app_user_id = userId,
                     master_questioner_intro_id = "7e3dca2d-2d99-4a8d-9fc0-9b80cb4c3a79",        
                     master_questioner_checklist_id = "16d4f8e1-360a-47b0-86b7-8ac55a1a6f75",     
-                    audit_level = auditNext.ToString() ?? "IA",
+                    audit_level = nextauditsspbu,
                     audit_type = TipeAudit,
                     audit_schedule_date = DateOnly.FromDateTime(TanggalAudit),
                     audit_execution_time = null,

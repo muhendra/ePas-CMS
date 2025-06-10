@@ -272,8 +272,12 @@ else if (!string.IsNullOrEmpty(Model.Notes) || (Model.FinalDocuments != null && 
     </div>
 }
 
+<div class="text-end mt-5 d-flex justify-content-end gap-2 flex-wrap">
 
-<div class="text-end mt-5">
+    <a href="/Report/Detail/@ViewBag.AuditId"
+       class="btn btn-outline-dark bg-light text-dark rounded-pill px-4 py-2 border border-dark-subtle">
+        Preview report
+    </a>
 
     @if ((Model.Status != null && Model.Status.ToUpper() != "VERIFIED") && currentUser != "usermanagement1")
     {
@@ -348,6 +352,14 @@ else if (!string.IsNullOrEmpty(Model.Notes) || (Model.FinalDocuments != null && 
 @section Styles {
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css" />
     <style>
+        a.btn.btn-outline-dark:hover,
+        a.btn.btn-outline-dark:focus,
+        a.btn.btn-outline-dark:active {
+            background-color: #f8f9fa !important; /* tetap terang */
+            color: #000 !important; /* teks tetap hitam */
+            border-color: #212529 !important; /* garis tegas saat hover */
+        }
+
         .card-header .btn-sm {
             min-width: 70px;
         }
