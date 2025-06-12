@@ -296,6 +296,161 @@ namespace e_Pas_CMS.Controllers
             return View(model);
         }
 
+        [HttpGet("Report/PreviewDetail/{id}")]
+        public async Task<IActionResult> PreviewDetail(string id)
+        {
+            using var conn = _context.Database.GetDbConnection();
+            if (conn.State != ConnectionState.Open)
+                await conn.OpenAsync();
+
+            var basic = await GetAuditHeaderAsync(conn, id);
+            if (basic == null)
+                return NotFound();
+
+            var model = MapToViewModel(basic);
+
+            var penaltySql = @"
+            SELECT STRING_AGG(mqd.penalty_alert, ', ') AS penalty_alerts
+            FROM trx_audit_checklist tac
+            INNER JOIN master_questioner_detail mqd ON mqd.id = tac.master_questioner_detail_id
+            WHERE 
+                tac.trx_audit_id = @id and
+                ((mqd.penalty_excellent_criteria = 'LT_1' and tac.score_input <> 'A') or
+                (mqd.penalty_excellent_criteria = 'EQ_0' and tac.score_input = 'F')) and
+                (mqd.is_relaksasi = false or mqd.is_relaksasi is null) and
+                mqd.is_penalty = true;";
+
+            model.PenaltyAlerts = await conn.ExecuteScalarAsync<string>(penaltySql, new { id = id.ToString() });
+
+
+            var penaltySqlGood = @"
+            SELECT STRING_AGG(mqd.penalty_alert, ', ') AS penalty_alerts
+            FROM trx_audit_checklist tac
+            INNER JOIN master_questioner_detail mqd ON mqd.id = tac.master_questioner_detail_id
+            WHERE 
+                tac.trx_audit_id = @id AND
+                tac.score_input = 'F' AND
+                mqd.is_penalty = true AND 
+                (mqd.is_relaksasi = false OR mqd.is_relaksasi IS NULL);";
+
+            model.PenaltyAlertsGood = await conn.ExecuteScalarAsync<string>(penaltySqlGood, new { id = id.ToString() });
+
+            model.MediaNotes = await GetMediaNotesAsync(conn, id, "QUESTION");
+            model.FinalDocuments = await GetMediaNotesAsync(conn, id, "FINAL");
+
+            model.QqChecks = await GetQqCheckDataAsync(conn, id);
+
+            var checklistData = await GetChecklistDataAsync(conn, id);
+            var mediaList = await GetMediaPerNodeAsync(conn, id);
+            model.Elements = BuildHierarchy(checklistData, mediaList);
+
+            foreach (var element in model.Elements)
+            {
+                AssignWeightRecursive(element);
+            }
+
+            CalculateChecklistScores(model.Elements);
+            CalculateOverallScore(model, checklistData);
+
+            ViewBag.AuditId = id;
+
+            var penaltyExcellentQuery = @"SELECT STRING_AGG(mqd.penalty_alert, ', ') AS penalty_alerts
+                FROM trx_audit_checklist tac
+                INNER JOIN master_questioner_detail mqd ON mqd.id = tac.master_questioner_detail_id
+                WHERE 
+                    tac.trx_audit_id = @id and
+                    ((mqd.penalty_excellent_criteria = 'LT_1' and tac.score_input <> 'A') or
+                    (mqd.penalty_excellent_criteria = 'EQ_0' and tac.score_input = 'F')) and
+                    (mqd.is_relaksasi = false or mqd.is_relaksasi is null) and
+                    mqd.is_penalty = true;";
+
+            var penaltyGoodQuery = @"SELECT STRING_AGG(mqd.penalty_alert, ', ') AS penalty_alerts
+                FROM trx_audit_checklist tac
+                INNER JOIN master_questioner_detail mqd ON mqd.id = tac.master_questioner_detail_id
+                WHERE tac.trx_audit_id = @id AND
+                      tac.score_input = 'F' AND
+                      mqd.is_penalty = true AND 
+                      (mqd.is_relaksasi = false OR mqd.is_relaksasi IS NULL);";
+
+            var penaltyExcellentResult = await conn.ExecuteScalarAsync<string>(penaltyExcellentQuery, new { id = model.AuditId });
+            var penaltyGoodResult = await conn.ExecuteScalarAsync<string>(penaltyGoodQuery, new { id = model.AuditId });
+
+            bool hasExcellentPenalty = !string.IsNullOrEmpty(penaltyExcellentResult);
+            bool hasGoodPenalty = !string.IsNullOrEmpty(penaltyGoodResult);
+
+            string goodStatus = (model.TotalScore >= 75 && !hasGoodPenalty) ? "CERTIFIED" : "NOT CERTIFIED";
+            string excellentStatus = (model.TotalScore >= 80 && !hasExcellentPenalty) ? "CERTIFIED" : "NOT CERTIFIED";
+
+            string auditNext = null;
+            string levelspbu = null;
+
+            var auditFlowSql = @"SELECT * FROM master_audit_flow WHERE audit_level = @level LIMIT 1;";
+            var auditFlow = await conn.QueryFirstOrDefaultAsync<dynamic>(auditFlowSql, new { level = model.AuditCurrent });
+
+            if (auditFlow != null)
+            {
+                string passedGood = auditFlow.passed_good;
+                string passedExcellent = auditFlow.passed_excellent;
+                string passedAuditLevel = auditFlow.passed_audit_level;
+                string failed_audit_level = auditFlow.failed_audit_level;
+
+                if (string.IsNullOrWhiteSpace(passedGood) && string.IsNullOrWhiteSpace(passedExcellent) && goodStatus == "CERTIFIED" && excellentStatus == "CERTIFIED")
+                {
+                    model.AuditNext = passedAuditLevel;
+                }
+                else if (string.IsNullOrWhiteSpace(passedGood) && string.IsNullOrWhiteSpace(passedExcellent) && goodStatus == "CERTIFIED" && excellentStatus == "NOT CERTIFIED")
+                {
+                    model.AuditNext = passedAuditLevel;
+                }
+                else if (string.IsNullOrWhiteSpace(passedGood) && string.IsNullOrWhiteSpace(passedExcellent) && goodStatus == "NOT CERTIFIED" && excellentStatus == "NOT CERTIFIED")
+                {
+                    model.AuditNext = failed_audit_level;
+                }
+                else if (goodStatus == "NOT CERTIFIED" && excellentStatus == "NOT CERTIFIED")
+                {
+                    model.AuditNext = failed_audit_level;
+                }
+                else if (goodStatus == "CERTIFIED" && excellentStatus == "NOT CERTIFIED")
+                {
+                    model.AuditNext = passedGood;
+                }
+                else if (goodStatus == "CERTIFIED" && excellentStatus == "CERTIFIED")
+                {
+                    model.AuditNext = passedExcellent;
+                }
+                else if (string.IsNullOrWhiteSpace(passedGood) && string.IsNullOrWhiteSpace(passedExcellent) && model.TotalScore >= 75)
+                {
+                    model.AuditNext = passedAuditLevel;
+                }
+                else
+                {
+                    model.AuditNext = failed_audit_level;
+                }
+
+                var auditlevelClassSql = @"SELECT audit_level_class FROM master_audit_flow WHERE audit_level = @level LIMIT 1;";
+                var auditlevelClass = await conn.QueryFirstOrDefaultAsync<dynamic>(auditlevelClassSql, new { level = model.AuditNext });
+                levelspbu = auditlevelClass != null
+                ? (auditlevelClass.audit_level_class ?? "")
+                : "";
+            }
+
+            model.ClassSPBU = levelspbu;
+
+            var updateSql = @"
+            UPDATE spbu
+            SET audit_current_score = @score
+            WHERE spbu_no = @spbuNo";
+
+            await conn.ExecuteAsync(updateSql, new
+            {
+                score = Math.Round(model.TotalScore, 2),
+                spbuNo = model.SpbuNo
+            });
+
+            return View(model);
+        }
+
+
         [HttpGet("Report/Detail/{id}")]
         public async Task<IActionResult> Detail(string id)
         {
