@@ -56,6 +56,13 @@ namespace e_Pas_CMS.ViewModels
         public string AuditNext { get; set; }
 
         public string? ApproveBy { get; set; }
+
+        public decimal? SSS { get; set; }
+        public decimal? EQnQ { get; set; }
+        public decimal? RFS { get; set; }
+        public decimal? VFC { get; set; }
+        public decimal? EPO { get; set; }
+
         public List<AuditLevelSummaryGroup> LevelSummaryGroups { get; set; }
 
         public List<FotoTemuan> FotoTemuan { get; set; } = new();

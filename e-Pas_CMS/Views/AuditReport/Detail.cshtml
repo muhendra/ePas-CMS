@@ -586,7 +586,7 @@
             updateUI(newMode);
         });
 
-                function updateUI(mode) {
+                    function updateUI(mode) {
             const minScoresGood = [80, 85, 85, 15, 25];
             const minScoresExcellent = [85, 85, 85, 20, 50];
             const minScores = mode === 'excellent' ? minScoresExcellent : minScoresGood;
@@ -601,32 +601,61 @@
             const minPassing = mode === 'excellent' ? minPassingExcellent : minPassingGood;
             const penalty = mode === 'excellent' ? penaltyExcellent : penaltyGood;
 
-            // Special rule
+            // Elemen scores from Razor
+            const sss = parseFloat('@(Model.SSS ?? 0)');
+            const eqnq = parseFloat('@(Model.EQnQ ?? 0)');
+            const rfs = parseFloat('@(Model.RFS ?? 0)');
+            const vfc = parseFloat('@(Model.VFC ?? 0)');
+            const epo = parseFloat('@(Model.EPO ?? 0)');
+
+            // Log nilai elemen
+            console.log(`Mode: ${mode}`);
+            console.log(`Scores - SSS: ${sss}, EQnQ: ${eqnq}, RFS: ${rfs}, VFC: ${vfc}, EPO: ${epo}`);
+            console.log(`Total Score: ${totalScore}, Penalty: ${penalty}`);
+
+            // Special nodes
             const specialNodeId = '555fe2e4-b95b-461b-9c92-ad8b5c837119';
             const specialNodeId2 = '5e9ffc47-de99-4d7d-b8bc-0fb9b7acc81b';
             const specialNodeId3 = 'bafc206f-ed29-4bbc-8053-38799e186fb0';
             const specialNodeId4 = 'd26f4caa-e849-4ab4-9372-298693247272';
 
-            const specialNodeScore = $(`#node-${specialNodeId} .option-btn.active`).data('score') || "";
+            const specialNodeScore = $(`#node-${specialNodeId} .option-btn.active`).data('score')?.toString().trim().toUpperCase() || "";
             const specialNodeScore2 = $(`#node-${specialNodeId2} .option-btn.active`).data('score')?.toString().trim().toUpperCase() || "";
             const specialNodeScore3 = $(`#node-${specialNodeId3} .option-btn.active`).data('score')?.toString().trim().toUpperCase() || "";
             const specialNodeScore4 = $(`#node-${specialNodeId4} .option-btn.active`).data('score')?.toString().trim().toUpperCase() || "";
 
+            console.log("Special Node Scores:", specialNodeScore, specialNodeScore2, specialNodeScore3, specialNodeScore4);
+
             let forceGoodOnly = false;
             let forceNotCertified = false;
 
+            // Special node rules (mode: excellent)
             if (mode === 'excellent') {
                 if (specialNodeScore === 'C') {
                     forceGoodOnly = true;
-                } else if (specialNodeScore !== 'A') {
+                    console.log("Special node C detected — downgrade to GOOD");
+                } else if (
+                    specialNodeScore !== 'A' ||
+                    specialNodeScore2 !== 'A' ||
+                    specialNodeScore3 !== 'A' ||
+                    specialNodeScore4 !== 'A'
+                ) {
                     forceNotCertified = true;
-                }else if (specialNodeScore2 !== 'A') {
-                    forceNotCertified = true;
-                }else if (specialNodeScore3 !== 'A') {
-                    forceNotCertified = true;
-                }else if (specialNodeScore4 !== 'A') {
-                    forceNotCertified = true;
+                    console.log("One or more special nodes not A — force NOT CERTIFIED");
                 }
+            }
+
+            // Validation by element threshold
+            if (
+                (mode === 'good' && (
+                    sss < 80 || eqnq < 85 || rfs < 85 || vfc < 15 || epo < 25
+                )) ||
+                (mode === 'excellent' && (
+                    sss < 85 || eqnq < 85 || rfs < 85 || vfc < 20 || epo < 50
+                ))
+            ) {
+                forceNotCertified = true;
+                console.log("One or more element scores below minimum — force NOT CERTIFIED");
             }
 
             let isCertified = (totalScore >= minPassing && penalty === "");
@@ -639,7 +668,9 @@
                 statusLabel = forceGoodOnly ? "GOOD" : "EXCELLENT";
             }
 
-            // Update UI as usual...
+            console.log("Final Status:", statusLabel);
+
+            // Update UI
             $('td.min-nilai').each(function (i) {
                 if (i < minScores.length) {
                     $(this).text(minScores[i].toFixed(2) + '%');
@@ -676,6 +707,10 @@
                 .addClass(isCertified ? 'alert-success' : 'alert-danger');
             $('#certStatusLabel').text(statusLabel);
         }
+
+
+
+
 
 
             // PILIHAN NILAI A-F

@@ -97,7 +97,20 @@ public class ReportGoodTemplate : IDocument
     {
         container.Column(col =>
         {
-            bool isCertified0 = _model.TotalScore >= 75 && string.IsNullOrWhiteSpace(_model.PenaltyAlertsGood); // Atau pakai _model.MinPassingScore
+            // Ambil nilai compliance dari model
+            decimal? sss = _model.SSS;
+            decimal? eqnq = _model.EQnQ;
+            decimal? rfs = _model.RFS;
+            decimal? vfc = _model.VFC;
+            decimal? epo = _model.EPO;
+
+            // Validasi threshold minimum untuk mode GOOD
+            bool failGood = sss < 80 || eqnq < 85 || rfs < 85 || vfc < 15 || epo < 25;
+
+            bool isCertified0 = _model.TotalScore >= 75 &&
+                                string.IsNullOrWhiteSpace(_model.PenaltyAlertsGood) &&
+                                !failGood;
+
             string boxColor = isCertified0 ? "#1aa31f" : "#F44336";
             string scoreFontColor = Colors.White;
 
@@ -186,8 +199,8 @@ public class ReportGoodTemplate : IDocument
             //        : "#F44336";
 
             var isCertified = _model.TotalScore >= 75 && string.IsNullOrWhiteSpace(_model.PenaltyAlertsGood); // Atau ambil dari _model.MinPassingScore jika ada
-            var statusBoxText = isCertified ? "PASTI PAS Good!" : "NOT CERTIFIED";
-            var statusColor = isCertified ? "#1aa31f" : "#F44336";
+            var statusBoxText = isCertified0 ? "PASTI PAS Good!" : "NOT CERTIFIED";
+            var statusColor = isCertified0 ? "#1aa31f" : "#F44336";
 
             col.Item().Background(statusColor).Padding(10).Column(box =>
             {

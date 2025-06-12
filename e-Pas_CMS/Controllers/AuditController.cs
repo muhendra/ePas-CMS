@@ -466,6 +466,7 @@ namespace e_Pas_CMS.Controllers
                   mqd.is_penalty,
                   mqd.order_no,
                   mqd.is_relaksasi,
+                  mqd.number,
                   (
                     SELECT string_agg(mqd2.penalty_alert, ', ')
                     FROM trx_audit_checklist tac2
@@ -1488,6 +1489,7 @@ VALUES
                 {
                     Id = item.id,
                     Title = item.title,
+                    number = item.number,
                     Description = item.description,
                     Type = item.type,
                     Weight = item.weight,

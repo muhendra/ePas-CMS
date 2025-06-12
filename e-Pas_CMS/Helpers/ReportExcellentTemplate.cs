@@ -121,14 +121,30 @@ public class ReportExcellentTemplate : IDocument
                     forceNotCertified = true;
             }
 
-            // Cek status sertifikasi akhir
-            bool isCertified = _model.TotalScore >= 80 && string.IsNullOrWhiteSpace(_model.PenaltyAlerts) && !forceNotCertified;
+            // Ambil compliance score per elemen
+            decimal? sss = _model.SSS;
+            decimal? eqnq = _model.EQnQ;
+            decimal? rfs = _model.RFS;
+            decimal? vfc = _model.VFC;
+            decimal? epo = _model.EPO;
+
+            // Validasi threshold minimum Excellent
+            bool failExcellent = sss < 85 || eqnq < 85 || rfs < 85 || vfc < 20 || epo < 50;
+
+            // Evaluasi status sertifikasi akhir
+            bool isCertified = _model.TotalScore >= 80 &&
+                               string.IsNullOrWhiteSpace(_model.PenaltyAlerts) &&
+                               !failExcellent &&
+                               !forceNotCertified;
+
             string statusBoxText = isCertified
-                ? (forceGoodOnly ? "PASTI PAS GOOD!" : "PASTI PAS EXCELLENT!")
-                : "NOT CERTIFIED";
+            ? (forceGoodOnly ? "PASTI PAS GOOD!" : "PASTI PAS EXCELLENT!")
+            : "NOT CERTIFIED";
+
             string statusColor = isCertified
                 ? (forceGoodOnly ? "#00A64F" : "#FFC107")
                 : "#F44336";
+
 
             // Box skor total
             string boxColor = _model.TotalScore >= 80 ? "#FFC107" : "#F44336";
