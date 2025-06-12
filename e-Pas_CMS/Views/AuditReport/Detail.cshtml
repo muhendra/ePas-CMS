@@ -825,6 +825,11 @@
             });
             modal.show();
         }
+
+        function showFinalMediaPopup(mediaItems) {
+        showMediaPopup(mediaItems);
+        }
+
         // PDF download
         document.getElementById('btnDownloadPdf')?.addEventListener('click', function () {
             const auditId = '@Context.Request.RouteValues["id"]';
