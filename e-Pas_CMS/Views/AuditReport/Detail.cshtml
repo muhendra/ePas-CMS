@@ -664,9 +664,10 @@
             }
 
             let statusLabel = "NOT CERTIFIED";
-            if (isCertified) {
-                statusLabel = forceGoodOnly ? "GOOD" : "EXCELLENT";
-            }
+                    if (isCertified) {
+            statusLabel = mode === 'good' ? "Pasti Pas Good" : (forceGoodOnly ? "GOOD" : "EXCELLENT");
+        }
+
 
             console.log("Final Status:", statusLabel);
 
