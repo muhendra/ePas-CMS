@@ -905,7 +905,7 @@ namespace e_Pas_CMS.Controllers
         ta.audit_type                         AS AuditType,
         ta.audit_execution_time               AS SubmitDate,
         ta.status,
-        ta.audit_mom_intro                    AS Notes,
+        ta.audit_mom_final                    AS Notes,
         ta.audit_level,
         s.spbu_no                             AS SpbuNo,
         s.region,
