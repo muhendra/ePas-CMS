@@ -146,8 +146,8 @@ public class ReportExcellentTemplate : IDocument
                 : "#F44336";
 
 
-            // Box skor total
-            string boxColor = _model.TotalScore >= 80 ? "#FFC107" : "#F44336";
+            // Box skor total mengikuti warna status akhir (statusColor)
+            string boxColor = statusColor;
             string scoreFontColor = Colors.White;
 
             col.Item()

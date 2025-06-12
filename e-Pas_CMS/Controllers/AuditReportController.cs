@@ -492,34 +492,30 @@ namespace e_Pas_CMS.Controllers
             var model = MapToViewModel(basic);
 
             var penaltySql = @"
-            SELECT STRING_AGG(mqd.penalty_alert, ', ') AS penalty_alerts
-            FROM trx_audit_checklist tac
-            INNER JOIN master_questioner_detail mqd ON mqd.id = tac.master_questioner_detail_id
-            WHERE 
-                tac.trx_audit_id = @id and
-                ((mqd.penalty_excellent_criteria = 'LT_1' and tac.score_input <> 'A') or
-                (mqd.penalty_excellent_criteria = 'EQ_0' and tac.score_input = 'F')) and
-                (mqd.is_relaksasi = false or mqd.is_relaksasi is null) and
-                mqd.is_penalty = true;";
-
-            model.PenaltyAlerts = await conn.ExecuteScalarAsync<string>(penaltySql, new { id = id.ToString() });
-
+    SELECT STRING_AGG(mqd.penalty_alert, ', ') AS penalty_alerts
+    FROM trx_audit_checklist tac
+    INNER JOIN master_questioner_detail mqd ON mqd.id = tac.master_questioner_detail_id
+    WHERE 
+        tac.trx_audit_id = @id and
+        ((mqd.penalty_excellent_criteria = 'LT_1' and tac.score_input <> 'A') or
+        (mqd.penalty_excellent_criteria = 'EQ_0' and tac.score_input = 'F')) and
+        (mqd.is_relaksasi = false or mqd.is_relaksasi is null) and
+        mqd.is_penalty = true;";
+            model.PenaltyAlerts = await conn.ExecuteScalarAsync<string>(penaltySql, new { id });
 
             var penaltySqlGood = @"
-            SELECT STRING_AGG(mqd.penalty_alert, ', ') AS penalty_alerts
-            FROM trx_audit_checklist tac
-            INNER JOIN master_questioner_detail mqd ON mqd.id = tac.master_questioner_detail_id
-            WHERE 
-                tac.trx_audit_id = @id AND
-                tac.score_input = 'F' AND
-                mqd.is_penalty = true AND 
-                (mqd.is_relaksasi = false OR mqd.is_relaksasi IS NULL);";
-            
-            model.PenaltyAlertsGood = await conn.ExecuteScalarAsync<string>(penaltySqlGood, new { id = id.ToString() });
+    SELECT STRING_AGG(mqd.penalty_alert, ', ') AS penalty_alerts
+    FROM trx_audit_checklist tac
+    INNER JOIN master_questioner_detail mqd ON mqd.id = tac.master_questioner_detail_id
+    WHERE 
+        tac.trx_audit_id = @id AND
+        tac.score_input = 'F' AND
+        mqd.is_penalty = true AND 
+        (mqd.is_relaksasi = false OR mqd.is_relaksasi IS NULL);";
+            model.PenaltyAlertsGood = await conn.ExecuteScalarAsync<string>(penaltySqlGood, new { id });
 
             model.MediaNotes = await GetMediaNotesAsync(conn, id, "QUESTION");
             model.FinalDocuments = await GetMediaNotesAsync(conn, id, "FINAL");
-
             model.QqChecks = await GetQqCheckDataAsync(conn, id);
 
             var checklistData = await GetChecklistDataAsync(conn, id);
@@ -527,102 +523,56 @@ namespace e_Pas_CMS.Controllers
             model.Elements = BuildHierarchy(checklistData, mediaList);
 
             foreach (var element in model.Elements)
-            {
                 AssignWeightRecursive(element);
-            }
 
             CalculateChecklistScores(model.Elements);
             CalculateOverallScore(model, checklistData);
 
-            ViewBag.AuditId = id;
+            // Hitung compliance level
+            var compliance = HitungComplianceLevelDariElements(model.Elements);
+            model.SSS = Math.Round(compliance.SSS ?? 0, 2);
+            model.EQnQ = Math.Round(compliance.EQnQ ?? 0, 2);
+            model.RFS = Math.Round(compliance.RFS ?? 0, 2);
+            model.VFC = Math.Round(compliance.VFC ?? 0, 2);
+            model.EPO = Math.Round(compliance.EPO ?? 0, 2);
 
-            var penaltyExcellentQuery = @"SELECT STRING_AGG(mqd.penalty_alert, ', ') AS penalty_alerts
-                FROM trx_audit_checklist tac
-                INNER JOIN master_questioner_detail mqd ON mqd.id = tac.master_questioner_detail_id
-                WHERE 
-                    tac.trx_audit_id = @id and
-                    ((mqd.penalty_excellent_criteria = 'LT_1' and tac.score_input <> 'A') or
-                    (mqd.penalty_excellent_criteria = 'EQ_0' and tac.score_input = 'F')) and
-                    (mqd.is_relaksasi = false or mqd.is_relaksasi is null) and
-                    mqd.is_penalty = true;";
+            // Validasi sertifikasi
+            bool failGood = model.SSS < 80 || model.EQnQ < 85 || model.RFS < 85 || model.VFC < 15 || model.EPO < 25;
+            bool failExcellent = model.SSS < 85 || model.EQnQ < 85 || model.RFS < 85 || model.VFC < 20 || model.EPO < 50;
+            bool hasExcellentPenalty = !string.IsNullOrEmpty(model.PenaltyAlerts);
+            bool hasGoodPenalty = !string.IsNullOrEmpty(model.PenaltyAlertsGood);
 
-            var penaltyGoodQuery = @"SELECT STRING_AGG(mqd.penalty_alert, ', ') AS penalty_alerts
-                FROM trx_audit_checklist tac
-                INNER JOIN master_questioner_detail mqd ON mqd.id = tac.master_questioner_detail_id
-                WHERE tac.trx_audit_id = @id AND
-                      tac.score_input = 'F' AND
-                      mqd.is_penalty = true AND 
-                      (mqd.is_relaksasi = false OR mqd.is_relaksasi IS NULL);";
+            model.GoodStatus = (model.TotalScore >= 75 && !hasGoodPenalty && !failGood) ? "CERTIFIED" : "NOT CERTIFIED";
+            model.ExcellentStatus = (model.TotalScore >= 80 && !hasExcellentPenalty && !failExcellent) ? "CERTIFIED" : "NOT CERTIFIED";
 
-            var penaltyExcellentResult = await conn.ExecuteScalarAsync<string>(penaltyExcellentQuery, new { id = model.AuditId });
-            var penaltyGoodResult = await conn.ExecuteScalarAsync<string>(penaltyGoodQuery, new { id = model.AuditId });
-
-            bool hasExcellentPenalty = !string.IsNullOrEmpty(penaltyExcellentResult);
-            bool hasGoodPenalty = !string.IsNullOrEmpty(penaltyGoodResult);
-
-            string goodStatus = (model.TotalScore >= 75 && !hasGoodPenalty) ? "CERTIFIED" : "NOT CERTIFIED";
-            string excellentStatus = (model.TotalScore >= 80 && !hasExcellentPenalty) ? "CERTIFIED" : "NOT CERTIFIED";
-
-            string auditNext = null;
-            string levelspbu = null;
-
+            // Audit next dan class
             var auditFlowSql = @"SELECT * FROM master_audit_flow WHERE audit_level = @level LIMIT 1;";
             var auditFlow = await conn.QueryFirstOrDefaultAsync<dynamic>(auditFlowSql, new { level = model.AuditCurrent });
 
             if (auditFlow != null)
             {
-                string passedGood = auditFlow.passed_good;
-                string passedExcellent = auditFlow.passed_excellent;
-                string passedAuditLevel = auditFlow.passed_audit_level;
-                string failed_audit_level = auditFlow.failed_audit_level;
+                string goodStatus = model.GoodStatus;
+                string excellentStatus = model.ExcellentStatus;
+                string auditNext = null;
 
-                if (string.IsNullOrWhiteSpace(passedGood) && string.IsNullOrWhiteSpace(passedExcellent) && goodStatus == "CERTIFIED" && excellentStatus == "CERTIFIED")
-                {
-                    model.AuditNext = passedAuditLevel;
-                }
-                else if (string.IsNullOrWhiteSpace(passedGood) && string.IsNullOrWhiteSpace(passedExcellent) && goodStatus == "CERTIFIED" && excellentStatus == "NOT CERTIFIED")
-                {
-                    model.AuditNext = passedAuditLevel;
-                }
-                else if (string.IsNullOrWhiteSpace(passedGood) && string.IsNullOrWhiteSpace(passedExcellent) && goodStatus == "NOT CERTIFIED" && excellentStatus == "NOT CERTIFIED")
-                {
-                    model.AuditNext = failed_audit_level;
-                }
-                else if(goodStatus == "NOT CERTIFIED" && excellentStatus == "NOT CERTIFIED")
-                {
-                    model.AuditNext = failed_audit_level;
-                }
-                else if (goodStatus == "CERTIFIED" && excellentStatus == "NOT CERTIFIED")
-                {
-                    model.AuditNext = passedGood;
-                }
-                else if (goodStatus == "CERTIFIED" && excellentStatus == "CERTIFIED")
-                {
-                    model.AuditNext = passedExcellent;
-                }
-                else if(string.IsNullOrWhiteSpace(passedGood) && string.IsNullOrWhiteSpace(passedExcellent) && model.TotalScore >= 75)
-                {
-                    model.AuditNext = passedAuditLevel;
-                }
+                if (goodStatus == "CERTIFIED" && excellentStatus == "CERTIFIED")
+                    auditNext = auditFlow.passed_excellent;
+                else if (goodStatus == "CERTIFIED")
+                    auditNext = auditFlow.passed_good;
                 else
-                {
-                    model.AuditNext = failed_audit_level;
-                }
+                    auditNext = auditFlow.failed_audit_level;
+
+                model.AuditNext = auditNext;
 
                 var auditlevelClassSql = @"SELECT audit_level_class FROM master_audit_flow WHERE audit_level = @level LIMIT 1;";
-                var auditlevelClass = await conn.QueryFirstOrDefaultAsync<dynamic>(auditlevelClassSql, new { level = model.AuditNext });
-                levelspbu = auditlevelClass != null
-                ? (auditlevelClass.audit_level_class ?? "")
-                : "";
+                var auditlevelClass = await conn.QueryFirstOrDefaultAsync<dynamic>(auditlevelClassSql, new { level = auditNext });
+                model.ClassSPBU = auditlevelClass?.audit_level_class ?? "";
             }
 
-            model.ClassSPBU = levelspbu;
+            ViewBag.AuditId = id;
 
-            var updateSql = @"
-            UPDATE spbu
-            SET audit_current_score = @score
-            WHERE spbu_no = @spbuNo";
-
+            // Update audit_current_score ke spbu
+            var updateSql = @"UPDATE spbu SET audit_current_score = @score WHERE spbu_no = @spbuNo";
             await conn.ExecuteAsync(updateSql, new
             {
                 score = Math.Round(model.TotalScore, 2),
@@ -631,6 +581,7 @@ namespace e_Pas_CMS.Controllers
 
             return View(model);
         }
+
 
         public async Task<IActionResult> DownloadPdfQuest(Guid id)
         {
