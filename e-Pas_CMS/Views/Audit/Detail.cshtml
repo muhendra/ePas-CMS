@@ -1607,7 +1607,9 @@ else if (!string.IsNullOrEmpty(Model.Notes) || (Model.FinalDocuments != null && 
                             data-bs-target="#@collapseId"
                             aria-expanded="false"
                             aria-controls="@collapseId">
-                        <span class="fw-bold text-dark">@node.Title</span>
+                        <span class="fw-bold text-dark">
+                            @(string.IsNullOrWhiteSpace(node.number) ? "" : node.number + " ")@node.Title
+                        </span>
                         @if (!string.IsNullOrWhiteSpace(node.Description))
                         {
                             <span class="fw-bold fs-6 text-muted ms-2">@node.Description</span>

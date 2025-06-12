@@ -452,7 +452,7 @@ public class ReportGoodTemplate : IDocument
             {
                 row.RelativeItem(8).Element(text =>
                 {
-                    var content = text.Text($"{label}. {node.Description ?? "-"}")
+                    var content = text.Text($"{label}. {node.Description ?? ""}")
                         .FontSize(9)
                         .LineHeight(1.2f);
 

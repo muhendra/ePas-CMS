@@ -586,10 +586,9 @@
             updateUI(newMode);
         });
 
-        function updateUI(mode) {
+                function updateUI(mode) {
             const minScoresGood = [80, 85, 85, 15, 25];
             const minScoresExcellent = [85, 85, 85, 20, 50];
-
             const minScores = mode === 'excellent' ? minScoresExcellent : minScoresGood;
 
             const minPassingGood = @Model.MinPassingScoreGood;
@@ -599,24 +598,56 @@
             const penaltyExcellent = "@Model.PenaltyAlerts".trim();
 
             const totalScore = parseFloat('@Model.TotalScore');
-
             const minPassing = mode === 'excellent' ? minPassingExcellent : minPassingGood;
             const penalty = mode === 'excellent' ? penaltyExcellent : penaltyGood;
 
-            const isCertified = (totalScore >= minPassing && penalty === "");
-            const statusLabel = isCertified ? "CERTIFIED" : "NOT CERTIFIED";
+            // Special rule
+            const specialNodeId = '555fe2e4-b95b-461b-9c92-ad8b5c837119';
+            const specialNodeId2 = '5e9ffc47-de99-4d7d-b8bc-0fb9b7acc81b';
+            const specialNodeId3 = 'bafc206f-ed29-4bbc-8053-38799e186fb0';
+            const specialNodeId4 = 'd26f4caa-e849-4ab4-9372-298693247272';
 
-            // Update nilai minimum per elemen
+            const specialNodeScore = $(`#node-${specialNodeId} .option-btn.active`).data('score') || "";
+            const specialNodeScore2 = $(`#node-${specialNodeId2} .option-btn.active`).data('score')?.toString().trim().toUpperCase() || "";
+            const specialNodeScore3 = $(`#node-${specialNodeId3} .option-btn.active`).data('score')?.toString().trim().toUpperCase() || "";
+            const specialNodeScore4 = $(`#node-${specialNodeId4} .option-btn.active`).data('score')?.toString().trim().toUpperCase() || "";
+
+            let forceGoodOnly = false;
+            let forceNotCertified = false;
+
+            if (mode === 'excellent') {
+                if (specialNodeScore === 'C') {
+                    forceGoodOnly = true;
+                } else if (specialNodeScore !== 'A') {
+                    forceNotCertified = true;
+                }else if (specialNodeScore2 !== 'A') {
+                    forceNotCertified = true;
+                }else if (specialNodeScore3 !== 'A') {
+                    forceNotCertified = true;
+                }else if (specialNodeScore4 !== 'A') {
+                    forceNotCertified = true;
+                }
+            }
+
+            let isCertified = (totalScore >= minPassing && penalty === "");
+            if (forceNotCertified) {
+                isCertified = false;
+            }
+
+            let statusLabel = "NOT CERTIFIED";
+            if (isCertified) {
+                statusLabel = forceGoodOnly ? "GOOD" : "EXCELLENT";
+            }
+
+            // Update UI as usual...
             $('td.min-nilai').each(function (i) {
                 if (i < minScores.length) {
                     $(this).text(minScores[i].toFixed(2) + '%');
                 }
             });
 
-            // 🔁 Update nilai minimum global
             $('#minPassingDisplay').text(minPassing.toFixed(2) + '%');
 
-            // Update box class dan style
             const boxClass = isCertified
                 ? (mode === 'excellent' ? 'bg-warning' : 'bg-success')
                 : 'bg-danger text-white';
@@ -632,17 +663,14 @@
                 .addClass(boxClass)
                 .attr('style', boxStyle);
 
-            // Update text "Total Score"
             $('.score-label').html(`Total Score (TS): ${totalScore.toFixed(2)}% &mdash; ${statusLabel}`);
 
-            // Update penalty visibility
             if (isCertified) {
                 $('.box-penalty').hide();
             } else {
                 $('.box-penalty').show().html(`<strong>Penalty:</strong> ${penalty}`);
             }
 
-            // Update status box atas
             $('#certStatusBox')
                 .removeClass('alert-success alert-danger')
                 .addClass(isCertified ? 'alert-success' : 'alert-danger');
@@ -847,7 +875,9 @@
                             data-bs-target="#@collapseId"
                             aria-expanded="false"
                             aria-controls="@collapseId">
-                        <span class="fw-bold text-dark">@node.Title</span>
+                        <span class="fw-bold text-dark">
+                            @(string.IsNullOrWhiteSpace(node.number) ? "" : node.number + " ")@node.Title
+                        </span>
                         @if (!string.IsNullOrWhiteSpace(node.Description))
                         {
                             <span class="fw-bold fs-6 text-muted ms-2">@node.Description</span>

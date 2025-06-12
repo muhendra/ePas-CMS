@@ -98,97 +98,62 @@ public class ReportExcellentTemplate : IDocument
     {
         container.Column(col =>
         {
-            bool isCertified0 = _model.TotalScore >= 80 && string.IsNullOrWhiteSpace(_model.PenaltyAlerts); // Atau pakai _model.MinPassingScore
-            string boxColor = isCertified0 ? "#FFC107" : "#F44336";
+            // Cek apakah semua special node bernilai A (Excellent), jika ada C (Good Only), jika ada selain itu (Not Certified)
+            var specialNodeIds = new[]
+            {
+            "555fe2e4-b95b-461b-9c92-ad8b5c837119",
+            "5e9ffc47-de99-4d7d-b8bc-0fb9b7acc81b",
+            "bafc206f-ed29-4bbc-8053-38799e186fb0",
+            "d26f4caa-e849-4ab4-9372-298693247272"
+        };
+
+            bool forceGoodOnly = false;
+            bool forceNotCertified = false;
+
+            foreach (var nodeId in specialNodeIds)
+            {
+                var node = FindNodeById(_model.Elements, nodeId);
+                var score = node?.ScoreInput?.Trim().ToUpperInvariant();
+
+                if (score == "C")
+                    forceGoodOnly = true;
+                else if (score != "A")
+                    forceNotCertified = true;
+            }
+
+            // Cek status sertifikasi akhir
+            bool isCertified = _model.TotalScore >= 80 && string.IsNullOrWhiteSpace(_model.PenaltyAlerts) && !forceNotCertified;
+            string statusBoxText = isCertified
+                ? (forceGoodOnly ? "PASTI PAS GOOD!" : "PASTI PAS EXCELLENT!")
+                : "NOT CERTIFIED";
+            string statusColor = isCertified
+                ? (forceGoodOnly ? "#00A64F" : "#FFC107")
+                : "#F44336";
+
+            // Box skor total
+            string boxColor = _model.TotalScore >= 80 ? "#FFC107" : "#F44336";
             string scoreFontColor = Colors.White;
 
             col.Item()
-   .PaddingTop(-18)
-   .AlignRight()
-   .Width(100)
-   .Background(boxColor)
-   .Padding(4)
-   .Column(score =>
-   {
-       score.Item().AlignLeft().Text("TOTAL SCORE (TS):")
-           .Bold().FontColor(scoreFontColor).FontSize(9);
-       score.Item().AlignLeft().Text($"{_model.TotalScore:0.00}")
-           .FontSize(16).Bold().FontColor(scoreFontColor);
-       score.Item().AlignLeft().Text("Minimum Skor: 80")
-           .FontSize(8).FontColor(scoreFontColor);
-   });
+                .PaddingTop(-18)
+                .AlignRight()
+                .Width(100)
+                .Background(boxColor)
+                .Padding(4)
+                .Column(score =>
+                {
+                    score.Item().AlignLeft().Text("TOTAL SCORE (TS):").Bold().FontColor(scoreFontColor).FontSize(9);
+                    score.Item().AlignLeft().Text($"{_model.TotalScore:0.00}").FontSize(16).Bold().FontColor(scoreFontColor);
+                    score.Item().AlignLeft().Text("Minimum Skor: 80").FontSize(8).FontColor(scoreFontColor);
+                });
 
-            // Status Sertifikasi
-            var statusText = "UNKNOWN";
-            string statusBgColor = "#F8D7DA";
+            col.Item().PaddingTop(15).PaddingBottom(5).Text("Informasi SPBU").Bold().FontSize(12);
+            col.Item().PaddingBottom(15).Element(ComposeInfoTable);
+            col.Item().PaddingBottom(5).Text("Informasi Kegiatan Audit").Bold().FontSize(12);
+            col.Item().PaddingBottom(20).Element(ComposeAuditInfoTable);
 
-            if (_model.ExcellentStatus == "EXCELLENT")
-            {
-                statusText = "CERTIFIED";
-                statusBgColor = "#FFC107";
-            }
-            else if (_model.GoodStatus == "CERTIFIED")
-            {
-                statusText = "CERTIFIED";
-                statusBgColor = "#00A64F";
-            }
-            else if (_model.GoodStatus == "NOT CERTIFIED")
-            {
-                statusText = "NOT CERTIFIED";
-                statusBgColor = "#F44336";
-            }
-
-
-            //col.Item()
-            //.Background(statusBgColor)
-            //.Padding(8)
-            //.AlignCenter()
-            //.Text(statusText)
-            //.FontSize(16)
-            //.Bold()
-            //.FontColor(Colors.White); 
-
-            //if (!string.IsNullOrWhiteSpace(_model.PenaltyAlerts))
-            //{
-            //    col.Item()
-            //        .PaddingTop(5)
-            //        .Text($"Gagal di elemen: {_model.PenaltyAlerts}")
-            //        .FontColor(Colors.Red.Darken2)
-            //        .Italic()
-            //        .FontSize(9);
-            //}
-
-            // Judul: Informasi SPBU
-            col.Item().PaddingTop(15).PaddingBottom(5)
-    .Text("Informasi SPBU").Bold().FontSize(12);
-
-            col.Item().PaddingBottom(15).Element(ComposeInfoTable); // Lebih longgar
-
-            col.Item().PaddingBottom(5)
-                .Text("Informasi Kegiatan Audit").Bold().FontSize(12);
-
-            col.Item().PaddingBottom(20).Element(ComposeAuditInfoTable); // Tambahkan spasi antar bagian
-
-            col.Item().PaddingBottom(15); // Spacer kosong sebelum box CERTIFIED/NOT CERTIFIED
-
-            //col.Item().PaddingBottom(10).Text($"Catatan Auditor: {_model.Notes}").Italic().FontSize(9);
-
-            //var statusBoxText = _model.ExcellentStatus == "EXCELLENT"
-            //    ? "PASTI PAS EXCELLENT!"
-            //    : _model.GoodStatus == "CERTIFIED"
-            //        ? "PASTI PAS GOOD!"
-            //        : "NOT CERTIFIED";
-
-            //var statusColor = _model.ExcellentStatus == "EXCELLENT"
-            //    ? "#FFC107"
-            //    : _model.GoodStatus == "CERTIFIED"
-            //        ? "#00A64F"
-            //        : "#F44336";
-
-            var isCertified = _model.TotalScore >= 80 && string.IsNullOrWhiteSpace(_model.PenaltyAlerts); // Atau ambil dari _model.MinPassingScore jika ada
-            var statusBoxText = isCertified ? "PASTI PAS EXCELLENT!" : "NOT CERTIFIED";
-            var statusColor = isCertified ? "#FFC107" : "#F44336";
-
+            // Box status akhir
+            col.Item().PaddingBottom(15);
             col.Item().Background(statusColor).Padding(10).Column(box =>
             {
                 box.Item().AlignCenter()
@@ -207,21 +172,18 @@ public class ReportExcellentTemplate : IDocument
                 }
             });
 
-            col.Item().Height(20); // Spacer setelah box sertifikasi
+            col.Item().Height(20);
 
-            // Jalankan RenderChecklistStructured secara diam-diam hanya untuk menghitung skor dan isi TotalScore tiap elemen
+            // Hitung skor checklist dan tampilkan tabel element
             foreach (var root in _model.Elements)
             {
                 RenderChecklistStructured(new ColumnDescriptor(), root, root.Title, 0);
             }
 
-            // Pastikan hanya satu kali baris ini:
             _model.TotalScore = Math.Round(_model.Elements.Sum(x => x.TotalScore ?? 0), 2);
 
-            // Tampilkan tabel Element Compliance yang butuh node.TotalScore
             col.Item().PaddingVertical(10).Element(ComposeElementTable);
 
-            // Tampilkan tabel Sub-Element
             foreach (var element in _model.Elements.Where(x => !string.IsNullOrWhiteSpace(x.Description)))
             {
                 col.Item().PaddingTop(10).Text(element.Description).Bold().FontSize(11);
@@ -229,7 +191,6 @@ public class ReportExcellentTemplate : IDocument
             }
 
             col.Item().PaddingTop(20).Text("KOMENTAR AUDITOR").Bold().FontSize(12);
-
             void KomentarItem(string label, string value)
             {
                 col.Item().Text(label).Bold().FontSize(10);
@@ -243,40 +204,22 @@ public class ReportExcellentTemplate : IDocument
             KomentarItem("Komentar Manajer SPBU", _model.KomentarManager);
 
             col.Item().PageBreak();
-
             col.Item().PaddingTop(20).Text("DETAIL CHECKLIST").Bold().FontSize(12);
-            //foreach (var root in _model.Elements)
-            //{
-            //    col.Item().Text($"{root.Title} - {root.Description}").Bold().FontSize(10);
-            //    foreach (var child in root.Children)
-            //    {
-            //        //RenderChecklistStructured(col, child, root.Title + ".");
-            //        RenderChecklistStructured(col, child, child.Title, 1);
-            //    }
-            //}
-
             foreach (var root in _model.Elements)
             {
                 RenderChecklistStructured(col, root, root.Title, 0);
             }
 
             col.Item().PageBreak();
-
             col.Item().PaddingTop(20).Text("PENGECEKAN Q&Q").Bold().FontSize(12);
             col.Item().Element(ComposeQqTable);
-
-            //col.Item().PaddingTop(20).Text("DOKUMENTASI").Bold().FontSize(12);
-            //foreach (var doc in _model.FinalDocuments)
-            //{
-            //    col.Item().Text(doc.MediaPath).FontSize(8);
-            //}
 
             col.Item().PageBreak();
             col.Item().Element(container =>
             {
                 container.PaddingVertical(10).Grid(grid =>
                 {
-                    grid.Columns(2); // Diubah jadi 2 kolom per baris
+                    grid.Columns(2);
                     grid.Spacing(10);
 
                     foreach (var foto in _model.FotoTemuan)
@@ -290,10 +233,7 @@ public class ReportExcellentTemplate : IDocument
                             var relativePath = foto.Path.TrimStart('/');
                             fullPath = Path.Combine("/var/www/epas-asset/wwwroot", relativePath);
                         }
-                        catch
-                        {
-                            continue;
-                        }
+                        catch { continue; }
 
                         if (!System.IO.File.Exists(fullPath))
                             continue;
@@ -307,29 +247,35 @@ public class ReportExcellentTemplate : IDocument
                                     e.Image(Image.FromFile(fullPath)).FitArea();
                                 });
 
-                                // Caption dengan MaxWidth dan WrapAnywhere
                                 item.Item().PaddingTop(5).Element(c =>
                                 {
                                     c.Container().MaxWidth(250).AlignCenter().Text(foto.Caption ?? "IMAGE")
-                                        .FontSize(8)
-                                        .WrapAnywhere();
+                                        .FontSize(8).WrapAnywhere();
                                 });
                             });
                         }
-                        catch
-                        {
-                            continue;
-                        }
+                        catch { continue; }
                     }
                 });
             });
-
-
-
-
-
-
         });
+    }
+
+    AuditChecklistNode FindNodeById(List<AuditChecklistNode> nodes, string id)
+    {
+        foreach (var node in nodes)
+        {
+            if (node.Id == id)
+                return node;
+
+            if (node.Children?.Any() == true)
+            {
+                var found = FindNodeById(node.Children, id);
+                if (found != null)
+                    return found;
+            }
+        }
+        return null;
     }
 
     void DrawImageFromUrl(SKCanvas canvas, Size size, string imageUrl)
@@ -457,7 +403,7 @@ public class ReportExcellentTemplate : IDocument
             {
                 row.RelativeItem(8).Element(text =>
                 {
-                    var content = text.Text($"{label}. {node.Description ?? "-"}")
+                    var content = text.Text($"{label}. {node.Description ?? ""}")
                         .FontSize(9)
                         .LineHeight(1.2f);
 
