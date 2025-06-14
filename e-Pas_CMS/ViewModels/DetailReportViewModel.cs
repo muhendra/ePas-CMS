@@ -32,7 +32,7 @@ namespace e_Pas_CMS.ViewModels
         public string KomentarHSSE { get; set; }
         public string KomentarVisual { get; set; }
         public string KomentarManager { get; set; }
-
+        public string PenawaranKomperhensif { get; set; }
         public string Region { get; set; }
         public string OwnerName { get; set; }
         public string ManagerName { get; set; }
@@ -104,7 +104,7 @@ namespace e_Pas_CMS.ViewModels
         public string KomentarHSSE { get; set; }
         public string KomentarVisual { get; set; }
         public string KomentarManager { get; set; }
-
+        public string PenawaranKomperhensif { get; set; }
         public string AuditCurrent { get; set; }
 
         public string AuditNext { get; set; }

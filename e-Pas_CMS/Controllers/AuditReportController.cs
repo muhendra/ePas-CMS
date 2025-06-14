@@ -274,6 +274,13 @@ WHERE
                     else
                         auditNext = failed_audit_level;
 
+                    string passedLevel = auditFlow.passed_audit_level;
+
+                    if (auditNext == null)
+                    {
+                        auditNext = passedLevel;
+                    }
+
                     var auditlevelClassSql = @"SELECT audit_level_class FROM master_audit_flow WHERE audit_level = @level LIMIT 1;";
                     var auditlevelClass = await conn.QueryFirstOrDefaultAsync<dynamic>(auditlevelClassSql, new { level = auditNext });
                     levelspbu = auditlevelClass != null ? (auditlevelClass.audit_level_class ?? "") : "";
@@ -599,6 +606,8 @@ WHERE
                 string excellentStatus = model.ExcellentStatus;
                 string auditNext = null;
 
+                string passedLevel = auditFlow.passed_audit_level;
+
                 if (goodStatus == "CERTIFIED" && excellentStatus == "CERTIFIED")
                     auditNext = auditFlow.passed_excellent;
                 else if (goodStatus == "CERTIFIED")
@@ -607,6 +616,12 @@ WHERE
                     auditNext = auditFlow.failed_audit_level;
 
                 model.AuditNext = auditNext;
+
+                if (auditNext == null)
+                {
+                    auditNext = passedLevel;
+                    model.AuditNext = passedLevel;
+                }
 
                 var auditlevelClassSql = @"SELECT audit_level_class FROM master_audit_flow WHERE audit_level = @level LIMIT 1;";
                 var auditlevelClass = await conn.QueryFirstOrDefaultAsync<dynamic>(auditlevelClassSql, new { level = auditNext });
@@ -911,6 +926,7 @@ WHERE
         (SELECT all_comments FROM comment_per_elemen WHERE root_title = 'Elemen 2') AS KomentarQuality,
         (SELECT all_comments FROM comment_per_elemen WHERE root_title = 'Elemen 3') AS KomentarHSSE,
         (SELECT all_comments FROM comment_per_elemen WHERE root_title = 'Elemen 4') AS KomentarVisual,
+        (SELECT all_comments FROM comment_per_elemen WHERE root_title = 'Elemen 5') AS PenawaranKomperhensif,
         CASE 
             WHEN audit_mom_final IS NOT NULL AND audit_mom_final <> '' THEN audit_mom_final
             ELSE audit_mom_intro
@@ -1080,6 +1096,7 @@ WHERE
                 KomentarHSSE = basic.KomentarHSSE,
                 KomentarVisual = basic.KomentarVisual,
                 KomentarManager = basic.KomentarManager,
+                PenawaranKomperhensif = basic.PenawaranKomperhensif,
                 AuditCurrent = basic.AuditCurrent,
                 AuditNext = basic.AuditNext,
                 ApproveBy = basic.ApproveBy,

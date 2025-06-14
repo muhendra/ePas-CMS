@@ -217,6 +217,7 @@ public class ReportExcellentTemplate : IDocument
             KomentarItem("Jaminan Kualitas dan Kuantitas", _model.KomentarQuality);
             KomentarItem("Peralatan Terpelihara dan HSSE", _model.KomentarHSSE);
             KomentarItem("Tampilan Fisik Seragam", _model.KomentarVisual);
+            KomentarItem("Penawaran Produk Komperhensif", _model.PenawaranKomperhensif);
             KomentarItem("Komentar Manajer SPBU", _model.KomentarManager);
 
             col.Item().PageBreak();
