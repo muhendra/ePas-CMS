@@ -378,22 +378,8 @@
                                        asp-route-searchTerm="@ViewBag.SearchTerm"
                                        asp-route-sortColumn="Audit"
                                        asp-route-sortDirection="@(ViewBag.SortColumn == "Audit" && ViewBag.SortDirection == "asc" ? "desc" : "asc")">
-                                        Status Audit
+                                        Tahap Audit
                                         @if (ViewBag.SortColumn == "Audit")
-                                        {
-                                            <i class="bi bi-arrow-@(ViewBag.SortDirection == "asc" ? "up" : "down")"></i>
-                                        }
-                                    </a>
-                                </th>
-                                <th>
-                                    <a asp-action="Index"
-                                       asp-route-pageNumber="1"
-                                       asp-route-pageSize="@Model.PageSize"
-                                       asp-route-searchTerm="@ViewBag.SearchTerm"
-                                       asp-route-sortColumn="TipeAudit"
-                                       asp-route-sortDirection="@(ViewBag.SortColumn == "TipeAudit" && ViewBag.SortDirection == "asc" ? "desc" : "asc")">
-                                        Tipe Audit
-                                        @if (ViewBag.SortColumn == "TipeAudit")
                                         {
                                             <i class="bi bi-arrow-@(ViewBag.SortDirection == "asc" ? "up" : "down")"></i>
                                         }
@@ -523,7 +509,6 @@
                                         <td>@item.NamaAuditor</td>
                                         <td>@item.Rayon</td>
                                         <td>@item.Audit</td>
-                                        <td>@item.Type</td>
                                         <td>@item.Score</td>
                                         <td class="fw-bold @(item.Good == "CERTIFIED" ? "text-success" : "text-danger")">@item.Good</td>
                                         <td class="fw-bold @(item.Excelent == "EXCELLENT" ? "text-success" : "text-danger")">@item.Excelent</td>

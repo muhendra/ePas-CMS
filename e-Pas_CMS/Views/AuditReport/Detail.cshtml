@@ -166,11 +166,14 @@
             Total Score (TS): @Model.TotalScore.ToString("0.00")% &mdash;
             NOT CERTIFIED
         </strong>
-        <div class="box-penalty mt-1 small" style="display:none">
-            <strong>Penalty:</strong> -
+        <div class="box-penalty mt-1 small text-white" style="display:none">
+            <strong>Penalty:</strong> <span class="penalty-text">-</span><br />
+            <span class="fail-elements" style="display:none;">
+                <strong>Gagal di Elemen:</strong> <span class="fail-list"></span>
+            </span>
         </div>
+</div>
     </div>
-
 
     <div class="text-center text-muted mb-3">
         Nilai Minimum Pasti Pas: <span id="minPassingDisplay">@Model.MinPassingScore.ToString("0.00")%</span>
@@ -704,22 +707,40 @@
 
             $('.score-label').html(`Total Score (TS): ${totalScore.toFixed(2)}% &mdash; ${statusLabel}`);
 
-            if (isCertified) {
-                $('.box-penalty').hide();
-            } else {
-                $('.box-penalty').show().html(`<strong>Penalty:</strong> ${penalty}`);
+                    if (isCertified) {
+            $('.box-penalty').hide();
+        } else {
+            $('.box-penalty').show();
+                    $('.penalty-text').text(penalty || '-');
+
+        // Cari elemen yang gagal berdasarkan skor elemen
+        const failedElements = [];
+        const elements = ['SSS', 'EQnQ', 'RFS', 'VFC', 'EPO'];
+        const scores = [sss, eqnq, rfs, vfc, epo];
+        const minScores = mode === 'excellent'
+            ? [85, 85, 85, 20, 50]
+            : [80, 85, 85, 15, 25];
+
+        for (let i = 0; i < scores.length; i++) {
+            if (scores[i] < minScores[i]) {
+                failedElements.push(elements[i]);
             }
+        }
+
+        if (failedElements.length > 0) {
+            $('.fail-elements').show();
+            $('.fail-list').text(failedElements.join(', '));
+        } else {
+            $('.fail-elements').hide();
+        }
+        }
+
 
             $('#certStatusBox')
                 .removeClass('alert-success alert-danger')
                 .addClass(isCertified ? 'alert-success' : 'alert-danger');
             $('#certStatusLabel').text(statusLabel);
         }
-
-
-
-
-
 
             // PILIHAN NILAI A-F
             $(document).on('click', '.option-btn', function () {
