@@ -121,7 +121,17 @@ public class ReportExcellentTemplate : IDocument
                     forceNotCertified = true;
             }
 
-            // Ambil compliance score per elemen
+            // Step 1: Hitung skor dulu
+            HitungSemuaTotalScore();
+
+            // Step 2: Set compliance value dari elemen yang baru dihitung
+            _model.SSS = GetCompliance("Skilled Staff & Services", 30);
+            _model.EQnQ = GetCompliance("Exact Quality & Quantity", 30);
+            _model.RFS = GetCompliance("Reliable Facilities & Safety", 20);
+            _model.VFC = GetCompliance("Visual Format Consistency", 10);
+            _model.EPO = GetCompliance("Expansive Product Offer", 10);
+
+            // Step 3: Ambil untuk validasi sertifikasi
             decimal? sss = _model.SSS;
             decimal? eqnq = _model.EQnQ;
             decimal? rfs = _model.RFS;
@@ -144,7 +154,6 @@ public class ReportExcellentTemplate : IDocument
             string statusColor = isCertified
                 ? (forceGoodOnly ? "#00A64F" : "#FFC107")
                 : "#F44336";
-
 
             // Box skor total mengikuti warna status akhir (statusColor)
             string boxColor = statusColor;
@@ -177,14 +186,37 @@ public class ReportExcellentTemplate : IDocument
                     .FontSize(16).Bold()
                     .FontColor(Colors.White);
 
-                if (!isCertified && !string.IsNullOrWhiteSpace(_model.PenaltyAlerts))
+                if (!isCertified)
                 {
-                    box.Item().PaddingTop(5)
-                        .AlignCenter()
-                        .Text($"Gagal di elemen: {_model.PenaltyAlerts}")
-                        .FontSize(9)
-                        .Italic()
-                        .FontColor(Colors.White);
+                    // Gabungkan penalty alerts dan failed elements
+                    var alasan = new List<string>();
+                    if (!string.IsNullOrWhiteSpace(_model.PenaltyAlerts))
+                        alasan.Add(_model.PenaltyAlerts);
+
+                    var failedElements = new[]
+                    {
+            ("SSS", 85, _model.SSS),
+            ("EQnQ", 85, _model.EQnQ),
+            ("RFS", 85, _model.RFS),
+            ("VFC", 20, _model.VFC),
+            ("EPO", 50, _model.EPO)
+        }
+                    .Where(e => (e.Item3 ?? 0) < e.Item2)
+                    .Select(e => e.Item1)
+                    .ToList();
+
+                    if (failedElements.Any())
+                        alasan.Add("Gagal di elemen: " + string.Join(", ", failedElements));
+
+                    if (alasan.Any())
+                    {
+                        box.Item().PaddingTop(5)
+                            .AlignCenter()
+                            .Text(string.Join("\n", alasan))
+                            .FontSize(9)
+                            .Italic()
+                            .FontColor(Colors.White);
+                    }
                 }
             });
 
@@ -602,7 +634,6 @@ public class ReportExcellentTemplate : IDocument
         });
     }
 
-
     void ComposeElementTable(IContainer container)
     {
         var elements = new[]
@@ -614,72 +645,93 @@ public class ReportExcellentTemplate : IDocument
         new { Name = "Expansive Product Offer", Weight = 10 },
     };
 
-        container.Table(table =>
+        var failedElements = new List<string>();
+
+        container.Column(col =>
         {
-            table.ColumnsDefinition(c =>
+            col.Item().Table(table =>
             {
-                c.RelativeColumn(2);
-                c.RelativeColumn();
-                c.RelativeColumn();
-                c.ConstantColumn(70);
-            });
-
-            table.Header(header =>
-            {
-                header.Cell().Text("Indikator Penilaian").Bold();
-                header.Cell().AlignCenter().Text("Bobot Nilai").Bold();
-                header.Cell().AlignCenter().Text("Nilai Minimum").Bold();
-                header.Cell().AlignCenter().Text("Compliance Level").Bold();
-            });
-
-            foreach (var e in elements)
-            {
-                var modelElement = _model.Elements.FirstOrDefault(x =>
-                    (x.Title?.Trim().ToUpperInvariant().Contains(e.Name.Trim().ToUpperInvariant()) ?? false) ||
-                    (x.Description?.Trim().ToUpperInvariant().Contains(e.Name.Trim().ToUpperInvariant()) ?? false)
-                );
-
-                decimal skor = modelElement?.TotalScore ?? 0;
-                decimal percent = (e.Weight > 0) ? (skor / e.Weight) * 100 : 0;
-
-                string level;
-                string levelColor;
-
-                if (percent <= 35)
-                    (level, levelColor) = ("Warning", "#FF0000");
-                else if (percent <= 80)
-                    (level, levelColor) = ("Poor", "#FFFF99");
-                //else if (percent <= 80)
-                //    (level, levelColor) = ("Average", "#CCF2F4");
-                //else if (percent <= 95)
-                //    (level, levelColor) = ("Good", "#00FF00");
-                else
-                    (level, levelColor) = ("Excellent", "#FFA500");
-
-                string minText = e.Name switch
+                table.ColumnsDefinition(c =>
                 {
-                    "Skilled Staff & Services" => "85.00%",
-                    "Exact Quality & Quantity" => "85.00%",
-                    "Reliable Facilities & Safety" => "85.00%",
-                    "Visual Format Consistency" => "20.00%",
-                    "Expansive Product Offer" => "50.00%",
-                    _ => "75.00%"
-                };
+                    c.RelativeColumn(2);
+                    c.RelativeColumn();
+                    c.RelativeColumn();
+                    c.ConstantColumn(70);
+                });
 
-                table.Cell().Text(e.Name).FontSize(9);
-                table.Cell().AlignCenter().Text($"{e.Weight:0}");
-                table.Cell().AlignCenter().Text(minText);
-                table.Cell().Border(2).BorderColor(Colors.White).Padding(2).Element(cell =>
-                    cell.Container().Background(levelColor)
-                        .PaddingVertical(2).PaddingHorizontal(2)
-                        .AlignCenter().AlignMiddle()
-                        .Column(col =>
-                        {
-                            col.Item().Text($"{percent:0.##}%").FontSize(8).Bold().AlignCenter();
-                            col.Item().Text(level).FontSize(7).AlignCenter();
-                        })
-                );
-            }
+                table.Header(header =>
+                {
+                    header.Cell().Text("Indikator Penilaian").Bold();
+                    header.Cell().AlignCenter().Text("Bobot Nilai").Bold();
+                    header.Cell().AlignCenter().Text("Nilai Minimum").Bold();
+                    header.Cell().AlignCenter().Text("Compliance Level").Bold();
+                });
+
+                foreach (var e in elements)
+                {
+                    var modelElement = _model.Elements.FirstOrDefault(x =>
+                        (x.Title?.Trim().ToUpperInvariant().Contains(e.Name.Trim().ToUpperInvariant()) ?? false) ||
+                        (x.Description?.Trim().ToUpperInvariant().Contains(e.Name.Trim().ToUpperInvariant()) ?? false)
+                    );
+
+                    decimal percent = e.Name switch
+                    {
+                        "Skilled Staff & Services" => _model.SSS ?? 0,
+                        "Exact Quality & Quantity" => _model.EQnQ ?? 0,
+                        "Reliable Facilities & Safety" => _model.RFS ?? 0,
+                        "Visual Format Consistency" => _model.VFC ?? 0,
+                        "Expansive Product Offer" => _model.EPO ?? 0,
+                        _ => 0
+                    };
+
+                    bool isFailed = e.Name switch
+                    {
+                        "Skilled Staff & Services" => percent < 85,
+                        "Exact Quality & Quantity" => percent < 85,
+                        "Reliable Facilities & Safety" => percent < 85,
+                        "Visual Format Consistency" => percent < 20,
+                        "Expansive Product Offer" => percent < 50,
+                        _ => percent < 75
+                    };
+
+                    if (isFailed)
+                        failedElements.Add(e.Name);
+
+                    string level;
+                    string levelColor;
+
+                    if (percent <= 35)
+                        (level, levelColor) = ("Warning", "#FF0000");
+                    else if (percent <= 80)
+                        (level, levelColor) = ("Poor", "#FFFF99");
+                    else
+                        (level, levelColor) = ("Excellent", "#FFA500");
+
+                    string minText = e.Name switch
+                    {
+                        "Skilled Staff & Services" => "85.00%",
+                        "Exact Quality & Quantity" => "85.00%",
+                        "Reliable Facilities & Safety" => "85.00%",
+                        "Visual Format Consistency" => "20.00%",
+                        "Expansive Product Offer" => "50.00%",
+                        _ => "75.00%"
+                    };
+
+                    table.Cell().Text(e.Name).FontSize(9);
+                    table.Cell().AlignCenter().Text($"{e.Weight:0}");
+                    table.Cell().AlignCenter().Text(minText);
+                    table.Cell().Border(2).BorderColor(Colors.White).Padding(2).Element(cell =>
+                        cell.Container().Background(levelColor)
+                            .PaddingVertical(2).PaddingHorizontal(2)
+                            .AlignCenter().AlignMiddle()
+                            .Column(col =>
+                            {
+                                col.Item().Text($"{percent:0.##}%").FontSize(8).Bold().AlignCenter();
+                                col.Item().Text(level).FontSize(7).AlignCenter();
+                            })
+                    );
+                }
+            });
         });
     }
 
@@ -810,6 +862,24 @@ public class ReportExcellentTemplate : IDocument
         node.TotalScore = skor;
 
         System.Diagnostics.Debug.WriteLine($"[CALC-FINAL] {node.Title} → TotalScore: {skor:0.##}");
+    }
+
+    void HitungSemuaTotalScore()
+    {
+        foreach (var root in _model.Elements)
+            HitungTotalScore(root);
+    }
+
+    decimal GetCompliance(string name, int expectedWeight)
+    {
+        var el = _model.Elements.FirstOrDefault(x =>
+            string.Equals(x.Title?.Trim(), name.Trim(), StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(x.Description?.Trim(), name.Trim(), StringComparison.OrdinalIgnoreCase));
+
+        if (el == null || !el.TotalScore.HasValue)
+            return 0;
+
+        return Math.Round((el.TotalScore.Value / expectedWeight) * 100, 2);
     }
 
 }

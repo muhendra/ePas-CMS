@@ -700,6 +700,9 @@ WHERE
             model.FotoTemuan = await GetMediaReportFAsync(conn, id.ToString());
             _logger.LogInformation("FotoTemuan: {Path}", model.FotoTemuan);
 
+            foreach (var element in model.Elements)
+                AssignWeightRecursive(element);
+
             CalculateChecklistScores(model.Elements);
 
             // Hitung final score seperti Index
@@ -778,8 +781,8 @@ WHERE
 
             // Hitung compliance dan simpan ke model
             CalculateOverallScore(model, checklistData);
+            // Hitung compliance level
             var compliance = HitungComplianceLevelDariElements(model.Elements);
-
             model.SSS = Math.Round(compliance.SSS ?? 0, 2);
             model.EQnQ = Math.Round(compliance.EQnQ ?? 0, 2);
             model.RFS = Math.Round(compliance.RFS ?? 0, 2);

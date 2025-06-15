@@ -97,7 +97,25 @@ public class ReportGoodTemplate : IDocument
     {
         container.Column(col =>
         {
-            // Recalculate compliance scores directly from elements
+            // Step 1: Hitung skor dulu
+            HitungSemuaTotalScore();
+
+
+            _model.TotalScore = Math.Round(_model.Elements.Sum(x => x.TotalScore ?? 0), 2);
+
+            decimal sss = GetCompliance("Skilled Staff & Services", 30);
+            decimal eqnq = GetCompliance("Exact Quality & Quantity", 30);
+            decimal rfs = GetCompliance("Reliable Facilities & Safety", 20);
+            decimal vfc = GetCompliance("Visual Format Consistency", 10);
+            decimal epo = GetCompliance("Expansive Product Offer", 10);
+
+            // Sinkronkan ke model agar _model.RFS dan lainnya konsisten
+            _model.SSS = sss;
+            _model.EQnQ = eqnq;
+            _model.RFS = rfs;
+            _model.VFC = vfc;
+            _model.EPO = epo;
+            // Step 2: Ambil ulang skor elemen setelah update
             decimal GetCompliance(string name, int expectedWeight)
             {
                 var el = _model.Elements.FirstOrDefault(x =>
@@ -107,87 +125,73 @@ public class ReportGoodTemplate : IDocument
                 if (el == null || !el.TotalScore.HasValue)
                     return 0;
 
-                return (el.TotalScore.Value / expectedWeight) * 100;
+                return Math.Round((el.TotalScore.Value / expectedWeight) * 100, 2);
             }
 
-            decimal sss = GetCompliance("Skilled Staff & Services", 30);
-            decimal eqnq = GetCompliance("Exact Quality & Quantity", 30);
-            decimal rfs = GetCompliance("Reliable Facilities & Safety", 20);
-            decimal vfc = GetCompliance("Visual Format Consistency", 10);
-            decimal epo = GetCompliance("Expansive Product Offer", 10);
-
-            // Validasi kelulusan good
+            // Validasi GOOD
             bool failGood = sss < 80 || eqnq < 85 || rfs < 85 || vfc < 15 || epo < 25;
             bool isCertified0 = _model.TotalScore >= 75 &&
                                 string.IsNullOrWhiteSpace(_model.PenaltyAlertsGood) &&
                                 !failGood;
 
-            // Warna box score
             string boxColor = isCertified0 ? "#1aa31f" : "#F44336";
             string scoreFontColor = Colors.White;
 
-            col.Item()
-                .PaddingTop(-18)
-                .AlignRight()
-                .Width(100)
-                .Background(boxColor)
-                .Padding(4)
-                .Column(score =>
+            // Box Nilai Akhir
+            col.Item().PaddingTop(-18).AlignRight().Width(100)
+                .Background(boxColor).Padding(4).Column(score =>
                 {
-                    score.Item().AlignLeft().Text("TOTAL SCORE (TS):")
-                        .Bold().FontColor(scoreFontColor).FontSize(9);
-                    score.Item().AlignLeft().Text($"{_model.TotalScore:0.00}")
-                        .FontSize(16).Bold().FontColor(scoreFontColor);
-                    score.Item().AlignLeft().Text("Minimum Skor: 75")
-                        .FontSize(8).FontColor(scoreFontColor);
+                    score.Item().AlignLeft().Text("TOTAL SCORE (TS):").Bold().FontColor(scoreFontColor).FontSize(9);
+                    score.Item().AlignLeft().Text($"{_model.TotalScore:0.00}").FontSize(16).Bold().FontColor(scoreFontColor);
+                    score.Item().AlignLeft().Text("Minimum Skor: 75").FontSize(8).FontColor(scoreFontColor);
                 });
 
-            var statusBoxText = isCertified0 ? "PASTI PAS Good!" : "NOT CERTIFIED";
-            var statusColor = isCertified0 ? "#1aa31f" : "#F44336";
+            // Box Status Sertifikasi
+            var failedElements = new List<string>();
+            if (sss < 80) failedElements.Add("SSS");
+            if (eqnq < 85) failedElements.Add("EQnQ");
+            if (rfs < 85) failedElements.Add("RFS");
+            if (vfc < 15) failedElements.Add("VFC");
+            if (epo < 25) failedElements.Add("EPO");
 
+            var statusColor = isCertified0 ? "#1aa31f" : "#F44336";
             col.Item().Background(statusColor).Padding(10).Column(box =>
             {
-                box.Item().AlignCenter()
-                    .Text(statusBoxText)
-                    .FontSize(16).Bold()
-                    .FontColor(Colors.White);
+                box.Item().AlignCenter().Text("NOT CERTIFIED").FontSize(16).Bold().FontColor(Colors.White);
 
-                if (!isCertified0 && !string.IsNullOrWhiteSpace(_model.PenaltyAlertsGood))
+                if (!isCertified0)
                 {
-                    box.Item().PaddingTop(5)
-                        .AlignCenter()
-                        .Text($"Gagal di elemen: {_model.PenaltyAlertsGood}")
-                        .FontSize(9)
-                        .Italic()
-                        .FontColor(Colors.White);
+                    if (failedElements.Any())
+                    {
+                        box.Item().PaddingTop(4).AlignCenter().Text($"Gagal di Elemen: {string.Join(", ", failedElements)}")
+                            .FontSize(9).Italic().FontColor(Colors.White);
+                    }
+
+                    if (!string.IsNullOrWhiteSpace(_model.PenaltyAlertsGood))
+                    {
+                        box.Item().PaddingTop(2).AlignCenter().Text($"Penalty: {_model.PenaltyAlertsGood}")
+                            .FontSize(9).Italic().FontColor(Colors.White);
+                    }
                 }
             });
 
             col.Item().Height(20);
 
-            foreach (var root in _model.Elements)
-            {
-                RenderChecklistStructured(new ColumnDescriptor(), root, root.Title, 0);
-            }
-
-            _model.TotalScore = Math.Round(_model.Elements.Sum(x => x.TotalScore ?? 0), 2);
-
+            // Sisanya tetap
             col.Item().PaddingVertical(10).Element(ComposeElementTable);
-
             foreach (var element in _model.Elements.Where(x => !string.IsNullOrWhiteSpace(x.Description)))
             {
                 col.Item().PaddingTop(10).Text(element.Description).Bold().FontSize(11);
                 col.Item().Element(c => ComposeSubElementTable(c, element.Children));
             }
 
+            // Komentar
             col.Item().PaddingTop(20).Text("KOMENTAR AUDITOR").Bold().FontSize(12);
-
             void KomentarItem(string label, string value)
             {
                 col.Item().Text(label).Bold().FontSize(10);
                 col.Item().PaddingBottom(10).Text(value ?? "-").FontSize(9);
             }
-
             KomentarItem("Staf Terlatih dan Termotivasi", _model.KomentarStaf);
             KomentarItem("Jaminan Kualitas dan Kuantitas", _model.KomentarQuality);
             KomentarItem("Peralatan Terpelihara dan HSSE", _model.KomentarHSSE);
@@ -195,9 +199,9 @@ public class ReportGoodTemplate : IDocument
             KomentarItem("Penawaran Produk Komperhensif", _model.PenawaranKomperhensif);
             KomentarItem("Komentar Manajer SPBU", _model.KomentarManager);
 
+            // Checklist dan QQ
             col.Item().PageBreak();
             col.Item().PaddingTop(20).Text("DETAIL CHECKLIST").Bold().FontSize(12);
-
             foreach (var root in _model.Elements)
                 RenderChecklistStructured(col, root, root.Title, 0);
 
@@ -552,7 +556,15 @@ public class ReportGoodTemplate : IDocument
                 );
 
                 decimal skor = modelElement?.TotalScore ?? 0;
-                decimal percent = (e.Weight > 0) ? (skor / e.Weight) * 100 : 0;
+                decimal percent = e.Name switch
+                {
+                    "Skilled Staff & Services" => _model.SSS ?? 0,
+                    "Exact Quality & Quantity" => _model.EQnQ ?? 0,
+                    "Reliable Facilities & Safety" => _model.RFS ?? 0,
+                    "Visual Format Consistency" => _model.VFC ?? 0,
+                    "Expansive Product Offer" => _model.EPO ?? 0,
+                    _ => 0
+                };
 
                 string level;
                 string levelColor;
@@ -722,6 +734,12 @@ public class ReportGoodTemplate : IDocument
         node.TotalScore = skor;
 
         System.Diagnostics.Debug.WriteLine($"[CALC-FINAL] {node.Title} → TotalScore: {skor:0.##}");
+    }
+
+    void HitungSemuaTotalScore()
+    {
+        foreach (var root in _model.Elements)
+            HitungTotalScore(root);
     }
 
 }

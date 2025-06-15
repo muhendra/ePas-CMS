@@ -66,6 +66,7 @@
 
 </style>
 
+<div class="container-fluid">
 <!-- HEADER ATAS -->
 <div class="d-flex align-items-center justify-content-between mb-4">
     <div>
@@ -103,7 +104,6 @@
         <label class="form-check-label fw-bold" for="toggleReportMode">Report Excellent</label>
     </div>
 </div>
-
 
 <!-- STATUS -->
 <div id="certStatusBox" class="alert text-center py-2 mb-4">
@@ -154,7 +154,6 @@
         </div>
     </div>
 </div>
-
 
 <!-- LAPORAN PENILAIAN (Skor dan Level) -->
 <div class="mb-5">
@@ -922,7 +921,6 @@
         });
     </script>
 }
-
 
 @functions {
     async Task RenderChecklistNode(AuditChecklistNode node, int level, bool isVerified, bool isReadonlyUser)
