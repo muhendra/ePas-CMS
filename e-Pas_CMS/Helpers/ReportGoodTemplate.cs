@@ -97,56 +97,29 @@ public class ReportGoodTemplate : IDocument
     {
         container.Column(col =>
         {
-            // Step 1: Hitung skor dulu
+            // Step 0: Hitung skor dulu
             HitungSemuaTotalScore();
-
-
             _model.TotalScore = Math.Round(_model.Elements.Sum(x => x.TotalScore ?? 0), 2);
 
+            // Step 1: Set compliance per elemen
             decimal sss = GetCompliance("Skilled Staff & Services", 30);
             decimal eqnq = GetCompliance("Exact Quality & Quantity", 30);
             decimal rfs = GetCompliance("Reliable Facilities & Safety", 20);
             decimal vfc = GetCompliance("Visual Format Consistency", 10);
             decimal epo = GetCompliance("Expansive Product Offer", 10);
 
-            // Sinkronkan ke model agar _model.RFS dan lainnya konsisten
             _model.SSS = sss;
             _model.EQnQ = eqnq;
             _model.RFS = rfs;
             _model.VFC = vfc;
             _model.EPO = epo;
-            // Step 2: Ambil ulang skor elemen setelah update
-            decimal GetCompliance(string name, int expectedWeight)
-            {
-                var el = _model.Elements.FirstOrDefault(x =>
-                    (x.Title?.Trim().ToUpperInvariant().Contains(name.Trim().ToUpperInvariant()) ?? false) ||
-                    (x.Description?.Trim().ToUpperInvariant().Contains(name.Trim().ToUpperInvariant()) ?? false));
 
-                if (el == null || !el.TotalScore.HasValue)
-                    return 0;
-
-                return Math.Round((el.TotalScore.Value / expectedWeight) * 100, 2);
-            }
-
-            // Validasi GOOD
+            // Step 2: Validasi GOOD
             bool failGood = sss < 80 || eqnq < 85 || rfs < 85 || vfc < 15 || epo < 25;
-            bool isCertified0 = _model.TotalScore >= 75 &&
-                                string.IsNullOrWhiteSpace(_model.PenaltyAlertsGood) &&
-                                !failGood;
+            bool isCertified = _model.TotalScore >= 75 &&
+                               string.IsNullOrWhiteSpace(_model.PenaltyAlertsGood) &&
+                               !failGood;
 
-            string boxColor = isCertified0 ? "#1aa31f" : "#F44336";
-            string scoreFontColor = Colors.White;
-
-            // Box Nilai Akhir
-            col.Item().PaddingTop(-18).AlignRight().Width(100)
-                .Background(boxColor).Padding(4).Column(score =>
-                {
-                    score.Item().AlignLeft().Text("TOTAL SCORE (TS):").Bold().FontColor(scoreFontColor).FontSize(9);
-                    score.Item().AlignLeft().Text($"{_model.TotalScore:0.00}").FontSize(16).Bold().FontColor(scoreFontColor);
-                    score.Item().AlignLeft().Text("Minimum Skor: 75").FontSize(8).FontColor(scoreFontColor);
-                });
-
-            // Box Status Sertifikasi
             var failedElements = new List<string>();
             if (sss < 80) failedElements.Add("SSS");
             if (eqnq < 85) failedElements.Add("EQnQ");
@@ -154,22 +127,42 @@ public class ReportGoodTemplate : IDocument
             if (vfc < 15) failedElements.Add("VFC");
             if (epo < 25) failedElements.Add("EPO");
 
-            var statusColor = isCertified0 ? "#1aa31f" : "#F44336";
-            col.Item().Background(statusColor).Padding(10).Column(box =>
-            {
-                box.Item().AlignCenter().Text("NOT CERTIFIED").FontSize(16).Bold().FontColor(Colors.White);
+            string boxColor = isCertified ? "#1aa31f" : "#F44336";
+            string scoreFontColor = Colors.White;
 
-                if (!isCertified0)
+            // Box skor total
+            col.Item().PaddingTop(-18).AlignRight().Width(100).Background(boxColor).Padding(4).Column(score =>
+            {
+                score.Item().AlignLeft().Text("TOTAL SCORE (TS):").Bold().FontColor(scoreFontColor).FontSize(9);
+                score.Item().AlignLeft().Text($"{_model.TotalScore:0.00}").FontSize(16).Bold().FontColor(scoreFontColor);
+                score.Item().AlignLeft().Text("Minimum Skor: 75").FontSize(8).FontColor(scoreFontColor);
+            });
+
+            // Informasi SPBU & Audit
+            col.Item().PaddingTop(15).PaddingBottom(5).Text("Informasi SPBU").Bold().FontSize(12);
+            col.Item().PaddingBottom(15).Element(ComposeInfoTable);
+            col.Item().PaddingBottom(5).Text("Informasi Kegiatan Audit").Bold().FontSize(12);
+            col.Item().PaddingBottom(20).Element(ComposeAuditInfoTable);
+
+            // Box Status Sertifikasi
+            col.Item().Background(boxColor).Padding(10).Column(box =>
+            {
+                box.Item().AlignCenter().Text(isCertified ? "PASTI PAS GOOD!" : "NOT CERTIFIED")
+                    .FontSize(16).Bold().FontColor(Colors.White);
+
+                if (!isCertified)
                 {
                     if (failedElements.Any())
                     {
-                        box.Item().PaddingTop(4).AlignCenter().Text($"Gagal di Elemen: {string.Join(", ", failedElements)}")
+                        box.Item().PaddingTop(4).AlignCenter()
+                            .Text($"Gagal di Elemen: {string.Join(", ", failedElements)}")
                             .FontSize(9).Italic().FontColor(Colors.White);
                     }
 
                     if (!string.IsNullOrWhiteSpace(_model.PenaltyAlertsGood))
                     {
-                        box.Item().PaddingTop(2).AlignCenter().Text($"Penalty: {_model.PenaltyAlertsGood}")
+                        box.Item().PaddingTop(2).AlignCenter()
+                            .Text($"Penalty: {_model.PenaltyAlertsGood}")
                             .FontSize(9).Italic().FontColor(Colors.White);
                     }
                 }
@@ -177,7 +170,7 @@ public class ReportGoodTemplate : IDocument
 
             col.Item().Height(20);
 
-            // Sisanya tetap
+            // Tabel Element dan SubElement
             col.Item().PaddingVertical(10).Element(ComposeElementTable);
             foreach (var element in _model.Elements.Where(x => !string.IsNullOrWhiteSpace(x.Description)))
             {
@@ -185,7 +178,7 @@ public class ReportGoodTemplate : IDocument
                 col.Item().Element(c => ComposeSubElementTable(c, element.Children));
             }
 
-            // Komentar
+            // Komentar Auditor
             col.Item().PaddingTop(20).Text("KOMENTAR AUDITOR").Bold().FontSize(12);
             void KomentarItem(string label, string value)
             {
@@ -199,15 +192,75 @@ public class ReportGoodTemplate : IDocument
             KomentarItem("Penawaran Produk Komperhensif", _model.PenawaranKomperhensif);
             KomentarItem("Komentar Manajer SPBU", _model.KomentarManager);
 
-            // Checklist dan QQ
+            // Halaman baru: Checklist
             col.Item().PageBreak();
             col.Item().PaddingTop(20).Text("DETAIL CHECKLIST").Bold().FontSize(12);
             foreach (var root in _model.Elements)
                 RenderChecklistStructured(col, root, root.Title, 0);
 
+            // Halaman baru: Q&Q
             col.Item().PageBreak();
             col.Item().PaddingTop(20).Text("PENGECEKAN Q&Q").Bold().FontSize(12);
             col.Item().Element(ComposeQqTable);
+
+            // Halaman baru: Foto Temuan
+            col.Item().PageBreak();
+            col.Item().Element(container =>
+            {
+                container.PaddingVertical(10).Grid(grid =>
+                {
+                    grid.Columns(2);
+                    grid.Spacing(10);
+
+                    foreach (var foto in _model.FotoTemuan)
+                    {
+                        if (foto == null || string.IsNullOrWhiteSpace(foto.Path))
+                            continue;
+
+                        string fullPath;
+                        try
+                        {
+                            var relativePath = foto.Path.TrimStart('/');
+                            fullPath = Path.Combine("/var/www/epas-asset/wwwroot", relativePath);
+                        }
+                        catch { continue; }
+
+                        if (!System.IO.File.Exists(fullPath))
+                            continue;
+
+                        try
+                        {
+                            grid.Item().Padding(5).Column(item =>
+                            {
+                                item.Item().Height(120).AlignCenter().AlignMiddle().Element(e =>
+                                {
+                                    e.Image(Image.FromFile(fullPath)).FitArea();
+                                });
+
+                                item.Item().PaddingTop(5).Element(c =>
+                                {
+                                    c.Container().MaxWidth(250).AlignCenter().Text(foto.Caption ?? "IMAGE")
+                                        .FontSize(8).WrapAnywhere();
+                                });
+                            });
+                        }
+                        catch { continue; }
+                    }
+                });
+            });
+
+            // Helper lokal
+            decimal GetCompliance(string name, int expectedWeight)
+            {
+                var el = _model.Elements.FirstOrDefault(x =>
+                    (x.Title?.Trim().ToUpperInvariant().Contains(name.Trim().ToUpperInvariant()) ?? false) ||
+                    (x.Description?.Trim().ToUpperInvariant().Contains(name.Trim().ToUpperInvariant()) ?? false));
+
+                if (el == null || !el.TotalScore.HasValue)
+                    return 0;
+
+                return Math.Round((el.TotalScore.Value / expectedWeight) * 100, 2);
+            }
         });
     }
 
