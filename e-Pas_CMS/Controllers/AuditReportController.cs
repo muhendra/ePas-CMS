@@ -833,6 +833,13 @@ WHERE
                 else
                     auditNext = failed_audit_level;
 
+                string passedLevel = auditFlow.passed_audit_level;
+
+                if (auditNext == null)
+                {
+                    auditNext = passedLevel;
+                }
+
                 var auditlevelClassSql = @"SELECT audit_level_class FROM master_audit_flow WHERE audit_level = @level LIMIT 1;";
                 var auditlevelClass = await conn.QueryFirstOrDefaultAsync<dynamic>(auditlevelClassSql, new { level = auditNext });
                 levelspbu = auditlevelClass != null ? (auditlevelClass.audit_level_class ?? "") : "";
