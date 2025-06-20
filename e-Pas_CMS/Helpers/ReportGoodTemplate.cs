@@ -96,17 +96,20 @@ public class ReportGoodTemplate : IDocument
     void ComposeContent(IContainer container)
     {
         container.Column(col =>
-        {
-            // Step 0: Hitung skor dulu
-            HitungSemuaTotalScore();
-            _model.TotalScore = Math.Round(_model.Elements.Sum(x => x.TotalScore ?? 0), 2);
+        {// Step 0: Gunakan TotalScore dari model, jangan hitung ulang
+         // (kecuali jika model.TotalScore belum diset dari controller)
+            if (_model.TotalScore == 0)
+            {
+                HitungSemuaTotalScore();
+                _model.TotalScore = Math.Round(_model.Elements.Sum(x => x.TotalScore ?? 0), 2);
+            }
 
             // Step 1: Set compliance per elemen
-            decimal sss = GetCompliance("Skilled Staff & Services", 30);
-            decimal eqnq = GetCompliance("Exact Quality & Quantity", 30);
-            decimal rfs = GetCompliance("Reliable Facilities & Safety", 20);
-            decimal vfc = GetCompliance("Visual Format Consistency", 10);
-            decimal epo = GetCompliance("Expansive Product Offer", 10);
+            decimal sss = _model.SSS ?? GetCompliance("Skilled Staff & Services", 30);
+            decimal eqnq = _model.EQnQ ?? GetCompliance("Exact Quality & Quantity", 30);
+            decimal rfs = _model.RFS ?? GetCompliance("Reliable Facilities & Safety", 20);
+            decimal vfc = _model.VFC ?? GetCompliance("Visual Format Consistency", 10);
+            decimal epo = _model.EPO ?? GetCompliance("Expansive Product Offer", 10);
 
             _model.SSS = sss;
             _model.EQnQ = eqnq;
@@ -410,19 +413,19 @@ public class ReportGoodTemplate : IDocument
         {
             table.ColumnsDefinition(columns =>
             {
-                columns.RelativeColumn(); // Nozzle Number
-                columns.RelativeColumn(); // DU Make
-                columns.RelativeColumn(); // DU Serial No
-                columns.RelativeColumn(); // Product
-                columns.RelativeColumn(); // Mode
-                columns.RelativeColumn(); // Qty Var (m)
-                columns.RelativeColumn(); // Qty Var (%)
-                columns.RelativeColumn(); // Density
-                columns.RelativeColumn(); // Temp
-                columns.RelativeColumn(); // Density15
-                columns.RelativeColumn(); // Ref Density15
-                columns.RelativeColumn(); // Tank No
-                columns.RelativeColumn(); // Density Var
+                columns.RelativeColumn();
+                columns.RelativeColumn();
+                columns.RelativeColumn();
+                columns.RelativeColumn();
+                columns.RelativeColumn();
+                columns.RelativeColumn();
+                columns.RelativeColumn();
+                columns.RelativeColumn();
+                columns.RelativeColumn();
+                columns.RelativeColumn();
+                columns.RelativeColumn();
+                columns.RelativeColumn();
+                columns.RelativeColumn();
             });
 
             // HEADER
@@ -570,7 +573,6 @@ public class ReportGoodTemplate : IDocument
             InfoRow("Sent Date", _model.TanggalSubmit?.ToString("dd/MM/yyyy"));
         });
     }
-
 
     void ComposeElementTable(IContainer container)
     {

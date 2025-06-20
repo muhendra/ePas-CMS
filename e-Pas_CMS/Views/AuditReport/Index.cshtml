@@ -48,6 +48,15 @@
 
 <h3 class="mb-4 fw-bold">Audit Report</h3>
 
+@* <div class="mb-3">
+    <a asp-action="DownloadCsv"
+   asp-controller="AuditReport"
+   asp-route-searchTerm="@ViewBag.SearchTerm"
+   class="btn btn-success">
+    <i class="bi bi-download"></i> Download CSV
+</a>
+</div> *@
+
 <div class="mb-3 form-search">
     <form method="get" asp-controller="AuditReport" asp-action="Index" class="d-flex gap-2">
         <input type="text" name="searchTerm" value="@ViewBag.SearchTerm" class="form-control" placeholder="🔍 Cari SPBU, Auditor, Status...">

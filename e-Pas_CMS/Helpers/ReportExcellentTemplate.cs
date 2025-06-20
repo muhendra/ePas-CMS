@@ -98,7 +98,7 @@ public class ReportExcellentTemplate : IDocument
     {
         container.Column(col =>
         {
-            // Cek apakah semua special node bernilai A (Excellent), jika ada C (Good Only), jika ada selain itu (Not Certified)
+            // Cek special node override
             var specialNodeIds = new[]
             {
             "555fe2e4-b95b-461b-9c92-ad8b5c837119",
@@ -121,86 +121,69 @@ public class ReportExcellentTemplate : IDocument
                     forceNotCertified = true;
             }
 
-            // Step 1: Hitung skor dulu
-            HitungSemuaTotalScore();
+            // Hitung hanya jika compliance belum tersedia
+            _model.SSS = _model.SSS ?? GetCompliance("Skilled Staff & Services", 30);
+            _model.EQnQ = _model.EQnQ ?? GetCompliance("Exact Quality & Quantity", 30);
+            _model.RFS = _model.RFS ?? GetCompliance("Reliable Facilities & Safety", 20);
+            _model.VFC = _model.VFC ?? GetCompliance("Visual Format Consistency", 10);
+            _model.EPO = _model.EPO ?? GetCompliance("Expansive Product Offer", 10);
 
-            // Step 2: Set compliance value dari elemen yang baru dihitung
-            _model.SSS = GetCompliance("Skilled Staff & Services", 30);
-            _model.EQnQ = GetCompliance("Exact Quality & Quantity", 30);
-            _model.RFS = GetCompliance("Reliable Facilities & Safety", 20);
-            _model.VFC = GetCompliance("Visual Format Consistency", 10);
-            _model.EPO = GetCompliance("Expansive Product Offer", 10);
+            // Ambil untuk validasi sertifikasi
+            var sss = _model.SSS;
+            var eqnq = _model.EQnQ;
+            var rfs = _model.RFS;
+            var vfc = _model.VFC;
+            var epo = _model.EPO;
 
-            // Step 3: Ambil untuk validasi sertifikasi
-            decimal? sss = _model.SSS;
-            decimal? eqnq = _model.EQnQ;
-            decimal? rfs = _model.RFS;
-            decimal? vfc = _model.VFC;
-            decimal? epo = _model.EPO;
-
-            // Validasi threshold minimum Excellent
             bool failExcellent = sss < 85 || eqnq < 85 || rfs < 85 || vfc < 20 || epo < 50;
 
-            // Evaluasi status sertifikasi akhir
             bool isCertified = _model.TotalScore >= 80 &&
                                string.IsNullOrWhiteSpace(_model.PenaltyAlerts) &&
                                !failExcellent &&
                                !forceNotCertified;
 
             string statusBoxText = isCertified
-            ? (forceGoodOnly ? "PASTI PAS GOOD!" : "PASTI PAS EXCELLENT!")
-            : "NOT CERTIFIED";
+                ? (forceGoodOnly ? "PASTI PAS GOOD!" : "PASTI PAS EXCELLENT!")
+                : "NOT CERTIFIED";
 
             string statusColor = isCertified
                 ? (forceGoodOnly ? "#00A64F" : "#FFC107")
                 : "#F44336";
 
-            // Box skor total mengikuti warna status akhir (statusColor)
             string boxColor = statusColor;
             string scoreFontColor = Colors.White;
 
-            col.Item()
-                .PaddingTop(-18)
-                .AlignRight()
-                .Width(100)
-                .Background(boxColor)
-                .Padding(4)
-                .Column(score =>
-                {
-                    score.Item().AlignLeft().Text("TOTAL SCORE (TS):").Bold().FontColor(scoreFontColor).FontSize(9);
-                    score.Item().AlignLeft().Text($"{_model.TotalScore:0.00}").FontSize(16).Bold().FontColor(scoreFontColor);
-                    score.Item().AlignLeft().Text("Minimum Skor: 80").FontSize(8).FontColor(scoreFontColor);
-                });
+            col.Item().PaddingTop(-18).AlignRight().Width(100).Background(boxColor).Padding(4).Column(score =>
+            {
+                score.Item().AlignLeft().Text("TOTAL SCORE (TS):").Bold().FontColor(scoreFontColor).FontSize(9);
+                score.Item().AlignLeft().Text($"{_model.TotalScore:0.00}").FontSize(16).Bold().FontColor(scoreFontColor);
+                score.Item().AlignLeft().Text("Minimum Skor: 80").FontSize(8).FontColor(scoreFontColor);
+            });
 
             col.Item().PaddingTop(15).PaddingBottom(5).Text("Informasi SPBU").Bold().FontSize(12);
             col.Item().PaddingBottom(15).Element(ComposeInfoTable);
             col.Item().PaddingBottom(5).Text("Informasi Kegiatan Audit").Bold().FontSize(12);
             col.Item().PaddingBottom(20).Element(ComposeAuditInfoTable);
 
-            // Box status akhir
             col.Item().PaddingBottom(15);
             col.Item().Background(statusColor).Padding(10).Column(box =>
             {
-                box.Item().AlignCenter()
-                    .Text(statusBoxText)
-                    .FontSize(16).Bold()
-                    .FontColor(Colors.White);
+                box.Item().AlignCenter().Text(statusBoxText).FontSize(16).Bold().FontColor(Colors.White);
 
                 if (!isCertified)
                 {
-                    // Gabungkan penalty alerts dan failed elements
                     var alasan = new List<string>();
                     if (!string.IsNullOrWhiteSpace(_model.PenaltyAlerts))
                         alasan.Add(_model.PenaltyAlerts);
 
                     var failedElements = new[]
                     {
-            ("SSS", 85, _model.SSS),
-            ("EQnQ", 85, _model.EQnQ),
-            ("RFS", 85, _model.RFS),
-            ("VFC", 20, _model.VFC),
-            ("EPO", 50, _model.EPO)
-        }
+                    ("SSS", 85, _model.SSS),
+                    ("EQnQ", 85, _model.EQnQ),
+                    ("RFS", 85, _model.RFS),
+                    ("VFC", 20, _model.VFC),
+                    ("EPO", 50, _model.EPO)
+                }
                     .Where(e => (e.Item3 ?? 0) < e.Item2)
                     .Select(e => e.Item1)
                     .ToList();
@@ -210,25 +193,21 @@ public class ReportExcellentTemplate : IDocument
 
                     if (alasan.Any())
                     {
-                        box.Item().PaddingTop(5)
-                            .AlignCenter()
+                        box.Item().PaddingTop(5).AlignCenter()
                             .Text(string.Join("\n", alasan))
-                            .FontSize(9)
-                            .Italic()
-                            .FontColor(Colors.White);
+                            .FontSize(9).Italic().FontColor(Colors.White);
                     }
                 }
             });
 
             col.Item().Height(20);
 
-            // Hitung skor checklist dan tampilkan tabel element
+            // Render checklist (tanpa hitung ulang total score)
             foreach (var root in _model.Elements)
-            {
                 RenderChecklistStructured(new ColumnDescriptor(), root, root.Title, 0);
-            }
 
-            _model.TotalScore = Math.Round(_model.Elements.Sum(x => x.TotalScore ?? 0), 2);
+            // Hapus hitungan ulang total_score
+            // _model.TotalScore = Math.Round(_model.Elements.Sum(x => x.TotalScore ?? 0), 2);
 
             col.Item().PaddingVertical(10).Element(ComposeElementTable);
 
@@ -255,9 +234,7 @@ public class ReportExcellentTemplate : IDocument
             col.Item().PageBreak();
             col.Item().PaddingTop(20).Text("DETAIL CHECKLIST").Bold().FontSize(12);
             foreach (var root in _model.Elements)
-            {
                 RenderChecklistStructured(col, root, root.Title, 0);
-            }
 
             col.Item().PageBreak();
             col.Item().PaddingTop(20).Text("PENGECEKAN Q&Q").Bold().FontSize(12);

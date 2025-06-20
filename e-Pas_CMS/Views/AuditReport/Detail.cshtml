@@ -107,10 +107,10 @@
 
 <!-- STATUS -->
 <div id="certStatusBox" class="alert text-center py-2 mb-4">
-    <strong id="certStatusLabel" class="score-label">
-        Total Score (TS): @Model.TotalScore.ToString("0.00")% &mdash;
-        NOT CERTIFIED <!-- default sementara, akan diubah JS -->
-    </strong>
+        <strong id="certStatusLabel" class="score-label">
+            Total Score (TS): @Model.TotalScore.ToString("0.00")% &mdash;
+            @Model.ExcellentStatus
+        </strong>
 </div>
 
 <!-- INFORMASI SPBU --><div class="card mb-5 shadow-sm">
@@ -161,10 +161,10 @@
 
     <!-- Total Score -->
     <div class="box-total-score rounded-3 text-center py-2 mb-1 bg-danger text-white">
-        <strong class="score-label">
-            Total Score (TS): @Model.TotalScore.ToString("0.00")% &mdash;
-            NOT CERTIFIED
-        </strong>
+            <strong class="score-label">
+                Total Score (TS): @Model.TotalScore.ToString("0.00")% &mdash;
+                @Model.ExcellentStatus
+            </strong>
         <div class="box-penalty mt-1 small text-white" style="display:none">
             <strong>Penalty:</strong> <span class="penalty-text">-</span><br />
             <span class="fail-elements" style="display:none;">
