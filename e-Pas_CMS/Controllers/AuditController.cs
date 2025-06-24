@@ -35,22 +35,6 @@ namespace e_Pas_CMS.Controllers
                 var currentUser = User.Identity?.Name;
                 bool isReadonlyUser = currentUser == "usermanagement1";
 
-                // Ambil region user (jika ada)
-                //var query = from a in _context.trx_audits
-                //            join s in _context.spbus on a.spbu_id equals s.id
-                //            join u in _context.app_users on a.app_user_id equals u.id
-                //            join aur in _context.app_user_roles on s.region equals aur.region
-                //            join au in _context.app_users on aur.app_user_id equals au.id
-                //            where a.status == "UNDER_REVIEW"
-                //               && au.username == currentUser
-                //            orderby a.created_date descending
-                //            select new
-                //            {
-                //                Audit = a,
-                //                Spbu = s,
-                //                AuditorName = u.name
-                //            };
-
                 var userRegion = await (from aur in _context.app_user_roles
                                         join au in _context.app_users on aur.app_user_id equals au.id
                                         where au.username == currentUser
@@ -119,97 +103,253 @@ namespace e_Pas_CMS.Controllers
 
                 var result = new List<SpbuViewModel>();
 
-                foreach (var item in items)
+                foreach (var a in items)
                 {
                     var sql = @"
-                SELECT mqd.weight, tac.score_input
-                FROM master_questioner_detail mqd
-                LEFT JOIN trx_audit_checklist tac 
-                    ON tac.master_questioner_detail_id = mqd.id 
-                    AND tac.trx_audit_id = @id
-                WHERE mqd.master_questioner_id = (
-                    SELECT master_questioner_checklist_id 
-                    FROM trx_audit 
-                    WHERE id = @id
-                )
-                AND mqd.type = 'QUESTION'";
+        SELECT 
+            mqd.weight, 
+            tac.score_input, 
+            tac.score_x, 
+            mqd.is_relaksasi
+        FROM master_questioner_detail mqd
+        LEFT JOIN trx_audit_checklist tac 
+            ON tac.master_questioner_detail_id = mqd.id 
+            AND tac.trx_audit_id = @id
+        WHERE mqd.master_questioner_id = (
+            SELECT master_questioner_checklist_id 
+            FROM trx_audit 
+            WHERE id = @id
+        )
+        AND mqd.type = 'QUESTION'";
 
-                    var checklist = (await conn.QueryAsync<(decimal? weight, string score_input)>(sql, new { id = item.Audit.id })).ToList();
+                    var checklist = (await conn.QueryAsync<(decimal? weight, string score_input, decimal? score_x, bool? is_relaksasi)>(sql, new { id = a.Audit.id }))
+                        .ToList();
 
-                    decimal totalScore = 0, maxScore = 0;
+                    decimal sumAF = 0, sumWeight = 0, sumX = 0;
 
-                    foreach (var q in checklist)
+                    foreach (var item in checklist)
                     {
-                        decimal w = q.weight ?? 0;
-                        decimal v = q.score_input switch
+                        decimal w = item.weight ?? 0;
+                        string input = item.score_input?.Trim().ToUpperInvariant() ?? "";
+
+                        if (input == "X")
                         {
-                            "A" => 1.00m,
-                            "B" => 0.80m,
-                            "C" => 0.60m,
-                            "D" => 0.40m,
-                            "E" => 0.20m,
-                            "F" => 0.00m,
-                            _ => 0.00m
-                        };
-                        totalScore += v * w;
-                        maxScore += w;
+                            sumX += w;
+                            sumAF += item.score_x ?? 0;
+                        }
+                        else if (input == "F" && item.is_relaksasi == true)
+                        {
+                            sumAF += 1.00m * w;
+                        }
+                        else
+                        {
+                            decimal af = input switch
+                            {
+                                "A" => 1.00m,
+                                "B" => 0.80m,
+                                "C" => 0.60m,
+                                "D" => 0.40m,
+                                "E" => 0.20m,
+                                "F" => 0.00m,
+                                _ => 0.00m
+                            };
+                            sumAF += af * w;
+                        }
+
+                        sumWeight += w;
                     }
 
-                    decimal finalScore = maxScore > 0 ? totalScore / maxScore * 100 : 0m;
+                    decimal finalScore = (sumWeight - sumX) > 0
+                        ? (sumAF / (sumWeight - sumX)) * sumWeight
+                        : 0m;
 
-                    var penaltyQuery = @"
-                SELECT string_agg(mqd.penalty_alert, ', ') AS penalty_alerts
-                FROM trx_audit_checklist tac 
-                INNER JOIN master_questioner_detail mqd 
-                    ON mqd.id = tac.master_questioner_detail_id 
-                WHERE tac.trx_audit_id = @id 
-                  AND tac.score_input = 'F' 
-                  AND mqd.is_penalty = true;";
+                    // === Special Node Score Check ===
+                    var specialNodeIds = new Guid[]
+    {
+    Guid.Parse("555fe2e4-b95b-461b-9c92-ad8b5c837119"),
+    Guid.Parse("5e9ffc47-de99-4d7d-b8bc-0fb9b7acc81b"),
+    Guid.Parse("bafc206f-ed29-4bbc-8053-38799e186fb0"),
+    Guid.Parse("d26f4caa-e849-4ab4-9372-298693247272")
+    };
 
-                    var penaltyResult = await conn.ExecuteScalarAsync<string>(penaltyQuery, new { id = item.Audit.id });
+                    var specialScoreSql = @"
+    SELECT mqd.id, tac.score_input
+    FROM master_questioner_detail mqd
+    LEFT JOIN trx_audit_checklist tac 
+        ON tac.master_questioner_detail_id = mqd.id 
+        AND tac.trx_audit_id = @id
+    WHERE mqd.id IN (
+        '555fe2e4-b95b-461b-9c92-ad8b5c837119',
+        '5e9ffc47-de99-4d7d-b8bc-0fb9b7acc81b',
+        'bafc206f-ed29-4bbc-8053-38799e186fb0',
+        'd26f4caa-e849-4ab4-9372-298693247272'
+    );";
 
-                    bool hasPenalty = !string.IsNullOrEmpty(penaltyResult);
+                    var specialScores = (await conn.QueryAsync<(string id, string score_input)>(
+                        specialScoreSql, new { id = a.Audit.id }))
+                        .ToDictionary(x => x.id, x => x.score_input?.Trim().ToUpperInvariant());
 
-                    string goodStatus = "NOT CERTIFIED";
+                    bool forceGoodOnly = false;
+                    bool forceNotCertified = false;
 
-                    string excellentStatus = "NO CERTIFIED";
-
-                    if (finalScore >= 80)
+                    foreach (var score in specialScores.Values)
                     {
-                        goodStatus = "CERTIFIED";
+                        if (score == "C")
+                            forceGoodOnly = true;
+                        else if (score != "A")
+                            forceNotCertified = true;
+                    }
 
-                        if (!hasPenalty)
+                    // === Penalty Check
+                    var penaltyExcellentQuery = @"SELECT STRING_AGG(mqd.penalty_alert, ', ') AS penalty_alerts
+FROM trx_audit_checklist tac
+INNER JOIN master_questioner_detail mqd ON mqd.id = tac.master_questioner_detail_id
+WHERE 
+    tac.trx_audit_id = @id
+    AND (
+        (tac.master_questioner_detail_id IN (
+            '555fe2e4-b95b-461b-9c92-ad8b5c837119',
+            '5e9ffc47-de99-4d7d-b8bc-0fb9b7acc81b',
+            'bafc206f-ed29-4bbc-8053-38799e186fb0',
+            'd26f4caa-e849-4ab4-9372-298693247272'
+        ) AND tac.score_input <> 'A')
+        OR
+        (
+            ((mqd.penalty_excellent_criteria = 'LT_1' AND tac.score_input <> 'A') OR
+             (mqd.penalty_excellent_criteria = 'EQ_0' AND tac.score_input = 'F'))
+            AND (mqd.is_relaksasi = false OR mqd.is_relaksasi IS NULL)
+            AND mqd.is_penalty = true
+        )
+);";
+
+                    var penaltyGoodQuery = @"SELECT STRING_AGG(mqd.penalty_alert, ', ') AS penalty_alerts
+            FROM trx_audit_checklist tac
+            INNER JOIN master_questioner_detail mqd ON mqd.id = tac.master_questioner_detail_id
+            WHERE tac.trx_audit_id = @id AND
+              tac.score_input = 'F' AND
+              mqd.is_penalty = true AND 
+              (mqd.is_relaksasi = false OR mqd.is_relaksasi IS NULL);";
+
+                    var penaltyExcellentResult = await conn.ExecuteScalarAsync<string>(penaltyExcellentQuery, new { id = a.Audit.id });
+                    var penaltyGoodResult = await conn.ExecuteScalarAsync<string>(penaltyGoodQuery, new { id = a.Audit.id });
+
+                    bool hasExcellentPenalty = !string.IsNullOrEmpty(penaltyExcellentResult);
+                    bool hasGoodPenalty = !string.IsNullOrEmpty(penaltyGoodResult);
+
+                    //string goodStatus = (finalScore >= 75 && !hasGoodPenalty) ? "CERTIFIED" : "NOT CERTIFIED";
+
+                    //string excellentStatus = (finalScore >= 80 && !hasExcellentPenalty && !forceNotCertified)
+                    //    ? (forceGoodOnly ? "GOOD" : "CERTIFIED")
+                    //    : "NOT CERTIFIED";
+
+                    // === Audit Next
+                    string auditNext = null;
+                    string levelspbu = null;
+
+                    var auditFlowSql = @"SELECT * FROM master_audit_flow WHERE audit_level = @level LIMIT 1;";
+                    var auditFlow = await conn.QueryFirstOrDefaultAsync<dynamic>(auditFlowSql, new { level = a.Audit.audit_level });
+
+
+                    // === Hitung Compliance
+                    var checklistData = await GetChecklistDataAsync(conn, a.Audit.id);
+                    var mediaList = await GetMediaPerNodeAsync(conn, a.Audit.id);
+                    var elements = BuildHierarchy(checklistData, mediaList);
+                    foreach (var element in elements) AssignWeightRecursive(element);
+                    CalculateChecklistScores(elements);
+                    CalculateOverallScore(new DetailReportViewModel { Elements = elements }, checklistData);
+                    var compliance = HitungComplianceLevelDariElements(elements);
+
+                    // === Compliance validation
+                    var sss = Math.Round(compliance.SSS ?? 0, 2);
+                    var eqnq = Math.Round(compliance.EQnQ ?? 0, 2);
+                    var rfs = Math.Round(compliance.RFS ?? 0, 2);
+                    var vfc = Math.Round(compliance.VFC ?? 0, 2);
+                    var epo = Math.Round(compliance.EPO ?? 0, 2);
+
+                    bool failGood = sss < 80 || eqnq < 85 || rfs < 85 || vfc < 15 || epo < 25;
+                    bool failExcellent = sss < 85 || eqnq < 85 || rfs < 85 || vfc < 20 || epo < 50;
+
+                    // === Update status with compliance logic
+                    string goodStatus = (finalScore >= 75 && !hasGoodPenalty && !failGood)
+                        ? "CERTIFIED"
+                        : "NOT CERTIFIED";
+
+                    string excellentStatus = (finalScore >= 80 && !hasExcellentPenalty && !failExcellent && !forceNotCertified)
+                        ? (forceGoodOnly ? "GOOD" : "CERTIFIED")
+                        : "NOT CERTIFIED";
+
+                    if (auditFlow != null)
+                    {
+                        string passedGood = auditFlow.passed_good;
+                        string passedExcellent = auditFlow.passed_excellent;
+                        string passedAuditLevel = auditFlow.passed_audit_level;
+                        string failed_audit_level = auditFlow.failed_audit_level;
+
+                        if (string.IsNullOrWhiteSpace(passedGood) && string.IsNullOrWhiteSpace(passedExcellent) && goodStatus == "CERTIFIED" && excellentStatus == "CERTIFIED")
                         {
-                            excellentStatus = "EXCELLENT";
+                            auditNext = passedAuditLevel;
                         }
+                        else if (string.IsNullOrWhiteSpace(passedGood) && string.IsNullOrWhiteSpace(passedExcellent) && goodStatus == "CERTIFIED" && excellentStatus == "NOT CERTIFIED")
+                        {
+                            auditNext = passedAuditLevel;
+                        }
+                        else if (string.IsNullOrWhiteSpace(passedGood) && string.IsNullOrWhiteSpace(passedExcellent) && goodStatus == "NOT CERTIFIED" && excellentStatus == "NOT CERTIFIED")
+                        {
+                            auditNext = failed_audit_level;
+                        }
+                        else if (goodStatus == "NOT CERTIFIED" && excellentStatus == "NOT CERTIFIED")
+                        {
+                            auditNext = failed_audit_level;
+                        }
+                        else if (goodStatus == "CERTIFIED" && excellentStatus == "NOT CERTIFIED")
+                        {
+                            auditNext = passedGood;
+                        }
+                        else if (goodStatus == "CERTIFIED" && excellentStatus == "CERTIFIED")
+                        {
+                            auditNext = passedExcellent;
+                        }
+                        else if (string.IsNullOrWhiteSpace(passedGood) && string.IsNullOrWhiteSpace(passedExcellent) && finalScore >= 75)
+                        {
+                            auditNext = passedAuditLevel;
+                        }
+                        else
+                        {
+                            auditNext = failed_audit_level;
+                        }
+
+                        var auditlevelClassSql = @"SELECT audit_level_class FROM master_audit_flow WHERE audit_level = @level LIMIT 1;";
+                        var auditlevelClass = await conn.QueryFirstOrDefaultAsync<dynamic>(auditlevelClassSql, new { level = auditNext });
+                        levelspbu = auditlevelClass != null
+                        ? (auditlevelClass.audit_level_class ?? "")
+                        : "";
                     }
 
                     result.Add(new SpbuViewModel
                     {
-                        Id = item.Audit.id,
-                        NoSpbu = item.Spbu.spbu_no,
-                        Rayon = item.Spbu.region,
-                        Alamat = item.Spbu.address,
-                        TipeSpbu = item.Spbu.type,
-                        Tahun = item.Audit.created_date.ToString("yyyy"),
-                        Audit = item.Audit.audit_level,
+                        Id = a.Audit.id,
+                        NoSpbu = a.Spbu.spbu_no,
+                        Rayon = a.Spbu.region,
+                        Alamat = a.Spbu.address,
+                        TipeSpbu = a.Spbu.type,
+                        Tahun = a.Audit.created_date.ToString("yyyy"),
+                        Audit = a.Audit.audit_level,
                         Score = Math.Round(finalScore, 2),
                         Good = goodStatus,
                         Excelent = excellentStatus,
-                        Provinsi = item.Spbu.province_name,
-                        Kota = item.Spbu.city_name,
-                        NamaAuditor = item.AuditorName,
-                        Report = item.Audit.report_no,
-                        TanggalSubmit = (item.Audit.audit_execution_time == null || item.Audit.audit_execution_time.Value == DateTime.MinValue)
-                            ? item.Audit.updated_date.Value
-                            : item.Audit.audit_execution_time.Value,
-                        Status = item.Audit.status,
-                        Komplain = item.Audit.status == "FAIL" ? "ADA" : "TIDAK ADA",
-                        Banding = item.Audit.audit_level == "Re-Audit" ? "ADA" : "TIDAK ADA",
-                        Type = item.Spbu.audit_current,
-                        TanggalApprove = item.Audit.approval_date ?? DateTime.Now,
-                        Approver = string.IsNullOrWhiteSpace(item.Audit.approval_by) ? "-" : item.Audit.approval_by
-
+                        Provinsi = a.Spbu.province_name,
+                        Kota = a.Spbu.city_name,
+                        NamaAuditor = a.AuditorName,
+                        Report = a.Audit.report_no,
+                        TanggalSubmit = (a.Audit.audit_execution_time == null || a.Audit.audit_execution_time.Value == DateTime.MinValue)
+                            ? a.Audit.updated_date.Value
+                            : a.Audit.audit_execution_time.Value,
+                        Status = a.Audit.status,
+                        Komplain = a.Audit.status == "FAIL" ? "ADA" : "TIDAK ADA",
+                        Banding = a.Audit.audit_level == "Re-Audit" ? "ADA" : "TIDAK ADA",
+                        Type = a.Spbu.audit_current,
+                        TanggalApprove = a.Audit.approval_date ?? DateTime.Now,
+                        Approver = string.IsNullOrWhiteSpace(a.Audit.approval_by) ? "-" : a.Audit.approval_by
                     });
                 }
 
@@ -251,6 +391,21 @@ namespace e_Pas_CMS.Controllers
                 });
             }
         }
+
+        private (decimal? SSS, decimal? EQnQ, decimal? RFS, decimal? VFC, decimal? EPO) HitungComplianceLevelDariElements(List<AuditChecklistNode> elements)
+        {
+            decimal? Ambil(string title) =>
+                elements.FirstOrDefault(e => e.Title?.Trim().ToUpperInvariant() == title.Trim().ToUpperInvariant())?.ScoreAF * 100;
+
+            return (
+                SSS: Ambil("Elemen 1"),
+                EQnQ: Ambil("Elemen 2"),
+                RFS: Ambil("Elemen 3"),
+                VFC: Ambil("Elemen 4"),
+                EPO: Ambil("Elemen 5")
+            );
+        }
+
 
         //public async Task<IActionResult> Index(int pageNumber = 1, int pageSize = DefaultPageSize, string searchTerm = "")
         //{

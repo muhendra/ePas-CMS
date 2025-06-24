@@ -368,16 +368,15 @@ WHERE
                                .Distinct()
                                .Where(r => r != null)
                                .ToListAsync();
-            var query = _context.trx_audits
-    .Include(a => a.spbu)
-    .Include(a => a.app_user)
-    .Where(a =>
-        a.status == "VERIFIED" &&
-        a.created_date >= new DateTime(2025, 5, 1) &&
-        a.created_date < new DateTime(2025, 6, 1)
-        //&& a.id == "89194b6a-0fcb-4a1a-bd2d-8fce8556d7ec"
-    );
 
+            var query = _context.trx_audits
+                .Include(a => a.spbu)
+                .Include(a => a.app_user)
+                .Where(a =>
+                    a.status == "VERIFIED" &&
+                    a.created_date >= new DateTime(2025, 5, 1) &&
+                    a.created_date < new DateTime(2025, 6, 1)
+                );
 
             if (userRegion.Any())
             {
@@ -401,10 +400,6 @@ WHERE
                 .OrderByDescending(a => a.audit_execution_time ?? a.updated_date)
                 .ToListAsync();
 
-            var conn = _context.Database.GetDbConnection();
-            if (conn.State != ConnectionState.Open)
-                await conn.OpenAsync();
-
             var csv = new StringBuilder();
             var headers = new[]
             {
@@ -414,6 +409,10 @@ WHERE
         "kelas_spbu","penalty_good_alerts","penalty_excellent_alerts"
     };
             csv.AppendLine(string.Join(",", headers.Select(h => $"\"{h}\"")));
+
+            await using var conn = _context.Database.GetDbConnection();
+            if (conn.State != ConnectionState.Open)
+                await conn.OpenAsync();
 
             foreach (var a in audits)
             {
@@ -439,11 +438,9 @@ WHERE
                     ? a.updated_date
                     : a.approval_date;
 
-                var score = a.spbu.audit_current_score.HasValue && a.spbu.audit_current_score != 0
-                    ? a.spbu.audit_current_score.Value
-                    : 0m;
+                var score = a.spbu.audit_current_score ?? 0m;
 
-                // Penalty
+                // Penalty queries
                 var penaltyGoodQuery = @"SELECT STRING_AGG(CONCAT(mqd.number, ' : ', mqd.penalty_alert), ', ') FROM trx_audit_checklist tac
 INNER JOIN master_questioner_detail mqd ON mqd.id = tac.master_questioner_detail_id
 WHERE tac.trx_audit_id = @id AND tac.score_input = 'F' AND mqd.is_penalty = true AND (mqd.is_relaksasi IS NULL OR mqd.is_relaksasi = false)";
@@ -462,11 +459,11 @@ WHERE tac.trx_audit_id = @id AND (
         AND mqd.is_penalty = true
     )
 );";
+                var penaltyGood = await conn.ExecuteScalarAsync<string>(
+                    new CommandDefinition(penaltyGoodQuery, new { id = a.id }, commandTimeout: 180)) ?? "";
+                var penaltyExcellent = await conn.ExecuteScalarAsync<string>(
+                    new CommandDefinition(penaltyExcellentQuery, new { id = a.id }, commandTimeout: 180)) ?? "";
 
-                var penaltyGood = await conn.ExecuteScalarAsync<string>(penaltyGoodQuery, new { id = a.id }) ?? "";
-                var penaltyExcellent = await conn.ExecuteScalarAsync<string>(penaltyExcellentQuery, new { id = a.id }) ?? "";
-
-                // Special node check
                 var specialSql = @"SELECT mqd.id, tac.score_input FROM master_questioner_detail mqd
 LEFT JOIN trx_audit_checklist tac ON tac.master_questioner_detail_id = mqd.id AND tac.trx_audit_id = @id
 WHERE mqd.id IN (
@@ -474,7 +471,8 @@ WHERE mqd.id IN (
     '5e9ffc47-de99-4d7d-b8bc-0fb9b7acc81b',
     'bafc206f-ed29-4bbc-8053-38799e186fb0',
     'd26f4caa-e849-4ab4-9372-298693247272')";
-                var specialScores = (await conn.QueryAsync<(string id, string score_input)>(specialSql, new { id = a.id }))
+                var specialScores = (await conn.QueryAsync<(string id, string score_input)>(
+                    new CommandDefinition(specialSql, new { id = a.id }, commandTimeout: 180)))
                     .ToDictionary(x => x.id, x => x.score_input?.Trim().ToUpperInvariant());
 
                 bool forceGoodOnly = false;
@@ -497,9 +495,11 @@ WHERE mqd.id IN (
                     ? (forceGoodOnly ? "GOOD" : "CERTIFIED")
                     : "NOT CERTIFIED";
 
-                // Audit Next
+                // Audit next flow
                 string auditNext = "", levelSpbu = "";
-                var flow = await conn.QueryFirstOrDefaultAsync<dynamic>("SELECT * FROM master_audit_flow WHERE audit_level = @level LIMIT 1", new { level = a.audit_level });
+                var flow = await conn.QueryFirstOrDefaultAsync<dynamic>(
+                    new CommandDefinition("SELECT * FROM master_audit_flow WHERE audit_level = @level LIMIT 1",
+                    new { level = a.audit_level }, commandTimeout: 180));
                 if (flow != null)
                 {
                     string passedGood = flow.passed_good;
@@ -507,44 +507,17 @@ WHERE mqd.id IN (
                     string passedAuditLevel = flow.passed_audit_level;
                     string failed_audit_level = flow.failed_audit_level;
 
-                    if (string.IsNullOrWhiteSpace(passedGood) && string.IsNullOrWhiteSpace(passedExcellent) && goodStatus == "CERTIFIED" && excellentStatus == "CERTIFIED")
-                    {
-                        auditNext = passedAuditLevel;
-                    }
-                    else if (string.IsNullOrWhiteSpace(passedGood) && string.IsNullOrWhiteSpace(passedExcellent) && goodStatus == "CERTIFIED" && excellentStatus == "NOT CERTIFIED")
-                    {
-                        auditNext = passedAuditLevel;
-                    }
-                    else if (string.IsNullOrWhiteSpace(passedGood) && string.IsNullOrWhiteSpace(passedExcellent) && goodStatus == "NOT CERTIFIED" && excellentStatus == "NOT CERTIFIED")
-                    {
-                        auditNext = failed_audit_level;
-                    }
-                    else if (goodStatus == "NOT CERTIFIED" && excellentStatus == "NOT CERTIFIED")
-                    {
-                        auditNext = failed_audit_level;
-                    }
+                    if (goodStatus == "CERTIFIED" && excellentStatus == "CERTIFIED")
+                        auditNext = string.IsNullOrWhiteSpace(passedExcellent) ? passedAuditLevel : passedExcellent;
                     else if (goodStatus == "CERTIFIED" && excellentStatus == "NOT CERTIFIED")
-                    {
-                        auditNext = passedGood;
-                    }
-                    else if (goodStatus == "CERTIFIED" && excellentStatus == "CERTIFIED")
-                    {
-                        auditNext = passedExcellent;
-                    }
-                    else if (string.IsNullOrWhiteSpace(passedGood) && string.IsNullOrWhiteSpace(passedExcellent) && score >= 75)
-                    {
-                        auditNext = passedAuditLevel;
-                    }
+                        auditNext = string.IsNullOrWhiteSpace(passedGood) ? passedAuditLevel : passedGood;
                     else
-                    {
                         auditNext = failed_audit_level;
-                    }
 
-                    var auditlevelClassSql = @"SELECT audit_level_class FROM master_audit_flow WHERE audit_level = @level LIMIT 1;";
-                    var auditlevelClass = await conn.QueryFirstOrDefaultAsync<dynamic>(auditlevelClassSql, new { level = auditNext });
-                    levelSpbu = auditlevelClass != null
-                    ? (auditlevelClass.audit_level_class ?? "")
-                    : "";
+                    var levelClass = await conn.QueryFirstOrDefaultAsync<dynamic>(
+                        new CommandDefinition("SELECT audit_level_class FROM master_audit_flow WHERE audit_level = @level LIMIT 1",
+                        new { level = auditNext }, commandTimeout: 60));
+                    levelSpbu = levelClass?.audit_level_class ?? "";
                 }
 
                 csv.AppendLine(string.Join(",", new[]
