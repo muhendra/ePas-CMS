@@ -373,7 +373,7 @@ WHERE
                 .Include(a => a.spbu)
                 .Include(a => a.app_user)
                 .Where(a =>
-                    a.status == "VERIFIED" &&
+                    a.audit_execution_time == DateTime.MinValue &&
                     a.created_date >= new DateTime(2025, 5, 1) &&
                     a.created_date < new DateTime(2025, 6, 1)
                 );
@@ -430,9 +430,7 @@ WHERE
                 var vfc = Math.Round(compliance.VFC ?? 0, 2);
                 var epo = Math.Round(compliance.EPO ?? 0, 2);
 
-                var auditDate = a.audit_execution_time == null || a.audit_execution_time == DateTime.MinValue
-                    ? a.updated_date.Value
-                    : a.audit_execution_time.Value;
+                var auditDate = a.audit_execution_time.Value;
 
                 var submitDate = a.approval_date == null || a.approval_date == DateTime.MinValue
                     ? a.updated_date

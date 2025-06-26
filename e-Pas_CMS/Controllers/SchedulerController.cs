@@ -24,9 +24,9 @@ namespace e_Pas_CMS.Controllers
         public async Task<IActionResult> Index(int pageNumber = 1, int pageSize = 10, string searchTerm = "")
         {
             var query = _context.trx_audits
-            .Include(a => a.app_user)
-            .Include(a => a.spbu)
-            .Where(a => a.status == "NOT_STARTED");
+                .Include(a => a.app_user)
+                .Include(a => a.spbu)
+                .Where(a => a.status != "DELETED");
 
             if (!string.IsNullOrWhiteSpace(searchTerm))
             {
@@ -39,21 +39,23 @@ namespace e_Pas_CMS.Controllers
             query = query.OrderByDescending(a => a.created_date);
 
             var totalItems = await query.CountAsync();
-            var items = await query
+
+            var rawItems = await query
                 .OrderByDescending(x => x.audit_schedule_date)
                 .Skip((pageNumber - 1) * pageSize)
                 .Take(pageSize)
-                .Select(a => new SchedulerItemViewModel
-                {
-                    Id = a.id,
-                    Status = a.status,
-                    AppUserName = a.app_user.name,
-                    AuditScheduleDate = a.audit_schedule_date.HasValue ? a.audit_schedule_date.Value.ToDateTime(new TimeOnly()) : DateTime.MinValue,
-                    AuditType = a.audit_type,
-                    AuditLevel = a.audit_level,
-                    SpbuNo = a.spbu.spbu_no
-                })
                 .ToListAsync();
+
+            var items = rawItems.Select(a => new SchedulerItemViewModel
+            {
+                Id = a.id,
+                Status = MapStatus(a.status),
+                AppUserName = a.app_user.name,
+                AuditScheduleDate = a.audit_schedule_date.HasValue ? a.audit_schedule_date.Value.ToDateTime(new TimeOnly()) : DateTime.MinValue,
+                AuditType = a.audit_type,
+                AuditLevel = a.audit_level,
+                SpbuNo = a.spbu.spbu_no
+            }).ToList();
 
             var vm = new SchedulerIndexViewModel
             {
@@ -66,6 +68,17 @@ namespace e_Pas_CMS.Controllers
 
             return View(vm);
         }
+
+        // Helper method to map status
+        private string MapStatus(string status) => status switch
+        {
+            "NOT_STARTED" => "Belum Dimulai",
+            "IN_PROGRESS_INPUT" => "Sedang Berlangsung",
+            "IN_PROGRESS_SUBMIT" => "Sedang Berlangsung",
+            "UNDER_REVIEW" => "Sedang Ditinjau",
+            "VERIFIED" => "Terverifikasi",
+            _ => status
+        };
 
         [HttpGet("Add")]
         public IActionResult Add()
@@ -288,7 +301,9 @@ namespace e_Pas_CMS.Controllers
 
                 if (existingSPBU != null)
                 {
-                    nextauditsspbu = existingSPBU.audit_next;
+                    nextauditsspbu = !string.IsNullOrEmpty(existingSPBU.audit_next)
+                        ? existingSPBU.audit_next
+                        : existingSPBU.audit_current;
                 }
 
                 var conn = _context.Database.GetDbConnection();
