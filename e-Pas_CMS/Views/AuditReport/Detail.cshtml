@@ -6,7 +6,7 @@
     ViewData["Title"] = "Detail Laporan Audit";
     bool isVerified = Model.Status?.ToUpper() == "VERIFIED";
 
-    var isSuperadmin = User.IsInRole("Report");
+    var isSuperadmin = User.IsInRole("Superadmin");
 
     var isCertified = Model.TotalScore >= Model.MinPassingScore && string.IsNullOrWhiteSpace(Model.PenaltyAlerts);
     var statusLabel = isCertified ? "EXCELLENT" : "NOT CERTIFIED";
