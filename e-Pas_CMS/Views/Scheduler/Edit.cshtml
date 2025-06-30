@@ -35,9 +35,10 @@
             <h5 class="fw-semibold mb-3 text-primary">Detail Audit</h5>
 
             <div class="form-floating mb-3">
-                @Html.TextBoxFor(m => m.AuditLevel, new { @class = "form-control", placeholder = "Audit Level" })
-                <label>Audit Level</label>
+                @Html.DropDownListFor(m => m.AuditLevel, Model.AuditLevelList, "Pilih Audit Level", new { @class = "form-select", id = "AuditLevel" })
+                <label for="AuditLevel">Audit Level</label>
             </div>
+
 
             <div class="form-floating mb-3">
                 @Html.DropDownListFor(m => m.AuditType, new SelectList(new[]

@@ -142,6 +142,13 @@ namespace e_Pas_CMS.Controllers
             var audit = _context.trx_audits.Find(id);
             if (audit == null) return HttpNotFound();
 
+            // Ambil audit_level unik dari master_audit_flow
+            var auditLevels = _context.master_audit_flows
+                .Select(m => m.audit_level)
+                .Distinct()
+                .OrderBy(x => x)
+                .ToList();
+
             var viewModel = new AuditEditViewModel
             {
                 Id = audit.id,
@@ -150,8 +157,19 @@ namespace e_Pas_CMS.Controllers
                 AuditLevel = audit.audit_level,
                 AuditType = audit.audit_type,
                 AuditScheduleDate = audit.audit_schedule_date,
-                SpbuList = _context.spbus.Select(s => new SelectListItem { Value = s.id, Text = s.spbu_no }),
-                UserList = _context.app_users.Select(u => new SelectListItem { Value = u.id, Text = u.name })
+                SpbuList = _context.spbus
+                    .Select(s => new SelectListItem { Value = s.id, Text = s.spbu_no })
+                    .ToList(),
+                UserList = _context.app_users
+                    .Select(u => new SelectListItem { Value = u.id, Text = u.name })
+                    .ToList(),
+                AuditLevelList = auditLevels
+                    .Select(a => new SelectListItem
+                    {
+                        Value = a,
+                        Text = a,
+                        Selected = (a == audit.audit_level)
+                    }).ToList()
             };
 
             return View(viewModel);
