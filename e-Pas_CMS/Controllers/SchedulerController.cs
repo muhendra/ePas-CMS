@@ -420,49 +420,53 @@ namespace e_Pas_CMS.Controllers
                 var auditFlowSql = @"SELECT * FROM master_audit_flow WHERE audit_level = @level LIMIT 1;";
                 var auditFlow = await conn.QueryFirstOrDefaultAsync<dynamic>(auditFlowSql, new { level = audit_level });
 
-                if (auditFlow != null)
-                {
-                    string passedGood = auditFlow.passed_good;
-                    string passedExcellent = auditFlow.passed_excellent;
-                    string passedAuditLevel = auditFlow.passed_audit_level;
-                    string failed_audit_level = auditFlow.failed_audit_level;
+                var auditNextSql = @"SELECT * FROM spbu WHERE id = @id LIMIT 1;";
+                var auditNextRes = await conn.QueryFirstOrDefaultAsync<dynamic>(auditNextSql, new { id = spbuId });
 
-                    if (string.IsNullOrWhiteSpace(passedGood) && string.IsNullOrWhiteSpace(passedExcellent) && goodStatus == "CERTIFIED" && excellentStatus == "CERTIFIED")
-                    {
-                        auditNext = passedAuditLevel;
-                    }
-                    else if (string.IsNullOrWhiteSpace(passedGood) && string.IsNullOrWhiteSpace(passedExcellent) && goodStatus == "CERTIFIED" && excellentStatus == "NOT CERTIFIED")
-                    {
-                        auditNext = passedAuditLevel;
-                    }
-                    else if (string.IsNullOrWhiteSpace(passedGood) && string.IsNullOrWhiteSpace(passedExcellent) && goodStatus == "NOT CERTIFIED" && excellentStatus == "NOT CERTIFIED")
-                    {
-                        auditNext = failed_audit_level;
-                    }
-                    else if (goodStatus == "CERTIFIED" && excellentStatus == "NOT CERTIFIED")
-                    {
-                        auditNext = passedGood;
-                    }
-                    else if (goodStatus == "CERTIFIED" && excellentStatus == "CERTIFIED")
-                    {
-                        auditNext = passedExcellent;
-                    }
-                    else if (string.IsNullOrWhiteSpace(passedGood) && string.IsNullOrWhiteSpace(passedExcellent) && finalScore >= 75)
-                    {
-                        auditNext = passedAuditLevel;
-                    }
-                    else
-                    {
-                        auditNext = failed_audit_level;
-                    }
+                //if (auditFlow != null)
+                //{
+                //    string passedGood = auditFlow.passed_good;
+                //    string passedExcellent = auditFlow.passed_excellent;
+                //    string passedAuditLevel = auditFlow.passed_audit_level;
+                //    string failed_audit_level = auditFlow.failed_audit_level;
 
-                    var auditlevelClassSql = @"SELECT audit_level_class FROM master_audit_flow WHERE audit_level = @level LIMIT 1;";
-                    var auditlevelClass = await conn.QueryFirstOrDefaultAsync<dynamic>(auditlevelClassSql, new { level = auditNext });
-                    levelspbu = auditlevelClass != null
-                    ? (auditlevelClass.audit_level_class ?? "")
-                    : "";
+                //    if (string.IsNullOrWhiteSpace(passedGood) && string.IsNullOrWhiteSpace(passedExcellent) && goodStatus == "CERTIFIED" && excellentStatus == "CERTIFIED")
+                //    {
+                //        auditNext = passedAuditLevel;
+                //    }
+                //    else if (string.IsNullOrWhiteSpace(passedGood) && string.IsNullOrWhiteSpace(passedExcellent) && goodStatus == "CERTIFIED" && excellentStatus == "NOT CERTIFIED")
+                //    {
+                //        auditNext = passedAuditLevel;
+                //    }
+                //    else if (string.IsNullOrWhiteSpace(passedGood) && string.IsNullOrWhiteSpace(passedExcellent) && goodStatus == "NOT CERTIFIED" && excellentStatus == "NOT CERTIFIED")
+                //    {
+                //        auditNext = failed_audit_level;
+                //    }
+                //    else if (goodStatus == "CERTIFIED" && excellentStatus == "NOT CERTIFIED")
+                //    {
+                //        auditNext = passedGood;
+                //    }
+                //    else if (goodStatus == "CERTIFIED" && excellentStatus == "CERTIFIED")
+                //    {
+                //        auditNext = passedExcellent;
+                //    }
+                //    else if (string.IsNullOrWhiteSpace(passedGood) && string.IsNullOrWhiteSpace(passedExcellent) && finalScore >= 75)
+                //    {
+                //        auditNext = passedAuditLevel;
+                //    }
+                //    else
+                //    {
+                //        auditNext = failed_audit_level;
+                //    }
+                //}
 
-                }
+                auditNext = auditNextRes.audit_next;
+
+                var auditlevelClassSql = @"SELECT audit_level_class FROM master_audit_flow WHERE audit_level = @level LIMIT 1;";
+                var auditlevelClass = await conn.QueryFirstOrDefaultAsync<dynamic>(auditlevelClassSql, new { level = auditNext });
+                levelspbu = auditlevelClass != null
+                ? (auditlevelClass.audit_level_class ?? "")
+                : "";
 
                 var trxAudit = new trx_audit
                 {
