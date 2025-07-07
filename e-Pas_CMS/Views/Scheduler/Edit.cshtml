@@ -10,9 +10,14 @@
         @Html.HiddenFor(m => m.Id)
         @Html.HiddenFor(m => m.SpbuId, new { id = "SpbuId" })
         @Html.HiddenFor(m => m.AppUserId, new { id = "AppUserId" })
+        @Html.HiddenFor(m => m.Status)
 
         <div class="card shadow-sm rounded-4 p-4 mb-4">
             <h5 class="fw-semibold mb-3 text-primary">Informasi SPBU & Auditor</h5>
+            <label>Status</label>
+            <div class="form-floating mb-3">
+                @Html.TextBoxFor(m => m.Status, new { @class = "form-control", @readonly = "readonly", disabled = "disabled", placeholder = "Status" })
+            </div>
 
             <div class="mb-3">
                 <label class="form-label">SPBU</label>

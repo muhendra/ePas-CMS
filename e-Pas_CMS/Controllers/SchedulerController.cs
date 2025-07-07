@@ -157,6 +157,7 @@ namespace e_Pas_CMS.Controllers
                 AuditLevel = audit.audit_level,
                 AuditType = audit.audit_type,
                 AuditScheduleDate = audit.audit_schedule_date,
+                Status = MapStatus(audit.status),
                 SpbuList = _context.spbus
                     .Select(s => new SelectListItem { Value = s.id, Text = s.spbu_no })
                     .ToList(),
@@ -228,7 +229,7 @@ namespace e_Pas_CMS.Controllers
                 AuditScheduleDate = data.audit_schedule_date?.ToDateTime(new TimeOnly()),
                 AuditType = data.audit_type,
                 AuditLevel = data.audit_level,
-                Status = data.status,
+                Status = MapStatus(data.status),
                 AuditMomIntro = data.audit_mom_intro,
                 AuditMomFinal = data.audit_mom_final
             };
