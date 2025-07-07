@@ -14,10 +14,11 @@
         public string Id { get; set; }
         public string Status { get; set; }
         public string AppUserName { get; set; }
-        public DateTime AuditScheduleDate { get; set; }
+        public DateTime AuditDate { get; set; }
         public string AuditType { get; set; }
         public string AuditLevel { get; set; }
         public string SpbuNo { get; set; }
+        public string ReportNo { get; set; }
     }
 
 }

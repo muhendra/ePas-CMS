@@ -51,10 +51,11 @@ namespace e_Pas_CMS.Controllers
                 Id = a.id,
                 Status = MapStatus(a.status),
                 AppUserName = a.app_user.name,
-                AuditScheduleDate = a.audit_schedule_date.HasValue ? a.audit_schedule_date.Value.ToDateTime(new TimeOnly()) : DateTime.MinValue,
+                AuditDate = (a.audit_execution_time == null || a.audit_execution_time.Value == DateTime.MinValue) ? a.audit_schedule_date.HasValue ? a.audit_schedule_date.Value.ToDateTime(new TimeOnly()) : DateTime.MinValue : a.audit_execution_time.Value,
                 AuditType = a.audit_type,
                 AuditLevel = a.audit_level,
-                SpbuNo = a.spbu.spbu_no
+                SpbuNo = a.spbu.spbu_no,
+                ReportNo = a.report_no
             }).ToList();
 
             var vm = new SchedulerIndexViewModel
