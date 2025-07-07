@@ -6,7 +6,7 @@
     ViewData["Title"] = "Detail Laporan Audit";
     bool isVerified = Model.Status?.ToUpper() == "VERIFIED";
 
-    var isSuperadmin = User.IsInRole("Verifikator");
+    var isSuperadmin = User.IsInRole("Superadmin");
 
     var isCertified = Model.TotalScore >= Model.MinPassingScore && string.IsNullOrWhiteSpace(Model.PenaltyAlerts);
     var statusLabel = isCertified ? "EXCELLENT" : "NOT CERTIFIED";
@@ -481,7 +481,7 @@
 }
 
 <div class="text-end mt-5">
-    @if (!isSuperadmin)
+    @if (User.IsInRole("Superadmin"))
     {
         <button class="btn btn-primary rounded-pill px-4 py-2" data-bs-toggle="modal" data-bs-target="#confirmModal">
             Reassign Laporan Audit
