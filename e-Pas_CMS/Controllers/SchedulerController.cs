@@ -199,6 +199,17 @@ namespace e_Pas_CMS.Controllers
 
             _context.SaveChanges();
 
+            // Update audit_next pada spbu
+            var spbu = _context.spbus.FirstOrDefault(s => s.id == model.SpbuId);
+            if (spbu != null)
+            {
+                spbu.audit_next = model.AuditLevel;
+                spbu.updated_by = User.Identity.Name;
+                spbu.updated_date = DateTime.Now;
+            }
+
+            _context.SaveChanges();
+
             TempData["Success"] = "Data berhasil diperbarui.";
             return RedirectToAction("Index");
         }
