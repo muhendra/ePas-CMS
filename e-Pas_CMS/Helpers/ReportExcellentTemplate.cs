@@ -102,7 +102,6 @@ public class ReportExcellentTemplate : IDocument
             var specialNodeIds = new[]
             {
             "555fe2e4-b95b-461b-9c92-ad8b5c837119",
-            "5e9ffc47-de99-4d7d-b8bc-0fb9b7acc81b",
             "bafc206f-ed29-4bbc-8053-38799e186fb0",
             "d26f4caa-e849-4ab4-9372-298693247272"
         };

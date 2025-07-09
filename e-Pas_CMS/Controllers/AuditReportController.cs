@@ -149,7 +149,6 @@ namespace e_Pas_CMS.Controllers
                 var specialNodeIds = new Guid[]
                 {
                     Guid.Parse("555fe2e4-b95b-461b-9c92-ad8b5c837119"),
-                    Guid.Parse("5e9ffc47-de99-4d7d-b8bc-0fb9b7acc81b"),
                     Guid.Parse("bafc206f-ed29-4bbc-8053-38799e186fb0"),
                     Guid.Parse("d26f4caa-e849-4ab4-9372-298693247272")
                 };
@@ -162,7 +161,6 @@ namespace e_Pas_CMS.Controllers
                     AND tac.trx_audit_id = @id
                 WHERE mqd.id IN (
                     '555fe2e4-b95b-461b-9c92-ad8b5c837119',
-                    '5e9ffc47-de99-4d7d-b8bc-0fb9b7acc81b',
                     'bafc206f-ed29-4bbc-8053-38799e186fb0',
                     'd26f4caa-e849-4ab4-9372-298693247272'
                 );";
@@ -184,25 +182,24 @@ namespace e_Pas_CMS.Controllers
 
                 // === Penalty Check
                 var penaltyExcellentQuery = @"SELECT STRING_AGG(mqd.penalty_alert, ', ') AS penalty_alerts
-FROM trx_audit_checklist tac
-INNER JOIN master_questioner_detail mqd ON mqd.id = tac.master_questioner_detail_id
-WHERE 
-    tac.trx_audit_id = @id
-    AND (
-        (tac.master_questioner_detail_id IN (
-            '555fe2e4-b95b-461b-9c92-ad8b5c837119',
-            '5e9ffc47-de99-4d7d-b8bc-0fb9b7acc81b',
-            'bafc206f-ed29-4bbc-8053-38799e186fb0',
-            'd26f4caa-e849-4ab4-9372-298693247272'
-        ) AND tac.score_input <> 'A')
-        OR
-        (
-            ((mqd.penalty_excellent_criteria = 'LT_1' AND tac.score_input <> 'A') OR
-             (mqd.penalty_excellent_criteria = 'EQ_0' AND tac.score_input = 'F'))
-            AND (mqd.is_relaksasi = false OR mqd.is_relaksasi IS NULL)
-            AND mqd.is_penalty = true
-        )
-);";
+            FROM trx_audit_checklist tac
+            INNER JOIN master_questioner_detail mqd ON mqd.id = tac.master_questioner_detail_id
+            WHERE 
+                tac.trx_audit_id = @id
+                AND (
+                    (tac.master_questioner_detail_id IN (
+                        '555fe2e4-b95b-461b-9c92-ad8b5c837119',
+                        'bafc206f-ed29-4bbc-8053-38799e186fb0',
+                        'd26f4caa-e849-4ab4-9372-298693247272'
+                    ) AND tac.score_input <> 'A')
+                    OR
+                    (
+                        ((mqd.penalty_excellent_criteria = 'LT_1' AND tac.score_input <> 'A') OR
+                         (mqd.penalty_excellent_criteria = 'EQ_0' AND tac.score_input = 'F'))
+                        AND (mqd.is_relaksasi = false OR mqd.is_relaksasi IS NULL)
+                        AND mqd.is_penalty = true
+                    )
+            );";
 
                 var penaltyGoodQuery = @"SELECT STRING_AGG(mqd.penalty_alert, ', ') AS penalty_alerts
             FROM trx_audit_checklist tac
@@ -368,6 +365,7 @@ WHERE
                                     select aur.region)
                                .Distinct()
                                .Where(r => r != null)
+                               
                                .ToListAsync();
 
             var allowedStatuses = new[] { "VERIFIED", "UNDER_REVIEW" };
@@ -403,6 +401,19 @@ WHERE
                 .OrderByDescending(a => a.audit_execution_time ?? a.updated_date)
                 .ToListAsync();
 
+            await using var conn2 = _context.Database.GetDbConnection();
+            if (conn2.State != ConnectionState.Open)
+                await conn2.OpenAsync();
+
+            var checklistNumbers = await conn2.QueryAsync<string>(@"
+        SELECT DISTINCT number 
+        FROM master_questioner_detail 
+        WHERE number IS NOT NULL AND TRIM(number) <> '' 
+        ORDER BY number ASC;
+    ");
+
+            var numberList = checklistNumbers.ToList();
+
             var csv = new StringBuilder();
             var headers = new[]
             {
@@ -410,8 +421,10 @@ WHERE
         "audit_level","audit_next","good_status","excellent_status","Total Score",
         "SSS","EQnQ","RFS","VFC","EPO","wtms","qq","wmef","format_fisik","cpo",
         "kelas_spbu","penalty_good_alerts","penalty_excellent_alerts"
-    };
-            csv.AppendLine(string.Join(",", headers.Select(h => $"\"{h}\"")));
+    };// Tambahkan header number checklist
+            csv.AppendLine(string.Join(",", headers.Concat(numberList).Select(h => $"\"{h}\"")));
+
+            //csv.AppendLine(string.Join(",", headers.Select(h => $"\"{h}\"")));
 
             await using var conn = _context.Database.GetDbConnection();
             if (conn.State != ConnectionState.Open)
@@ -436,8 +449,12 @@ WHERE
         )
         AND mqd.type = 'QUESTION'";
 
-                var checklist = (await conn.QueryAsync<(decimal? weight, string score_input, decimal? score_x, bool? is_relaksasi)>(sql, new { id = a.id }))
-                    .ToList();
+                var checklist = (await conn.QueryAsync<(decimal? weight, string score_input, decimal? score_x, bool? is_relaksasi)>(
+    sql,
+    new { id = a.id },
+    commandTimeout: 6000
+)).ToList();
+
 
                 decimal sumAF = 0, sumWeight = 0, sumX = 0;
 
@@ -481,7 +498,6 @@ WHERE
                 var specialNodeIds = new Guid[]
                 {
                     Guid.Parse("555fe2e4-b95b-461b-9c92-ad8b5c837119"),
-                    Guid.Parse("5e9ffc47-de99-4d7d-b8bc-0fb9b7acc81b"),
                     Guid.Parse("bafc206f-ed29-4bbc-8053-38799e186fb0"),
                     Guid.Parse("d26f4caa-e849-4ab4-9372-298693247272")
                 };
@@ -494,7 +510,6 @@ WHERE
                     AND tac.trx_audit_id = @id
                 WHERE mqd.id IN (
                     '555fe2e4-b95b-461b-9c92-ad8b5c837119',
-                    '5e9ffc47-de99-4d7d-b8bc-0fb9b7acc81b',
                     'bafc206f-ed29-4bbc-8053-38799e186fb0',
                     'd26f4caa-e849-4ab4-9372-298693247272'
                 );";
@@ -523,7 +538,6 @@ WHERE
     AND (
         (tac.master_questioner_detail_id IN (
             '555fe2e4-b95b-461b-9c92-ad8b5c837119',
-            '5e9ffc47-de99-4d7d-b8bc-0fb9b7acc81b',
             'bafc206f-ed29-4bbc-8053-38799e186fb0',
             'd26f4caa-e849-4ab4-9372-298693247272'
         ) AND tac.score_input <> 'A')
@@ -645,10 +659,30 @@ WHERE
                     : "";
                 }
 
+                var checklistRaw = await conn.QueryAsync<(string number, decimal? weight, string score_input, decimal? score_x, bool? is_relaksasi)>(@"
+    SELECT DISTINCT ON (mqd.number) 
+    mqd.number, mqd.weight, tac.score_input, tac.score_x, mqd.is_relaksasi
+FROM master_questioner_detail mqd
+LEFT JOIN trx_audit_checklist tac 
+    ON tac.master_questioner_detail_id = mqd.id 
+    AND tac.trx_audit_id = @id
+WHERE mqd.number IS NOT NULL AND TRIM(mqd.number) <> ''
+ORDER BY mqd.number, tac.updated_date DESC NULLS LAST
+", new { id = a.id });
+
+                var checklistMap = checklistRaw
+    .GroupBy(x => x.number)
+    .ToDictionary(
+        g => g.Key,
+        g => g.First().score_input?.Trim().ToUpperInvariant() ?? ""
+    );
+
+                var checklistValues = numberList.Select(number => $"\"{(checklistMap.TryGetValue(number, out var val) ? val : "")}\"");
+
                 decimal scores = (a.spbu.audit_current_score.HasValue && a.spbu.audit_current_score.Value != 0) ? a.spbu.audit_current_score.Value : finalScore;
 
                 csv.AppendLine(string.Join(",", new[]
-                {
+        {
             $"\"{submitDate:yyyy-MM-dd}\"",
             $"\"{auditDate:yyyy-MM-dd}\"",
             $"\"{a.spbu.spbu_no}\"",
@@ -674,9 +708,9 @@ WHERE
             $"\"{a.spbu.format_fisik}\"",
             $"\"{a.spbu.cpo}\"",
             $"\"{levelspbu}\"",
-            $"\"{penaltyExcellentResult}\"",
+            $"\"{penaltyGoodResult}\"",
             $"\"{penaltyExcellentResult}\""
-        }));
+        }.Concat(checklistValues)));
             }
 
             var fileName = $"Audit_Summary_{DateTime.Now:yyyyMMddHHmmss}.csv";
@@ -813,7 +847,6 @@ WHERE
                 AND tac.trx_audit_id = @id
             WHERE mqd.id IN (
                 '555fe2e4-b95b-461b-9c92-ad8b5c837119',
-                '5e9ffc47-de99-4d7d-b8bc-0fb9b7acc81b',
                 'bafc206f-ed29-4bbc-8053-38799e186fb0',
                 'd26f4caa-e849-4ab4-9372-298693247272'
             );";
@@ -837,7 +870,6 @@ WHERE
             WHERE tac.trx_audit_id = @id AND (
                 (tac.master_questioner_detail_id IN (
                     '555fe2e4-b95b-461b-9c92-ad8b5c837119',
-                    '5e9ffc47-de99-4d7d-b8bc-0fb9b7acc81b',
                     'bafc206f-ed29-4bbc-8053-38799e186fb0',
                     'd26f4caa-e849-4ab4-9372-298693247272'
                 ) AND tac.score_input <> 'A')
@@ -975,7 +1007,6 @@ WHERE
     AND (
         (tac.master_questioner_detail_id IN (
             '555fe2e4-b95b-461b-9c92-ad8b5c837119',
-            '5e9ffc47-de99-4d7d-b8bc-0fb9b7acc81b',
             'bafc206f-ed29-4bbc-8053-38799e186fb0',
             'd26f4caa-e849-4ab4-9372-298693247272'
         ) AND tac.score_input <> 'A')
@@ -1037,7 +1068,6 @@ WHERE
     AND (
         (tac.master_questioner_detail_id IN (
             '555fe2e4-b95b-461b-9c92-ad8b5c837119',
-            '5e9ffc47-de99-4d7d-b8bc-0fb9b7acc81b',
             'bafc206f-ed29-4bbc-8053-38799e186fb0',
             'd26f4caa-e849-4ab4-9372-298693247272'
         ) AND tac.score_input <> 'A')
@@ -1159,7 +1189,6 @@ WHERE
     AND (
         (tac.master_questioner_detail_id IN (
             '555fe2e4-b95b-461b-9c92-ad8b5c837119',
-            '5e9ffc47-de99-4d7d-b8bc-0fb9b7acc81b',
             'bafc206f-ed29-4bbc-8053-38799e186fb0',
             'd26f4caa-e849-4ab4-9372-298693247272'
         ) AND tac.score_input <> 'A')
@@ -1373,7 +1402,6 @@ WHERE
     AND (
         (tac.master_questioner_detail_id IN (
             '555fe2e4-b95b-461b-9c92-ad8b5c837119',
-            '5e9ffc47-de99-4d7d-b8bc-0fb9b7acc81b',
             'bafc206f-ed29-4bbc-8053-38799e186fb0',
             'd26f4caa-e849-4ab4-9372-298693247272'
         ) AND tac.score_input <> 'A')
@@ -1623,7 +1651,6 @@ WHERE
     AND (
         (tac.master_questioner_detail_id IN (
             '555fe2e4-b95b-461b-9c92-ad8b5c837119',
-            '5e9ffc47-de99-4d7d-b8bc-0fb9b7acc81b',
             'bafc206f-ed29-4bbc-8053-38799e186fb0',
             'd26f4caa-e849-4ab4-9372-298693247272'
         ) AND tac.score_input <> 'A')
@@ -1826,7 +1853,11 @@ WHERE
                    WHERE trx_audit_id = @id
                      AND master_questioner_detail_id IS NOT NULL";
 
-            var raw = await conn.QueryAsync<(string master_questioner_detail_id, string media_type, string media_path)>(sql, new { id });
+            var raw = await conn.QueryAsync<(string master_questioner_detail_id, string media_type, string media_path)>(
+                sql,
+                new { id },
+                commandTimeout: 6000
+            );
 
             return raw.GroupBy(x => x.master_questioner_detail_id)
                       .ToDictionary(
@@ -1838,6 +1869,7 @@ WHERE
                           }).ToList()
                       );
         }
+
 
         void RecalcScoreAFWeighted(AuditChecklistNode node)
         {

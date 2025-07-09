@@ -167,7 +167,6 @@ namespace e_Pas_CMS.Controllers
                     var specialNodeIds = new Guid[]
     {
     Guid.Parse("555fe2e4-b95b-461b-9c92-ad8b5c837119"),
-    Guid.Parse("5e9ffc47-de99-4d7d-b8bc-0fb9b7acc81b"),
     Guid.Parse("bafc206f-ed29-4bbc-8053-38799e186fb0"),
     Guid.Parse("d26f4caa-e849-4ab4-9372-298693247272")
     };
@@ -180,7 +179,6 @@ namespace e_Pas_CMS.Controllers
         AND tac.trx_audit_id = @id
     WHERE mqd.id IN (
         '555fe2e4-b95b-461b-9c92-ad8b5c837119',
-        '5e9ffc47-de99-4d7d-b8bc-0fb9b7acc81b',
         'bafc206f-ed29-4bbc-8053-38799e186fb0',
         'd26f4caa-e849-4ab4-9372-298693247272'
     );";
@@ -209,7 +207,6 @@ WHERE
     AND (
         (tac.master_questioner_detail_id IN (
             '555fe2e4-b95b-461b-9c92-ad8b5c837119',
-            '5e9ffc47-de99-4d7d-b8bc-0fb9b7acc81b',
             'bafc206f-ed29-4bbc-8053-38799e186fb0',
             'd26f4caa-e849-4ab4-9372-298693247272'
         ) AND tac.score_input <> 'A')
