@@ -49,9 +49,9 @@ namespace e_Pas_CMS.Controllers
                        .ToListAsync();
 
             var query = _context.trx_audits
-            .Include(a => a.spbu)
-            .Include(a => a.app_user)
-            .Where(a => a.status == "VERIFIED");
+                .Include(a => a.spbu)
+                .Include(a => a.app_user)
+                .Where(a => a.status == "VERIFIED");
 
             if (userRegion.Any())
             {
@@ -71,10 +71,13 @@ namespace e_Pas_CMS.Controllers
                 );
             }
 
+            // ✅ FIX: Sorting hanya sekali di awal dan dipakai terus
+            query = query.OrderByDescending(a => a.audit_execution_time)
+                         .ThenByDescending(a => a.id);
+
             var totalItems = await query.CountAsync();
 
             var pagedAudits = await query
-                .OrderByDescending(a => a.audit_execution_time ?? a.updated_date)
                 .Skip((pageNumber - 1) * pageSize)
                 .Take(pageSize)
                 .ToListAsync();
@@ -321,7 +324,7 @@ namespace e_Pas_CMS.Controllers
                     Auditor = a.app_user.name,
                     GoodStatus = goodStatus,
                     ExcellentStatus = excellentStatus,
-                    Score = (a.spbu.audit_current_score.HasValue && a.spbu.audit_current_score.Value != 0) ? a.spbu.audit_current_score.Value : finalScore,
+                    Score = (a.score ?? a.spbu.audit_current_score ?? (decimal?)finalScore).Value,
                     WTMS = a.spbu.wtms,
                     QQ = a.spbu.qq,
                     WMEF = a.spbu.wmef,
@@ -1284,6 +1287,13 @@ WHERE
             {
                 score = Math.Round(model.TotalScore, 2),
                 spbuNo = model.SpbuNo
+            });
+
+            var updateSqltrx_audit = @"UPDATE trx_audit SET score = @score WHERE id = @id";
+            await conn.ExecuteAsync(updateSqltrx_audit, new
+            {
+                score = Math.Round(model.TotalScore, 2),
+                id = id
             });
 
             return View(model);

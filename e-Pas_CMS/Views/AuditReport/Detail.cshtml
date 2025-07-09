@@ -628,11 +628,11 @@
             const specialNodeId4 = 'd26f4caa-e849-4ab4-9372-298693247272';
 
             const specialNodeScore = $(`#node-${specialNodeId} .option-btn.active`).data('score')?.toString().trim().toUpperCase() || "";
-            const specialNodeScore2 = $(`#node-${specialNodeId2} .option-btn.active`).data('score')?.toString().trim().toUpperCase() || "";
+            // const specialNodeScore2 = $(`#node-${specialNodeId2} .option-btn.active`).data('score')?.toString().trim().toUpperCase() || "";
             const specialNodeScore3 = $(`#node-${specialNodeId3} .option-btn.active`).data('score')?.toString().trim().toUpperCase() || "";
             const specialNodeScore4 = $(`#node-${specialNodeId4} .option-btn.active`).data('score')?.toString().trim().toUpperCase() || "";
 
-            console.log("Special Node Scores:", specialNodeScore, specialNodeScore2, specialNodeScore3, specialNodeScore4);
+            console.log("Special Node Scores:", specialNodeScore, specialNodeScore3, specialNodeScore4);
 
             let forceGoodOnly = false;
             let forceNotCertified = false;
@@ -644,7 +644,7 @@
                     console.log("Special node C detected — downgrade to GOOD");
                 } else if (
                     specialNodeScore !== 'A' ||
-                    specialNodeScore2 !== 'A' ||
+                    // specialNodeScore2 !== 'A' ||
                     specialNodeScore3 !== 'A' ||
                     specialNodeScore4 !== 'A'
                 ) {

@@ -600,7 +600,7 @@
             const specialNodeId4 = 'd26f4caa-e849-4ab4-9372-298693247272';
 
             const specialNodeScore = $(`#node-${specialNodeId} .option-btn.active`).data('score') || "";
-            const specialNodeScore2 = $(`#node-${specialNodeId2} .option-btn.active`).data('score')?.toString().trim().toUpperCase() || "";
+            // const specialNodeScore2 = $(`#node-${specialNodeId2} .option-btn.active`).data('score')?.toString().trim().toUpperCase() || "";
             const specialNodeScore3 = $(`#node-${specialNodeId3} .option-btn.active`).data('score')?.toString().trim().toUpperCase() || "";
             const specialNodeScore4 = $(`#node-${specialNodeId4} .option-btn.active`).data('score')?.toString().trim().toUpperCase() || "";
 
@@ -612,8 +612,9 @@
                     forceGoodOnly = true;
                 } else if (specialNodeScore !== 'A') {
                     forceNotCertified = true;
-                }else if (specialNodeScore2 !== 'A') {
-                    forceNotCertified = true;
+                }
+                // else if (specialNodeScore2 !== 'A') {
+                //     forceNotCertified = true;
                 }else if (specialNodeScore3 !== 'A') {
                     forceNotCertified = true;
                 }else if (specialNodeScore4 !== 'A') {
