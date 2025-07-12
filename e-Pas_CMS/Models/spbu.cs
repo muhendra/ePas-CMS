@@ -55,7 +55,7 @@ public partial class spbu
     public double? longitude { get; set; }
 
     public string? audit_current { get; set; }
-
+    [Required]
     public string? audit_next { get; set; }
 
     public string? status_good { get; set; }

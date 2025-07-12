@@ -1,4 +1,5 @@
 ﻿@using e_Pas_CMS.ViewModels
+@using System.Globalization
 @model PaginationModel<AuditReportListViewModel>
 
 @{
@@ -10,6 +11,10 @@
     int currentWindow = (int)Math.Ceiling((double)currentPage / windowSize);
     int startPage = (currentWindow - 1) * windowSize + 1;
     int endPage = Math.Min(startPage + windowSize - 1, totalPages);
+
+    var selectedMonth = ViewBag.FilterMonth as int?;
+    var selectedYear = ViewBag.FilterYear as int?;
+    var currentYear = DateTime.Now.Year;
 }
 
 @section Styles {
@@ -48,24 +53,40 @@
 
 <h3 class="mb-4 fw-bold">Audit Report</h3>
 
-@* <div class="mb-3">
-    <a asp-action="DownloadCsv"
-   asp-controller="AuditReport"
-   asp-route-searchTerm="@ViewBag.SearchTerm"
-   class="btn btn-success">
-    <i class="bi bi-download"></i> Download CSV
-</a>
-</div> *@
+<form method="get" asp-controller="AuditReport" asp-action="Index" class="row g-2 align-items-center mb-4">
+    <div class="col-auto" style="flex: 1 1 auto; min-width: 250px;">
+        <input type="text" name="searchTerm" value="@ViewBag.SearchTerm" class="form-control w-100" placeholder="🔍 Cari SPBU, Auditor, Status..." />
+    </div>
 
-<div class="mb-3 form-search">
-    <form method="get" asp-controller="AuditReport" asp-action="Index" class="d-flex gap-2">
-        <input type="text" name="searchTerm" value="@ViewBag.SearchTerm" class="form-control" placeholder="🔍 Cari SPBU, Auditor, Status...">
-        <button type="submit" class="btn btn-outline-primary">
+    <div class="col-auto" style="min-width: 180px;">
+        <select name="filterMonth" class="form-select w-100">
+            <option value="">📅 Bulan</option>
+            @for (int m = 1; m <= 12; m++)
+            {
+                var monthName = CultureInfo.CurrentCulture.DateTimeFormat.GetMonthName(m);
+                var isSelected = selectedMonth == m ? "selected" : "";
+                @Html.Raw($"<option value='{m}' {isSelected}>{monthName}</option>")
+            }
+        </select>
+    </div>
+
+    <div class="col-auto" style="min-width: 140px;">
+        <select name="filterYear" class="form-select w-100">
+            <option value="">📆 Tahun</option>
+            @for (int y = currentYear; y >= currentYear - 5; y--)
+            {
+                var isSelected = selectedYear == y ? "selected" : "";
+                @Html.Raw($"<option value='{y}' {isSelected}>{y}</option>")
+            }
+        </select>
+    </div>
+
+    <div class="col-auto">
+        <button type="submit" class="btn btn-outline-primary d-flex align-items-center gap-1">
             <i class="bi bi-search"></i> Cari
         </button>
-    </form>
-</div>
-
+    </div>
+</form>
 <table id="audit-table" class="table table-bordered table-hover align-middle nowrap w-100">
     <thead>
         <tr>
@@ -119,6 +140,7 @@
         }
     </tbody>
 </table>
+
 <br>
 <div class="d-flex justify-content-end mb-2">
     <div style="font-weight: bold; font-size: 18px;">
@@ -133,27 +155,27 @@
             @if (currentPage > 1)
             {
                 <li class="page-item">
-                    <a class="page-link" href="?pageNumber=1&searchTerm=@ViewBag.SearchTerm">First</a>
+                    <a class="page-link" href="?pageNumber=1&searchTerm=@ViewBag.SearchTerm&filterMonth=@selectedMonth&filterYear=@selectedYear">First</a>
                 </li>
                 <li class="page-item">
-                    <a class="page-link" href="?pageNumber=@(currentPage - 1)&searchTerm=@ViewBag.SearchTerm">&laquo;</a>
+                    <a class="page-link" href="?pageNumber=@(currentPage - 1)&searchTerm=@ViewBag.SearchTerm&filterMonth=@selectedMonth&filterYear=@selectedYear">&laquo;</a>
                 </li>
             }
 
             @for (int i = startPage; i <= endPage; i++)
             {
                 <li class="page-item @(i == currentPage ? "active" : "")">
-                    <a class="page-link" href="?pageNumber=@i&searchTerm=@ViewBag.SearchTerm">@i</a>
+                    <a class="page-link" href="?pageNumber=@i&searchTerm=@ViewBag.SearchTerm&filterMonth=@selectedMonth&filterYear=@selectedYear">@i</a>
                 </li>
             }
 
             @if (currentPage < totalPages)
             {
                 <li class="page-item">
-                    <a class="page-link" href="?pageNumber=@(currentPage + 1)&searchTerm=@ViewBag.SearchTerm">&raquo;</a>
+                    <a class="page-link" href="?pageNumber=@(currentPage + 1)&searchTerm=@ViewBag.SearchTerm&filterMonth=@selectedMonth&filterYear=@selectedYear">&raquo;</a>
                 </li>
                 <li class="page-item">
-                    <a class="page-link" href="?pageNumber=@totalPages&searchTerm=@ViewBag.SearchTerm">Last</a>
+                    <a class="page-link" href="?pageNumber=@totalPages&searchTerm=@ViewBag.SearchTerm&filterMonth=@selectedMonth&filterYear=@selectedYear">Last</a>
                 </li>
             }
         </ul>

@@ -4,6 +4,7 @@ using e_Pas_CMS.Models;
 using e_Pas_CMS.ViewModels;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.EntityFrameworkCore;
 using System;
 using System.Data;
@@ -138,6 +139,13 @@ public class SpbuController : Controller
     [HttpGet]
     public IActionResult Create()
     {
+        var auditLevels = _context.master_audit_flows
+            .Select(m => m.audit_level)
+            .Distinct()
+            .OrderBy(x => x)
+            .ToList();
+
+        ViewBag.AuditLevels = new SelectList(auditLevels);
         return View();
     }
 
@@ -180,6 +188,14 @@ public class SpbuController : Controller
     {
         var spbu = await _context.spbus.FindAsync(id);
         if (spbu == null) return NotFound();
+
+        var auditLevels = await _context.master_audit_flows
+            .Select(m => m.audit_level)
+            .Distinct()
+            .OrderBy(x => x)
+            .ToListAsync();
+
+        ViewBag.AuditLevels = new SelectList(auditLevels, spbu.audit_next); // auto select current value
         return View(spbu);
     }
 

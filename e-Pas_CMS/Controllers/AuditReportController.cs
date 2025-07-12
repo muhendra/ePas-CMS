@@ -36,7 +36,7 @@ namespace e_Pas_CMS.Controllers
             _logger = logger;
         }
 
-        public async Task<IActionResult> Index(int pageNumber = 1, int pageSize = 10, string searchTerm = "")
+        public async Task<IActionResult> Index(int pageNumber = 1, int pageSize = 10, string searchTerm = "", int? filterMonth = null, int? filterYear = null)
         {
             var currentUser = User.Identity?.Name;
 
@@ -71,7 +71,16 @@ namespace e_Pas_CMS.Controllers
                 );
             }
 
-            // ✅ FIX: Sorting hanya sekali di awal dan dipakai terus
+            if (filterMonth.HasValue && filterYear.HasValue)
+            {
+                query = query.Where(a =>
+                    a.created_date.Month == filterMonth.Value &&
+                    a.created_date.Year == filterYear.Value);
+            }
+
+            ViewBag.FilterMonth = filterMonth;
+            ViewBag.FilterYear = filterYear;
+
             query = query.OrderByDescending(a => a.audit_execution_time)
                          .ThenByDescending(a => a.id);
 

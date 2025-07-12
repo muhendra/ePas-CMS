@@ -184,7 +184,7 @@ namespace e_Pas_CMS.Controllers
             if (audit == null)
                 return NotFound();
 
-            // Update semua field yang pasti dikirim dari form (non-nullable)
+            // Update field dari form
             audit.spbu_id = model.SpbuId;
             audit.app_user_id = model.AppUserId;
             audit.audit_level = model.AuditLevel;
@@ -194,13 +194,25 @@ namespace e_Pas_CMS.Controllers
             audit.audit_mom_final = model.AuditMomFinal;
             audit.status = audit.status;
 
+            // Validasi berdasarkan tipe audit
+            if (model.AuditType == "Basic Operational")
+            {
+                audit.master_questioner_intro_id = "";
+                audit.master_questioner_checklist_id = "fe0d1ec2-513f-4e6f-bb0e-54c8ffdf38d6";
+            }
+            else
+            {
+                audit.master_questioner_intro_id = "7e3dca2d-2d99-4a8d-9fc0-9b80cb4c3a79";
+                audit.master_questioner_checklist_id = "16d4f8e1-360a-47b0-86b7-8ac55a1a6f75";
+            }
+
             // Metadata update
             audit.updated_date = DateTime.Now;
             audit.updated_by = User.Identity.Name;
 
             _context.SaveChanges();
 
-            // Update audit_next pada spbu
+            // Update audit_next pada SPBU
             var spbu = _context.spbus.FirstOrDefault(s => s.id == model.SpbuId);
             if (spbu != null)
             {
@@ -214,7 +226,6 @@ namespace e_Pas_CMS.Controllers
             TempData["Success"] = "Data berhasil diperbarui.";
             return RedirectToAction("Index");
         }
-
 
         private ActionResult HttpNotFound()
         {
@@ -481,6 +492,8 @@ namespace e_Pas_CMS.Controllers
                 ? (auditlevelClass.audit_level_class ?? "")
                 : "";
 
+                var isBasicOperational = TipeAudit == "Basic Operational";
+
                 var trxAudit = new trx_audit
                 {
                     id = Guid.NewGuid().ToString(),
@@ -488,8 +501,10 @@ namespace e_Pas_CMS.Controllers
                     report_no = "",                          
                     spbu_id = spbuId,
                     app_user_id = userId,
-                    master_questioner_intro_id = "7e3dca2d-2d99-4a8d-9fc0-9b80cb4c3a79",        
-                    master_questioner_checklist_id = "16d4f8e1-360a-47b0-86b7-8ac55a1a6f75",     
+                    master_questioner_intro_id = isBasicOperational ? null : "7e3dca2d-2d99-4a8d-9fc0-9b80cb4c3a79",
+                    master_questioner_checklist_id = isBasicOperational
+                    ? "fe0d1ec2-513f-4e6f-bb0e-54c8ffdf38d6"
+                    : "16d4f8e1-360a-47b0-86b7-8ac55a1a6f75",
                     audit_level = nextauditsspbu,
                     audit_type = TipeAudit,
                     audit_schedule_date = DateOnly.FromDateTime(TanggalAudit),
