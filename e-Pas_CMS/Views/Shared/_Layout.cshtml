@@ -164,6 +164,23 @@
                     </div>
                 </li>
 
+                <!-- Audit BOA Menu -->
+                <li class="nav-item mt-3">
+                    <a class="nav-link d-flex justify-content-between align-items-center" data-bs-toggle="collapse" href="#menu-audit-boa">
+                        <strong>Audit Basic Operational</strong>
+                        <i class="bi bi-caret-down-fill"></i>
+                    </a>
+                    <div class="collapse" id="menu-audit-boa">
+                        <ul class="nav flex-column ms-3 mt-2">
+                            @if (!User.IsInRole("Report"))
+                            {
+                                <li class="nav-item"><a class="nav-link" asp-controller="BasicOperational" asp-action="Index">Review Audit BOA</a></li>
+                            }
+                            <li class="nav-item"><a class="nav-link" asp-controller="BasicOperationalReport" asp-action="Index">Report BOA</a></li>
+                        </ul>
+                    </div>
+                </li>
+
                 @if (!User.IsInRole("Report"))
                 {
                 <!-- Scheduler Menu -->

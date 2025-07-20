@@ -1,0 +1,198 @@
+﻿@using e_Pas_CMS.ViewModels
+@using System.Globalization
+@model PaginationModel<AuditReportListViewModel>
+
+@{
+    ViewData["Title"] = "Audit Report Index Basic Operational";
+
+    int totalPages = (int)Math.Ceiling((decimal)Model.TotalItems / 10);
+    int currentPage = Model.PageNumber;
+    int windowSize = 10;
+    int currentWindow = (int)Math.Ceiling((double)currentPage / windowSize);
+    int startPage = (currentWindow - 1) * windowSize + 1;
+    int endPage = Math.Min(startPage + windowSize - 1, totalPages);
+
+    var selectedMonth = ViewBag.FilterMonth as int?;
+    var selectedYear = ViewBag.FilterYear as int?;
+    var currentYear = DateTime.Now.Year;
+}
+
+@section Styles {
+    <link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/jquery.dataTables.min.css" />
+    <style>
+        #audit-table_wrapper {
+            overflow-x: auto;
+        }
+
+        .table thead th {
+            background-color: #f1f3f5;
+            font-weight: 600;
+            text-align: center;
+            vertical-align: middle;
+        }
+
+        .table td,
+        .table th {
+            vertical-align: middle !important;
+            font-size: 14px;
+        }
+
+        .table-hover tbody tr:hover {
+            background-color: #f8f9fa;
+        }
+
+        .dataTables_wrapper .dataTables_filter {
+            display: none;
+        }
+
+        .pagination .page-link {
+            font-weight: 500;
+        }
+    </style>
+}
+
+<h3 class="mb-4 fw-bold">Audit Report Basic Operational</h3>
+
+<form method="get" asp-controller="BasicOperationalReport" asp-action="Index" class="row g-2 align-items-center mb-4">
+    <div class="col-auto" style="flex: 1 1 auto; min-width: 250px;">
+        <input type="text" name="searchTerm" value="@ViewBag.SearchTerm" class="form-control w-100" placeholder="🔍 Cari SPBU, Auditor, Status..." />
+    </div>
+
+    <div class="col-auto" style="min-width: 180px;">
+        <select name="filterMonth" class="form-select w-100">
+            <option value="">📅 Bulan</option>
+            @for (int m = 1; m <= 12; m++)
+            {
+                var monthName = CultureInfo.CurrentCulture.DateTimeFormat.GetMonthName(m);
+                var isSelected = selectedMonth == m ? "selected" : "";
+                @Html.Raw($"<option value='{m}' {isSelected}>{monthName}</option>")
+            }
+        </select>
+    </div>
+
+    <div class="col-auto" style="min-width: 140px;">
+        <select name="filterYear" class="form-select w-100">
+            <option value="">📆 Tahun</option>
+            @for (int y = currentYear; y >= currentYear - 5; y--)
+            {
+                var isSelected = selectedYear == y ? "selected" : "";
+                @Html.Raw($"<option value='{y}' {isSelected}>{y}</option>")
+            }
+        </select>
+    </div>
+
+    <div class="col-auto">
+        <button type="submit" class="btn btn-outline-primary d-flex align-items-center gap-1">
+            <i class="bi bi-search"></i> Cari
+        </button>
+    </div>
+</form>
+<table id="audit-table" class="table table-bordered table-hover align-middle nowrap w-100">
+    <thead>
+        <tr>
+            <th>No SPBU</th>
+            <th>Region</th>
+            <th style="min-width: 150px;">SBM</th>
+            <th style="min-width: 150px;">Alamat</th>
+            <th>Kelas SPBU</th>
+            <th>Type Audit</th>
+            <th>Next Audit</th>
+            <th>Tanggal Audit</th>
+            <th>Total Score</th>
+            <th>Good</th>
+            <th>Excelent</th>
+            <th>SSS</th>
+            <th>EQnQ</th>
+            <th>RFS</th>
+            <th>VFC</th>
+            <th>EPO</th>
+            <th>Aksi</th>
+        </tr>
+    </thead>
+    <tbody>
+        @for (int i = 0; i < Model.Items.Count; i++)
+        {
+            var item = Model.Items[i];
+            <tr>
+                <td>@item.SpbuNo</td>
+                <td>@item.Region</td>
+                <td>@item.SBM</td>
+                <td>@item.Address</td>
+                <td>@item.KelasSpbu</td>
+                <td>@item.Auditlevel</td>
+                <td>@item.AuditNext</td>
+                <td>@item.AuditDate?.ToString("dd/MM/yyyy")</td>
+                <td>@item.Score?.ToString("0.00")</td>
+                <td class="fw-bold @(item.GoodStatus == "CERTIFIED" ? "text-success" : "text-danger")">@item.GoodStatus</td>
+                <td class="fw-bold @(item.ExcellentStatus == "CERTIFIED" ? "text-success" : "text-danger")">@item.ExcellentStatus</td>
+                <td>@item.SSS</td>
+                <td>@item.EQnQ</td>
+                <td>@item.RFS</td>
+                <td>@item.VFC</td>
+                <td>@item.EPO</td>
+                <td>
+                    <a class="btn btn-sm btn-outline-primary fw-semibold"
+                       asp-controller="BasicOperationalReport" asp-action="Detail" asp-route-id="@item.TrxAuditId">
+                        <i class="bi bi-eye"></i> Detail
+                    </a>
+                </td>
+            </tr>
+        }
+    </tbody>
+</table>
+
+<br>
+<div class="d-flex justify-content-end mb-2">
+    <div style="font-weight: bold; font-size: 18px;">
+        Total Data: @Model.TotalItems
+    </div>
+</div>
+
+@if (totalPages > 1)
+{
+    <nav class="mt-4">
+        <ul class="pagination justify-content-start flex-wrap">
+            @if (currentPage > 1)
+            {
+                <li class="page-item">
+                    <a class="page-link" href="?pageNumber=1&searchTerm=@ViewBag.SearchTerm&filterMonth=@selectedMonth&filterYear=@selectedYear">First</a>
+                </li>
+                <li class="page-item">
+                    <a class="page-link" href="?pageNumber=@(currentPage - 1)&searchTerm=@ViewBag.SearchTerm&filterMonth=@selectedMonth&filterYear=@selectedYear">&laquo;</a>
+                </li>
+            }
+
+            @for (int i = startPage; i <= endPage; i++)
+            {
+                <li class="page-item @(i == currentPage ? "active" : "")">
+                    <a class="page-link" href="?pageNumber=@i&searchTerm=@ViewBag.SearchTerm&filterMonth=@selectedMonth&filterYear=@selectedYear">@i</a>
+                </li>
+            }
+
+            @if (currentPage < totalPages)
+            {
+                <li class="page-item">
+                    <a class="page-link" href="?pageNumber=@(currentPage + 1)&searchTerm=@ViewBag.SearchTerm&filterMonth=@selectedMonth&filterYear=@selectedYear">&raquo;</a>
+                </li>
+                <li class="page-item">
+                    <a class="page-link" href="?pageNumber=@totalPages&searchTerm=@ViewBag.SearchTerm&filterMonth=@selectedMonth&filterYear=@selectedYear">Last</a>
+                </li>
+            }
+        </ul>
+    </nav>
+}
+
+@section Scripts {
+    <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+    <script>
+        $(document).ready(function () {
+            $('#audit-table').DataTable({
+                paging: false,
+                info: false,
+                searching: false,
+                ordering: true,
+                responsive: true
+            });
+        });
+    </script>
+}

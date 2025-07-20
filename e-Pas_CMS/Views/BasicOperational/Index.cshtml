@@ -1,0 +1,620 @@
+﻿@model e_Pas_CMS.ViewModels.PaginationModel<e_Pas_CMS.ViewModels.SpbuViewModel>
+
+@section Styles {
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    <style>
+        .search-container {
+            position: sticky;
+            top: 0;
+            background: white;
+            padding: 1rem;
+            z-index: 2;
+            border-bottom: 1px solid #e2e8f0;
+            margin-bottom: 1rem;
+        }
+
+        .table-container {
+            position: relative;
+            height: calc(100vh - 300px);
+            overflow: hidden;
+            padding: 0 1rem;
+        }
+
+        .table-scroll {
+            overflow-y: auto;
+            overflow-x: auto;
+            height: 100%;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        .table-wrapper {
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        .table {
+            border-collapse: separate !important;
+            border-spacing: 0;
+            width: 100% !important;
+            min-width: 1200px;
+            background: #fff;
+            font-family: 'Inter', Arial, sans-serif;
+            font-size: 0.95rem;
+            color: #2c3e50;
+        }
+
+            .table thead {
+                position: sticky;
+                top: 0;
+                z-index: 1;
+            }
+
+                .table thead th {
+                    background: #f8f9fa;
+                    font-weight: 600;
+                    border: none;
+                    padding: 16px;
+                    color: #2c3e50;
+                    letter-spacing: 0.01em;
+                    text-transform: uppercase;
+                    font-size: 0.85rem;
+                    white-space: nowrap;
+                    box-shadow: 0 2px 2px rgba(0,0,0,0.05);
+                    cursor: pointer;
+                }
+
+                    .table thead th.sorting:after,
+                    .table thead th.sorting_asc:after,
+                    .table thead th.sorting_desc:after {
+                        position: absolute;
+                        right: 8px;
+                        display: block;
+                        opacity: 0.5;
+                    }
+
+                    .table thead th.sorting:after {
+                        content: "⇅";
+                        opacity: 0.2;
+                    }
+
+                    .table thead th.sorting_asc:after {
+                        content: "↑";
+                    }
+
+                    .table thead th.sorting_desc:after {
+                        content: "↓";
+                    }
+
+            .table tbody td {
+                border: none;
+                border-bottom: 1px solid #edf2f7;
+                padding: 14px 16px;
+                background: #fff;
+                vertical-align: middle;
+                transition: all 0.2s ease;
+                white-space: nowrap;
+            }
+
+            .table tbody tr:hover td {
+                background-color: #f8fafc;
+            }
+
+            .table tbody tr:last-child td {
+                border-bottom: none;
+            }
+
+        .table-striped > tbody > tr:nth-of-type(odd) {
+            background-color: #fafbfc;
+        }
+
+        .table-responsive {
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            margin-bottom: 0.5rem;
+            background: white;
+            height: 100%;
+        }
+
+        .btn-outline-primary {
+            border-color: #E30613;
+            color: #E30613;
+            font-weight: 500;
+            padding: 6px 12px;
+            border-radius: 6px;
+            transition: all 0.2s ease;
+        }
+
+            .btn-outline-primary:hover {
+                background-color: #E30613;
+                color: white;
+                border-color: #E30613;
+            }
+
+        .form-control {
+            border-radius: 8px;
+            border: 1px solid #e2e8f0;
+            padding: 10px 16px;
+            font-size: 0.95rem;
+            transition: all 0.2s ease;
+        }
+
+            .form-control:focus {
+                border-color: #E30613;
+                box-shadow: 0 0 0 3px rgba(227, 6, 19, 0.1);
+            }
+
+        .form-select {
+            border-radius: 8px;
+            border: 1px solid #e2e8f0;
+            padding: 10px 16px;
+            font-size: 0.95rem;
+            transition: all 0.2s ease;
+        }
+
+            .form-select:focus {
+                border-color: #E30613;
+                box-shadow: 0 0 0 3px rgba(227, 6, 19, 0.1);
+            }
+
+        .btn-primary {
+            background-color: #21B6D7;
+            border-color: #21B6D7;
+            border-radius: 8px;
+            padding: 10px 20px;
+            font-weight: 500;
+            transition: all 0.2s ease;
+        }
+
+            .btn-primary:hover {
+                background-color: #1a9ab8;
+                border-color: #1a9ab8;
+            }
+
+        .pagination {
+            margin-top: 0rem;
+            justify-content: flex-start;
+            gap: 0.25rem;
+        }
+
+
+            .pagination .page-item.active .page-link {
+                background-color: #21B6D7;
+                border-color: #21B6D7;
+                border-radius: 6px;
+            }
+
+            .pagination .page-link {
+                color: #21B6D7;
+                border-radius: 6px;
+                padding: 8px 16px;
+                border: 1px solid #e2e8f0;
+                transition: all 0.2s ease;
+            }
+
+                .pagination .page-link:hover {
+                    color: #21B6D7;
+                    background-color: #e6f7fa;
+                    border-color: #21B6D7;
+                }
+
+        .text-success {
+            color: #059669 !important;
+        }
+
+        .text-danger {
+            color: #dc2626 !important;
+        }
+
+        .fw-bold {
+            font-weight: 600 !important;
+        }
+
+        .alert {
+            border-radius: 8px;
+            border: none;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+
+        .alert-danger {
+            background-color: #fee2e2;
+            color: #dc2626;
+        }
+
+        .alert-success {
+            background-color: #dcfce7;
+            color: #059669;
+        }
+
+        .table thead th a {
+            color: inherit;
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            width: 100%;
+        }
+
+            .table thead th a:hover {
+                color: #E30613;
+            }
+
+        .table thead th i {
+            margin-left: 5px;
+        }
+    </style>
+}
+
+<div class="container-fluid px-0">
+    <h3 class="mb-4 fw-bold px-3">Review Audit Basic Operational</h3>
+
+    @if (TempData["Error"] != null)
+    {
+        <div class="alert alert-danger alert-dismissible fade show mx-3" role="alert">
+            @TempData["Error"]
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+    }
+
+    <div class="search-container">
+        <form method="get" class="row g-3">
+            <div class="col-md-8">
+                <input type="text" name="searchTerm" value="@ViewBag.SearchTerm" class="form-control" placeholder="🔍 Cari SPBU, Auditor, Status...">
+            </div>
+            <div class="col-md-2">
+                <select name="pageSize" class="form-select">
+                    @{
+                        var pageSizes = new[] { 10, 25, 50 };
+                        foreach (var size in pageSizes)
+                        {
+                            <option value="@size" selected="@(Model.PageSize == size)">@size per halaman</option>
+                        }
+                    }
+                </select>
+            </div>
+            <div class="col-md-2">
+                <button type="submit" class="btn btn-primary w-100">Cari</button>
+            </div>
+        </form>
+    </div>
+
+    <div class="table-container">
+        <div class="table-responsive">
+            <div class="table-scroll">
+                <div class="table-wrapper">
+                    <table id="audit-table" class="table table-bordered table-striped">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Aksi</th>
+                                <th>No</th>
+                                <th>
+                                    <a asp-action="Index"
+                                       asp-route-pageNumber="1"
+                                       asp-route-pageSize="@Model.PageSize"
+                                       asp-route-searchTerm="@ViewBag.SearchTerm"
+                                       asp-route-sortColumn="Status"
+                                       asp-route-sortDirection="@(ViewBag.SortColumn == "Status" && ViewBag.SortDirection == "asc" ? "desc" : "asc")">
+                                        Status Review
+                                        @if (ViewBag.SortColumn == "Status")
+                                        {
+                                            <i class="bi bi-arrow-@(ViewBag.SortDirection == "asc" ? "up" : "down")"></i>
+                                        }
+                                    </a>
+                                </th>
+                                <th>
+                                    <a asp-action="Index"
+                                       asp-route-pageNumber="1"
+                                       asp-route-pageSize="@Model.PageSize"
+                                       asp-route-searchTerm="@ViewBag.SearchTerm"
+                                       asp-route-sortColumn="Tahun"
+                                       asp-route-sortDirection="@(ViewBag.SortColumn == "Tahun" && ViewBag.SortDirection == "asc" ? "desc" : "asc")">
+                                        Tahun
+                                        @if (ViewBag.SortColumn == "Tahun")
+                                        {
+                                            <i class="bi bi-arrow-@(ViewBag.SortDirection == "asc" ? "up" : "down")"></i>
+                                        }
+                                    </a>
+                                </th>
+                                <th>
+                                    <a asp-action="Index"
+                                       asp-route-pageNumber="1"
+                                       asp-route-pageSize="@Model.PageSize"
+                                       asp-route-searchTerm="@ViewBag.SearchTerm"
+                                       asp-route-sortColumn="TanggalAudit"
+                                       asp-route-sortDirection="@(ViewBag.SortColumn == "TanggalAudit" && ViewBag.SortDirection == "asc" ? "desc" : "asc")">
+                                        Tanggal Audit
+                                        @if (ViewBag.SortColumn == "TanggalAudit")
+                                        {
+                                            <i class="bi bi-arrow-@(ViewBag.SortDirection == "asc" ? "up" : "down")"></i>
+                                        }
+                                    </a>
+                                </th>
+                                <th>
+                                    <a asp-action="Index"
+                                       asp-route-pageNumber="1"
+                                       asp-route-pageSize="@Model.PageSize"
+                                       asp-route-searchTerm="@ViewBag.SearchTerm"
+                                       asp-route-sortColumn="NoSpbu"
+                                       asp-route-sortDirection="@(ViewBag.SortColumn == "NoSpbu" && ViewBag.SortDirection == "asc" ? "desc" : "asc")">
+                                        No SPBU
+                                        @if (ViewBag.SortColumn == "NoSpbu")
+                                        {
+                                            <i class="bi bi-arrow-@(ViewBag.SortDirection == "asc" ? "up" : "down")"></i>
+                                        }
+                                    </a>
+                                </th>
+                                <th>
+                                    <a asp-action="Index"
+                                       asp-route-pageNumber="1"
+                                       asp-route-pageSize="@Model.PageSize"
+                                       asp-route-searchTerm="@ViewBag.SearchTerm"
+                                       asp-route-sortColumn="Auditor"
+                                       asp-route-sortDirection="@(ViewBag.SortColumn == "Auditor" && ViewBag.SortDirection == "asc" ? "desc" : "asc")">
+                                        Auditor
+                                        @if (ViewBag.SortColumn == "Auditor")
+                                        {
+                                            <i class="bi bi-arrow-@(ViewBag.SortDirection == "asc" ? "up" : "down")"></i>
+                                        }
+                                    </a>
+                                </th>
+                                <th>
+                                    <a asp-action="Index"
+                                       asp-route-pageNumber="1"
+                                       asp-route-pageSize="@Model.PageSize"
+                                       asp-route-searchTerm="@ViewBag.SearchTerm"
+                                       asp-route-sortColumn="Rayon"
+                                       asp-route-sortDirection="@(ViewBag.SortColumn == "Rayon" && ViewBag.SortDirection == "asc" ? "desc" : "asc")">
+                                        Region
+                                        @if (ViewBag.SortColumn == "Rayon")
+                                        {
+                                            <i class="bi bi-arrow-@(ViewBag.SortDirection == "asc" ? "up" : "down")"></i>
+                                        }
+                                    </a>
+                                </th>
+                                <th>
+                                    <a asp-action="Index"
+                                       asp-route-pageNumber="1"
+                                       asp-route-pageSize="@Model.PageSize"
+                                       asp-route-searchTerm="@ViewBag.SearchTerm"
+                                       asp-route-sortColumn="Audit"
+                                       asp-route-sortDirection="@(ViewBag.SortColumn == "Audit" && ViewBag.SortDirection == "asc" ? "desc" : "asc")">
+                                        Tahap Audit
+                                        @if (ViewBag.SortColumn == "Audit")
+                                        {
+                                            <i class="bi bi-arrow-@(ViewBag.SortDirection == "asc" ? "up" : "down")"></i>
+                                        }
+                                    </a>
+                                </th>
+                                <th>
+                                    <a asp-action="Index"
+                                       asp-route-pageNumber="1"
+                                       asp-route-pageSize="@Model.PageSize"
+                                       asp-route-searchTerm="@ViewBag.SearchTerm"
+                                       asp-route-sortColumn="Score"
+                                       asp-route-sortDirection="@(ViewBag.SortColumn == "Score" && ViewBag.SortDirection == "asc" ? "desc" : "asc")">
+                                        Score
+                                        @if (ViewBag.SortColumn == "Score")
+                                        {
+                                            <i class="bi bi-arrow-@(ViewBag.SortDirection == "asc" ? "up" : "down")"></i>
+                                        }
+                                    </a>
+                                </th>
+                                <th>
+                                    <a asp-action="Index"
+                                       asp-route-pageNumber="1"
+                                       asp-route-pageSize="@Model.PageSize"
+                                       asp-route-searchTerm="@ViewBag.SearchTerm"
+                                       asp-route-sortColumn="Good"
+                                       asp-route-sortDirection="@(ViewBag.SortColumn == "Good" && ViewBag.SortDirection == "asc" ? "desc" : "asc")">
+                                        Good
+                                        @if (ViewBag.SortColumn == "Good")
+                                        {
+                                            <i class="bi bi-arrow-@(ViewBag.SortDirection == "asc" ? "up" : "down")"></i>
+                                        }
+                                    </a>
+                                </th>
+                                <th>
+                                    <a asp-action="Index"
+                                       asp-route-pageNumber="1"
+                                       asp-route-pageSize="@Model.PageSize"
+                                       asp-route-searchTerm="@ViewBag.SearchTerm"
+                                       asp-route-sortColumn="Excellent"
+                                       asp-route-sortDirection="@(ViewBag.SortColumn == "Excellent" && ViewBag.SortDirection == "asc" ? "desc" : "asc")">
+                                        Excellent
+                                        @if (ViewBag.SortColumn == "Excellent")
+                                        {
+                                            <i class="bi bi-arrow-@(ViewBag.SortDirection == "asc" ? "up" : "down")"></i>
+                                        }
+                                    </a>
+                                </th>
+                                <th>
+                                    <a asp-action="Index"
+                                       asp-route-pageNumber="1"
+                                       asp-route-pageSize="@Model.PageSize"
+                                       asp-route-searchTerm="@ViewBag.SearchTerm"
+                                       asp-route-sortColumn="Kota"
+                                       asp-route-sortDirection="@(ViewBag.SortColumn == "Kota" && ViewBag.SortDirection == "asc" ? "desc" : "asc")">
+                                        Kab/Kota
+                                        @if (ViewBag.SortColumn == "Kota")
+                                        {
+                                            <i class="bi bi-arrow-@(ViewBag.SortDirection == "asc" ? "up" : "down")"></i>
+                                        }
+                                    </a>
+                                </th>
+                                <th>
+                                    <a asp-action="Index"
+                                       asp-route-pageNumber="1"
+                                       asp-route-pageSize="@Model.PageSize"
+                                       asp-route-searchTerm="@ViewBag.SearchTerm"
+                                       asp-route-sortColumn="Alamat"
+                                       asp-route-sortDirection="@(ViewBag.SortColumn == "Alamat" && ViewBag.SortDirection == "asc" ? "desc" : "asc")">
+                                        Alamat
+                                        @if (ViewBag.SortColumn == "Alamat")
+                                        {
+                                            <i class="bi bi-arrow-@(ViewBag.SortDirection == "asc" ? "up" : "down")"></i>
+                                        }
+                                    </a>
+                                </th>
+                                <th>
+                                    <a asp-action="Index"
+                                       asp-route-pageNumber="1"
+                                       asp-route-pageSize="@Model.PageSize"
+                                       asp-route-searchTerm="@ViewBag.SearchTerm"
+                                       asp-route-sortColumn="Komplain"
+                                       asp-route-sortDirection="@(ViewBag.SortColumn == "Komplain" && ViewBag.SortDirection == "asc" ? "desc" : "asc")">
+                                        Komplain
+                                        @if (ViewBag.SortColumn == "Komplain")
+                                        {
+                                            <i class="bi bi-arrow-@(ViewBag.SortDirection == "asc" ? "up" : "down")"></i>
+                                        }
+                                    </a>
+                                </th>
+                                <th>
+                                    <a asp-action="Index"
+                                       asp-route-pageNumber="1"
+                                       asp-route-pageSize="@Model.PageSize"
+                                       asp-route-searchTerm="@ViewBag.SearchTerm"
+                                       asp-route-sortColumn="Banding"
+                                       asp-route-sortDirection="@(ViewBag.SortColumn == "Banding" && ViewBag.SortDirection == "asc" ? "desc" : "asc")">
+                                        Banding
+                                        @if (ViewBag.SortColumn == "Banding")
+                                        {
+                                            <i class="bi bi-arrow-@(ViewBag.SortDirection == "asc" ? "up" : "down")"></i>
+                                        }
+                                    </a>
+                                </th>
+                            </tr>
+                        </thead>
+
+                        <tbody>
+                            @if (Model.Items != null && Model.Items.Any())
+                            {
+                                @for (int i = 0; i < Model.Items.Count; i++)
+                                {
+                                    var item = Model.Items[i];
+                                    <tr>
+                                        <td>
+                                            <a class="btn btn-sm btn-outline-primary fw-semibold"
+                                               asp-controller="BasicOperational"
+                                               asp-action="Detail"
+                                               asp-route-id="@item.Id">
+                                                <i class="bi bi-eye"></i> Detail
+                                            </a>
+                                        </td>
+                                        <td>@((Model.PageNumber - 1) * Model.PageSize + i + 1)</td>
+                                        <td class="fw-bold @(item.Status == "VERIFIED" || item.Status == "PASS" ? "text-success" : "text-danger")">@item.Status</td>
+                                        <td>@item.Tahun</td>
+                                        <td>@item.TanggalSubmit.ToString("dd/MM/yyyy")</td>
+                                        <td>@item.NoSpbu</td>
+                                        <td>@item.NamaAuditor</td>
+                                        <td>@item.Rayon</td>
+                                        <td>@item.Audit</td>
+                                        <td>@item.Score</td>
+                                        <td class="fw-bold @(item.Good == "CERTIFIED" ? "text-success" : "text-danger")">@item.Good</td>
+                                        <td class="fw-bold @(item.Excelent == "CERTIFIED" ? "text-success" : "text-danger")">@item.Excelent</td>
+                                        <td>@item.Kota</td>
+                                        <td>@item.Alamat</td>
+                                        <td class="fw-bold @(item.Komplain == "TIDAK ADA" ? "text-success" : "text-danger")">@item.Komplain</td>
+                                        <td class="fw-bold @(item.Banding == "TIDAK ADA" ? "text-success" : "text-danger")">@item.Banding</td>
+                                    </tr>
+                                }
+                            }
+                            else
+                            {
+                                <tr>
+                                    <td colspan="17" class="text-center">Tidak ada data yang ditemukan</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+
+                    <div class="d-flex justify-content-end mb-2">
+                        <div style="font-weight: bold; font-size: 18px;">
+                            Total Data: @Model.TotalItems
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @if (Model.TotalPages > 1)
+    {
+        <nav aria-label="Page navigation" class="px-3 mt-1">
+            <ul class="pagination justify-content-start flex-wrap">
+                @if (Model.PageNumber > 1)
+                {
+                    <li class="page-item">
+                        <a class="page-link" href="@Url.Action("Index", new {
+                        pageNumber = 1,
+                        pageSize = Model.PageSize,
+                        searchTerm = ViewBag.SearchTerm,
+                        sortColumn = ViewBag.SortColumn,
+                        sortDirection = ViewBag.SortDirection
+                    })">First</a>
+                    </li>
+                    <li class="page-item">
+                        <a class="page-link" href="@Url.Action("Index", new {
+                        pageNumber = Model.PageNumber - 1,
+                        pageSize = Model.PageSize,
+                        searchTerm = ViewBag.SearchTerm,
+                        sortColumn = ViewBag.SortColumn,
+                        sortDirection = ViewBag.SortDirection
+                    })">&laquo;</a>
+                    </li>
+                }
+
+                @{
+                    int windowSize = 10;
+                    int currentWindow = (int)Math.Ceiling((double)Model.PageNumber / windowSize);
+                    int startPage = (currentWindow - 1) * windowSize + 1;
+                    int endPage = Math.Min(startPage + windowSize - 1, Model.TotalPages);
+                }
+
+                @for (int i = startPage; i <= endPage; i++)
+                {
+                    <li class="page-item @(i == Model.PageNumber ? "active" : "")">
+                        <a class="page-link" href="@Url.Action("Index", new {
+                        pageNumber = i,
+                        pageSize = Model.PageSize,
+                        searchTerm = ViewBag.SearchTerm,
+                        sortColumn = ViewBag.SortColumn,
+                        sortDirection = ViewBag.SortDirection
+                    })">@i</a>
+                    </li>
+                }
+
+                @if (Model.PageNumber < Model.TotalPages)
+                {
+                    <li class="page-item">
+                        <a class="page-link" href="@Url.Action("Index", new {
+                        pageNumber = Model.PageNumber + 1,
+                        pageSize = Model.PageSize,
+                        searchTerm = ViewBag.SearchTerm,
+                        sortColumn = ViewBag.SortColumn,
+                        sortDirection = ViewBag.SortDirection
+                    })">&raquo;</a>
+                    </li>
+                    <li class="page-item">
+                        <a class="page-link" href="@Url.Action("Index", new {
+                        pageNumber = Model.TotalPages,
+                        pageSize = Model.PageSize,
+                        searchTerm = ViewBag.SearchTerm,
+                        sortColumn = ViewBag.SortColumn,
+                        sortDirection = ViewBag.SortDirection
+                    })">Last</a>
+                    </li>
+                }
+            </ul>
+        </nav>
+    }
+
+</div>
+
+@section Scripts {
+    <script>
+        $(document).ready(function () {
+            // Any other initialization code can go here
+        });
+    </script>
+}

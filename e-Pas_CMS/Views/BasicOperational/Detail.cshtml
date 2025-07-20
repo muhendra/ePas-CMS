@@ -1,0 +1,1796 @@
+﻿@using e_Pas_CMS.ViewModels
+@using Newtonsoft.Json
+@model DetailAuditViewModel
+
+@{
+    ViewData["Title"] = "Detail Hasil Audit Basic Operational";
+    bool isVerified = Model.Status == "VERIFIED";
+    var currentUser = User.Identity?.Name;
+    bool isReadonlyUser = currentUser == "usermanagement1";
+    var batasTanggal = new DateTime(2025, 5, 11);
+    bool hideUploadButton = Model.TanggalSubmit.HasValue && Model.TanggalSubmit.Value > batasTanggal;
+}
+
+@Html.AntiForgeryToken()
+
+@if (TempData["Success"] != null)
+{
+    <div class="alert alert-success">@TempData["Success"]</div>
+}
+
+<!-- Header Detail -->
+<h3 class="mb-4 fw-bold">Detail Hasil Audit Basic Operational</h3>
+
+<!-- HEADER DETAIL -->
+<div class="row g-4 mb-5 p-4 bg-light rounded shadow-sm">
+    <div class="col-md-4">
+        <strong class="d-block">No. Report</strong>
+        <span>@Model.ReportNo</span>
+    </div>
+    <div class="col-md-4">
+        <strong class="d-block">Nama Auditor</strong>
+        <span>@Model.NamaAuditor</span>
+    </div>
+    <div class="col-md-4">
+        <strong class="d-block">Tanggal Submit</strong>
+        <span>@Model.TanggalSubmit?.ToString("dd/MM/yyyy, HH:mm")</span>
+    </div>
+    <div class="col-md-4">
+        <strong class="d-block">Nomor SPBU</strong>
+        <span>@Model.SpbuNo</span>
+    </div>
+    <div class="col-md-4">
+        <strong class="d-block">Provinsi SPBU</strong>
+        <span>@Model.Provinsi</span>
+    </div>
+    <div class="col-md-4">
+        <strong class="d-block">Kabupaten/Kota SPBU</strong>
+        <span>@Model.Kota</span>
+    </div>
+    <div class="col-md-12">
+        <strong class="d-block">Alamat SPBU</strong>
+        <span>@Model.Alamat</span>
+    </div>
+</div>
+
+<!-- CHECKLIST AUDIT -->
+@if (Model.AuditType == "Mystery Audit" || Model.AuditType == "Regular Audit" || Model.AuditType == "Basic Operational")
+{
+    <h4 class="mt-5 fw-bold">Checklist Audit</h4>
+    <ul id="auditChecklist" class="list-unstyled">
+        @foreach (var node in Model.Elements)
+        {
+            await RenderChecklistNode(node, 0, isVerified, isReadonlyUser, hideUploadButton);
+
+        }
+    </ul>
+}
+
+<!-- Q&Q CHECK -->
+@if (Model.QqChecks != null && Model.QqChecks.Any())
+{
+    <h4 class="mt-5 fw-bold">Q&Q Check</h4>
+    <div class="table-responsive">
+        <table class="table table-bordered table-striped mt-3">
+            <thead class="table-light">
+                <tr>
+                    <th>Nozzle Number</th>
+                    <th>DU Make</th>
+                    <th>DU Serial No</th>
+                    <th>Product</th>
+                    <th>Mode</th>
+                    <th>Quantity Variation (Measure)</th>
+                    <th>Quantity Variation (%)</th>
+                    <th>Observed Density</th>
+                    <th>Observed Temp</th>
+                    <th>Observed Density (15°)</th>
+                    <th>Reference Density (15°)</th>
+                    <th>Tank Number</th>
+                    <th>Density Variation</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var item in Model.QqChecks)
+                {
+                    <tr>
+                        <td>@item.NozzleNumber</td>
+                        <td>@item.DuMake</td>
+                        <td>@item.DuSerialNo</td>
+                        <td>@item.Product</td>
+                        <td>@item.Mode</td>
+                        <td>@item.QuantityVariationWithMeasure?.ToString("0.00")</td>
+                        <td>@item.QuantityVariationInPercentage?.ToString("0.00")</td>
+                        <td>@item.ObservedDensity?.ToString("0.000")</td>
+                        <td>@item.ObservedTemp?.ToString("0.0")</td>
+                        <td>@item.ObservedDensity15Degree?.ToString("0.000")</td>
+                        <td>@item.ReferenceDensity15Degree?.ToString("0.000")</td>
+                        <td>@item.TankNumber</td>
+                        <td>@item.DensityVariation?.ToString("0.000")</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+<!-- CATATAN AUDIT -->
+@if (Model.AuditType == "Mystery Audit" || Model.AuditType == "Mystery Guest")
+{
+    @if (!string.IsNullOrEmpty(Model.Notes) || (Model.MediaNotes != null && Model.MediaNotes.Any()))
+    {
+        <div class="accordion mt-4 mb-4" id="mysteryAuditAccordion">
+            <div class="accordion-item shadow-sm">
+                <h2 class="accordion-header" id="mysteryAuditHeading">
+                    <button class="accordion-button collapsed d-flex justify-content-between align-items-center" type="button"
+                            data-bs-toggle="collapse"
+                            data-bs-target="#mysteryAuditCollapse"
+                            aria-expanded="false"
+                            aria-controls="mysteryAuditCollapse">
+                        <div class="d-flex flex-column">
+                            <span class="h5 fw-bold mb-0">
+                                @(Model.AuditType == "Mystery Guest" ? "Mystery Guest" : "Mystery Audit")
+                            </span>
+                            <small class="text-muted fst-italic">Klik untuk detail</small>
+                        </div>
+                    </button>
+                </h2>
+                <div id="mysteryAuditCollapse" class="accordion-collapse collapse"
+                     aria-labelledby="mysteryAuditHeading"
+                     data-bs-parent="#mysteryAuditAccordion">
+                    <div class="accordion-body">
+
+                        @* Teks Catatan *@
+                        @if (!string.IsNullOrEmpty(Model.Notes))
+                        {
+                            <div class="border rounded p-3 bg-light mb-4">
+                                @Model.Notes
+                            </div>
+                        }
+
+                        @* Gambar/Video Catatan *@
+                        @if (Model.MediaNotes != null && Model.MediaNotes.Any())
+                        {
+                            <div class="row row-cols-1 row-cols-md-2 g-4">
+                                @foreach (var media in Model.MediaNotes)
+                                {
+                                    <div class="col d-flex justify-content-center">
+                                        <div class="card h-100 p-3 d-flex align-items-center justify-content-center">
+                                            @if (media.MediaType?.ToUpper() == "VIDEO" || media.MediaPath.EndsWith(".mp4", StringComparison.OrdinalIgnoreCase))
+                                            {
+                                                <video controls class="rounded shadow-sm" style="max-height:800px; width:auto; max-width:100%;">
+                                                    <source src="@media.MediaPath" type="video/mp4" />
+                                                    Your browser does not support the video tag.
+                                                </video>
+                                            }
+                                            else
+                                            {
+                                                <img src="@media.MediaPath"
+                                                     alt="Foto Catatan Audit"
+                                                     class="rounded shadow-sm"
+                                                     style="max-height:800px; width:auto; max-width:100%;" />
+                                            }
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                        }
+
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+}
+
+
+<!-- BERITA ACARA -->
+@if (Model.Status != "VERIFIED" && currentUser != "usermanagement1")
+{
+    <div class="card p-4 mb-5 shadow-sm mt-5">
+        <h4 class="fw-bold mb-4">Berita Acara</h4>
+
+        @if (!isVerified && !isReadonlyUser)
+        {
+            <form method="post" asp-action="UpdateBeritaAcaraText" asp-route-id="@ViewBag.AuditId">
+                <div class="mb-3">
+                    <label for="BeritaAcaraText" class="form-label fw-semibold">Isi Berita Acara</label>
+                    <textarea id="BeritaAcaraText" name="Notes" class="form-control" rows="5" required>@Model.Notes</textarea>
+                </div>
+                <button type="submit" class="btn btn-primary rounded-pill px-4">Ubah Berita Acara</button>
+            </form>
+        }
+        else if (!string.IsNullOrEmpty(Model.Notes))
+        {
+            <div class="mb-3">
+                <label class="fw-semibold">Isi Catatan</label>
+                <div class="border rounded p-3 bg-light">
+                    @Model.Notes
+                </div>
+            </div>
+        }
+
+        <hr class="my-4" />
+
+        @if (!isVerified && !isReadonlyUser)
+        {
+            <form method="post"
+                  asp-action="UploadBeritaAcaraMedia"
+                  asp-controller="BasicOperational"
+                  asp-route-auditId="@ViewBag.AuditId"
+                  enctype="multipart/form-data">
+                <div class="mb-3">
+                    <label for="beritaAcaraFile" class="form-label fw-semibold">Upload Dokumen Tambahan Berita Acara</label>
+                    <input type="file" class="form-control" id="beritaAcaraFile" name="file" required />
+                </div>
+                <button type="submit" class="btn btn-secondary rounded-pill px-4">Upload Berita Acara</button>
+            </form>
+
+        }
+
+        @if (Model.FinalDocuments?.Any() ?? false)
+        {
+            <div class="mb-2 fw-semibold mt-4">Dokumen Lampiran</div>
+            <ul class="list-unstyled">
+                <li class="mb-2">
+                    <i class="bi bi-file-earmark-image text-primary"></i>
+                    <button type="button"
+                            class="btn btn-link text-decoration-none p-0"
+                            onclick='showFinalMediaPopup(@Html.Raw(JsonConvert.SerializeObject(Model.FinalDocuments)))'>
+                        Lihat Lampiran
+                    </button>
+                </li>
+            </ul>
+        }
+    </div>
+}
+else if (!string.IsNullOrEmpty(Model.Notes) || (Model.FinalDocuments != null && Model.FinalDocuments.Any()))
+{
+    <div class="card p-4 mb-5 shadow-sm mt-5">
+        <h4 class="fw-bold mb-4">Berita Acara</h4>
+
+        <div class="mb-3">
+            <label class="fw-semibold">Isi Catatan</label>
+            <div class="border rounded p-3 bg-light">
+                @Model.Notes
+            </div>
+        </div>
+
+        @if (Model.FinalDocuments?.Any() ?? false)
+        {
+            <div class="mb-2 fw-semibold mt-4">Bukti Dokumen/Foto Berita Acara</div>
+            <ul class="list-unstyled">
+                <li class="mb-2">
+                    <i class="bi bi-file-earmark-image text-primary"></i>
+                    <button type="button"
+                            class="btn btn-link text-decoration-none p-0"
+                            onclick='showFinalMediaPopup(@Html.Raw(JsonConvert.SerializeObject(Model.FinalDocuments)))'>
+                        Lihat Lampiran
+                    </button>
+                </li>
+            </ul>
+        }
+    </div>
+}
+
+<div class="text-end mt-5 d-flex justify-content-end gap-2 flex-wrap">
+
+    <a href="/Report/PreviewDetail/@ViewBag.AuditId"
+       class="btn btn-outline-dark bg-light text-dark rounded-pill px-4 py-2 border border-dark-subtle">
+        Preview report
+    </a>
+
+    @if ((Model.Status != null && Model.Status.ToUpper() != "VERIFIED") && currentUser != "usermanagement1")
+    {
+        <button class="btn btn-primary rounded-pill px-4 py-2" data-bs-toggle="modal" data-bs-target="#confirmModal">
+            Setujui Laporan Audit
+        </button>
+    }
+    else
+    {
+        <a asp-action="Index" class="btn btn-secondary rounded-pill px-4 py-2">
+            Back
+        </a>
+    }
+
+</div>
+
+<!-- Modal Konfirmasi -->
+<div class="modal fade" id="confirmModal" tabindex="-1" aria-labelledby="confirmModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Konfirmasi Persetujuan</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Tutup"></button>
+            </div>
+            <div class="modal-body">
+                Apakah Anda yakin ingin menyetujui laporan audit ini?
+            </div>
+            <div class="modal-footer">
+                <form method="post" asp-action="Approve" asp-route-id="@Context.Request.RouteValues["id"]">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Batal</button>
+                    <button type="submit" class="btn btn-primary">Ya, Setujui</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Media -->
+<div class="modal fade" id="mediaModal" tabindex="-1" aria-labelledby="mediaModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="mediaModalLabel">Dokumentasi Foto / Video</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Tutup"></button>
+            </div>
+            <div class="modal-body" id="mediaModalBody">
+                <!-- Media will be inserted here -->
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Full Size Media -->
+<div class="modal fade" id="fullSizeMediaModal" tabindex="-1" aria-labelledby="fullSizeMediaModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-fullscreen">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Tutup"></button>
+            </div>
+            <div class="modal-body p-0 position-relative" id="fullSizeMediaModalBody">
+                <!-- Full size media will be inserted here -->
+            </div>
+            <div class="modal-footer justify-content-end">
+                <button type="button" class="btn btn-primary" id="useMediaBtn" style="display: none;">
+                    Gunakan media ini
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Styles {
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css" />
+    <style>
+        a.btn.btn-outline-dark:hover,
+        a.btn.btn-outline-dark:focus,
+        a.btn.btn-outline-dark:active {
+            background-color: #f8f9fa !important; /* tetap terang */
+            color: #000 !important; /* teks tetap hitam */
+            border-color: #212529 !important; /* garis tegas saat hover */
+        }
+
+        .card-header .btn-sm {
+            min-width: 70px;
+        }
+
+        .card-header .option-group .btn {
+            min-width: 60px;
+            text-align: center;
+        }
+
+        .rotate-arrow {
+            transition: transform .3s ease;
+        }
+
+        .rotate-arrow.rotate {
+            transform: rotate(90deg);
+        }
+
+        .option-btn:hover {
+            background-color: #e0f2f1 !important;
+            border-color: #10b981;
+            color: #0f766e;
+        }
+
+        .option-btn.active, .option-btn.active:hover {
+            background-color: #059669 !important;
+            color: #fff;
+        }
+
+        /* Media fit in modal */
+        .carousel-item img,
+        .carousel-item video,
+        #mediaModalBody img,
+        #mediaModalBody video,
+        #fullSizeMediaModalBody img,
+        #fullSizeMediaModalBody video {
+            max-width: 100%;
+            max-height: 85vh;
+            object-fit: contain;
+            display: block;
+            margin: 0 auto;
+        }
+
+        .modal {
+            outline: none !important;
+        }
+
+        #fullSizeMediaModal .modal-content {
+            background-color: rgba(0, 0, 0, 0.9);
+        }
+
+        #fullSizeMediaModal .modal-header {
+            border-bottom: none;
+            padding: 0.5rem;
+        }
+
+        #fullSizeMediaModal .modal-body {
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 80vh;
+        }
+
+        #fullSizeMediaModal .btn-close {
+            background-color: white;
+            opacity: 0.8;
+        }
+
+        #fullSizeMediaModal .btn-close:hover {
+            opacity: 1;
+        }
+
+        #fullSizeMediaModal .modal-footer {
+            background-color: rgba(0, 0, 0, 0.9);
+            border-top: none;
+            padding: 1rem;
+        }
+
+        #fullSizeMediaModal .btn-primary {
+            background-color: #0d6efd;
+            border: none;
+            padding: 0.5rem 1.5rem;
+        }
+
+        #fullSizeMediaModal .btn-primary:hover {
+            background-color: #0b5ed7;
+        }
+
+        /* Add these new styles for full screen modal */
+        #fullSizeMediaModal .modal-dialog {
+            max-width: 100%;
+            margin: 0;
+            height: 100vh;
+        }
+
+        #fullSizeMediaModal .modal-content {
+            height: 100vh;
+            background-color: rgba(0, 0, 0, 0.9);
+            border: none;
+            border-radius: 0;
+        }
+
+        #fullSizeMediaModal .modal-body {
+            padding: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        #fullSizeMediaModal .carousel-item {
+            height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        #fullSizeMediaModal .carousel-control-prev,
+        #fullSizeMediaModal .carousel-control-next {
+            width: 10%;
+        }
+
+        #fullSizeMediaModal .carousel-indicators {
+            margin-bottom: 1rem;
+        }
+
+        #fullSizeMediaModal .btn-close {
+            position: absolute;
+            right: 1rem;
+            top: 1rem;
+            z-index: 1050;
+            background-color: white;
+            opacity: 0.8;
+        }
+
+        #fullSizeMediaModal .btn-close:hover {
+            opacity: 1;
+        }
+
+        /* Gallery grid styles */
+        .gallery-grid {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            grid-auto-rows: min-content; /* Prevent row stretching */
+            gap: 0.3rem;
+            padding: 0.3rem;
+            width: 100%;
+            max-width: 100%;
+            margin: 0;
+        }
+
+        .gallery-grid .col {
+            width: 100%;
+            padding: 0;
+            min-width: 0;
+            height: fit-content; /* Prevent column stretching */
+        }
+
+        .gallery-grid .card {
+            margin: 0;
+            border: 1px solid rgba(0,0,0,0.1);
+            transform: scale(0.97);
+            transform-origin: center;
+            height: fit-content; /* Prevent card stretching */
+            width: 100%;
+            min-width: 0;
+        }
+
+        .gallery-grid .card-body {
+            padding: 0.12rem;
+            display: flex;
+            flex-direction: column;
+            height: fit-content; /* Prevent body stretching */
+            min-width: 0;
+        }
+
+        .gallery-grid .media-container {
+            flex: 0 0 120px; /* Fixed height, don't grow or shrink */
+            min-height: 0;
+            position: relative;
+            width: 100%;
+            height: 120px;
+            min-width: 0;
+        }
+
+        .gallery-grid .media-container img,
+        .gallery-grid .media-container video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            border-radius: 0.25rem;
+        }
+
+        .gallery-grid .text-truncate.small {
+            flex: 0 0 auto; /* Don't grow or shrink */
+            font-size: 0.65rem;
+            line-height: 1.1;
+            margin-top: 0.12rem;
+            padding: 0 0.15rem;
+            color: #666;
+            text-align: center;
+            display: block;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        /* Modal styles */
+        #mediaModal .modal-dialog {
+            max-width: 95vw;
+            margin: 1.75rem auto;
+            width: 95vw;
+        }
+
+        #mediaModal .modal-content {
+            background-color: #f8f9fa;
+            width: 100%;
+            max-width: 100%;
+        }
+
+        #mediaModal .modal-body {
+            padding: 0.3rem;
+            max-height: 90vh;
+            overflow-y: auto;
+            overflow-x: hidden;
+            width: 100%;
+            max-width: 100%;
+        }
+
+        /* Ensure search container doesn't cause horizontal scroll */
+        #mediaModal .input-group {
+            max-width: 100%;
+            margin-bottom: 0.5rem;
+        }
+
+        /* Ensure pagination container doesn't cause horizontal scroll */
+        #mediaModal .pagination {
+            flex-wrap: wrap;
+            justify-content: center;
+            margin: 0.5rem 0;
+        }
+
+        #mediaModal .pagination .page-item {
+            margin: 0.1rem;
+        }
+
+        #fullSizeMediaModal .modal-dialog {
+            margin: 0;
+            max-width: 100%;
+            height: 100vh;
+        }
+
+        #fullSizeMediaModal .modal-content {
+            height: 100vh;
+            background-color: rgba(0, 0, 0, 0.9);
+            border: none;
+            border-radius: 0;
+        }
+
+        #fullSizeMediaModal .modal-body {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0;
+        }
+
+        #fullSizeMediaModal .modal-header {
+            position: absolute;
+            top: 0;
+            right: 0;
+            z-index: 1050;
+            border: none;
+            padding: 1rem;
+        }
+
+        #fullSizeMediaModal .modal-footer {
+            position: absolute;
+            bottom: 0;
+            right: 0;
+            z-index: 1050;
+            border: none;
+            padding: 1rem;
+            background-color: transparent;
+        }
+
+        #fullSizeMediaModal .btn-close {
+            background-color: white;
+            opacity: 0.8;
+        }
+
+        #fullSizeMediaModal .btn-close:hover {
+            opacity: 1;
+        }
+
+        #fullSizeMediaModal .btn-primary {
+            background-color: #0d6efd;
+            border: none;
+            padding: 0.5rem 1.5rem;
+        }
+
+        #fullSizeMediaModal .btn-primary:hover {
+            background-color: #0b5ed7;
+        }
+
+        /* Custom black arrow style */
+        .carousel-control-prev-icon.custom-arrow,
+        .carousel-control-next-icon.custom-arrow {
+            background-image: none;
+            width: 2.5rem;
+            height: 2.5rem;
+            background-color: white;
+            border: 2px solid black;
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            opacity: 0.9;
+            transition: all 0.3s ease;
+        }
+
+            .carousel-control-prev-icon.custom-arrow::after,
+            .carousel-control-next-icon.custom-arrow::after {
+                content: '';
+                display: inline-block;
+                width: 0.5rem;
+                height: 0.5rem;
+                border: solid black;
+                border-width: 0 2px 2px 0;
+                padding: 3px;
+            }
+
+            .carousel-control-prev-icon.custom-arrow::after {
+                transform: rotate(135deg);
+            }
+
+            .carousel-control-next-icon.custom-arrow::after {
+                transform: rotate(-45deg);
+            }
+
+            .carousel-control-prev-icon.custom-arrow:hover,
+            .carousel-control-next-icon.custom-arrow:hover {
+                background-color: #f8f9fa;
+            }
+
+    </style>
+}
+
+@section Scripts {
+    <script>
+        let currentPage = 1;
+        const pageSize = 35;
+        let selectedMedia = null;
+
+        function loadGalleryPage(page) {
+            const searchInput = document.getElementById('gallerySearch');
+            const searchQuery = searchInput ? searchInput.value : '';
+            const url = `/BasicOperational/GetLibraryMedia?page=${page}&pageSize=${pageSize}&search=${encodeURIComponent(searchQuery)}`;
+
+            fetch(url)
+                .then(res => res.json())
+                .then(result => {
+                    console.log("Gallery result:", result);
+                    const container = document.getElementById('mediaModalBody');
+                    container.innerHTML = '';
+
+                    // Add search input at the top
+                    const searchContainer = document.createElement('div');
+                    searchContainer.className = 'mb-3';
+                    searchContainer.innerHTML = `
+                        <div class="input-group">
+                            <input type="text" 
+                                   class="form-control" 
+                                   id="gallerySearch" 
+                                   placeholder="Cari file..." 
+                                   value="${searchQuery}">
+                            <button class="btn btn-outline-secondary" 
+                                    type="button" 
+                                    onclick="loadGalleryPage(1)">
+                                <i class="bi bi-search"></i>
+                            </button>
+                        </div>
+                    `;
+                    container.appendChild(searchContainer);
+
+                    // Add event listener for Enter key on search input
+                    const newSearchInput = searchContainer.querySelector('#gallerySearch');
+                    newSearchInput.addEventListener('keypress', function(e) {
+                        if (e.key === 'Enter') {
+                            loadGalleryPage(1);
+                        }
+                    });
+
+                    if (!result.data || result.data.length === 0) {
+                        container.innerHTML += '<p class="text-muted">Tidak ada media tersedia.</p>';
+                        return;
+                    }
+
+                    // Create grid container
+                    const gridContainer = document.createElement('div');
+                    gridContainer.className = 'gallery-grid';
+
+                    // Add each media item as a thumbnail
+                    result.data.forEach(item => {
+                        const isVideo = item.mediaType === 'VIDEO' || item.mediaPath.toLowerCase().endsWith('.mp4');
+                        const col = document.createElement('div');
+                        col.className = 'col';
+
+                        const card = document.createElement('div');
+                        card.className = 'card h-100';
+
+                        const cardBody = document.createElement('div');
+                        cardBody.className = 'card-body p-1';
+
+                        const mediaContainer = document.createElement('div');
+                        mediaContainer.className = 'media-container mb-1';
+
+                        if (isVideo) {
+                            const video = document.createElement('video');
+                            video.src = 'https://epas-assets.zarata.co.id' + item.mediaPath;
+                            video.className = 'rounded';
+                            video.style.objectFit = 'cover';
+                            mediaContainer.appendChild(video);
+                        } else {
+                            const img = document.createElement('img');
+                            img.src = 'https://epas-assets.zarata.co.id' + item.mediaPath;
+                            img.className = 'rounded';
+                            img.style.objectFit = 'cover';
+                            img.onerror = () => {
+                                img.src = 'https://epas-assets.zarata.co.id/images/image-not-found.png';
+                                img.alt = 'Gambar tidak ditemukan';
+                            };
+                            mediaContainer.appendChild(img);
+                        }
+
+                        // Add filename display
+                        const fileName = document.createElement('div');
+                        fileName.className = 'text-truncate small text-muted';
+                        fileName.style.fontSize = '0.75rem';
+                        fileName.title = item.mediaPath.split('/').pop(); // Full filename for tooltip
+                        fileName.textContent = item.mediaPath.split('/').pop(); // Just the filename
+                        cardBody.appendChild(mediaContainer);
+                        cardBody.appendChild(fileName);
+
+                        // Add click handler to show full image/video in new modal
+                        mediaContainer.style.cursor = 'pointer';
+                        mediaContainer.onclick = () => {
+                            const fullSizeContainer = document.getElementById('fullSizeMediaModalBody');
+                            fullSizeContainer.innerHTML = '';
+
+                            if (isVideo) {
+                                const video = document.createElement('video');
+                                video.src = 'https://epas-assets.zarata.co.id' + item.mediaPath;
+                                video.controls = true;
+                                video.className = 'w-100 rounded';
+                                fullSizeContainer.appendChild(video);
+                            } else {
+                                const img = document.createElement('img');
+                                img.src = 'https://epas-assets.zarata.co.id' + item.mediaPath;
+                                img.className = 'img-fluid rounded';
+                                fullSizeContainer.appendChild(img);
+                            }
+
+                            // Store the selected media with additional data
+                            selectedMedia = {
+                                ...selectedMedia,  // Preserve existing data including nodeId and auditId
+                                mediaType: item.mediaType,
+                                mediaPath: item.mediaPath
+                            };
+
+                            // Show the "Use Media" button
+                            const useMediaBtn = document.getElementById('useMediaBtn');
+                            useMediaBtn.style.display = 'block';
+
+                            const fullSizeModal = new bootstrap.Modal(document.getElementById('fullSizeMediaModal'));
+                            fullSizeModal.show();
+                        };
+
+                        card.appendChild(cardBody);
+                        col.appendChild(card);
+                        gridContainer.appendChild(col);
+                    });
+
+                    container.appendChild(gridContainer);
+
+                    // Add page info
+                    const pageInfo = document.createElement('div');
+                    pageInfo.className = 'text-center text-muted mt-3';
+                    const startItem = (page - 1) * pageSize + 1;
+                    const endItem = Math.min(page * pageSize, result.total);
+                    pageInfo.textContent = `Showing ${startItem}-${endItem} of ${result.total} items`;
+                    container.appendChild(pageInfo);
+
+                    // Add pagination controls
+                    const paginationContainer = document.createElement('div');
+                    paginationContainer.className = 'd-flex justify-content-center mt-3';
+                    
+                    const pagination = document.createElement('nav');
+                    pagination.setAttribute('aria-label', 'Gallery pagination');
+                    
+                    const paginationList = document.createElement('ul');
+                    paginationList.className = 'pagination';
+
+                    const totalPages = Math.ceil(result.total / pageSize);
+
+                    // First page button
+                    const firstLi = document.createElement('li');
+                    firstLi.className = `page-item ${page === 1 ? 'disabled' : ''}`;
+                    const firstLink = document.createElement('a');
+                    firstLink.className = 'page-link';
+                    firstLink.href = '#';
+                    firstLink.innerHTML = '&laquo;&laquo;';
+                    firstLink.onclick = (e) => {
+                        e.preventDefault();
+                        if (page > 1) {
+                            loadGalleryPage(1);
+                        }
+                    };
+                    firstLi.appendChild(firstLink);
+                    paginationList.appendChild(firstLi);
+
+                    // Previous button
+                    const prevLi = document.createElement('li');
+                    prevLi.className = `page-item ${page === 1 ? 'disabled' : ''}`;
+                    const prevLink = document.createElement('a');
+                    prevLink.className = 'page-link';
+                    prevLink.href = '#';
+                    prevLink.innerHTML = '&laquo;';
+                    prevLink.onclick = (e) => {
+                        e.preventDefault();
+                        if (page > 1) {
+                            loadGalleryPage(page - 1);
+                        }
+                    };
+                    prevLi.appendChild(prevLink);
+                    paginationList.appendChild(prevLi);
+
+                    // Page numbers with ellipsis
+                    const maxVisiblePages = 5;
+                    let startPage = Math.max(1, page - Math.floor(maxVisiblePages / 2));
+                    let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
+
+                    if (endPage - startPage + 1 < maxVisiblePages) {
+                        startPage = Math.max(1, endPage - maxVisiblePages + 1);
+                    }
+
+                    if (startPage > 1) {
+                        const firstPageLi = document.createElement('li');
+                        firstPageLi.className = 'page-item';
+                        const firstPageLink = document.createElement('a');
+                        firstPageLink.className = 'page-link';
+                        firstPageLink.href = '#';
+                        firstPageLink.textContent = '1';
+                        firstPageLink.onclick = (e) => {
+                            e.preventDefault();
+                            loadGalleryPage(1);
+                        };
+                        firstPageLi.appendChild(firstPageLink);
+                        paginationList.appendChild(firstPageLi);
+
+                        if (startPage > 2) {
+                            const ellipsisLi = document.createElement('li');
+                            ellipsisLi.className = 'page-item disabled';
+                            const ellipsisSpan = document.createElement('span');
+                            ellipsisSpan.className = 'page-link';
+                            ellipsisSpan.textContent = '...';
+                            ellipsisLi.appendChild(ellipsisSpan);
+                            paginationList.appendChild(ellipsisLi);
+                        }
+                    }
+
+                    for (let i = startPage; i <= endPage; i++) {
+                        const pageLi = document.createElement('li');
+                        pageLi.className = `page-item ${i === page ? 'active' : ''}`;
+                        const pageLink = document.createElement('a');
+                        pageLink.className = 'page-link';
+                        pageLink.href = '#';
+                        pageLink.textContent = i;
+                        pageLink.onclick = (e) => {
+                            e.preventDefault();
+                            loadGalleryPage(i);
+                        };
+                        pageLi.appendChild(pageLink);
+                        paginationList.appendChild(pageLi);
+                    }
+
+                    if (endPage < totalPages) {
+                        if (endPage < totalPages - 1) {
+                            const ellipsisLi = document.createElement('li');
+                            ellipsisLi.className = 'page-item disabled';
+                            const ellipsisSpan = document.createElement('span');
+                            ellipsisSpan.className = 'page-link';
+                            ellipsisSpan.textContent = '...';
+                            ellipsisLi.appendChild(ellipsisSpan);
+                            paginationList.appendChild(ellipsisLi);
+                        }
+
+                        const lastPageLi = document.createElement('li');
+                        lastPageLi.className = 'page-item';
+                        const lastPageLink = document.createElement('a');
+                        lastPageLink.className = 'page-link';
+                        lastPageLink.href = '#';
+                        lastPageLink.textContent = totalPages;
+                        lastPageLink.onclick = (e) => {
+                            e.preventDefault();
+                            loadGalleryPage(totalPages);
+                        };
+                        lastPageLi.appendChild(lastPageLink);
+                        paginationList.appendChild(lastPageLi);
+                    }
+
+                    // Next button
+                    const nextLi = document.createElement('li');
+                    nextLi.className = `page-item ${page === totalPages ? 'disabled' : ''}`;
+                    const nextLink = document.createElement('a');
+                    nextLink.className = 'page-link';
+                    nextLink.href = '#';
+                    nextLink.innerHTML = '&raquo;';
+                    nextLink.onclick = (e) => {
+                        e.preventDefault();
+                        if (page < totalPages) {
+                            loadGalleryPage(page + 1);
+                        }
+                    };
+                    nextLi.appendChild(nextLink);
+                    paginationList.appendChild(nextLi);
+
+                    // Last page button
+                    const lastLi = document.createElement('li');
+                    lastLi.className = `page-item ${page === totalPages ? 'disabled' : ''}`;
+                    const lastLink = document.createElement('a');
+                    lastLink.className = 'page-link';
+                    lastLink.href = '#';
+                    lastLink.innerHTML = '&raquo;&raquo;';
+                    lastLink.onclick = (e) => {
+                        e.preventDefault();
+                        if (page < totalPages) {
+                            loadGalleryPage(totalPages);
+                        }
+                    };
+                    lastLi.appendChild(lastLink);
+                    paginationList.appendChild(lastLi);
+
+                    pagination.appendChild(paginationList);
+                    paginationContainer.appendChild(pagination);
+                    container.appendChild(paginationContainer);
+
+                    // Get the modal element
+                    const modalEl = document.getElementById('mediaModal');
+                    
+                    // Remove any existing modal instances
+                    const existingModal = bootstrap.Modal.getInstance(modalEl);
+                    if (existingModal) {
+                        existingModal.dispose();
+                    }
+
+                    // Create and show new modal
+                    const modal = new bootstrap.Modal(modalEl, {
+                        backdrop: 'static',
+                        keyboard: false
+                    });
+
+                    // Add event listener for when modal is hidden
+                    modalEl.addEventListener('hidden.bs.modal', function () {
+                        // Clean up the modal content
+                        container.innerHTML = '';
+                        // Remove the backdrop
+                        const backdrop = document.querySelector('.modal-backdrop');
+                        if (backdrop) {
+                            backdrop.remove();
+                        }
+                        // Remove modal-open class from body
+                        document.body.classList.remove('modal-open');
+                        document.body.style.overflow = '';
+                        document.body.style.paddingRight = '';
+                    });
+
+                    modal.show();
+                })
+                .catch(error => {
+                    console.error('Error loading gallery:', error);
+                    const container = document.getElementById('mediaModalBody');
+                    container.innerHTML = '<p class="text-danger">Error loading media. Please try again.</p>';
+                });
+        }
+
+        // Add event listener for the "Use Media" button
+        document.getElementById('useMediaBtn').addEventListener('click', function() {
+            if (selectedMedia) {
+                const token = $('input[name="__RequestVerificationToken"]').val();
+
+                fetch('/BasicOperational/UpdateMediaPath', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'RequestVerificationToken': token
+                    },
+                    body: JSON.stringify({
+                        NodeId: selectedMedia.nodeId,
+                        AuditId: selectedMedia.auditId,
+                        MediaPath: selectedMedia.mediaPath,
+                        MediaType: selectedMedia.mediaType
+                    })
+                })
+                .then(response => {
+                    if (response.ok) {
+                        // Close both modals
+                        const fullSizeModal = bootstrap.Modal.getInstance(document.getElementById('fullSizeMediaModal'));
+                        const mediaModal = bootstrap.Modal.getInstance(document.getElementById('mediaModal'));
+                        
+                        if (fullSizeModal) {
+                            fullSizeModal.hide();
+                            // Remove modal backdrop and body classes
+                            document.body.classList.remove('modal-open');
+                            document.body.style.overflow = '';
+                            document.body.style.paddingRight = '';
+                            const backdrop = document.querySelector('.modal-backdrop');
+                            if (backdrop) {
+                                backdrop.remove();
+                            }
+                        }
+                        
+                        if (mediaModal) {
+                            mediaModal.hide();
+                            // Remove modal backdrop and body classes
+                            document.body.classList.remove('modal-open');
+                            document.body.style.overflow = '';
+                            document.body.style.paddingRight = '';
+                            const backdrop = document.querySelector('.modal-backdrop');
+                            if (backdrop) {
+                                backdrop.remove();
+                            }
+                        }
+
+                        // Show success message
+                        const successAlert = document.createElement('div');
+                        successAlert.className = 'alert alert-success alert-dismissible fade show position-fixed top-0 start-50 translate-middle-x mt-3';
+                        successAlert.style.zIndex = '9999';
+                        successAlert.innerHTML = `
+                            Media berhasil diperbarui
+                            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                        `;
+                        document.body.appendChild(successAlert);
+                    } else {
+                        throw new Error('Failed to update media path');
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('Failed to update media path. Please try again.');
+                });
+            }
+        });
+
+        function validateMediaPaths(paths) {
+            return Promise.all(paths.map(src => new Promise(r => {
+                const img = new Image();
+                img.onload  = () => r(true);
+                img.onerror = () => r(false);
+                img.src     = src;
+            })));
+        }
+
+        function validateMediaPaths(mediaItems) {
+            const checks = mediaItems.map(item => {
+                return new Promise(resolve => {
+                    if (item.MediaType === 'VIDEO') {
+                        // Bisa dibiarkan true atau dikembangkan untuk cek manual video jika perlu
+                        resolve(true);
+                    } else {
+                        const img = new Image();
+                        img.onload = () => resolve(true);
+                        img.onerror = () => resolve(false);
+                        img.src = item.MediaPath;
+                    }
+                });
+            });
+
+            return Promise.all(checks);
+        }
+
+        function handleDocumentationClick(mediaItems, nodeId, auditId) {
+            // Initialize selectedMedia with IDs
+            selectedMedia = {
+                nodeId: nodeId,
+                auditId: auditId
+            };
+
+            // If no media items, directly open gallery
+            if (!mediaItems || mediaItems.length === 0) {
+                loadGalleryPage(1);
+                return;
+            }
+
+            // Try to show existing media first
+            const container = document.getElementById('mediaModalBody');
+            if (!container) {
+                console.error('Media modal container not found');
+                return;
+            }
+
+            // Try to load the first media item
+            const firstItem = mediaItems[0];
+            console.log('First media item:', firstItem); // Debug log
+
+            const isVideo = firstItem.mediaType?.toUpperCase() === 'VIDEO' || 
+                          firstItem.mediaPath?.toLowerCase().endsWith('.mp4');
+            
+            const mediaElement = document.createElement(isVideo ? 'video' : 'img');
+            mediaElement.className = 'w-100 rounded';
+            if (isVideo) {
+                mediaElement.controls = true;
+                mediaElement.innerHTML = `<source src="${firstItem.mediaPath}" type="video/mp4">`;
+            } else {
+                mediaElement.src = firstItem.mediaPath;
+            }
+
+            console.log('Media element source:', mediaElement.src); // Debug log
+
+            // Try to load the media
+            mediaElement.onload = () => {
+                // Media loaded successfully
+                container.innerHTML = '';
+                container.appendChild(mediaElement);
+                
+                // Update selectedMedia
+                selectedMedia = {
+                    ...selectedMedia,
+                    mediaType: firstItem.mediaType,
+                    mediaPath: firstItem.mediaPath
+                };
+
+                // Show modal
+                const modalEl = document.getElementById('mediaModal');
+                if (modalEl) {
+                    const modal = new bootstrap.Modal(modalEl, {
+                        backdrop: 'static',
+                        keyboard: false
+                    });
+                    modal.show();
+                }
+            };
+
+            mediaElement.onerror = () => {
+                // Media failed to load, open gallery instead
+                console.log('Media failed to load, opening gallery.. ', firstItem.mediaPath);
+                loadGalleryPage(1);
+            };
+        }
+
+        $(function() {
+            // Toggle pilihan jawaban
+            $(document).on('click', '.option-btn', function() {
+                var nodeId = $(this).data('node-id');
+                $('.option-btn[data-node-id="'+nodeId+'"]')
+                .removeClass('active bg-success text-white')
+                .addClass('btn-outline-secondary');
+                $(this)
+                .removeClass('btn-outline-secondary')
+                .addClass('active bg-success text-white');
+            });
+
+            // Hitung ulang satu node (rekursif)
+        function recalcNode($li) {
+            var nodeId = $li.attr('id').replace('node-', '');
+            var weight = parseFloat($li.attr('data-weight')) || 0;
+            var sumAF = 0;
+            var sumWeight = 0;
+            var sumX = 0;
+            var skor = 0;
+
+            var map = { A: 1, B: 0.8, C: 0.6, D: 0.4, E: 0.2, F: 0 };
+
+            var $grp = $li.find('.option-group[data-node-id="' + nodeId + '"]');
+            var isRelaksasi = $grp.data('is-relaksasi');
+
+            if ($grp.length) {
+                var letter = $grp.find('.option-btn.active').data('score') || '';
+                if (letter === 'X') {
+                    var scoreX = parseFloat($li.attr('data-score-x')) || 0;
+                    sumX = weight;
+                    sumAF = scoreX;
+                } else {
+                    if (isRelaksasi === 'True' && letter === 'F') {
+                        sumAF = 1 * weight;
+                    } else {
+                        sumAF = (map[letter] || 0) * weight;
+                    }
+                }
+                sumWeight = weight;
+                skor = (sumWeight - sumX) > 0 ? (sumAF / (sumWeight - sumX)) * sumWeight : 0;
+            } else {
+                var children = $li.find('> .card > .collapse > .card-body > ul > li');
+                children.each(function () {
+                    var result = recalcNode($(this));
+                    sumAF += result.af;
+                    sumWeight += result.wt;
+                    sumX += result.x;
+                });
+
+                var elementTitle = $li.find('> .card > .card-header span.fw-bold.text-dark').text().trim();
+
+                if (elementTitle === "Elemen 2" || elementTitle === "Elemen 5") {
+                    // console.log("🔍 Menjumlah langsung skor anak untuk:", elementTitle);
+                    var directSum = 0;
+                    children.each(function () {
+                        var rawScore = $(this).find('.score-x').text();
+                        var subScore = parseFloat(rawScore) || 0;
+                        directSum += subScore;
+                        console.log("   ↪ Sub skor:", subScore);
+                    });
+                    skor = directSum;
+                    sumAF = skor;
+                    sumWeight = 1;
+                    sumX = 0;
+                } else {
+                    skor = (sumWeight - sumX) > 0 ? (sumAF / (sumWeight - sumX)) * sumWeight : 0;
+                }
+            }
+
+            var $scoreElement = $li.find('.score-x[data-node-id="' + nodeId + '"]');
+            // console.log("📌 Node:", nodeId, "| Judul:", $li.find('.fw-bold.text-dark').text().trim(), "| Skor akhir:", skor.toFixed(2));
+            $scoreElement.text(skor.toFixed(2)); // TANPA 'Skor:' karena sudah ada di <small>
+
+            return { af: sumAF, wt: sumWeight, x: sumX };
+        }
+
+            $(document).on('click', '.save-comment-btn', function () {
+                const nodeId = $(this).data('node-id');
+                const auditId = $(this).data('audit-id');
+                const comment = $(`.comment-input[data-node-id="${nodeId}"]`).val();
+                const token = $('input[name="__RequestVerificationToken"]').val();
+
+                fetch('/BasicOperational/UpdateComment', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'RequestVerificationToken': token
+                    },
+                    body: JSON.stringify({ NodeId: nodeId, AuditId: auditId, Comment: comment })
+                })
+                .then(res => {
+                    if (!res.ok) return res.text().then(t => Promise.reject(t));
+                    alert("Komentar berhasil disimpan");
+                })
+                .catch(err => {
+                    console.error(err);
+                    alert("Gagal menyimpan komentar: " + err);
+                });
+            });
+
+            function recalcAll() {
+                $('#auditChecklist > li[id^="node-"]').each(function () {
+                    recalcNode($(this));
+                });
+            }
+
+                    // recalc saat update
+        $(document).on('click', '.update-score-btn', function() {
+            var nodeId  = $(this).data('node-id');
+            var auditId = $(this).data('audit-id');
+            var score   = $('.option-btn[data-node-id="' + nodeId + '"].active').data('score');
+            var token   = $('input[name="__RequestVerificationToken"]').val();
+
+            if (!score) return alert('Pilih jawaban dulu!');
+
+            fetch('/BasicOperational/UpdateScore', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'RequestVerificationToken': token
+                },
+                body: JSON.stringify({ NodeId: nodeId, AuditId: auditId, Score: score })
+            })
+            .then(res => {
+                if (res.ok) {
+                    recalcAll();
+
+                    // Tampilkan notifikasi sukses setelah update berhasil
+                    const alertBox = document.createElement('div');
+                    alertBox.className = 'alert alert-success alert-dismissible fade show position-fixed top-0 start-50 translate-middle-x mt-3';
+                    alertBox.style.zIndex = '9999';
+                    alertBox.innerHTML = `
+                        Nilai berhasil diperbarui.
+                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                    `;
+                    document.body.appendChild(alertBox);
+
+                    // Auto-dismiss setelah 2.5 detik
+                    setTimeout(() => {
+                        alertBox.classList.remove('show');
+                        alertBox.classList.add('fade');
+                        alertBox.addEventListener('transitionend', () => alertBox.remove());
+                    }, 2500);
+                } else {
+                    return res.text().then(t => Promise.reject(t));
+                }
+            })
+            .catch(err => {
+                console.error(err);
+                alert('Gagal update nilai: ' + err);
+            });
+        });
+
+
+
+            // Recalc juga setelah collapse toggle (open/close)
+            $('#auditChecklist').on('shown.bs.collapse hidden.bs.collapse', function(){
+                recalcAll();
+            });
+
+            // Inisialisasi pertama
+            recalcAll();
+        });
+
+                function showMediaPopup(mediaItems) {
+            const container = document.getElementById('mediaModalBody');
+            container.innerHTML = '';
+
+            if (!mediaItems || mediaItems.length === 0) {
+                container.innerHTML = '<p class="text-muted">Tidak ada media tersedia.</p>';
+            } else if (mediaItems.length === 1) {
+                const item = mediaItems[0];
+                const isVideo = item.MediaType?.toUpperCase() === 'VIDEO' || item.MediaPath?.toLowerCase().endsWith('.mp4');
+                const el = document.createElement(isVideo ? 'video' : 'img');
+
+                if (isVideo) {
+                    el.src = item.MediaPath;
+                    el.controls = true;
+                    el.className = 'w-100 rounded';
+                } else {
+                    el.src = item.MediaPath;
+                    el.alt = '';
+                    el.className = 'img-fluid rounded';
+                }
+
+                container.appendChild(el);
+            } else {
+                const carouselId = 'mediaCarousel';
+                const indicators = [];
+                const innerItems = [];
+
+                mediaItems.forEach((item, index) => {
+                    const isActive = index === 0 ? 'active' : '';
+                    const isVideo = item.MediaType?.toUpperCase() === 'VIDEO' || item.MediaPath?.toLowerCase().endsWith('.mp4');
+                    const mediaTag = isVideo
+                        ? `<video controls class="d-block w-100 rounded"><source src="${item.MediaPath}" type="video/mp4"></video>`
+                        : `<img src="${item.MediaPath}" class="d-block w-100 rounded" alt="">`;
+
+                    indicators.push(`<button type="button" data-bs-target="#${carouselId}" data-bs-slide-to="${index}" class="${isActive}" aria-current="${isActive ? 'true' : ''}" aria-label="Slide ${index + 1}"></button>`);
+                    innerItems.push(`<div class="carousel-item ${isActive}">${mediaTag}</div>`);
+                });
+
+                container.innerHTML = `
+                <div id="${carouselId}" class="carousel slide" data-bs-ride="carousel">
+                    <div class="carousel-indicators">
+                        ${indicators.join('')}
+                    </div>
+                    <div class="carousel-inner">
+                        ${innerItems.join('')}
+                    </div>
+                    <button class="carousel-control-prev" type="button" data-bs-target="#${carouselId}" data-bs-slide="prev">
+                        <span class="carousel-control-prev-icon custom-arrow" aria-hidden="true"></span>
+                        <span class="visually-hidden">Previous</span>
+                    </button>
+                    <button class="carousel-control-next" type="button" data-bs-target="#${carouselId}" data-bs-slide="next">
+                        <span class="carousel-control-next-icon custom-arrow" aria-hidden="true"></span>
+                        <span class="visually-hidden">Next</span>
+                    </button>
+                </div>`;
+            }
+
+            const modalEl = document.getElementById('mediaModal');
+            const modal = new bootstrap.Modal(modalEl, {
+                backdrop: 'static',
+                keyboard: false,
+                focus: false
+            });
+            modal.show();
+        }
+
+        function showFinalMediaPopup(mediaItems) {
+        showMediaPopup(mediaItems);
+        }
+
+        // function showFinalMediaPopup(mediaList) {
+        //     const container = document.getElementById('mediaModalBody');
+        //     container.innerHTML = '';
+
+        //     mediaList.forEach(item => {
+        //         const isVideo = item.mediaType?.toUpperCase() === 'VIDEO' || item.mediaPath.toLowerCase().endsWith('.mp4');
+
+        //         const el = document.createElement(isVideo ? 'video' : 'img');
+        //         el.src = item.mediaPath;
+        //         el.className = "rounded shadow-sm mb-3";
+        //         el.style.maxWidth = "100%";
+        //         el.style.maxHeight = "80vh";
+        //         el.style.display = "block";
+        //         el.style.margin = "0 auto";
+
+        //         if (isVideo) {
+        //             el.controls = true;
+        //         }
+
+        //         container.appendChild(el);
+        //     });
+
+        //     const modal = new bootstrap.Modal(document.getElementById('mediaModal'));
+        //     modal.show();
+        // }
+
+        $(document).on('click', '.view-media-btn2', function () {
+            const mediaItems = $(this).data('media-items');
+            showMediaPopup(mediaItems);
+            console.log(mediaItems);
+        });
+
+
+        // Add this at the beginning of your script section
+        $(document).on('click', '.view-documentation-btn', function() {
+            const mediaItems = $(this).data('media-items');
+            const nodeId = $(this).data('node-id');
+            const auditId = $(this).data('audit-id');
+            handleDocumentationClick(mediaItems, nodeId, auditId);
+        });
+
+        // Add this new function for viewing media in full screen
+                function showFullScreenMedia(mediaItems) {
+            const normalizedItems = mediaItems.map(item => ({
+                path: item.mediaPath || item.MediaPath,
+                type: (item.mediaType || item.MediaType)?.toUpperCase()
+            }));
+
+            const modalEl = document.getElementById('fullSizeMediaModal');
+            const container = document.getElementById('fullSizeMediaModalBody');
+
+            // Cleanup previously injected content and modal state
+            container.innerHTML = '';
+            document.body.classList.remove('modal-open');
+            document.body.style.overflow = '';
+            document.body.style.paddingRight = '';
+            const backdrop = document.querySelector('.modal-backdrop');
+            if (backdrop) backdrop.remove();
+
+            if (normalizedItems.length > 1) {
+                const carouselId = 'fullScreenCarousel';
+                const indicators = [];
+                const innerItems = [];
+
+                normalizedItems.forEach((item, index) => {
+                    const isVideo = item.type === 'VIDEO' || item.path.toLowerCase().endsWith('.mp4');
+                    const isActive = index === 0 ? 'active' : '';
+                    const mediaTag = isVideo
+                        ? `<video controls class="w-100 h-100" style="object-fit: contain;"><source src="${item.path}" type="video/mp4"></video>`
+                        : `<img src="${item.path}" class="w-100 h-100" style="object-fit: contain;" alt="Dokumentasi">`;
+
+                    indicators.push(`<button type="button" data-bs-target="#${carouselId}" data-bs-slide-to="${index}" class="${isActive}" aria-current="${isActive}" aria-label="Slide ${index + 1}"></button>`);
+                    innerItems.push(`<div class="carousel-item ${isActive}">${mediaTag}</div>`);
+                });
+
+                const carouselHTML = `
+                    <div id="${carouselId}" class="carousel slide" data-bs-ride="false">
+                        <div class="carousel-indicators">${indicators.join('')}</div>
+                        <div class="carousel-inner">${innerItems.join('')}</div>
+                        <button class="carousel-control-prev" type="button" data-bs-target="#${carouselId}" data-bs-slide="prev">
+                            <span class="carousel-control-prev-icon" aria-hidden="true"></span>
+                            <span class="visually-hidden">Previous</span>
+                        </button>
+                        <button class="carousel-control-next" type="button" data-bs-target="#${carouselId}" data-bs-slide="next">
+                            <span class="carousel-control-next-icon" aria-hidden="true"></span>
+                            <span class="visually-hidden">Next</span>
+                        </button>
+                    </div>`;
+
+                container.innerHTML = carouselHTML;
+
+                const modal = new bootstrap.Modal(modalEl);
+                modal.show();
+
+                // Delay Carousel Initialization to ensure modal DOM is ready
+                setTimeout(() => {
+                    const carouselEl = document.getElementById(carouselId);
+                    if (carouselEl) {
+                        bootstrap.Carousel.getInstance(carouselEl)?.dispose();
+                        new bootstrap.Carousel(carouselEl, {
+                            interval: false,
+                            ride: false,
+                            wrap: false
+                        });
+                    }
+
+                    // Debug check
+                    const active = document.querySelectorAll(`#${carouselId} .carousel-item.active`).length;
+                    const all = document.querySelectorAll(`#${carouselId} .carousel-item`).length;
+                    console.log('Active carousel items:', active);
+                    console.log('All carousel items:', all);
+                }, 300);
+
+            } else {
+                const item = normalizedItems[0];
+                const isVideo = item.type === 'VIDEO' || item.path.toLowerCase().endsWith('.mp4');
+                container.innerHTML = isVideo
+                    ? `<video controls class="w-100 h-100" style="object-fit: contain;"><source src="${item.path}" type="video/mp4"></video>`
+                    : `<img src="${item.path}" class="w-100 h-100" style="object-fit: contain;" alt="Dokumentasi">`;
+
+                const modal = new bootstrap.Modal(modalEl);
+                modal.show();
+            }
+        }
+
+        // Add click handler for the new view media button
+        $(document).on('click', '.view-media-btn', function() {
+            const mediaItems = $(this).data('media-items');
+            console.log('Raw media items from data attribute:', mediaItems); // Debug log
+            showFullScreenMedia(mediaItems);
+        });
+
+                const myCarousel = document.querySelector('#fullScreenCarousel');
+        if (myCarousel) {
+            console.log("Manually initializing carousel...");
+            bootstrap.Carousel.getInstance(myCarousel)?.dispose(); // buang instance lama
+            new bootstrap.Carousel(myCarousel, {
+                interval: false,
+                ride: false
+            });
+        }
+
+    </script>
+}
+
+@functions {
+    async Task RenderChecklistNode(AuditChecklistNode node, int level, bool isVerified, bool isReadonlyUser, bool hideUploadButton)
+    {
+        var collapseId = $"collapse-{node.Id}";
+        var paddingClass = $"ps-{level * 3}";
+        <li id="node-@node.Id"
+            class="mb-3 @paddingClass"
+            data-weight="@(node.Weight ?? 0)"
+            data-score-x="@(node.ScoreX?.ToString("0.00") ?? "0")">
+
+            <div class="card border-secondary">
+                <!-- HEADER: toggle + skor -->
+                <div class="card-header bg-light d-flex flex-wrap justify-content-between align-items-center gap-2">
+                    <button class="btn btn-link flex-grow-1 text-start py-0"
+                            type="button"
+                            data-bs-toggle="collapse"
+                            data-bs-target="#@collapseId"
+                            aria-expanded="false"
+                            aria-controls="@collapseId">
+                        <span class="fw-bold text-dark">
+                            @(string.IsNullOrWhiteSpace(node.number) ? "" : node.number + " ")@node.Title
+                        </span>
+                        @if (!string.IsNullOrWhiteSpace(node.Description))
+                        {
+                            <span class="fw-bold fs-6 text-muted ms-2">@node.Description</span>
+                        }
+                        <i class="bi bi-chevron-right rotate-arrow ms-2"></i>
+                    </button>
+                    @if (node.Type == "QUESTION")
+                    {
+                        <div class="ms-auto d-flex align-items-center flex-wrap gap-2 w-100 justify-content-between">
+                            <!-- Pilihan A-F -->
+                            <div class="d-flex align-items-center flex-wrap gap-2">
+                                <div class="option-group"
+                                     data-node-id="@node.Id"
+                                     data-is-relaksasi="@node.IsRelaksasi"
+                                     data-score-option="@node.ScoreOption">
+                                    @{
+                                        var opts = (node.ScoreOption ?? "")
+                                        .Split('/', StringSplitOptions.RemoveEmptyEntries)
+                                        .Select(s => s.Trim().ToUpper())
+                                        .SelectMany(o => o == "A-F"
+                                        ? new[] { "A", "B", "C", "D", "E", "F" }
+                                        : new[] { o })
+                                        .Distinct();
+                                    }
+                                    @foreach (var opt in opts)
+                                    {
+                                        decimal val = opt switch
+                                        {
+                                            "A" => 1m,
+                                            "B" => 0.8m,
+                                            "C" => 0.6m,
+                                            "D" => 0.4m,
+                                            "E" => 0.2m,
+                                            "F" => 0m,
+                                            _ => 0m
+                                        };
+                                        bool active = node.ScoreInput == opt;
+                                        <button type="button"
+                                                class="btn btn-sm option-btn @(active ? "active bg-success text-white" : "btn-outline-secondary")"
+                                                data-node-id="@node.Id"
+                                                data-score="@opt"
+                                        @(isVerified ? "disabled" : "")>
+                                            @(opt == "X" ? "X" : $"{opt} ({(node.IsRelaksasi ? 1 : val):0.00})")
+                                        </button>
+                                    }
+                                </div>
+
+                                <!-- Skor -->
+                                <div class="text-end">
+                                    <small>skor :</small><br />
+                                    <strong class="score-x text-primary" data-node-id="@node.Id"></strong>
+                                </div>
+                            </div>
+
+                            <!-- Tombol Update + Batal -->
+                            @if (!isReadonlyUser)
+                            {
+                                <div class="d-flex gap-2 ms-auto">
+                                    <button type="button"
+                                            class="btn btn-sm btn-primary update-score-btn"
+                                            data-node-id="@node.Id"
+                                            data-audit-id="@ViewBag.AuditId"
+                                    @(isVerified ? "disabled" : "")>
+                                        Update
+                                    </button>
+
+                                    <button type="button"
+                                            class="btn btn-sm btn-secondary cancel-score-btn"
+                                            data-node-id="@node.Id"
+                                    @(isVerified ? "disabled" : "")>
+                                        Batal
+                                    </button>
+                                </div>
+                            }
+                        </div>
+                    }
+
+                    else if (node.ScoreInput != "X")
+                    {
+                        <div class="ms-auto text-end">
+                            <small>Skor:</small>
+                            <strong class="score-x" data-node-id="@node.Id">0.00</strong>
+                        </div>
+                    }
+                </div>
+
+
+                <!-- COLLAPSE BODY -->
+                <div id="@collapseId" class="collapse">
+                    <div class="card-body">
+                        @if (node.Type == "QUESTION")
+                        {
+                            @if (node.Type == "QUESTION" && (node.Children == null || !node.Children.Any()))
+                            {
+                                <div class="d-flex gap-2 align-items-center mb-3 flex-wrap">
+                                    @if (!hideUploadButton)
+                                    {
+                                        <button type="button" class="btn btn-outline-primary btn-sm view-documentation-btn"
+                                                data-media-items='@Html.Raw(JsonConvert.SerializeObject(node.MediaItems ?? new List<MediaItem> { }))'
+                                                data-node-id="@node.Id"
+                                                data-audit-id="@ViewBag.AuditId">
+                                            <i class="bi bi-image me-1"></i> Upload dari Media Library
+                                        </button>
+                                    }
+
+                                    <button type="button" class="btn btn-outline-secondary btn-sm view-media-btn2"
+                                            data-media-items='@Html.Raw(JsonConvert.SerializeObject(node.MediaItems ?? new List<MediaItem> { }))'>
+                                        <i class="bi bi-eye me-1"></i> Lihat Dokumentasi
+                                    </button>
+
+
+                                    @if (!isReadonlyUser)
+                                    {
+                                        <form asp-controller="BasicOperational"
+                                              asp-action="UploadDocument"
+                                              asp-route-nodeId="@node.Id"
+                                              asp-route-auditId="@ViewBag.AuditId"
+                                              enctype="multipart/form-data"Upload dari Media Library
+                                              method="post"
+                                              class="d-flex align-items-center">
+                                            <input type="file" name="file" class="form-control form-control-sm me-2"
+                                                   required @(isVerified ? "disabled" : "") />
+                                            <button type="submit" class="btn btn-sm btn-secondary" @(isVerified ? "disabled" : "")>
+                                                Upload
+                                            </button>
+                                        </form>
+                                    }
+                                </div>
+
+                                @if (node.ScoreInput == "F")
+                                {
+                                    <div class="alert alert-danger small mt-2">
+                                        <i class="bi bi-exclamation-triangle-fill me-1"></i>
+                                        <strong>Penalti:</strong> @node.PenaltyAlert
+                                    </div>
+                                }
+
+                                <div class="mb-3">
+                                    <label class="fw-semibold text-muted">Catatan Penilaian:</label>
+                                    @if (isReadonlyUser || isVerified)
+                                    {
+                                        <div class="border rounded p-2 bg-light small">@node.Comment</div>
+                                    }
+                                    else
+                                    {
+                                        <textarea class="form-control form-control-sm comment-input"
+                                                  data-node-id="@node.Id"
+                                                  rows="2">@node.Comment</textarea>
+                                        <button class="btn btn-sm btn-outline-success mt-1 save-comment-btn"
+                                                data-node-id="@node.Id"
+                                                data-audit-id="@ViewBag.AuditId">
+                                            Ubah Komentar
+                                        </button>
+                                    }
+
+                                </div>
+
+                            }
+                        }
+
+
+                        @if (node.ScoreInput == "X" && node.ScoreX.HasValue)
+                        {
+                            <div class="mt-1">
+                                <span class="badge bg-info text-dark">Nilai X: @node.ScoreX.Value.ToString("0.00")</span>
+                            </div>
+                        }
+
+                        @if (node.Children?.Any() ?? false)
+                        {
+                            <ul class="list-unstyled mt-3">
+                                @foreach (var child in node.Children)
+                                {
+                                    RenderChecklistNode(child, level + 1, isVerified, isReadonlyUser, hideUploadButton);
+                                }
+                            </ul>
+                        }
+
+                    </div>
+                </div>
+            </div>
+        </li>
+    }
+}

@@ -6,7 +6,7 @@
     ViewData["Title"] = "Detail Laporan Audit Basic Operational";
     bool isVerified = Model.Status?.ToUpper() == "VERIFIED";
 
-    var isSuperadmin = User.IsInRole("Superadmin");
+    var isSuperadmin = User.IsInRole("Report");
 
     var isCertified = Model.TotalScore >= Model.MinPassingScore && string.IsNullOrWhiteSpace(Model.PenaltyAlerts);
     var statusLabel = isCertified ? "EXCELLENT" : "NOT CERTIFIED";
@@ -35,8 +35,8 @@
         display: inline-block;
         min-width: 90px;
         color: black !important;
-        font-weight: bold; 
-        font-size: 0.95rem; 
+        font-weight: bold;
+        font-size: 0.95rem;
         font-weight: 600;
         border-radius: 0.5rem;
         padding: 0.25rem 0.5rem;
@@ -66,17 +66,16 @@
 
 </style>
 
-<div class="container-fluid">
 <!-- HEADER ATAS -->
 <div class="d-flex align-items-center justify-content-between mb-4">
     <div>
         <h2 class="fw-bold mb-1">
-            Detail Laporan Audit Basic Operational Performa SPBU
+            Detail Laporan Audit Performa SPBU
             <small class="text-muted">(Regular Audit)</small>
         </h2>
         <div>
             <a class="text-primary text-decoration-none"
-                   href="@Url.Action("Index", "BasicOperationalReport")">
+               href="@Url.Action("Index", "BasicOperational")">
                 <small>Daftar Report / </small>
             </a>
 
@@ -86,11 +85,11 @@
     </div>
     <div class="d-flex gap-2">
         <a class="btn btn-outline-success"
-               href="@Url.Action("DownloadPdfQuestGood", "BasicOperationalReport", new { id = Context.Request.RouteValues["id"], type = "good" })">
+           href="@Url.Action("DownloadPdfQuestGood", "BasicOperational", new { id = Context.Request.RouteValues["id"], type = "good" })">
             <i class="bi bi-check-circle-fill"></i> Report Good
         </a>
         <a class="btn btn-outline-warning"
-               href="@Url.Action("DownloadPdfQuest", "BasicOperationalReport", new { id = Context.Request.RouteValues["id"], type = "excellent" })">
+           href="@Url.Action("DownloadPdfQuest", "BasicOperational", new { id = Context.Request.RouteValues["id"], type = "excellent" })">
             <i class="bi bi-star-fill"></i> Report Excellent
         </a>
     </div>
@@ -105,12 +104,13 @@
     </div>
 </div>
 
+
 <!-- STATUS -->
 <div id="certStatusBox" class="alert text-center py-2 mb-4">
-        <strong id="certStatusLabel" class="score-label">
-            Total Score (TS): @Model.TotalScore.ToString("0.00")% &mdash;
-            @Model.ExcellentStatus
-        </strong>
+    <strong id="certStatusLabel" class="score-label">
+        Total Score (TS): @Model.TotalScore.ToString("0.00")% &mdash;
+        NOT CERTIFIED <!-- default sementara, akan diubah JS -->
+    </strong>
 </div>
 
 <!-- INFORMASI SPBU --><div class="card mb-5 shadow-sm">
@@ -155,24 +155,22 @@
     </div>
 </div>
 
+
 <!-- LAPORAN PENILAIAN (Skor dan Level) -->
 <div class="mb-5">
     <h4 class="fw-bold">Laporan Penilaian</h4>
 
     <!-- Total Score -->
     <div class="box-total-score rounded-3 text-center py-2 mb-1 bg-danger text-white">
-            <strong class="score-label">
-                Total Score (TS): @Model.TotalScore.ToString("0.00")% &mdash;
-                @Model.ExcellentStatus
-            </strong>
-        <div class="box-penalty mt-1 small text-white" style="display:none">
-            <strong>Penalty:</strong> <span class="penalty-text">-</span><br />
-            <span class="fail-elements" style="display:none;">
-                <strong>Gagal di Elemen:</strong> <span class="fail-list"></span>
-            </span>
+        <strong class="score-label">
+            Total Score (TS): @Model.TotalScore.ToString("0.00")% &mdash;
+            NOT CERTIFIED
+        </strong>
+        <div class="box-penalty mt-1 small" style="display:none">
+            <strong>Penalty:</strong> -
         </div>
-</div>
     </div>
+
 
     <div class="text-center text-muted mb-3">
         Nilai Minimum Pasti Pas: <span id="minPassingDisplay">@Model.MinPassingScore.ToString("0.00")%</span>
@@ -365,13 +363,6 @@
             </div>
         </div>
 
-        <div class="mb-4">
-            <strong>Penawaran Produk Komperhensif:</strong>
-            <div class="border rounded p-3 bg-light mt-2">
-                @Html.Raw(Model.PenawaranKomperhensif?.Replace("\n", "<br>"))
-            </div>
-        </div>
-
         <div>
             <strong>Komentar Manajer SPBU:</strong>
             <div class="border rounded p-3 bg-light mt-2">
@@ -428,9 +419,9 @@
                         <td>@qq.Mode</td>
                         <td>@qq.QuantityVariationWithMeasure</td>
                         <td style="
-                        background-color: @(qq.QuantityVariationInPercentage < -0.003m ? "#ff0000" : 
+                        background-color: @(qq.QuantityVariationInPercentage < -0.003m ? "#ff0000" :
                                            qq.QuantityVariationInPercentage > 0.003m ? "#ffff00" : "transparent");">
-                        @qq.QuantityVariationInPercentage
+                            @qq.QuantityVariationInPercentage
                         </td>
                         <td>@qq.ObservedDensity</td>
                         <td>@qq.ObservedTemp</td>
@@ -481,18 +472,11 @@
 }
 
 <div class="text-end mt-5">
-    @if (User.IsInRole("Superadmin"))
-    {
-        <button class="btn btn-primary rounded-pill px-4 py-2" data-bs-toggle="modal" data-bs-target="#confirmModal">
-            Reassign Laporan Audit
-        </button>
-    }
-    else
-    {
+    
         <a asp-action="Index" class="btn btn-secondary rounded-pill px-4 py-2">
             Back
         </a>
-    }
+    
 </div>
 
 <!-- Modal Konfirmasi -->
@@ -595,7 +579,7 @@
             updateUI(newMode);
         });
 
-                    function updateUI(mode) {
+                function updateUI(mode) {
             const minScoresGood = [80, 85, 85, 15, 25];
             const minScoresExcellent = [85, 85, 85, 20, 50];
             const minScores = mode === 'excellent' ? minScoresExcellent : minScoresGood;
@@ -610,60 +594,32 @@
             const minPassing = mode === 'excellent' ? minPassingExcellent : minPassingGood;
             const penalty = mode === 'excellent' ? penaltyExcellent : penaltyGood;
 
-            // Elemen scores from Razor
-            const sss = parseFloat('@(Model.SSS ?? 0)');
-            const eqnq = parseFloat('@(Model.EQnQ ?? 0)');
-            const rfs = parseFloat('@(Model.RFS ?? 0)');
-            const vfc = parseFloat('@(Model.VFC ?? 0)');
-            const epo = parseFloat('@(Model.EPO ?? 0)');
-
-            // Log nilai elemen
-            console.log(`Mode: ${mode}`);
-            console.log(`Scores - SSS: ${sss}, EQnQ: ${eqnq}, RFS: ${rfs}, VFC: ${vfc}, EPO: ${epo}`);
-            console.log(`Total Score: ${totalScore}, Penalty: ${penalty}`);
-
-            // Special nodes
+            // Special rule
             const specialNodeId = '555fe2e4-b95b-461b-9c92-ad8b5c837119';
             const specialNodeId3 = 'bafc206f-ed29-4bbc-8053-38799e186fb0';
             const specialNodeId4 = 'd26f4caa-e849-4ab4-9372-298693247272';
 
-            const specialNodeScore = $(`#node-${specialNodeId} .option-btn.active`).data('score')?.toString().trim().toUpperCase() || "";
+            const specialNodeScore = $(`#node-${specialNodeId} .option-btn.active`).data('score') || "";
             // const specialNodeScore2 = $(`#node-${specialNodeId2} .option-btn.active`).data('score')?.toString().trim().toUpperCase() || "";
             const specialNodeScore3 = $(`#node-${specialNodeId3} .option-btn.active`).data('score')?.toString().trim().toUpperCase() || "";
             const specialNodeScore4 = $(`#node-${specialNodeId4} .option-btn.active`).data('score')?.toString().trim().toUpperCase() || "";
 
-            console.log("Special Node Scores:", specialNodeScore, specialNodeScore3, specialNodeScore4);
-
             let forceGoodOnly = false;
             let forceNotCertified = false;
 
-            // Special node rules (mode: excellent)
             if (mode === 'excellent') {
                 if (specialNodeScore === 'C') {
                     forceGoodOnly = true;
-                    console.log("Special node C detected — downgrade to GOOD");
-                } else if (
-                    specialNodeScore !== 'A' ||
-                    // specialNodeScore2 !== 'A' ||
-                    specialNodeScore3 !== 'A' ||
-                    specialNodeScore4 !== 'A'
-                ) {
+                } else if (specialNodeScore !== 'A') {
                     forceNotCertified = true;
-                    console.log("One or more special nodes not A — force NOT CERTIFIED");
                 }
-            }
-
-            // Validation by element threshold
-            if (
-                (mode === 'good' && (
-                    sss < 80 || eqnq < 85 || rfs < 85 || vfc < 15 || epo < 25
-                )) ||
-                (mode === 'excellent' && (
-                    sss < 85 || eqnq < 85 || rfs < 85 || vfc < 20 || epo < 50
-                ))
-            ) {
-                forceNotCertified = true;
-                console.log("One or more element scores below minimum — force NOT CERTIFIED");
+                // else if (specialNodeScore2 !== 'A') {
+                //     forceNotCertified = true;
+                }else if (specialNodeScore3 !== 'A') {
+                    forceNotCertified = true;
+                }else if (specialNodeScore4 !== 'A') {
+                    forceNotCertified = true;
+                }
             }
 
             let isCertified = (totalScore >= minPassing && penalty === "");
@@ -672,14 +628,11 @@
             }
 
             let statusLabel = "NOT CERTIFIED";
-                    if (isCertified) {
-            statusLabel = mode === 'good' ? "Pasti Pas Good" : (forceGoodOnly ? "GOOD" : "EXCELLENT");
-        }
+            if (isCertified) {
+                statusLabel = forceGoodOnly ? "GOOD" : "EXCELLENT";
+            }
 
-
-            console.log("Final Status:", statusLabel);
-
-            // Update UI
+            // Update UI as usual...
             $('td.min-nilai').each(function (i) {
                 if (i < minScores.length) {
                     $(this).text(minScores[i].toFixed(2) + '%');
@@ -705,40 +658,18 @@
 
             $('.score-label').html(`Total Score (TS): ${totalScore.toFixed(2)}% &mdash; ${statusLabel}`);
 
-                    if (isCertified) {
-            $('.box-penalty').hide();
-        } else {
-            $('.box-penalty').show();
-                    $('.penalty-text').text(penalty || '-');
-
-        // Cari elemen yang gagal berdasarkan skor elemen
-        const failedElements = [];
-        const elements = ['SSS', 'EQnQ', 'RFS', 'VFC', 'EPO'];
-        const scores = [sss, eqnq, rfs, vfc, epo];
-        const minScores = mode === 'excellent'
-            ? [85, 85, 85, 20, 50]
-            : [80, 85, 85, 15, 25];
-
-        for (let i = 0; i < scores.length; i++) {
-            if (scores[i] < minScores[i]) {
-                failedElements.push(elements[i]);
+            if (isCertified) {
+                $('.box-penalty').hide();
+            } else {
+                $('.box-penalty').show().html(`<strong>Penalty:</strong> ${penalty}`);
             }
-        }
-
-        if (failedElements.length > 0) {
-            $('.fail-elements').show();
-            $('.fail-list').text(failedElements.join(', '));
-        } else {
-            $('.fail-elements').hide();
-        }
-        }
-
 
             $('#certStatusBox')
                 .removeClass('alert-success alert-danger')
                 .addClass(isCertified ? 'alert-success' : 'alert-danger');
             $('#certStatusLabel').text(statusLabel);
         }
+
 
             // PILIHAN NILAI A-F
             $(document).on('click', '.option-btn', function () {
@@ -887,15 +818,10 @@
             });
             modal.show();
         }
-
-        function showFinalMediaPopup(mediaItems) {
-        showMediaPopup(mediaItems);
-        }
-
         // PDF download
         document.getElementById('btnDownloadPdf')?.addEventListener('click', function () {
             const auditId = '@Context.Request.RouteValues["id"]';
-            fetch(`/BasicOperationalReport/DownloadPdfQuest?id=${auditId}`, {
+            fetch(`/BasicOperational/DownloadPdfQuest?id=${auditId}`, {
                 method: 'GET',
                 headers: { 'Accept': 'application/pdf' }
             })
@@ -920,6 +846,7 @@
         });
     </script>
 }
+
 
 @functions {
     async Task RenderChecklistNode(AuditChecklistNode node, int level, bool isVerified, bool isReadonlyUser)
