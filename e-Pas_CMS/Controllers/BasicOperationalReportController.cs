@@ -2225,8 +2225,7 @@ WHERE
             model.TotalScore = totalScore;
             model.MaxScore = maxScore;
             model.FinalScore = (maxScore > 0) ? (totalScore / maxScore) * 100m : 0m;
-            model.MinPassingScore = 80.00m;
-            model.MinPassingScoreGood = 75.00m;
+            model.MinPassingScore = 75.00m;
 
             // Log ke Output
             System.Diagnostics.Debug.WriteLine("[DEBUG] Perhitungan Total Skor:");
