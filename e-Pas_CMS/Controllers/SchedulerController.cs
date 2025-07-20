@@ -494,6 +494,28 @@ namespace e_Pas_CMS.Controllers
 
                 var isBasicOperational = TipeAudit == "Basic Operational";
 
+                string checklistId;
+                string? introId = null;
+
+                using (var conn = new NpgsqlConnection(_connectionString))
+                {
+                    conn.Open();
+
+                    if (TipeAudit == "Basic Operational")
+                    {
+                        var sql = "select id from master_questioner where type = 'Basic Operational' and category = 'CHECKLIST' order by version desc limit 1";
+                        checklistId = conn.QueryFirstOrDefault<string>(sql);
+                    }
+                    else
+                    {
+                        var sqlChecklist = "select id from master_questioner where type = 'Mystery Audit' and category = 'CHECKLIST' order by version desc limit 1";
+                        checklistId = conn.QueryFirstOrDefault<string>(sqlChecklist);
+
+                        var sqlIntro = "select id from master_questioner where type = 'Mystery Audit' and category = 'INTRO' order by version desc limit 1";
+                        introId = conn.QueryFirstOrDefault<string>(sqlChecklist);
+                    }
+                }
+
                 var trxAudit = new trx_audit
                 {
                     id = Guid.NewGuid().ToString(),
@@ -502,9 +524,7 @@ namespace e_Pas_CMS.Controllers
                     spbu_id = spbuId,
                     app_user_id = userId,
                     master_questioner_intro_id = isBasicOperational ? null : "7e3dca2d-2d99-4a8d-9fc0-9b80cb4c3a79",
-                    master_questioner_checklist_id = isBasicOperational
-                    ? "fe0d1ec2-513f-4e6f-bb0e-54c8ffdf38d6"
-                    : "16d4f8e1-360a-47b0-86b7-8ac55a1a6f75",
+                    master_questioner_checklist_id = checklistId,
                     audit_level = nextauditsspbu,
                     audit_type = TipeAudit,
                     audit_schedule_date = DateOnly.FromDateTime(TanggalAudit),
