@@ -492,28 +492,27 @@ namespace e_Pas_CMS.Controllers
                 ? (auditlevelClass.audit_level_class ?? "")
                 : "";
 
-                var isBasicOperational = TipeAudit == "Basic Operational";
+                bool isBasicOperational = TipeAudit == "Basic Operational";
 
-                string checklistId;
+                string checklistId = "";
                 string? introId = null;
 
-                using (var conn = new NpgsqlConnection(_connectionString))
+                var conn2 = _context.Database.GetDbConnection();
+                if (conn2.State != ConnectionState.Open)
+                    await conn2.OpenAsync();
+
+                if (isBasicOperational)
                 {
-                    conn.Open();
+                    var sqlChecklist = "select id from master_questioner where type = 'Basic Operational' and category = 'CHECKLIST' order by version desc limit 1";
+                    checklistId = await conn2.QueryFirstOrDefaultAsync<string>(sqlChecklist);
+                }
+                else
+                {
+                    var sqlChecklist = "select id from master_questioner where type = 'Mystery Audit' and category = 'CHECKLIST' order by version desc limit 1";
+                    checklistId = await conn2.QueryFirstOrDefaultAsync<string>(sqlChecklist);
 
-                    if (TipeAudit == "Basic Operational")
-                    {
-                        var sql = "select id from master_questioner where type = 'Basic Operational' and category = 'CHECKLIST' order by version desc limit 1";
-                        checklistId = conn.QueryFirstOrDefault<string>(sql);
-                    }
-                    else
-                    {
-                        var sqlChecklist = "select id from master_questioner where type = 'Mystery Audit' and category = 'CHECKLIST' order by version desc limit 1";
-                        checklistId = conn.QueryFirstOrDefault<string>(sqlChecklist);
-
-                        var sqlIntro = "select id from master_questioner where type = 'Mystery Audit' and category = 'INTRO' order by version desc limit 1";
-                        introId = conn.QueryFirstOrDefault<string>(sqlChecklist);
-                    }
+                    var sqlIntro = "select id from master_questioner where type = 'Mystery Audit' and category = 'INTRO' order by version desc limit 1";
+                    introId = await conn2.QueryFirstOrDefaultAsync<string>(sqlIntro);
                 }
 
                 var trxAudit = new trx_audit
@@ -523,7 +522,7 @@ namespace e_Pas_CMS.Controllers
                     report_no = "",                          
                     spbu_id = spbuId,
                     app_user_id = userId,
-                    master_questioner_intro_id = isBasicOperational ? null : "7e3dca2d-2d99-4a8d-9fc0-9b80cb4c3a79",
+                    master_questioner_intro_id = introId,
                     master_questioner_checklist_id = checklistId,
                     audit_level = nextauditsspbu,
                     audit_type = TipeAudit,
