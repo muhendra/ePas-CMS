@@ -76,7 +76,7 @@
         </h2>
         <div>
             <a class="text-primary text-decoration-none"
-                   href="@Url.Action("Index", "BasicOperationalReport")">
+                   href="@Url.Action("Index", "AuditReport")">
                 <small>Daftar Report / </small>
             </a>
 
@@ -86,11 +86,11 @@
     </div>
     <div class="d-flex gap-2">
         <a class="btn btn-outline-success"
-               href="@Url.Action("DownloadPdfQuestGood", "BasicOperationalReport", new { id = Context.Request.RouteValues["id"], type = "good" })">
+               href="@Url.Action("DownloadPdfQuestGood", "AuditReport", new { id = Context.Request.RouteValues["id"], type = "good" })">
             <i class="bi bi-check-circle-fill"></i> Report Good
         </a>
         <a class="btn btn-outline-warning"
-               href="@Url.Action("DownloadPdfQuest", "BasicOperationalReport", new { id = Context.Request.RouteValues["id"], type = "excellent" })">
+               href="@Url.Action("DownloadPdfQuest", "AuditReport", new { id = Context.Request.RouteValues["id"], type = "excellent" })">
             <i class="bi bi-star-fill"></i> Report Excellent
         </a>
     </div>
@@ -895,7 +895,7 @@
         // PDF download
         document.getElementById('btnDownloadPdf')?.addEventListener('click', function () {
             const auditId = '@Context.Request.RouteValues["id"]';
-            fetch(`/BasicOperationalReport/DownloadPdfQuest?id=${auditId}`, {
+            fetch(`/AuditReport/DownloadPdfQuest?id=${auditId}`, {
                 method: 'GET',
                 headers: { 'Accept': 'application/pdf' }
             })
