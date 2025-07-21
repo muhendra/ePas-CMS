@@ -6,11 +6,12 @@
     ViewData["Title"] = "Detail Laporan Audit Basic Operational";
     bool isVerified = Model.Status?.ToUpper() == "VERIFIED";
 
-    var isSuperadmin = User.IsInRole("Report");
+    var isSuperadmin = User.IsInRole("Superadmin");
 
     var isCertified = Model.TotalScore >= Model.MinPassingScore && string.IsNullOrWhiteSpace(Model.PenaltyAlerts);
-    var statusLabel = isCertified ? "EXCELLENT" : "NOT CERTIFIED";
-    var boxClass = isCertified ? "bg-warning" : "bg-danger text-white";
+    var statusLabel = isCertified ? "PASSED BASIC OPERATIONAL" : "NOT PASSED";
+    var boxClass = isCertified ? "bg-passed text-white" : "bg-danger text-white";
+
     var showPenalty = !isCertified && !string.IsNullOrWhiteSpace(Model.PenaltyAlerts);
 
     var boxStyle = statusLabel == "EXCELLENT" ? "background-color:#FFA500 !important;" : "";
@@ -21,10 +22,15 @@
 
 @if (TempData["Success"] != null)
 {
-    <div class="alert alert-success">@TempData["Success"]</div>
+        <div class="alert alert-success">@TempData["Success"]</div>
 }
 
 <style>
+
+    .bg-passed {
+    background-color: #4F96D8 !important;
+    color: white !important;
+    }
 
     .option-group .option-btn {
         display: none !important;
@@ -35,8 +41,8 @@
         display: inline-block;
         min-width: 90px;
         color: black !important;
-        font-weight: bold;
-        font-size: 0.95rem;
+        font-weight: bold; 
+        font-size: 0.95rem; 
         font-weight: 600;
         border-radius: 0.5rem;
         padding: 0.25rem 0.5rem;
@@ -66,50 +72,37 @@
 
 </style>
 
+<div class="container-fluid">
 <!-- HEADER ATAS -->
 <div class="d-flex align-items-center justify-content-between mb-4">
     <div>
         <h2 class="fw-bold mb-1">
-            Detail Laporan Audit Performa SPBU
+            Detail Laporan Audit Basic Operational SPBU
             <small class="text-muted">(Regular Audit)</small>
         </h2>
         <div>
             <a class="text-primary text-decoration-none"
-               href="@Url.Action("Index", "BasicOperational")">
+                   href="@Url.Action("Index", "BasicOperationalReport")">
                 <small>Daftar Report / </small>
             </a>
 
-            @Model.ReportNo <i class="bi bi-caret-down-fill"></i>
+                @Model.ReportNo <i class="bi bi-caret-down-fill"></i>
 
         </div>
     </div>
-    <div class="d-flex gap-2">
-        <a class="btn btn-outline-success"
-           href="@Url.Action("DownloadPdfQuestGood", "BasicOperational", new { id = Context.Request.RouteValues["id"], type = "good" })">
-            <i class="bi bi-check-circle-fill"></i> Report Good
-        </a>
-        <a class="btn btn-outline-warning"
-           href="@Url.Action("DownloadPdfQuest", "BasicOperational", new { id = Context.Request.RouteValues["id"], type = "excellent" })">
-            <i class="bi bi-star-fill"></i> Report Excellent
-        </a>
-    </div>
+        <div>
+            <a class="btn btn-primary"
+               href="@Url.Action("DownloadPdfQuest", "BasicOperationalReport", new { id = Context.Request.RouteValues["id"] })">
+                <i class="bi bi-file-earmark-pdf-fill"></i> Download Report
+            </a>
+        </div>
 
 </div>
-
-<!-- Toggle Switch Report Mode -->
-<div class="d-flex justify-content-end mb-3">
-    <div class="form-check form-switch d-flex align-items-center">
-        <input class="form-check-input" type="checkbox" id="toggleReportMode" style="transform: scale(1.5); margin-right: 20px;">
-        <label class="form-check-label fw-bold" for="toggleReportMode">Report Excellent</label>
-    </div>
-</div>
-
 
 <!-- STATUS -->
-<div id="certStatusBox" class="alert text-center py-2 mb-4">
-    <strong id="certStatusLabel" class="score-label">
-        Total Score (TS): @Model.TotalScore.ToString("0.00")% &mdash;
-        NOT CERTIFIED <!-- default sementara, akan diubah JS -->
+<div id="certStatusBox" class="alert text-center py-2 mb-4 @boxClass">
+    <strong class="score-label">
+            @statusLabel
     </strong>
 </div>
 
@@ -155,22 +148,24 @@
     </div>
 </div>
 
-
 <!-- LAPORAN PENILAIAN (Skor dan Level) -->
 <div class="mb-5">
     <h4 class="fw-bold">Laporan Penilaian</h4>
 
     <!-- Total Score -->
-    <div class="box-total-score rounded-3 text-center py-2 mb-1 bg-danger text-white">
-        <strong class="score-label">
-            Total Score (TS): @Model.TotalScore.ToString("0.00")% &mdash;
-            NOT CERTIFIED
-        </strong>
-        <div class="box-penalty mt-1 small" style="display:none">
-            <strong>Penalty:</strong> -
+        <div class="box-total-score rounded-3 text-center py-2 mb-1 @boxClass">
+            <strong class="score-label">
+                Total Score (TS): @Model.TotalScore.ToString("0.00")% &mdash;
+                @statusLabel
+            </strong>
+        <div class="box-penalty mt-1 small text-white" style="display:none">
+            <strong>Penalty:</strong> <span class="penalty-text">-</span><br />
+            <span class="fail-elements" style="display:none;">
+                <strong>Gagal di Elemen:</strong> <span class="fail-list"></span>
+            </span>
         </div>
+</div>
     </div>
-
 
     <div class="text-center text-muted mb-3">
         Nilai Minimum Pasti Pas: <span id="minPassingDisplay">@Model.MinPassingScore.ToString("0.00")%</span>
@@ -228,23 +223,23 @@
                         _ => 80.00m
                     };
 
-                    <tr>
-                        <td>
-                            <strong>@element.Title</strong><br />
+                        <tr>
+                            <td>
+                                <strong>@element.Title</strong><br />
                             @if (!string.IsNullOrWhiteSpace(element.Description))
                             {
-                                <span class="text-muted small">@element.Description</span>
+                                        <span class="text-muted small">@element.Description</span>
                             }
-                        </td>
-                        <td class="text-center">@((int)(element.Weight ?? 0))</td>
-                        <td class="text-center min-nilai">@minValue.ToString("0.00")%</td>
-                        <td class="text-center">
-                            <div class="compliance-badge @badgeClass">
+                            </td>
+                            <td class="text-center">@((int)(element.Weight ?? 0))</td>
+                            <td class="text-center min-nilai">@minValue.ToString("0.00")%</td>
+                            <td class="text-center">
+                                <div class="compliance-badge @badgeClass">
                                 @($"{(scoreFraction * 100):0.##}%")<br />
-                                <small>@level</small>
-                            </div>
-                        </td>
-                    </tr>
+                                    <small>@level</small>
+                                </div>
+                            </td>
+                        </tr>
                 }
             </tbody>
 
@@ -261,23 +256,23 @@
         var elementScore = element.ScoreAF ?? 0m;
         string elementScoreStr = elementScore.ToString("0.00");
 
-        <div class="mt-4">
-            <div class="d-flex justify-content-between align-items-center mb-2">
-                <h6 class="fw-bold mb-0">@element.Description</h6>
+            <div class="mt-4">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <h6 class="fw-bold mb-0">@element.Description</h6>
                 @* <div class="text-muted">
                     Skor: <strong>@elementScoreStr</strong>
                 </div> *@
-            </div>
+                </div>
 
-            <table class="table table-bordered align-middle">
-                <thead class="table-light">
-                    <tr>
-                        <th style="width: 60%">Indikator Penilaian</th>
-                        <th style="width: 20%" class="text-center">Bobot Nilai</th>
-                        <th style="width: 20%" class="text-center">Compliance Level</th>
-                    </tr>
-                </thead>
-                <tbody>
+                <table class="table table-bordered align-middle">
+                    <thead class="table-light">
+                        <tr>
+                            <th style="width: 60%">Indikator Penilaian</th>
+                            <th style="width: 20%" class="text-center">Bobot Nilai</th>
+                            <th style="width: 20%" class="text-center">Compliance Level</th>
+                        </tr>
+                    </thead>
+                    <tbody>
                     @foreach (var child in element.Children)
                     {
                         decimal? af = child.ScoreAF;
@@ -313,20 +308,20 @@
                         }
 
 
-                        <tr>
-                            <td>@child.Description</td>
-                            <td class="text-center">@((child.Weight ?? 0).ToString("0.##"))</td>
-                            <td class="text-center">
-                                <div class="compliance-badge @badgeClass">
+                                <tr>
+                                    <td>@child.Description</td>
+                                    <td class="text-center">@((child.Weight ?? 0).ToString("0.##"))</td>
+                                    <td class="text-center">
+                                        <div class="compliance-badge @badgeClass">
                                     @scoreDisplay<br />
-                                    <small>@level</small>
-                                </div>
-                            </td>
-                        </tr>
+                                            <small>@level</small>
+                                        </div>
+                                    </td>
+                                </tr>
                     }
-                </tbody>
-            </table>
-        </div>
+                    </tbody>
+                </table>
+            </div>
     }
 </div>
 
@@ -363,6 +358,13 @@
             </div>
         </div>
 
+        <div class="mb-4">
+            <strong>Penawaran Produk Komperhensif:</strong>
+            <div class="border rounded p-3 bg-light mt-2">
+                @Html.Raw(Model.PenawaranKomperhensif?.Replace("\n", "<br>"))
+            </div>
+        </div>
+
         <div>
             <strong>Komentar Manajer SPBU:</strong>
             <div class="border rounded p-3 bg-light mt-2">
@@ -375,108 +377,115 @@
 <!-- CHECKLIST AUDIT -->
 @if (Model.AuditType == "Mystery Audit" || Model.AuditType == "Regular Audit" || Model.AuditType == "Basic Operational")
 {
-    <h4 class="mt-5 fw-bold">Checklist Audit</h4>
-    <ul id="auditChecklist" class="list-unstyled">
+        <h4 class="mt-5 fw-bold">Checklist Audit</h4>
+        <ul id="auditChecklist" class="list-unstyled">
         @foreach (var node in Model.Elements)
         {
             await RenderChecklistNode(node, 0, isVerified, true);
 
         }
-    </ul>
+        </ul>
 }
 
 <!-- Q&Q CHECK (tabel hasil Quality & Quantity Check jika ada) -->
 @if (Model.QqChecks?.Any() == true)
 {
-    <h4 class="mt-5 fw-bold">Q&Q Check</h4>
-    <div class="table-responsive">
-        <table class="table table-bordered table-striped mt-3">
-            <thead class="table-light">
-                <tr>
-                    <th>Nozzle Number</th>
-                    <th>DU Make</th>
-                    <th>DU Serial No</th>
-                    <th>Product</th>
-                    <th>Mode</th>
-                    <th>Qty Var (m)</th>
-                    <th>Qty Var (%)</th>
-                    <th>Density</th>
-                    <th>Temp</th>
-                    <th>Density15°</th>
-                    <th>Ref Density15°</th>
-                    <th>Tank No</th>
-                    <th>Density Var</th>
-                </tr>
-            </thead>
-            <tbody>
+        <h4 class="mt-5 fw-bold">Q&Q Check</h4>
+        <div class="table-responsive">
+            <table class="table table-bordered table-striped mt-3">
+                <thead class="table-light">
+                    <tr>
+                        <th>Nozzle Number</th>
+                        <th>DU Make</th>
+                        <th>DU Serial No</th>
+                        <th>Product</th>
+                        <th>Mode</th>
+                        <th>Qty Var (m)</th>
+                        <th>Qty Var (%)</th>
+                        <th>Density</th>
+                        <th>Temp</th>
+                        <th>Density15°</th>
+                        <th>Ref Density15°</th>
+                        <th>Tank No</th>
+                        <th>Density Var</th>
+                    </tr>
+                </thead>
+                <tbody>
                 @foreach (var qq in Model.QqChecks)
                 {
-                    <tr>
-                        <td>@qq.NozzleNumber</td>
-                        <td>@qq.DuMake</td>
-                        <td>@qq.DuSerialNo</td>
-                        <td>@qq.Product</td>
-                        <td>@qq.Mode</td>
-                        <td>@qq.QuantityVariationWithMeasure</td>
-                        <td style="
-                        background-color: @(qq.QuantityVariationInPercentage < -0.003m ? "#ff0000" :
+                            <tr>
+                                <td>@qq.NozzleNumber</td>
+                                <td>@qq.DuMake</td>
+                                <td>@qq.DuSerialNo</td>
+                                <td>@qq.Product</td>
+                                <td>@qq.Mode</td>
+                                <td>@qq.QuantityVariationWithMeasure</td>
+                                <td style="
+                        background-color: @(qq.QuantityVariationInPercentage < -0.003m ? "#ff0000" : 
                                            qq.QuantityVariationInPercentage > 0.003m ? "#ffff00" : "transparent");">
                             @qq.QuantityVariationInPercentage
-                        </td>
-                        <td>@qq.ObservedDensity</td>
-                        <td>@qq.ObservedTemp</td>
-                        <td>@qq.ObservedDensity15Degree</td>
-                        <td>@qq.ReferenceDensity15Degree</td>
-                        <td>@qq.TankNumber</td>
-                        <td>@qq.DensityVariation</td>
-                    </tr>
+                                </td>
+                                <td>@qq.ObservedDensity</td>
+                                <td>@qq.ObservedTemp</td>
+                                <td>@qq.ObservedDensity15Degree</td>
+                                <td>@qq.ReferenceDensity15Degree</td>
+                                <td>@qq.TankNumber</td>
+                                <td>@qq.DensityVariation</td>
+                            </tr>
                 }
-            </tbody>
-        </table>
-    </div>
+                </tbody>
+            </table>
+        </div>
 }
 
 <!-- BERITA ACARA -->
 @if (!string.IsNullOrEmpty(Model.Notes) || (Model.FinalDocuments != null && Model.FinalDocuments.Any()))
 {
-    <div class="card p-4 mb-5 shadow-sm mt-5">
-        <h4 class="fw-bold mb-4">Berita Acara</h4>
+        <div class="card p-4 mb-5 shadow-sm mt-5">
+            <h4 class="fw-bold mb-4">Berita Acara</h4>
 
         @if (!string.IsNullOrEmpty(Model.Notes))
         {
-            <div class="mb-3">
-                <label class="fw-semibold">Isi Catatan</label>
-                <div class="border rounded p-3 bg-light">
+                    <div class="mb-3">
+                        <label class="fw-semibold">Isi Catatan</label>
+                        <div class="border rounded p-3 bg-light">
                     @Model.Notes
-                </div>
-            </div>
+                        </div>
+                    </div>
         }
 
         @if (Model.FinalDocuments != null && Model.FinalDocuments.Any())
         {
-            <div class="mb-2 fw-semibold mt-4">
-                Bukti Dokumen/Foto Berita Acara
-            </div>
-            <ul class="list-unstyled">
-                <li class="mb-2">
-                    <i class="bi bi-file-earmark-image text-primary"></i>
-                    <button type="button"
-                            class="btn btn-link text-decoration-none p-0"
-                            onclick='showFinalMediaPopup(@Html.Raw(JsonConvert.SerializeObject(Model.FinalDocuments)))'>
-                        Lihat Lampiran
-                    </button>
-                </li>
-            </ul>
+                    <div class="mb-2 fw-semibold mt-4">
+                        Bukti Dokumen/Foto Berita Acara
+                    </div>
+                    <ul class="list-unstyled">
+                        <li class="mb-2">
+                            <i class="bi bi-file-earmark-image text-primary"></i>
+                            <button type="button"
+                                    class="btn btn-link text-decoration-none p-0"
+                                    onclick='showFinalMediaPopup(@Html.Raw(JsonConvert.SerializeObject(Model.FinalDocuments)))'>
+                                Lihat Lampiran
+                            </button>
+                        </li>
+                    </ul>
         }
-    </div>
+        </div>
 }
 
 <div class="text-end mt-5">
-    
-        <a asp-action="Index" class="btn btn-secondary rounded-pill px-4 py-2">
-            Back
-        </a>
-    
+    @if (User.IsInRole("Superadmin"))
+    {
+            <button class="btn btn-primary rounded-pill px-4 py-2" data-bs-toggle="modal" data-bs-target="#confirmModal">
+                Reassign Laporan Audit
+            </button>
+    }
+    else
+    {
+            <a asp-action="Index" class="btn btn-secondary rounded-pill px-4 py-2">
+                Back
+            </a>
+    }
 </div>
 
 <!-- Modal Konfirmasi -->
@@ -516,337 +525,238 @@
 </div>
 
 @section Styles {
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css" />
-    <style>
-        .card-header .btn-sm {
-            min-width: 70px;
-        }
-
-        .card-header .option-group .btn {
-            min-width: 60px;
-            text-align: center;
-        }
-
-        .rotate-arrow {
-            transition: transform .3s ease;
-        }
-
-            .rotate-arrow.rotate {
-                transform: rotate(90deg);
+        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css" />
+        <style>
+            .card-header .btn-sm {
+                min-width: 70px;
             }
 
-        .option-btn:hover {
-            background-color: #e0f2f1 !important;
-            border-color: #10b981;
-            color: #0f766e;
-        }
+            .card-header .option-group .btn {
+                min-width: 60px;
+                text-align: center;
+            }
 
-        .option-btn.active, .option-btn.active:hover {
-            background-color: #059669 !important;
-            color: #fff;
-        }
-        /* Media fit di modal */
-        .carousel-item img,
-        .carousel-item video,
-        #mediaModalBody img,
-        #mediaModalBody video {
-            max-width: 100%;
-            max-height: 80vh;
-            object-fit: contain;
-            display: block;
-            margin: 0 auto;
-        }
+            .rotate-arrow {
+                transition: transform .3s ease;
+            }
 
-        .modal {
-            outline: none !important;
-        }
+                .rotate-arrow.rotate {
+                    transform: rotate(90deg);
+                }
 
-    </style>
+            .option-btn:hover {
+                background-color: #e0f2f1 !important;
+                border-color: #10b981;
+                color: #0f766e;
+            }
+
+            .option-btn.active, .option-btn.active:hover {
+                background-color: #059669 !important;
+                color: #fff;
+            }
+            /* Media fit di modal */
+            .carousel-item img,
+            .carousel-item video,
+            #mediaModalBody img,
+            #mediaModalBody video {
+                max-width: 100%;
+                max-height: 80vh;
+                object-fit: contain;
+                display: block;
+                margin: 0 auto;
+            }
+
+            .modal {
+                outline: none !important;
+            }
+
+        </style>
 }
 
 @section Scripts {
-    <script>
-        $(function () {
-        const mode = localStorage.getItem('reportMode') || 'good';
-        const toggle = $('#toggleReportMode');
+        <script>
+            $(function () {
 
-        toggle.prop('checked', mode === 'excellent');
-        updateUI(mode);
-
-        toggle.on('change', function () {
-            const newMode = this.checked ? 'excellent' : 'good';
-            localStorage.setItem('reportMode', newMode);
-            updateUI(newMode);
-        });
-
-                function updateUI(mode) {
-            const minScoresGood = [80, 85, 85, 15, 25];
-            const minScoresExcellent = [85, 85, 85, 20, 50];
-            const minScores = mode === 'excellent' ? minScoresExcellent : minScoresGood;
-
-            const minPassingGood = @Model.MinPassingScoreGood;
-            const minPassingExcellent = @Model.MinPassingScore;
-
-            const penaltyGood = "@Model.PenaltyAlertsGood".trim();
-            const penaltyExcellent = "@Model.PenaltyAlerts".trim();
-
-            const totalScore = parseFloat('@Model.TotalScore');
-            const minPassing = mode === 'excellent' ? minPassingExcellent : minPassingGood;
-            const penalty = mode === 'excellent' ? penaltyExcellent : penaltyGood;
-
-            // Special rule
-            const specialNodeId = '555fe2e4-b95b-461b-9c92-ad8b5c837119';
-            const specialNodeId3 = 'bafc206f-ed29-4bbc-8053-38799e186fb0';
-            const specialNodeId4 = 'd26f4caa-e849-4ab4-9372-298693247272';
-
-            const specialNodeScore = $(`#node-${specialNodeId} .option-btn.active`).data('score') || "";
-            // const specialNodeScore2 = $(`#node-${specialNodeId2} .option-btn.active`).data('score')?.toString().trim().toUpperCase() || "";
-            const specialNodeScore3 = $(`#node-${specialNodeId3} .option-btn.active`).data('score')?.toString().trim().toUpperCase() || "";
-            const specialNodeScore4 = $(`#node-${specialNodeId4} .option-btn.active`).data('score')?.toString().trim().toUpperCase() || "";
-
-            let forceGoodOnly = false;
-            let forceNotCertified = false;
-
-            if (mode === 'excellent') {
-                if (specialNodeScore === 'C') {
-                    forceGoodOnly = true;
-                } else if (specialNodeScore !== 'A') {
-                    forceNotCertified = true;
-                }
-                // else if (specialNodeScore2 !== 'A') {
-                //     forceNotCertified = true;
-                }else if (specialNodeScore3 !== 'A') {
-                    forceNotCertified = true;
-                }else if (specialNodeScore4 !== 'A') {
-                    forceNotCertified = true;
-                }
-            }
-
-            let isCertified = (totalScore >= minPassing && penalty === "");
-            if (forceNotCertified) {
-                isCertified = false;
-            }
-
-            let statusLabel = "NOT CERTIFIED";
-            if (isCertified) {
-                statusLabel = forceGoodOnly ? "GOOD" : "EXCELLENT";
-            }
-
-            // Update UI as usual...
-            $('td.min-nilai').each(function (i) {
-                if (i < minScores.length) {
-                    $(this).text(minScores[i].toFixed(2) + '%');
-                }
-            });
-
-            $('#minPassingDisplay').text(minPassing.toFixed(2) + '%');
-
-            const boxClass = isCertified
-                ? (mode === 'excellent' ? 'bg-warning' : 'bg-success')
-                : 'bg-danger text-white';
-
-            const boxStyle = isCertified
-                ? (mode === 'excellent'
-                    ? 'background-color:#FFA500 !important;'
-                    : 'background-color:#28a745 !important;')
-                : 'background-color:#dc3545 !important; color:#fff;';
-
-            $('.box-total-score')
-                .removeClass('bg-warning bg-success bg-danger text-white')
-                .addClass(boxClass)
-                .attr('style', boxStyle);
-
-            $('.score-label').html(`Total Score (TS): ${totalScore.toFixed(2)}% &mdash; ${statusLabel}`);
-
-            if (isCertified) {
-                $('.box-penalty').hide();
-            } else {
-                $('.box-penalty').show().html(`<strong>Penalty:</strong> ${penalty}`);
-            }
-
-            $('#certStatusBox')
-                .removeClass('alert-success alert-danger')
-                .addClass(isCertified ? 'alert-success' : 'alert-danger');
-            $('#certStatusLabel').text(statusLabel);
-        }
-
-
-            // PILIHAN NILAI A-F
-            $(document).on('click', '.option-btn', function () {
-                var nodeId = $(this).data('node-id');
-                $('.option-btn[data-node-id="' + nodeId + '"]')
-                    .removeClass('active bg-success text-white')
-                    .addClass('btn-outline-secondary');
-                $(this)
-                    .removeClass('btn-outline-secondary')
-                    .addClass('active bg-success text-white');
-            });
-
-            // Hitung ulang semua skor
-             // Hitung ulang satu node (rekursif)
-                function recalcNode($li) {
-            var weight = parseFloat($li.attr('data-weight')) || 0;
-            var skor = 0;
-
-            // Jika leaf node (memiliki .option-group)
-            var $grp = $li.find('>.option-group');
-            if ($grp.length) {
-                var letter = $grp.find('.option-btn.active').data('score');
-                var isRelaksasi = $grp.data('is-relaksasi');
-                var weight = parseFloat($li.attr('data-weight')) || 0;
-                var scoreX = parseFloat($li.attr('data-score-x')) || 0;
-                var map = { A: 1, B: 0.8, C: 0.6, D: 0.4, E: 0.2, F: 0 };
-
-                if (letter === 'X') {
-                    skor = scoreX;
-                } else if (isRelaksasi && letter === 'F') {
-                    skor = 1.0;
-                } else {
-                    skor = map[letter] || 0;
-                }
-
-                return skor * weight;
-            }
-
-            // Jika bukan leaf node, rekursif ke anak
-            var sum = 0;
-            $li.children('ul').children('li').each(function () {
-                sum += recalcNode($(this));
-            });
-
-            return sum;
-        }
-
-
-        function recalcAll() {
-        $('#auditChecklist > li[id^="node-"]').each(function () {
-        recalcNode($(this));
-        });
-        }
-
-            $(document).on('click', '.update-score-btn', function () {
-                var nodeId = $(this).data('node-id');
-                var auditId = $(this).data('audit-id');
-                var score = $('.option-btn[data-node-id="' + nodeId + '"].active').data('score');
-                var token = $('input[name="__RequestVerificationToken"]').val();
-                if (!score) return alert('Pilih jawaban dulu!');
-                fetch('/Audit/UpdateScore', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'RequestVerificationToken': token
-                    },
-                    body: JSON.stringify({ NodeId: nodeId, AuditId: auditId, Score: score })
-                })
-                .then(res => res.ok ? recalcAll() : res.text().then(t => Promise.reject(t)))
-                .catch(err => {
-                    console.error(err);
-                    alert('Gagal update nilai: ' + err);
+                // PILIHAN NILAI A-F
+                $(document).on('click', '.option-btn', function () {
+                    var nodeId = $(this).data('node-id');
+                    $('.option-btn[data-node-id="' + nodeId + '"]')
+                        .removeClass('active bg-success text-white')
+                        .addClass('btn-outline-secondary');
+                    $(this)
+                        .removeClass('btn-outline-secondary')
+                        .addClass('active bg-success text-white');
                 });
-            });
 
-            $('#auditChecklist').on('shown.bs.collapse hidden.bs.collapse', function () {
+                // Hitung ulang semua skor
+                 // Hitung ulang satu node (rekursif)
+                    function recalcNode($li) {
+                var weight = parseFloat($li.attr('data-weight')) || 0;
+                var skor = 0;
+
+                // Jika leaf node (memiliki .option-group)
+                var $grp = $li.find('>.option-group');
+                if ($grp.length) {
+                    var letter = $grp.find('.option-btn.active').data('score');
+                    var isRelaksasi = $grp.data('is-relaksasi');
+                    var weight = parseFloat($li.attr('data-weight')) || 0;
+                    var scoreX = parseFloat($li.attr('data-score-x')) || 0;
+                    var map = { A: 1, B: 0.8, C: 0.6, D: 0.4, E: 0.2, F: 0 };
+
+                    if (letter === 'X') {
+                        skor = scoreX;
+                    } else if (isRelaksasi && letter === 'F') {
+                        skor = 1.0;
+                    } else {
+                        skor = map[letter] || 0;
+                    }
+
+                    return skor * weight;
+                }
+
+                // Jika bukan leaf node, rekursif ke anak
+                var sum = 0;
+                $li.children('ul').children('li').each(function () {
+                    sum += recalcNode($(this));
+                });
+
+                return sum;
+            }
+
+
+            function recalcAll() {
+            $('#auditChecklist > li[id^="node-"]').each(function () {
+            recalcNode($(this));
+            });
+            }
+
+                $(document).on('click', '.update-score-btn', function () {
+                    var nodeId = $(this).data('node-id');
+                    var auditId = $(this).data('audit-id');
+                    var score = $('.option-btn[data-node-id="' + nodeId + '"].active').data('score');
+                    var token = $('input[name="__RequestVerificationToken"]').val();
+                    if (!score) return alert('Pilih jawaban dulu!');
+                    fetch('/Audit/UpdateScore', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'RequestVerificationToken': token
+                        },
+                        body: JSON.stringify({ NodeId: nodeId, AuditId: auditId, Score: score })
+                    })
+                    .then(res => res.ok ? recalcAll() : res.text().then(t => Promise.reject(t)))
+                    .catch(err => {
+                        console.error(err);
+                        alert('Gagal update nilai: ' + err);
+                    });
+                });
+
+                $('#auditChecklist').on('shown.bs.collapse hidden.bs.collapse', function () {
+                    recalcAll();
+                });
+
+                // Inisialisasi
                 recalcAll();
             });
 
-            // Inisialisasi
-            recalcAll();
-        });
+                    function showMediaPopup(mediaItems) {
+                const container = document.getElementById('mediaModalBody');
+                container.innerHTML = '';
 
-                function showMediaPopup(mediaItems) {
-            const container = document.getElementById('mediaModalBody');
-            container.innerHTML = '';
+                if (!mediaItems || mediaItems.length === 0) {
+                    container.innerHTML = '<p class="text-muted">Tidak ada media tersedia.</p>';
+                } else if (mediaItems.length === 1) {
+                    const item = mediaItems[0];
+                    const isVideo = item.MediaType?.toUpperCase() === 'VIDEO' || item.MediaPath?.toLowerCase().endsWith('.mp4');
+                    const el = document.createElement(isVideo ? 'video' : 'img');
 
-            if (!mediaItems || mediaItems.length === 0) {
-                container.innerHTML = '<p class="text-muted">Tidak ada media tersedia.</p>';
-            } else if (mediaItems.length === 1) {
-                const item = mediaItems[0];
-                const isVideo = item.MediaType?.toUpperCase() === 'VIDEO' || item.MediaPath?.toLowerCase().endsWith('.mp4');
-                const el = document.createElement(isVideo ? 'video' : 'img');
+                    if (isVideo) {
+                        el.src = item.MediaPath;
+                        el.controls = true;
+                        el.className = 'w-100 rounded';
+                    } else {
+                        el.src = item.MediaPath;
+                        el.alt = '';
+                        el.className = 'img-fluid rounded';
+                    }
 
-                if (isVideo) {
-                    el.src = item.MediaPath;
-                    el.controls = true;
-                    el.className = 'w-100 rounded';
+                    container.appendChild(el);
                 } else {
-                    el.src = item.MediaPath;
-                    el.alt = '';
-                    el.className = 'img-fluid rounded';
+                    const carouselId = 'mediaCarousel';
+                    const indicators = [];
+                    const innerItems = [];
+
+                    mediaItems.forEach((item, index) => {
+                        const isActive = index === 0 ? 'active' : '';
+                        const isVideo = item.MediaType?.toUpperCase() === 'VIDEO' || item.MediaPath?.toLowerCase().endsWith('.mp4');
+                        const mediaTag = isVideo
+                            ? `<video controls class="d-block w-100 rounded"><source src="${item.MediaPath}" type="video/mp4"></video>`
+                            : `<img src="${item.MediaPath}" class="d-block w-100 rounded" alt="">`;
+
+                        indicators.push(`<button type="button" data-bs-target="#${carouselId}" data-bs-slide-to="${index}" class="${isActive}" aria-current="${isActive ? 'true' : ''}" aria-label="Slide ${index + 1}"></button>`);
+                        innerItems.push(`<div class="carousel-item ${isActive}">${mediaTag}</div>`);
+                    });
+
+                    container.innerHTML = `
+                    <div id="${carouselId}" class="carousel slide" data-bs-ride="carousel">
+                        <div class="carousel-indicators">
+                            ${indicators.join('')}
+                        </div>
+                        <div class="carousel-inner">
+                            ${innerItems.join('')}
+                        </div>
+                        <button class="carousel-control-prev" type="button" data-bs-target="#${carouselId}" data-bs-slide="prev">
+                            <span class="carousel-control-prev-icon custom-arrow" aria-hidden="true"></span>
+                            <span class="visually-hidden">Previous</span>
+                        </button>
+                        <button class="carousel-control-next" type="button" data-bs-target="#${carouselId}" data-bs-slide="next">
+                            <span class="carousel-control-next-icon custom-arrow" aria-hidden="true"></span>
+                            <span class="visually-hidden">Next</span>
+                        </button>
+                    </div>`;
                 }
 
-                container.appendChild(el);
-            } else {
-                const carouselId = 'mediaCarousel';
-                const indicators = [];
-                const innerItems = [];
-
-                mediaItems.forEach((item, index) => {
-                    const isActive = index === 0 ? 'active' : '';
-                    const isVideo = item.MediaType?.toUpperCase() === 'VIDEO' || item.MediaPath?.toLowerCase().endsWith('.mp4');
-                    const mediaTag = isVideo
-                        ? `<video controls class="d-block w-100 rounded"><source src="${item.MediaPath}" type="video/mp4"></video>`
-                        : `<img src="${item.MediaPath}" class="d-block w-100 rounded" alt="">`;
-
-                    indicators.push(`<button type="button" data-bs-target="#${carouselId}" data-bs-slide-to="${index}" class="${isActive}" aria-current="${isActive ? 'true' : ''}" aria-label="Slide ${index + 1}"></button>`);
-                    innerItems.push(`<div class="carousel-item ${isActive}">${mediaTag}</div>`);
+                const modalEl = document.getElementById('mediaModal');
+                const modal = new bootstrap.Modal(modalEl, {
+                    backdrop: 'static',
+                    keyboard: false,
+                    focus: false
                 });
-
-                container.innerHTML = `
-                <div id="${carouselId}" class="carousel slide" data-bs-ride="carousel">
-                    <div class="carousel-indicators">
-                        ${indicators.join('')}
-                    </div>
-                    <div class="carousel-inner">
-                        ${innerItems.join('')}
-                    </div>
-                    <button class="carousel-control-prev" type="button" data-bs-target="#${carouselId}" data-bs-slide="prev">
-                        <span class="carousel-control-prev-icon custom-arrow" aria-hidden="true"></span>
-                        <span class="visually-hidden">Previous</span>
-                    </button>
-                    <button class="carousel-control-next" type="button" data-bs-target="#${carouselId}" data-bs-slide="next">
-                        <span class="carousel-control-next-icon custom-arrow" aria-hidden="true"></span>
-                        <span class="visually-hidden">Next</span>
-                    </button>
-                </div>`;
+                modal.show();
             }
 
-            const modalEl = document.getElementById('mediaModal');
-            const modal = new bootstrap.Modal(modalEl, {
-                backdrop: 'static',
-                keyboard: false,
-                focus: false
-            });
-            modal.show();
-        }
-        // PDF download
-        document.getElementById('btnDownloadPdf')?.addEventListener('click', function () {
-            const auditId = '@Context.Request.RouteValues["id"]';
-            fetch(`/BasicOperational/DownloadPdfQuest?id=${auditId}`, {
-                method: 'GET',
-                headers: { 'Accept': 'application/pdf' }
-            })
-            .then(response => {
-                if (!response.ok) throw new Error('Gagal mengunduh PDF');
-                return response.blob();
-            })
-            .then(blob => {
-                const url = window.URL.createObjectURL(blob);
-                const link = document.createElement('a');
-                link.href = url;
-                link.download = `LaporanAudit_${auditId}.pdf`;
-                document.body.appendChild(link);
-                link.click();
-                link.remove();
-                window.URL.revokeObjectURL(url);
-            })
-            .catch(err => {
-                console.error(err);
-                alert('Gagal mengunduh PDF');
-            });
-        });
-    </script>
-}
+            function showFinalMediaPopup(mediaItems) {
+            showMediaPopup(mediaItems);
+            }
 
+            // PDF download
+            document.getElementById('btnDownloadPdf')?.addEventListener('click', function () {
+                const auditId = '@Context.Request.RouteValues["id"]';
+                fetch(`/BasicOperationalReport/DownloadPdfQuest?id=${auditId}`, {
+                    method: 'GET',
+                    headers: { 'Accept': 'application/pdf' }
+                })
+                .then(response => {
+                    if (!response.ok) throw new Error('Gagal mengunduh PDF');
+                    return response.blob();
+                })
+                .then(blob => {
+                    const url = window.URL.createObjectURL(blob);
+                    const link = document.createElement('a');
+                    link.href = url;
+                    link.download = `LaporanAudit_${auditId}.pdf`;
+                    document.body.appendChild(link);
+                    link.click();
+                    link.remove();
+                    window.URL.revokeObjectURL(url);
+                })
+                .catch(err => {
+                    console.error(err);
+                    alert('Gagal mengunduh PDF');
+                });
+            });
+        </script>
+}
 
 @functions {
     async Task RenderChecklistNode(AuditChecklistNode node, int level, bool isVerified, bool isReadonlyUser)
@@ -854,38 +764,38 @@
     {
         var collapseId = $"collapse-{node.Id}";
         var paddingClass = $"ps-{level * 3}";
-        <li id="node-@node.Id"
-            class="mb-3 @paddingClass"
-            data-weight="@(node.Weight ?? 0)"
-            data-score-x="@(node.ScoreX?.ToString("0.00") ?? "0")">
+                <li id="node-@node.Id"
+                    class="mb-3 @paddingClass"
+                    data-weight="@(node.Weight ?? 0)"
+                    data-score-x="@(node.ScoreX?.ToString("0.00") ?? "0")">
 
-            <div class="card border-secondary">
-                <!-- HEADER: toggle + skor -->
-                <div class="card-header bg-light d-flex flex-wrap justify-content-between align-items-center gap-2">
-                    <button class="btn btn-link flex-grow-1 text-start py-0"
-                            type="button"
-                            data-bs-toggle="collapse"
-                            data-bs-target="#@collapseId"
-                            aria-expanded="false"
-                            aria-controls="@collapseId">
-                        <span class="fw-bold text-dark">
+                    <div class="card border-secondary">
+                        <!-- HEADER: toggle + skor -->
+                        <div class="card-header bg-light d-flex flex-wrap justify-content-between align-items-center gap-2">
+                            <button class="btn btn-link flex-grow-1 text-start py-0"
+                                    type="button"
+                                    data-bs-toggle="collapse"
+                                    data-bs-target="#@collapseId"
+                                    aria-expanded="false"
+                                    aria-controls="@collapseId">
+                                <span class="fw-bold text-dark">
                             @(string.IsNullOrWhiteSpace(node.number) ? "" : node.number + " ")@node.Title
-                        </span>
+                                </span>
                         @if (!string.IsNullOrWhiteSpace(node.Description))
                         {
-                            <span class="fw-bold fs-6 text-muted ms-2">@node.Description</span>
+                                        <span class="fw-bold fs-6 text-muted ms-2">@node.Description</span>
                         }
-                        <i class="bi bi-chevron-right rotate-arrow ms-2"></i>
-                    </button>
+                                <i class="bi bi-chevron-right rotate-arrow ms-2"></i>
+                            </button>
                     @if (node.Type == "QUESTION")
                     {
-                        <div class="ms-auto d-flex align-items-center flex-wrap gap-2 w-100 justify-content-between">
-                            <!-- Pilihan A-F -->
-                            <div class="d-flex align-items-center flex-wrap gap-2">
-                                <div class="option-group d-none"
-                                     data-node-id="@node.Id"
-                                     data-is-relaksasi="@node.IsRelaksasi"
-                                     data-score-option="@node.ScoreOption">
+                                    <div class="ms-auto d-flex align-items-center flex-wrap gap-2 w-100 justify-content-between">
+                                        <!-- Pilihan A-F -->
+                                        <div class="d-flex align-items-center flex-wrap gap-2">
+                                            <div class="option-group d-none"
+                                                 data-node-id="@node.Id"
+                                                 data-is-relaksasi="@node.IsRelaksasi"
+                                                 data-score-option="@node.ScoreOption">
                                     @{
                                         var opts = (node.ScoreOption ?? "")
                                         .Split('/', StringSplitOptions.RemoveEmptyEntries)
@@ -908,62 +818,62 @@
                                             _ => 0m
                                         };
                                         bool active = node.ScoreInput == opt;
-                                        <button type="button"
-                                                class="btn btn-sm option-btn @(active ? "active bg-success text-white" : "btn-outline-secondary")"
-                                                data-node-id="@node.Id"
-                                                data-score="@opt"
-                                                disabled>
+                                                        <button type="button"
+                                                                class="btn btn-sm option-btn @(active ? "active bg-success text-white" : "btn-outline-secondary")"
+                                                                data-node-id="@node.Id"
+                                                                data-score="@opt"
+                                                                disabled>
                                             @(opt == "X" ? "X" : opt)
-                                        </button>
+                                                        </button>
                                     }
-                                </div>
+                                            </div>
 
-                                <!-- Skor -->
-                                <div class="text-end">
-                                    <small>skor :</small><br />
-                                    <strong class="text-primary">@node.ScoreInput</strong>
-                                </div>
-                            </div>
+                                            <!-- Skor -->
+                                            <div class="text-end">
+                                                <small>skor :</small><br />
+                                                <strong class="text-primary">@node.ScoreInput</strong>
+                                            </div>
+                                        </div>
 
-                            <!-- Tombol Update + Batal -->
+                                        <!-- Tombol Update + Batal -->
                             @if (!isReadonlyUser)
                             {
-                                <div class="d-flex gap-2 ms-auto">
-                                    <button type="button"
-                                            class="btn btn-sm btn-primary update-score-btn"
-                                            data-node-id="@node.Id"
-                                            data-audit-id="@ViewBag.AuditId"
+                                                <div class="d-flex gap-2 ms-auto">
+                                                    <button type="button"
+                                                            class="btn btn-sm btn-primary update-score-btn"
+                                                            data-node-id="@node.Id"
+                                                            data-audit-id="@ViewBag.AuditId"
                                     @(isVerified ? "disabled" : "")>
-                                        Update
-                                    </button>
+                                                        Update
+                                                    </button>
 
-                                    <button type="button"
-                                            class="btn btn-sm btn-secondary cancel-score-btn"
-                                            data-node-id="@node.Id"
+                                                    <button type="button"
+                                                            class="btn btn-sm btn-secondary cancel-score-btn"
+                                                            data-node-id="@node.Id"
                                     @(isVerified ? "disabled" : "")>
-                                        Batal
-                                    </button>
-                                </div>
+                                                        Batal
+                                                    </button>
+                                                </div>
                             }
-                        </div>
+                                    </div>
                     }
 
                     else
                     {
                         decimal totalScore = node.ScoreAF.HasValue ? node.ScoreAF.Value * (node.Weight ?? 0) : 0;
-                        <div class="ms-auto text-end">
-                            <small>Skor:</small>
-                            <strong class="score-x text-dark" data-node-id="@node.Id">@totalScore.ToString("0.00")</strong>
-                        </div>
+                                    <div class="ms-auto text-end">
+                                        <small>Skor:</small>
+                                        <strong class="score-x text-dark" data-node-id="@node.Id">@totalScore.ToString("0.00")</strong>
+                                    </div>
                     }
 
 
-                </div>
+                        </div>
 
 
-                <!-- COLLAPSE BODY -->
-                <div id="@collapseId" class="collapse">
-                    <div class="card-body">
+                        <!-- COLLAPSE BODY -->
+                        <div id="@collapseId" class="collapse">
+                            <div class="card-body">
                         @if (node.Type == "QUESTION")
                         {
                             // @if (!isReadonlyUser)
@@ -987,49 +897,49 @@
                             // }
                             @if (node.Type == "QUESTION" && (node.Children == null || !node.Children.Any()))
                             {
-                                <div class="d-flex gap-2 align-items-center mb-3 flex-wrap">
+                                                <div class="d-flex gap-2 align-items-center mb-3 flex-wrap">
                                     @if (node.MediaItems?.Any() ?? false)
                                     {
-                                        <button type="button" class="btn btn-outline-primary btn-sm"
-                                                onclick='showMediaPopup(@Html.Raw(JsonConvert.SerializeObject(node.MediaItems ?? new List<MediaItem> { })))'>
-                                            <i class="bi bi-image me-1"></i> Lihat Dokumentasi
-                                        </button>
+                                                            <button type="button" class="btn btn-outline-primary btn-sm"
+                                                                    onclick='showMediaPopup(@Html.Raw(JsonConvert.SerializeObject(node.MediaItems ?? new List<MediaItem> { })))'>
+                                                                <i class="bi bi-image me-1"></i> Lihat Dokumentasi
+                                                            </button>
                                     }
 
                                     @if (!isReadonlyUser)
                                     {
-                                        <form asp-controller="Audit"
-                                              asp-action="UploadDocument"
-                                              asp-route-nodeId="@node.Id"
-                                              asp-route-auditId="@ViewBag.AuditId"
-                                              enctype="multipart/form-data"
-                                              method="post"
-                                              class="d-flex align-items-center">
-                                            <input type="file" name="file" class="form-control form-control-sm me-2"
-                                                   required @(isVerified ? "disabled" : "") />
-                                            <button type="submit" class="btn btn-sm btn-secondary" @(isVerified ? "disabled" : "")>
-                                                Upload
-                                            </button>
-                                        </form>
+                                                            <form asp-controller="Audit"
+                                                                  asp-action="UploadDocument"
+                                                                  asp-route-nodeId="@node.Id"
+                                                                  asp-route-auditId="@ViewBag.AuditId"
+                                                                  enctype="multipart/form-data"
+                                                                  method="post"
+                                                                  class="d-flex align-items-center">
+                                                                <input type="file" name="file" class="form-control form-control-sm me-2"
+                                                                       required @(isVerified ? "disabled" : "") />
+                                                                <button type="submit" class="btn btn-sm btn-secondary" @(isVerified ? "disabled" : "")>
+                                                                    Upload
+                                                                </button>
+                                                            </form>
                                     }
-                                </div>
+                                                </div>
 
                                 @if (node.ScoreInput == "F")
                                 {
-                                    <div class="alert alert-danger small mt-2">
-                                        <i class="bi bi-exclamation-triangle-fill me-1"></i>
-                                        <strong>Penalti:</strong> @node.PenaltyAlert
-                                    </div>
+                                                        <div class="alert alert-danger small mt-2">
+                                                            <i class="bi bi-exclamation-triangle-fill me-1"></i>
+                                                            <strong>Penalti:</strong> @node.PenaltyAlert
+                                                        </div>
                                 }
 
                                 @if (!string.IsNullOrWhiteSpace(node.Comment))
                                 {
-                                    <div class="mb-3">
-                                        <label class="fw-semibold text-muted">Catatan Penilaian:</label>
-                                        <div class="border rounded p-2 bg-light small">
+                                                        <div class="mb-3">
+                                                            <label class="fw-semibold text-muted">Catatan Penilaian:</label>
+                                                            <div class="border rounded p-2 bg-light small">
                                             @node.Comment
-                                        </div>
-                                    </div>
+                                                            </div>
+                                                        </div>
                                 }
                             }
 
@@ -1065,24 +975,24 @@
 
                         @if (node.ScoreInput == "X" && node.ScoreX.HasValue)
                         {
-                            <div class="mt-1">
-                                <span class="badge bg-info text-dark">Nilai X: @node.ScoreX.Value.ToString("0.00")</span>
-                            </div>
+                                        <div class="mt-1">
+                                            <span class="badge bg-info text-dark">Nilai X: @node.ScoreX.Value.ToString("0.00")</span>
+                                        </div>
                         }
 
                         @if (node.Children?.Any() ?? false)
                         {
-                            <ul class="list-unstyled mt-3">
+                                        <ul class="list-unstyled mt-3">
                                 @foreach (var child in node.Children)
                                 {
                                     RenderChecklistNode(child, level + 1, isVerified, isReadonlyUser);
                                 }
-                            </ul>
+                                        </ul>
                         }
 
+                            </div>
+                        </div>
                     </div>
-                </div>
-            </div>
-        </li>
+                </li>
     }
 }

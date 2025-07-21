@@ -3,7 +3,7 @@
 @model DetailReportViewModel
 
 @{
-    ViewData["Title"] = "Detail Laporan Audit";
+    ViewData["Title"] = "Detail Laporan Audit Basic Operational";
     bool isVerified = Model.Status?.ToUpper() == "VERIFIED";
 
     var isSuperadmin = User.IsInRole("Superadmin");
