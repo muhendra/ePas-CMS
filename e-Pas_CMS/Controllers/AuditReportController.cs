@@ -1298,12 +1298,12 @@ WHERE
                 spbuNo = model.SpbuNo
             });
 
-            var updateSqltrx_audit = @"UPDATE trx_audit SET score = @score WHERE id = @id";
-            await conn.ExecuteAsync(updateSqltrx_audit, new
-            {
-                score = Math.Round(model.TotalScore, 2),
-                id = id
-            });
+            //var updateSqltrx_audit = @"UPDATE trx_audit SET score = @score WHERE id = @id";
+            //await conn.ExecuteAsync(updateSqltrx_audit, new
+            //{
+            //    score = Math.Round(model.TotalScore, 2),
+            //    id = id
+            //});
 
             return View(model);
         }
