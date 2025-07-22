@@ -197,7 +197,7 @@ namespace e_Pas_CMS.Controllers
             // Validasi berdasarkan tipe audit
             if (model.AuditType == "Basic Operational")
             {
-                audit.master_questioner_intro_id = "";
+                audit.master_questioner_intro_id = null;
                 audit.master_questioner_checklist_id = "fe0d1ec2-513f-4e6f-bb0e-54c8ffdf38d6";
             }
             else
