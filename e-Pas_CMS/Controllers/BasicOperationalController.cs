@@ -208,7 +208,7 @@ namespace e_Pas_CMS.Controllers
                         Tahun = a.Audit.created_date.ToString("yyyy"),
                         Audit = a.Audit.audit_level,
                         //Score = Math.Round(finalScore, 2),
-                        Score = (decimal)(totalScore ?? a.Audit.score),
+                        Score = Math.Round((decimal)(totalScore ?? a.Audit.score), 2),
                         Good = goodStatus,
                         //Excelent = excellentStatus,
                         Provinsi = a.Spbu.province_name,
