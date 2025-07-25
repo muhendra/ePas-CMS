@@ -3,10 +3,10 @@
 @model DetailReportViewModel
 
 @{
-    ViewData["Title"] = "Detail Laporan Audit";
+    ViewData["Title"] = "Detail Laporan Audit Regular";
     bool isVerified = Model.Status?.ToUpper() == "VERIFIED";
 
-    var isSuperadmin = User.IsInRole("Report");
+    var isSuperadmin = User.IsInRole("Superadmin");
 
     var isCertified = Model.TotalScore >= Model.MinPassingScore && string.IsNullOrWhiteSpace(Model.PenaltyAlerts);
     var statusLabel = isCertified ? "EXCELLENT" : "NOT CERTIFIED";
@@ -66,111 +66,113 @@
 
 </style>
 
-<!-- HEADER ATAS -->
-<div class="d-flex align-items-center justify-content-between mb-4">
-    <div>
-        <h2 class="fw-bold mb-1">
-            Detail Laporan Audit Performa SPBU
-            <small class="text-muted">(Regular Audit)</small>
-        </h2>
+<div class="container-fluid">
+    <!-- HEADER ATAS -->
+    <div class="d-flex align-items-center justify-content-between mb-4">
         <div>
-            <a class="text-primary text-decoration-none"
-               href="@Url.Action("Index", "AuditReport")">
-                <small>Daftar Report / </small>
+            <h2 class="fw-bold mb-1">
+                Detail Laporan Audit Regular Performa SPBU
+                <small class="text-muted">(Regular Audit)</small>
+            </h2>
+            <div>
+                <a class="text-primary text-decoration-none"
+                   href="@Url.Action("Index", "AuditReport")">
+                    <small>Daftar Report / </small>
+                </a>
+
+                @Model.ReportNo <i class="bi bi-caret-down-fill"></i>
+
+            </div>
+        </div>
+        <div class="d-flex gap-2">
+            <a class="btn btn-outline-success"
+               href="@Url.Action("DownloadPdfQuestGood", "AuditReport", new { id = Context.Request.RouteValues["id"], type = "good" })">
+                <i class="bi bi-check-circle-fill"></i> Report Good
             </a>
-
-            @Model.ReportNo <i class="bi bi-caret-down-fill"></i>
-
-        </div>
-    </div>
-    <div class="d-flex gap-2">
-        <a class="btn btn-outline-success"
-           href="@Url.Action("DownloadPdfQuestGood", "AuditReport", new { id = Context.Request.RouteValues["id"], type = "good" })">
-            <i class="bi bi-check-circle-fill"></i> Report Good
-        </a>
-        <a class="btn btn-outline-warning"
-           href="@Url.Action("DownloadPdfQuest", "AuditReport", new { id = Context.Request.RouteValues["id"], type = "excellent" })">
-            <i class="bi bi-star-fill"></i> Report Excellent
-        </a>
-    </div>
-
-</div>
-
-<!-- Toggle Switch Report Mode -->
-<div class="d-flex justify-content-end mb-3">
-    <div class="form-check form-switch d-flex align-items-center">
-        <input class="form-check-input" type="checkbox" id="toggleReportMode" style="transform: scale(1.5); margin-right: 20px;">
-        <label class="form-check-label fw-bold" for="toggleReportMode">Report Excellent</label>
-    </div>
-</div>
-
-
-<!-- STATUS -->
-<div id="certStatusBox" class="alert text-center py-2 mb-4">
-    <strong id="certStatusLabel" class="score-label">
-        Total Score (TS): @Model.TotalScore.ToString("0.00")% &mdash;
-        NOT CERTIFIED <!-- default sementara, akan diubah JS -->
-    </strong>
-</div>
-
-<!-- INFORMASI SPBU --><div class="card mb-5 shadow-sm">
-    <div class="card-body">
-        <!-- Informasi SPBU -->
-        <h5 class="card-title mb-4">Informasi SPBU</h5>
-        <div class="row gy-3">
-            <div class="col-md-3"><strong>Nomor SPBU</strong><br />@Model.SpbuNo</div>
-            <div class="col-md-3"><strong>Region</strong><br />@Model.Region</div>
-            <div class="col-md-3"><strong>Kabupaten/Kota</strong><br />@Model.Kota</div>
-            <div class="col-md-3"><strong>Alamat SPBU</strong><br />@Model.Alamat</div>
-
-            <div class="col-md-3"><strong>Nama Pemilik SPBU</strong><br />@Model.OwnerName</div>
-            <div class="col-md-3"><strong>Nama Manajer</strong><br />@Model.ManagerName</div>
-            <div class="col-md-3"><strong>Tipe Kepemilikan</strong><br />@Model.OwnershipType</div>
-            <div class="col-md-3"><strong>Quarter</strong><br />@Model.Quarter</div>
-
-            <div class="col-md-3"><strong>Tahun</strong><br />@Model.Year</div>
-            <div class="col-md-3"><strong>MOR</strong><br />@Model.MOR</div>
-            <div class="col-md-3"><strong>Sales Area</strong><br />@Model.SalesArea</div>
-            <div class="col-md-3"><strong>SBM</strong><br />@Model.SBM</div>
-
-            <div class="col-md-3"><strong>Kelas SPBU</strong><br />@Model.ClassSPBU</div>
-            <div class="col-md-3"><strong>Telepon</strong><br />@Model.Phone</div>
+            <a class="btn btn-outline-warning"
+               href="@Url.Action("DownloadPdfQuest", "AuditReport", new { id = Context.Request.RouteValues["id"], type = "excellent" })">
+                <i class="bi bi-star-fill"></i> Report Excellent
+            </a>
         </div>
 
-        <!-- Informasi Kegiatan Audit -->
-        <h5 class="card-title mb-4 mt-5">Informasi Kegiatan Audit</h5>
-        <div class="row gy-3">
-            <div class="col-md-3"><strong>No. Report</strong><br />@Model.ReportNo</div>
-            <div class="col-md-3"><strong>Tanggal Audit</strong><br />@Model.TanggalAudit?.ToString("dd/MM/yyyy")</div>
-            <div class="col-md-3"><strong>Verifikator</strong><br />@Model.ApproveBy</div>
+    </div>
 
-            <div class="col-md-3"><strong>Auditor 1</strong><br />@Model.NamaAuditor</div>
-            <div class="col-md-3"><strong>Auditor 2</strong><br />-</div>
-            <div class="col-md-3"><strong>Tipe Audit</strong><br />@Model.AuditCurrent</div>
-            <div class="col-md-3"><strong>Next Audit</strong><br />@Model.AuditNext</div>
-
-            <div class="col-md-3"><strong>Ko-ordinator</strong><br />Sabar Kembaren</div>
-            <div class="col-md-3"><strong>Sent Date</strong><br />@Model.TanggalSubmit?.ToString("dd/MM/yyyy")</div>
+    <!-- Toggle Switch Report Mode -->
+    <div class="d-flex justify-content-end mb-3">
+        <div class="form-check form-switch d-flex align-items-center">
+            <input class="form-check-input" type="checkbox" id="toggleReportMode" style="transform: scale(1.5); margin-right: 20px;">
+            <label class="form-check-label fw-bold" for="toggleReportMode">Report Excellent</label>
         </div>
     </div>
-</div>
 
-
-<!-- LAPORAN PENILAIAN (Skor dan Level) -->
-<div class="mb-5">
-    <h4 class="fw-bold">Laporan Penilaian</h4>
-
-    <!-- Total Score -->
-    <div class="box-total-score rounded-3 text-center py-2 mb-1 bg-danger text-white">
-        <strong class="score-label">
+    <!-- STATUS -->
+    <div id="certStatusBox" class="alert text-center py-2 mb-4">
+        <strong id="certStatusLabel" class="score-label">
             Total Score (TS): @Model.TotalScore.ToString("0.00")% &mdash;
-            NOT CERTIFIED
+            @Model.ExcellentStatus
         </strong>
-        <div class="box-penalty mt-1 small" style="display:none">
-            <strong>Penalty:</strong> -
+    </div>
+
+    <!-- INFORMASI SPBU --><div class="card mb-5 shadow-sm">
+        <div class="card-body">
+            <!-- Informasi SPBU -->
+            <h5 class="card-title mb-4">Informasi SPBU</h5>
+            <div class="row gy-3">
+                <div class="col-md-3"><strong>Nomor SPBU</strong><br />@Model.SpbuNo</div>
+                <div class="col-md-3"><strong>Region</strong><br />@Model.Region</div>
+                <div class="col-md-3"><strong>Kabupaten/Kota</strong><br />@Model.Kota</div>
+                <div class="col-md-3"><strong>Alamat SPBU</strong><br />@Model.Alamat</div>
+
+                <div class="col-md-3"><strong>Nama Pemilik SPBU</strong><br />@Model.OwnerName</div>
+                <div class="col-md-3"><strong>Nama Manajer</strong><br />@Model.ManagerName</div>
+                <div class="col-md-3"><strong>Tipe Kepemilikan</strong><br />@Model.OwnershipType</div>
+                <div class="col-md-3"><strong>Quarter</strong><br />@Model.Quarter</div>
+
+                <div class="col-md-3"><strong>Tahun</strong><br />@Model.Year</div>
+                <div class="col-md-3"><strong>MOR</strong><br />@Model.MOR</div>
+                <div class="col-md-3"><strong>Sales Area</strong><br />@Model.SalesArea</div>
+                <div class="col-md-3"><strong>SBM</strong><br />@Model.SBM</div>
+
+                <div class="col-md-3"><strong>Kelas SPBU</strong><br />@Model.ClassSPBU</div>
+                <div class="col-md-3"><strong>Telepon</strong><br />@Model.Phone</div>
+            </div>
+
+            <!-- Informasi Kegiatan Audit -->
+            <h5 class="card-title mb-4 mt-5">Informasi Kegiatan Audit</h5>
+            <div class="row gy-3">
+                <div class="col-md-3"><strong>No. Report</strong><br />@Model.ReportNo</div>
+                <div class="col-md-3"><strong>Tanggal Audit</strong><br />@Model.TanggalAudit?.ToString("dd/MM/yyyy")</div>
+                <div class="col-md-3"><strong>Verifikator</strong><br />@Model.ApproveBy</div>
+
+                <div class="col-md-3"><strong>Auditor 1</strong><br />@Model.NamaAuditor</div>
+                <div class="col-md-3"><strong>Auditor 2</strong><br />-</div>
+                <div class="col-md-3"><strong>Tipe Audit</strong><br />@Model.AuditCurrent</div>
+                <div class="col-md-3"><strong>Next Audit</strong><br />@Model.AuditNext</div>
+
+                <div class="col-md-3"><strong>Ko-ordinator</strong><br />Sabar Kembaren</div>
+                <div class="col-md-3"><strong>Sent Date</strong><br />@Model.TanggalSubmit?.ToString("dd/MM/yyyy")</div>
+            </div>
         </div>
     </div>
 
+    <!-- LAPORAN PENILAIAN (Skor dan Level) -->
+    <div class="mb-5">
+        <h4 class="fw-bold">Laporan Penilaian</h4>
+
+        <!-- Total Score -->
+        <div class="box-total-score rounded-3 text-center py-2 mb-1 bg-danger text-white">
+            <strong class="score-label">
+                Total Score (TS): @Model.TotalScore.ToString("0.00")% &mdash;
+                @Model.ExcellentStatus
+            </strong>
+            <div class="box-penalty mt-1 small text-white" style="display:none">
+                <strong>Penalty:</strong> <span class="penalty-text">-</span><br />
+                <span class="fail-elements" style="display:none;">
+                    <strong>Gagal di Elemen:</strong> <span class="fail-list"></span>
+                </span>
+            </div>
+        </div>
+    </div>
 
     <div class="text-center text-muted mb-3">
         Nilai Minimum Pasti Pas: <span id="minPassingDisplay">@Model.MinPassingScore.ToString("0.00")%</span>
@@ -363,6 +365,13 @@
             </div>
         </div>
 
+        <div class="mb-4">
+            <strong>Penawaran Produk Komperhensif:</strong>
+            <div class="border rounded p-3 bg-light mt-2">
+                @Html.Raw(Model.PenawaranKomperhensif?.Replace("\n", "<br>"))
+            </div>
+        </div>
+
         <div>
             <strong>Komentar Manajer SPBU:</strong>
             <div class="border rounded p-3 bg-light mt-2">
@@ -472,11 +481,18 @@
 }
 
 <div class="text-end mt-5">
-    
+    @if (User.IsInRole("Superadmin"))
+    {
+        <button class="btn btn-primary rounded-pill px-4 py-2" data-bs-toggle="modal" data-bs-target="#confirmModal">
+            Reassign Laporan Audit
+        </button>
+    }
+    else
+    {
         <a asp-action="Index" class="btn btn-secondary rounded-pill px-4 py-2">
             Back
         </a>
-    
+    }
 </div>
 
 <!-- Modal Konfirmasi -->
@@ -579,7 +595,7 @@
             updateUI(newMode);
         });
 
-                function updateUI(mode) {
+                    function updateUI(mode) {
             const minScoresGood = [80, 85, 85, 15, 25];
             const minScoresExcellent = [85, 85, 85, 20, 50];
             const minScores = mode === 'excellent' ? minScoresExcellent : minScoresGood;
@@ -594,32 +610,60 @@
             const minPassing = mode === 'excellent' ? minPassingExcellent : minPassingGood;
             const penalty = mode === 'excellent' ? penaltyExcellent : penaltyGood;
 
-            // Special rule
+            // Elemen scores from Razor
+            const sss = parseFloat('@(Model.SSS ?? 0)');
+            const eqnq = parseFloat('@(Model.EQnQ ?? 0)');
+            const rfs = parseFloat('@(Model.RFS ?? 0)');
+            const vfc = parseFloat('@(Model.VFC ?? 0)');
+            const epo = parseFloat('@(Model.EPO ?? 0)');
+
+            // Log nilai elemen
+            console.log(`Mode: ${mode}`);
+            console.log(`Scores - SSS: ${sss}, EQnQ: ${eqnq}, RFS: ${rfs}, VFC: ${vfc}, EPO: ${epo}`);
+            console.log(`Total Score: ${totalScore}, Penalty: ${penalty}`);
+
+            // Special nodes
             const specialNodeId = '555fe2e4-b95b-461b-9c92-ad8b5c837119';
             const specialNodeId3 = 'bafc206f-ed29-4bbc-8053-38799e186fb0';
             const specialNodeId4 = 'd26f4caa-e849-4ab4-9372-298693247272';
 
-            const specialNodeScore = $(`#node-${specialNodeId} .option-btn.active`).data('score') || "";
+            const specialNodeScore = $(`#node-${specialNodeId} .option-btn.active`).data('score')?.toString().trim().toUpperCase() || "";
             // const specialNodeScore2 = $(`#node-${specialNodeId2} .option-btn.active`).data('score')?.toString().trim().toUpperCase() || "";
             const specialNodeScore3 = $(`#node-${specialNodeId3} .option-btn.active`).data('score')?.toString().trim().toUpperCase() || "";
             const specialNodeScore4 = $(`#node-${specialNodeId4} .option-btn.active`).data('score')?.toString().trim().toUpperCase() || "";
 
+            console.log("Special Node Scores:", specialNodeScore, specialNodeScore3, specialNodeScore4);
+
             let forceGoodOnly = false;
             let forceNotCertified = false;
 
+            // Special node rules (mode: excellent)
             if (mode === 'excellent') {
                 if (specialNodeScore === 'C') {
                     forceGoodOnly = true;
-                } else if (specialNodeScore !== 'A') {
+                    console.log("Special node C detected — downgrade to GOOD");
+                } else if (
+                    specialNodeScore !== 'A' ||
+                    // specialNodeScore2 !== 'A' ||
+                    specialNodeScore3 !== 'A' ||
+                    specialNodeScore4 !== 'A'
+                ) {
                     forceNotCertified = true;
+                    console.log("One or more special nodes not A — force NOT CERTIFIED");
                 }
-                // else if (specialNodeScore2 !== 'A') {
-                //     forceNotCertified = true;
-                }else if (specialNodeScore3 !== 'A') {
-                    forceNotCertified = true;
-                }else if (specialNodeScore4 !== 'A') {
-                    forceNotCertified = true;
-                }
+            }
+
+            // Validation by element threshold
+            if (
+                (mode === 'good' && (
+                    sss < 80 || eqnq < 85 || rfs < 85 || vfc < 15 || epo < 25
+                )) ||
+                (mode === 'excellent' && (
+                    sss < 85 || eqnq < 85 || rfs < 85 || vfc < 20 || epo < 50
+                ))
+            ) {
+                forceNotCertified = true;
+                console.log("One or more element scores below minimum — force NOT CERTIFIED");
             }
 
             let isCertified = (totalScore >= minPassing && penalty === "");
@@ -628,11 +672,14 @@
             }
 
             let statusLabel = "NOT CERTIFIED";
-            if (isCertified) {
-                statusLabel = forceGoodOnly ? "GOOD" : "EXCELLENT";
-            }
+                    if (isCertified) {
+            statusLabel = mode === 'good' ? "Pasti Pas Good" : (forceGoodOnly ? "GOOD" : "EXCELLENT");
+        }
 
-            // Update UI as usual...
+
+            console.log("Final Status:", statusLabel);
+
+            // Update UI
             $('td.min-nilai').each(function (i) {
                 if (i < minScores.length) {
                     $(this).text(minScores[i].toFixed(2) + '%');
@@ -658,18 +705,40 @@
 
             $('.score-label').html(`Total Score (TS): ${totalScore.toFixed(2)}% &mdash; ${statusLabel}`);
 
-            if (isCertified) {
-                $('.box-penalty').hide();
-            } else {
-                $('.box-penalty').show().html(`<strong>Penalty:</strong> ${penalty}`);
+                    if (isCertified) {
+            $('.box-penalty').hide();
+        } else {
+            $('.box-penalty').show();
+                    $('.penalty-text').text(penalty || '-');
+
+        // Cari elemen yang gagal berdasarkan skor elemen
+        const failedElements = [];
+        const elements = ['SSS', 'EQnQ', 'RFS'];
+        const scores = [sss, eqnq, rfs];
+        const minScores = mode === 'excellent'
+            ? [80, 85, 85]
+            : [80, 85, 85, 15, 25];
+
+        for (let i = 0; i < scores.length; i++) {
+            if (scores[i] < minScores[i]) {
+                failedElements.push(elements[i]);
             }
+        }
+
+        if (failedElements.length > 0) {
+            $('.fail-elements').show();
+            $('.fail-list').text(failedElements.join(', '));
+        } else {
+            $('.fail-elements').hide();
+        }
+        }
+
 
             $('#certStatusBox')
                 .removeClass('alert-success alert-danger')
                 .addClass(isCertified ? 'alert-success' : 'alert-danger');
             $('#certStatusLabel').text(statusLabel);
         }
-
 
             // PILIHAN NILAI A-F
             $(document).on('click', '.option-btn', function () {
@@ -818,6 +887,11 @@
             });
             modal.show();
         }
+
+        function showFinalMediaPopup(mediaItems) {
+        showMediaPopup(mediaItems);
+        }
+
         // PDF download
         document.getElementById('btnDownloadPdf')?.addEventListener('click', function () {
             const auditId = '@Context.Request.RouteValues["id"]';
@@ -846,7 +920,6 @@
         });
     </script>
 }
-
 
 @functions {
     async Task RenderChecklistNode(AuditChecklistNode node, int level, bool isVerified, bool isReadonlyUser)
