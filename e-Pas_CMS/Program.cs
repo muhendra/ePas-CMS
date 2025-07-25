@@ -5,6 +5,13 @@ using QuestPDF.Infrastructure;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Set Kestrel to listen on 5050 (atau port bebas)
+builder.WebHost.ConfigureKestrel(serverOptions =>
+{
+    serverOptions.ListenAnyIP(5050); // Ganti dari 5000 ke 5050
+});
+
+
 QuestPDF.Settings.License = LicenseType.Community;
 
 // Add services to the container
