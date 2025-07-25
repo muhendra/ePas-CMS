@@ -102,18 +102,14 @@ public class ReportBOATemplate : IDocument
             // Step 1: Set compliance per elemen
             decimal sss = _model.SSS ?? GetCompliance("Skilled Staff & Services", 30);
             decimal eqnq = _model.EQnQ ?? GetCompliance("Exact Quality & Quantity", 30);
-            decimal rfs = _model.RFS ?? GetCompliance("Reliable Facilities & Safety", 20);
-            decimal vfc = _model.VFC ?? GetCompliance("Visual Format Consistency", 10);
-            decimal epo = _model.EPO ?? GetCompliance("Expansive Product Offer", 10);
+            decimal rve = _model.RFS ?? GetCompliance("Keandalan, Visual, Keluasan", 40);
 
             _model.SSS = sss;
             _model.EQnQ = eqnq;
-            _model.RFS = rfs;
-            _model.VFC = vfc;
-            _model.EPO = epo;
+            _model.RFS = rve;
 
             // Step 2: Validasi GOOD
-            bool failGood = sss < 80 || eqnq < 85 || rfs < 85 || vfc < 15 || epo < 25;
+            bool failGood = sss < 80 || eqnq < 85 || rve < 85;
             bool isCertified = _model.TotalScore >= 75 &&
                                string.IsNullOrWhiteSpace(_model.PenaltyAlertsGood) &&
                                !failGood;
@@ -121,9 +117,7 @@ public class ReportBOATemplate : IDocument
             var failedElements = new List<string>();
             if (sss < 80) failedElements.Add("SSS");
             if (eqnq < 85) failedElements.Add("EQnQ");
-            if (rfs < 85) failedElements.Add("RFS");
-            if (vfc < 15) failedElements.Add("VFC");
-            if (epo < 25) failedElements.Add("EPO");
+            if (rve < 85) failedElements.Add("RFS");
 
             string boxColor = isCertified ? "#1aa31f" : "#F44336";
             string scoreFontColor = Colors.White;
@@ -204,9 +198,7 @@ public class ReportBOATemplate : IDocument
             }
             KomentarItem("Staf Terlatih dan Termotivasi", _model.KomentarStaf);
             KomentarItem("Jaminan Kualitas dan Kuantitas", _model.KomentarQuality);
-            KomentarItem("Peralatan Terpelihara dan HSSE", _model.KomentarHSSE);
-            KomentarItem("Tampilan Fisik Seragam", _model.KomentarVisual);
-            KomentarItem("Penawaran Produk Komperhensif", _model.PenawaranKomperhensif);
+            KomentarItem("Fasilitas dan Peralatan Terpelihara dengan Baik", _model.KomentarHSSE);
             KomentarItem("Komentar Manajer SPBU", _model.KomentarManager);
 
             // Halaman baru: Checklist
@@ -591,13 +583,11 @@ public class ReportBOATemplate : IDocument
     void ComposeElementTable(IContainer container)
     {
         var elements = new[]
-        {
-        new { Name = "Skilled Staff & Services", Weight = 30 },
-        new { Name = "Exact Quality & Quantity", Weight = 30 },
-        new { Name = "Reliable Facilities & Safety", Weight = 20 },
-        new { Name = "Visual Format Consistency", Weight = 10 },
-        new { Name = "Expansive Product Offer", Weight = 10 },
-    };
+{
+    new { Name = "Skilled Staff & Services", Weight = 30 },
+    new { Name = "Exact Quality & Quantity", Weight = 30 },
+    new { Name = "Keandalan, Visual, Keluasan", Weight = 40 },
+};
 
         container.Table(table =>
         {
@@ -629,9 +619,7 @@ public class ReportBOATemplate : IDocument
                 {
                     "Skilled Staff & Services" => _model.SSS ?? 0,
                     "Exact Quality & Quantity" => _model.EQnQ ?? 0,
-                    "Reliable Facilities & Safety" => _model.RFS ?? 0,
-                    "Visual Format Consistency" => _model.VFC ?? 0,
-                    "Expansive Product Offer" => _model.EPO ?? 0,
+                    "Reliability, Visual, Extensiveness" => _model.RFS ?? 0,
                     _ => 0
                 };
 
@@ -653,11 +641,10 @@ public class ReportBOATemplate : IDocument
                 {
                     "Skilled Staff & Services" => "80.00%",
                     "Exact Quality & Quantity" => "85.00%",
-                    "Reliable Facilities & Safety" => "85.00%",
-                    "Visual Format Consistency" => "15.00%",
-                    "Expansive Product Offer" => "25.00%",
+                    "Reliability, Visual, Extensiveness" => "85.00%",
                     _ => "0.00%"
                 };
+
 
                 table.Cell().Text(e.Name).FontSize(9);
                 table.Cell().AlignCenter().Text($"{e.Weight:0}");

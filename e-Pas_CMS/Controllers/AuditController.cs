@@ -47,7 +47,7 @@ namespace e_Pas_CMS.Controllers
                             join s in _context.spbus on a.spbu_id equals s.id
                             join u in _context.app_users on a.app_user_id equals u.id into aud
                             from u in aud.DefaultIfEmpty()
-                            where a.status == "UNDER_REVIEW"
+                            where a.status == "UNDER_REVIEW" && a.audit_type != "Basic Operational"
                             select new
                             {
                                 Audit = a,
