@@ -3,7 +3,7 @@
 @model DetailReportViewModel
 
 @{
-    ViewData["Title"] = "Detail Laporan Audit Basic Operational";
+    ViewData["Title"] = "Detail Laporan Audit Regular";
     bool isVerified = Model.Status?.ToUpper() == "VERIFIED";
 
     var isSuperadmin = User.IsInRole("Superadmin");
@@ -71,7 +71,7 @@
 <div class="d-flex align-items-center justify-content-between mb-4">
     <div>
         <h2 class="fw-bold mb-1">
-            Detail Laporan Audit Basic Operational Performa SPBU
+            Detail Laporan Audit Regular Performa SPBU
             <small class="text-muted">(Regular Audit)</small>
         </h2>
         <div>
@@ -713,10 +713,10 @@
 
         // Cari elemen yang gagal berdasarkan skor elemen
         const failedElements = [];
-        const elements = ['SSS', 'EQnQ', 'RFS', 'VFC', 'EPO'];
-        const scores = [sss, eqnq, rfs, vfc, epo];
+        const elements = ['SSS', 'EQnQ', 'RFS'];
+        const scores = [sss, eqnq, rfs];
         const minScores = mode === 'excellent'
-            ? [85, 85, 85, 20, 50]
+            ? [80, 85, 85]
             : [80, 85, 85, 15, 25];
 
         for (let i = 0; i < scores.length; i++) {

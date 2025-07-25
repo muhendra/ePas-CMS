@@ -99,8 +99,8 @@
             <th>Next Audit</th>
             <th>Tanggal Audit</th>
             <th>Total Score</th>
-            @* <th>Good</th>
-            <th>Excelent</th> *@
+            <th>Result</th>
+            @* <th>Excelent</th> *@
             <th>SSS</th>
             <th>EQnQ</th>
             <th>RFS</th>
@@ -123,8 +123,8 @@
                 <td>@item.AuditNext</td>
                 <td>@item.AuditDate?.ToString("dd/MM/yyyy")</td>
                 <td>@item.Score?.ToString("0.00")</td>
-                @* <td class="fw-bold @(item.GoodStatus == "CERTIFIED" ? "text-success" : "text-danger")">@item.GoodStatus</td>
-                <td class="fw-bold @(item.ExcellentStatus == "CERTIFIED" ? "text-success" : "text-danger")">@item.ExcellentStatus</td> *@
+                <td class="fw-bold @(item.GoodStatus == "CERTIFIED" ? "text-success" : "text-danger")">@item.GoodStatus</td>
+                @*<td class="fw-bold @(item.ExcellentStatus == "CERTIFIED" ? "text-success" : "text-danger")">@item.ExcellentStatus</td> *@
                 <td>@item.SSS</td>
                 <td>@item.EQnQ</td>
                 <td>@item.RFS</td>

@@ -158,12 +158,12 @@
                 Total Score (TS): @Model.TotalScore.ToString("0.00")% &mdash;
                 @statusLabel
             </strong>
-        <div class="box-penalty mt-1 small text-white" style="display:none">
-            <strong>Penalty:</strong> <span class="penalty-text">-</span><br />
-            <span class="fail-elements" style="display:none;">
-                <strong>Gagal di Elemen:</strong> <span class="fail-list"></span>
-            </span>
-        </div>
+            <div class="box-penalty mt-1 small text-white" style="display:none">
+                <strong>Penalty:</strong> <span class="penalty-text">-</span><br />
+                <span class="fail-elements" style="display:none;">
+                    <strong>Gagal di Elemen:</strong> <span class="fail-list"></span>
+                </span>
+            </div>
 </div>
     </div>
 
@@ -629,6 +629,42 @@
         recalcNode($(this));
         });
         }
+
+                // ==== Evaluasi Penalty & Gagal di Elemen (mode: BASIC OPERATIONAL) ====
+        const sss = parseFloat('@(Model.SSS ?? 0)');
+        const eqnq = parseFloat('@(Model.EQnQ ?? 0)');
+        const rfs = parseFloat('@(Model.RFS ?? 0)');
+        const vfc = parseFloat('@(Model.VFC ?? 0)');
+        const epo = parseFloat('@(Model.EPO ?? 0)');
+        const totalScore = parseFloat('@Model.TotalScore');
+        const minPassing = parseFloat('@Model.MinPassingScore');
+        const penalty = "@Model.PenaltyAlerts".trim();
+
+        const failedElements = [];
+        const elements = ['SSS', 'EQnQ', 'RFS'];
+        const scores = [sss, eqnq, rfs];
+        const minScores = [85, 85, 85]; // mode: Basic Operational
+
+        for (let i = 0; i < scores.length; i++) {
+            if (scores[i] < minScores[i]) {
+                failedElements.push(elements[i]);
+            }
+        }
+
+        if (penalty || failedElements.length > 0 || totalScore < minPassing) {
+            $('.box-penalty').show();
+            $('.penalty-text').text(penalty || '-');
+
+            if (failedElements.length > 0) {
+                $('.fail-elements').show();
+                $('.fail-list').text(failedElements.join(', '));
+            } else {
+                $('.fail-elements').hide();
+            }
+        } else {
+            $('.box-penalty').hide();
+        }
+
 
             $(document).on('click', '.update-score-btn', function () {
                 var nodeId = $(this).data('node-id');

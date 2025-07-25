@@ -248,6 +248,9 @@ namespace e_Pas_CMS.Controllers
                 foreach (var element in elements) AssignWeightRecursive(element);
                 CalculateChecklistScores(elements);
                 CalculateOverallScore(new DetailReportViewModel { Elements = elements }, checklistData);
+                var modelstotal = new DetailReportViewModel { Elements = elements };
+                CalculateOverallScore(modelstotal, checklistData);
+                decimal? totalScore = modelstotal.TotalScore;
                 var compliance = HitungComplianceLevelDariElements(elements);
 
                 // === Compliance validation
@@ -333,7 +336,8 @@ namespace e_Pas_CMS.Controllers
                     Auditor = a.app_user.name,
                     GoodStatus = goodStatus,
                     ExcellentStatus = excellentStatus,
-                    Score = (a.score ?? a.spbu.audit_current_score ?? (decimal?)finalScore).Value,
+                    //Score = (a.score ?? a.spbu.audit_current_score ?? (decimal?)finalScore).Value,
+                    Score = totalScore ?? a.score,
                     WTMS = a.spbu.wtms,
                     QQ = a.spbu.qq,
                     WMEF = a.spbu.wmef,
@@ -1298,12 +1302,12 @@ WHERE
                 spbuNo = model.SpbuNo
             });
 
-            //var updateSqltrx_audit = @"UPDATE trx_audit SET score = @score WHERE id = @id";
-            //await conn.ExecuteAsync(updateSqltrx_audit, new
-            //{
-            //    score = Math.Round(model.TotalScore, 2),
-            //    id = id
-            //});
+            var updateSqltrx_audit = @"UPDATE trx_audit SET score = @score WHERE id = @id";
+            await conn.ExecuteAsync(updateSqltrx_audit, new
+            {
+                score = Math.Round(model.TotalScore, 2),
+                id = id
+            });
 
             return View(model);
         }

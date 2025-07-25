@@ -102,7 +102,7 @@ public class ReportBOATemplate : IDocument
             // Step 1: Set compliance per elemen
             decimal sss = _model.SSS ?? GetCompliance("Skilled Staff & Services", 30);
             decimal eqnq = _model.EQnQ ?? GetCompliance("Exact Quality & Quantity", 30);
-            decimal rve = _model.RFS ?? GetCompliance("Keandalan, Visual, Keluasan", 40);
+            decimal rve = _model.RFS ?? GetCompliance("Reliable Facilities & Safety", 40);
 
             _model.SSS = sss;
             _model.EQnQ = eqnq;
@@ -139,7 +139,10 @@ public class ReportBOATemplate : IDocument
             // Box Status Sertifikasi
             col.Item().PaddingTop(10).Element(container =>
             {
-                var passed = _model.TotalScore >= _model.MinPassingScore && string.IsNullOrWhiteSpace(_model.PenaltyAlerts);
+                var passed = _model.TotalScore >= _model.MinPassingScore &&
+             string.IsNullOrWhiteSpace(_model.PenaltyAlertsGood) &&
+             !(_model.SSS < 80 || _model.EQnQ < 85 || _model.RFS < 85);
+
                 var boxColor = passed ? "#4F96D8" : "#F44336";
 
                 container
@@ -170,12 +173,33 @@ public class ReportBOATemplate : IDocument
 
 
                         // 3/4 KANAN
-                        var status = _model.TotalScore >= _model.MinPassingScore && string.IsNullOrWhiteSpace(_model.PenaltyAlerts)
-                            ? "PASSED BASIC OPERATIONAL"
-                            : "NOT PASSED";
+                        var status = passed
+    ? "PASSED BASIC OPERATIONAL"
+    : "NOT PASSED";
 
-                        row.RelativeItem(3).AlignMiddle().AlignCenter().Text(status)
-                            .FontSize(14).Bold().FontColor(Colors.White);
+
+                        row.RelativeItem(3).AlignMiddle().Column(right =>
+                        {
+                            right.Item().AlignCenter().Text(status)
+                                .FontSize(14).Bold().FontColor(Colors.White);
+
+                            if (!passed)
+                            {
+                                if (!string.IsNullOrWhiteSpace(_model.PenaltyAlertsGood))
+                                {
+                                    right.Item().AlignCenter().PaddingTop(5).Text($"Penalty: {_model.PenaltyAlertsGood}")
+                                        .FontSize(9).Italic().FontColor(Colors.White);
+                                }
+
+                                if (failedElements.Any())
+                                {
+                                    var failedText = string.Join(", ", failedElements);
+                                    right.Item().AlignCenter().PaddingTop(3).Text($"Gagal di elemen: {failedText}")
+                                        .FontSize(9).Italic().FontColor(Colors.White);
+                                }
+                            }
+                        });
+
                     });
             });
 
@@ -268,7 +292,7 @@ public class ReportBOATemplate : IDocument
                 if (el == null || !el.TotalScore.HasValue)
                     return 0;
 
-                return Math.Round((el.TotalScore.Value / expectedWeight) * 100, 2);
+                return Math.Min(Math.Round((el.TotalScore.Value / expectedWeight) * 100, 2), 100);
             }
         });
     }
@@ -586,7 +610,7 @@ public class ReportBOATemplate : IDocument
 {
     new { Name = "Skilled Staff & Services", Weight = 30 },
     new { Name = "Exact Quality & Quantity", Weight = 30 },
-    new { Name = "Keandalan, Visual, Keluasan", Weight = 40 },
+    new { Name = "Reliability, Visual, Extensiveness", Weight = 40 },
 };
 
         container.Table(table =>
@@ -630,8 +654,8 @@ public class ReportBOATemplate : IDocument
                     (level, levelColor) = ("Warning", "#FF0000");
                 else if (percent <= 80)
                     (level, levelColor) = ("Poor", "#FFFF99");
-                //else if (percent <= 75)
-                //    (level, levelColor) = ("Average", "#CCF2F4");
+                else if (percent <= 85)
+                    (level, levelColor) = ("Average", "#CCF2F4");
                 else if (percent <= 95)
                     (level, levelColor) = ("Good", "#00FF00");
                 else

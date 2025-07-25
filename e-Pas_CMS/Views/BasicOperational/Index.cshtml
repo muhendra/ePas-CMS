@@ -404,6 +404,20 @@
                                        asp-route-pageNumber="1"
                                        asp-route-pageSize="@Model.PageSize"
                                        asp-route-searchTerm="@ViewBag.SearchTerm"
+                                       asp-route-sortColumn="Good"
+                                       asp-route-sortDirection="@(ViewBag.SortColumn == "Good" && ViewBag.SortDirection == "asc" ? "desc" : "asc")">
+                                        Result
+                                        @if (ViewBag.SortColumn == "Good")
+                                        {
+                                            <i class="bi bi-arrow-@(ViewBag.SortDirection == "asc" ? "up" : "down")"></i>
+                                        }
+                                    </a>
+                                </th
+                                <th>
+                                    <a asp-action="Index"
+                                       asp-route-pageNumber="1"
+                                       asp-route-pageSize="@Model.PageSize"
+                                       asp-route-searchTerm="@ViewBag.SearchTerm"
                                        asp-route-sortColumn="Kota"
                                        asp-route-sortDirection="@(ViewBag.SortColumn == "Kota" && ViewBag.SortDirection == "asc" ? "desc" : "asc")">
                                         Kab/Kota
@@ -482,6 +496,7 @@
                                         <td>@item.Rayon</td>
                                         <td>@item.Audit</td>
                                         <td>@item.Score</td>
+                                        <td class="fw-bold @(item.Good == "CERTIFIED" ? "text-success" : "text-danger")">@item.Good</td>
                                         <td>@item.Kota</td>
                                         <td>@item.Alamat</td>
                                         <td class="fw-bold @(item.Komplain == "TIDAK ADA" ? "text-success" : "text-danger")">@item.Komplain</td>

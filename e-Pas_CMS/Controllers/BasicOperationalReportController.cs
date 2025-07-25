@@ -250,6 +250,9 @@ namespace e_Pas_CMS.Controllers
                 foreach (var element in elements) AssignWeightRecursive(element);
                 CalculateChecklistScores(elements);
                 CalculateOverallScore(new DetailReportViewModel { Elements = elements }, checklistData);
+                var modelstotal = new DetailReportViewModel { Elements = elements };
+                CalculateOverallScore(modelstotal, checklistData);
+                decimal? totalScore = modelstotal.TotalScore;
                 var compliance = HitungComplianceLevelDariElements(elements);
 
                 // === Compliance validation
@@ -263,7 +266,7 @@ namespace e_Pas_CMS.Controllers
                 bool failExcellent = sss < 85 || eqnq < 85 || rfs < 85 || vfc < 20 || epo < 50;
 
                 // === Update status with compliance logic
-                string goodStatus = (finalScore >= 75 && !hasGoodPenalty && !failGood)
+                string goodStatus = (finalScore >= 75 && !hasGoodPenalty)
                     ? "CERTIFIED"
                     : "NOT CERTIFIED";
 
@@ -335,7 +338,8 @@ namespace e_Pas_CMS.Controllers
                     Auditor = a.app_user.name,
                     GoodStatus = goodStatus,
                     ExcellentStatus = excellentStatus,
-                    Score = (a.score ?? a.spbu.audit_current_score ?? (decimal?)finalScore).Value,
+                    //Score = (a.score ?? a.spbu.audit_current_score ?? (decimal?)finalScore).Value,
+                    Score = totalScore ?? a.score,
                     WTMS = a.spbu.wtms,
                     QQ = a.spbu.qq,
                     WMEF = a.spbu.wmef,
@@ -1194,37 +1198,23 @@ WHERE
 
             var model = MapToViewModel(basic);
 
-            var penaltySql = @"
-    SELECT STRING_AGG(mqd.penalty_alert, ', ') AS penalty_alerts
-FROM trx_audit_checklist tac
-INNER JOIN master_questioner_detail mqd ON mqd.id = tac.master_questioner_detail_id
-WHERE 
-    tac.trx_audit_id = @id
-    AND (
-        (tac.master_questioner_detail_id IN (
-            '555fe2e4-b95b-461b-9c92-ad8b5c837119',
-            'bafc206f-ed29-4bbc-8053-38799e186fb0',
-            'd26f4caa-e849-4ab4-9372-298693247272'
-        ) AND tac.score_input <> 'A')
-        OR
-        (
-            ((mqd.penalty_excellent_criteria = 'LT_1' AND tac.score_input <> 'A') OR
-             (mqd.penalty_excellent_criteria = 'EQ_0' AND tac.score_input = 'F'))
-            AND (mqd.is_relaksasi = false OR mqd.is_relaksasi IS NULL)
-            AND mqd.is_penalty = true
-        )
-);";
+            var penaltySql = @"SELECT STRING_AGG(mqd.penalty_alert, ', ') AS penalty_alerts
+            FROM trx_audit_checklist tac
+            INNER JOIN master_questioner_detail mqd ON mqd.id = tac.master_questioner_detail_id
+            WHERE tac.trx_audit_id = @id AND
+              tac.score_input = 'F' AND
+              mqd.is_penalty = true AND 
+              (mqd.is_relaksasi = false OR mqd.is_relaksasi IS NULL);";
             model.PenaltyAlerts = await conn.ExecuteScalarAsync<string>(penaltySql, new { id });
 
             var penaltySqlGood = @"
     SELECT STRING_AGG(mqd.penalty_alert, ', ') AS penalty_alerts
-    FROM trx_audit_checklist tac
-    INNER JOIN master_questioner_detail mqd ON mqd.id = tac.master_questioner_detail_id
-    WHERE 
-        tac.trx_audit_id = @id AND
-        tac.score_input = 'F' AND
-        mqd.is_penalty = true AND 
-        (mqd.is_relaksasi = false OR mqd.is_relaksasi IS NULL);";
+            FROM trx_audit_checklist tac
+            INNER JOIN master_questioner_detail mqd ON mqd.id = tac.master_questioner_detail_id
+            WHERE tac.trx_audit_id = @id AND
+              tac.score_input = 'F' AND
+              mqd.is_penalty = true AND 
+              (mqd.is_relaksasi = false OR mqd.is_relaksasi IS NULL);";
             model.PenaltyAlertsGood = await conn.ExecuteScalarAsync<string>(penaltySqlGood, new { id });
 
             model.MediaNotes = await GetMediaNotesAsync(conn, id, "QUESTION");
@@ -1246,66 +1236,31 @@ WHERE
             model.SSS = Math.Round(compliance.SSS ?? 0, 2);
             model.EQnQ = Math.Round(compliance.EQnQ ?? 0, 2);
             model.RFS = Math.Round(compliance.RFS ?? 0, 2);
-            model.VFC = Math.Round(compliance.VFC ?? 0, 2);
-            model.EPO = Math.Round(compliance.EPO ?? 0, 2);
 
             // Validasi sertifikasi
-            bool failGood = model.SSS < 80 || model.EQnQ < 85 || model.RFS < 85 || model.VFC < 15 || model.EPO < 25;
-            bool failExcellent = model.SSS < 85 || model.EQnQ < 85 || model.RFS < 85 || model.VFC < 20 || model.EPO < 50;
+            bool failGood = model.SSS < 80 || model.EQnQ < 85 || model.RFS < 85;
             bool hasExcellentPenalty = !string.IsNullOrEmpty(model.PenaltyAlerts);
             bool hasGoodPenalty = !string.IsNullOrEmpty(model.PenaltyAlertsGood);
 
-            model.GoodStatus = (model.TotalScore >= 75 && !hasGoodPenalty && !failGood) ? "CERTIFIED" : "NOT CERTIFIED";
-            model.ExcellentStatus = (model.TotalScore >= 80 && !hasExcellentPenalty && !failExcellent) ? "CERTIFIED" : "NOT CERTIFIED";
-
-            // Audit next dan class
-            var auditFlowSql = @"SELECT * FROM master_audit_flow WHERE audit_level = @level LIMIT 1;";
-            var auditFlow = await conn.QueryFirstOrDefaultAsync<dynamic>(auditFlowSql, new { level = model.AuditCurrent });
-
-            if (auditFlow != null)
-            {
-                string goodStatus = model.GoodStatus;
-                string excellentStatus = model.ExcellentStatus;
-                string auditNext = null;
-
-                string passedLevel = auditFlow.passed_audit_level;
-
-                if (goodStatus == "CERTIFIED" && excellentStatus == "CERTIFIED")
-                    auditNext = auditFlow.passed_excellent;
-                else if (goodStatus == "CERTIFIED")
-                    auditNext = auditFlow.passed_good;
-                else
-                    auditNext = auditFlow.failed_audit_level;
-
-                model.AuditNext = auditNext;
-
-                if (auditNext == null)
-                {
-                    auditNext = passedLevel;
-                    model.AuditNext = passedLevel;
-                }
-
-                var auditlevelClassSql = @"SELECT audit_level_class FROM master_audit_flow WHERE audit_level = @level LIMIT 1;";
-                var auditlevelClass = await conn.QueryFirstOrDefaultAsync<dynamic>(auditlevelClassSql, new { level = auditNext });
-                model.ClassSPBU = auditlevelClass?.audit_level_class ?? "";
-            }
+            model.GoodStatus = (model.TotalScore >= 75 && !hasGoodPenalty) ? "CERTIFIED" : "NOT CERTIFIED";
+            model.ExcellentStatus = (model.TotalScore >= 80 && !hasExcellentPenalty) ? "CERTIFIED" : "NOT CERTIFIED";
 
             ViewBag.AuditId = id;
 
-            // Update audit_current_score ke spbu
-            var updateSql = @"UPDATE spbu SET audit_current_score = @score WHERE spbu_no = @spbuNo";
-            await conn.ExecuteAsync(updateSql, new
-            {
-                score = Math.Round(model.TotalScore, 2),
-                spbuNo = model.SpbuNo
-            });
+            //// Update audit_current_score ke spbu
+            //var updateSql = @"UPDATE spbu SET audit_current_score = @score WHERE spbu_no = @spbuNo";
+            //await conn.ExecuteAsync(updateSql, new
+            //{
+            //    score = Math.Round(model.TotalScore, 2),
+            //    spbuNo = model.SpbuNo
+            //});
 
-            var updateSqltrx_audit = @"UPDATE trx_audit SET score = @score WHERE id = @id";
-            await conn.ExecuteAsync(updateSqltrx_audit, new
-            {
-                score = Math.Round(model.TotalScore, 2),
-                id = id
-            });
+            //var updateSqltrx_audit = @"UPDATE trx_audit SET score = @score WHERE id = @id";
+            //await conn.ExecuteAsync(updateSqltrx_audit, new
+            //{
+            //    score = Math.Round(model.TotalScore, 2),
+            //    id = id
+            //});
 
             return View(model);
         }

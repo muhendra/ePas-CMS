@@ -106,21 +106,21 @@ namespace e_Pas_CMS.Controllers
                 foreach (var a in items)
                 {
                     var sql = @"
-        SELECT 
-            mqd.weight, 
-            tac.score_input, 
-            tac.score_x, 
-            mqd.is_relaksasi
-        FROM master_questioner_detail mqd
-        LEFT JOIN trx_audit_checklist tac 
-            ON tac.master_questioner_detail_id = mqd.id 
-            AND tac.trx_audit_id = @id
-        WHERE mqd.master_questioner_id = (
-            SELECT master_questioner_checklist_id 
-            FROM trx_audit 
-            WHERE id = @id
-        )
-        AND mqd.type = 'QUESTION'";
+                    SELECT 
+                        mqd.weight, 
+                        tac.score_input, 
+                        tac.score_x, 
+                        mqd.is_relaksasi
+                    FROM master_questioner_detail mqd
+                    LEFT JOIN trx_audit_checklist tac 
+                        ON tac.master_questioner_detail_id = mqd.id 
+                        AND tac.trx_audit_id = @id
+                    WHERE mqd.master_questioner_id = (
+                        SELECT master_questioner_checklist_id 
+                        FROM trx_audit 
+                        WHERE id = @id
+                    )
+                    AND mqd.type = 'QUESTION'";
 
                     var checklist = (await conn.QueryAsync<(decimal? weight, string score_input, decimal? score_x, bool? is_relaksasi)>(sql, new { id = a.Audit.id }))
                         .ToList();
@@ -170,13 +170,31 @@ namespace e_Pas_CMS.Controllers
                     foreach (var element in elements) AssignWeightRecursive(element);
                     CalculateChecklistScores(elements);
                     CalculateOverallScore(new DetailReportViewModel { Elements = elements }, checklistData);
+                    var modelstotal = new DetailReportViewModel { Elements = elements };
+                    CalculateOverallScore(modelstotal, checklistData);
+                    decimal? totalScore = modelstotal.TotalScore;
                     var compliance = HitungComplianceLevelDariElements(elements);
 
                     // === Compliance validation
                     var sss = Math.Round(compliance.SSS ?? 0, 2);
                     var eqnq = Math.Round(compliance.EQnQ ?? 0, 2);
                     var rfs = Math.Round(compliance.RFS ?? 0, 2);
-                    
+
+                    var penaltyGoodQuery = @"SELECT STRING_AGG(mqd.penalty_alert, ', ') AS penalty_alerts
+            FROM trx_audit_checklist tac
+            INNER JOIN master_questioner_detail mqd ON mqd.id = tac.master_questioner_detail_id
+            WHERE tac.trx_audit_id = @id AND
+              tac.score_input = 'F' AND
+              mqd.is_penalty = true AND 
+              (mqd.is_relaksasi = false OR mqd.is_relaksasi IS NULL);";
+                    var penaltyGoodResult = await conn.ExecuteScalarAsync<string>(penaltyGoodQuery, new { id = a.Audit.id });
+
+                    bool hasGoodPenalty = !string.IsNullOrEmpty(penaltyGoodResult);
+
+                    string goodStatus = (finalScore >= 75 && !hasGoodPenalty)
+                        ? "CERTIFIED"
+                        : "NOT CERTIFIED";
+
                     bool failGood = sss < 80 || eqnq < 85 || rfs < 85;
                     bool failExcellent = sss < 85 || eqnq < 85 || rfs < 85;
 
@@ -189,8 +207,9 @@ namespace e_Pas_CMS.Controllers
                         TipeSpbu = a.Spbu.type,
                         Tahun = a.Audit.created_date.ToString("yyyy"),
                         Audit = a.Audit.audit_level,
-                        Score = Math.Round(finalScore, 2),
-                        //Good = goodStatus,
+                        //Score = Math.Round(finalScore, 2),
+                        Score = (decimal)(totalScore ?? a.Audit.score),
+                        Good = goodStatus,
                         //Excelent = excellentStatus,
                         Provinsi = a.Spbu.province_name,
                         Kota = a.Spbu.city_name,
@@ -213,7 +232,7 @@ namespace e_Pas_CMS.Controllers
                 result = sortColumn switch
                 {
                     "Score" => sortDirection == "asc" ? result.OrderBy(r => r.Score).ToList() : result.OrderByDescending(r => r.Score).ToList(),
-                    //"Good" => sortDirection == "asc" ? result.OrderBy(r => r.Good).ToList() : result.OrderByDescending(r => r.Good).ToList(),
+                    "Good" => sortDirection == "asc" ? result.OrderBy(r => r.Good).ToList() : result.OrderByDescending(r => r.Good).ToList(),
                     //"Excellent" => sortDirection == "asc" ? result.OrderBy(r => r.Excelent).ToList() : result.OrderByDescending(r => r.Excelent).ToList(),
                     "Komplain" => sortDirection == "asc" ? result.OrderBy(r => r.Komplain).ToList() : result.OrderByDescending(r => r.Komplain).ToList(),
                     "Banding" => sortDirection == "asc" ? result.OrderBy(r => r.Banding).ToList() : result.OrderByDescending(r => r.Banding).ToList(),
