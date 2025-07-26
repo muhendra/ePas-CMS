@@ -198,6 +198,37 @@ namespace e_Pas_CMS.Controllers
                     bool failGood = sss < 80 || eqnq < 85 || rfs < 85;
                     bool failExcellent = sss < 85 || eqnq < 85 || rfs < 85;
 
+                    // === Audit Next
+                    string auditNext = null;
+                    string levelspbu = null;
+
+                    var auditFlowSql = @"SELECT * FROM master_audit_flow WHERE audit_level = @level LIMIT 1;";
+                    var auditFlow = await conn.QueryFirstOrDefaultAsync<dynamic>(auditFlowSql, new { level = a.Audit.audit_level });
+
+                    if (auditFlow != null)
+                    {
+                        string passedGood = auditFlow.passed_good;
+                        string passedExcellent = auditFlow.passed_excellent;
+                        string passedAuditLevel = auditFlow.passed_audit_level;
+                        string failed_audit_level = auditFlow.failed_audit_level;
+
+                        if (string.IsNullOrWhiteSpace(passedGood) && string.IsNullOrWhiteSpace(passedExcellent) && finalScore >= 75)
+                        {
+                            auditNext = passedAuditLevel;
+                        }
+                        else
+                        {
+                            auditNext = failed_audit_level;
+                        }
+
+                        var auditlevelClassSql = @"SELECT audit_level_class FROM master_audit_flow WHERE audit_level = @level LIMIT 1;";
+                        var auditlevelClass = await conn.QueryFirstOrDefaultAsync<dynamic>(auditlevelClassSql, new { level = auditNext });
+                        levelspbu = auditlevelClass != null
+                        ? (auditlevelClass.audit_level_class ?? "")
+                        : "";
+                    }
+
+
                     result.Add(new SpbuViewModel
                     {
                         Id = a.Audit.id,

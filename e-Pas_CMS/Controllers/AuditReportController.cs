@@ -391,8 +391,8 @@ namespace e_Pas_CMS.Controllers
                 .Include(a => a.app_user)
                 .Where(a =>
                     allowedStatuses.Contains(a.status) &&
-                    a.created_date >= new DateTime(2025, 6, 1) &&
-                    a.created_date < new DateTime(2025, 7, 1)
+                    a.created_date >= new DateTime(2025, 7, 1) &&
+                    a.created_date < new DateTime(2025, 8, 1)
                 );
 
             if (userRegion.Any())
@@ -601,6 +601,9 @@ WHERE
                 foreach (var element in elements) AssignWeightRecursive(element);
                 CalculateChecklistScores(elements);
                 CalculateOverallScore(new DetailReportViewModel { Elements = elements }, checklistData);
+                var modelstotal = new DetailReportViewModel { Elements = elements };
+                CalculateOverallScore(modelstotal, checklistData);
+                decimal? totalScore = modelstotal.TotalScore;
                 var compliance = HitungComplianceLevelDariElements(elements);
 
                 var auditDate = a.audit_execution_time ?? a.updated_date ?? DateTime.MinValue;
@@ -695,7 +698,7 @@ ORDER BY mqd.number, tac.updated_date DESC NULLS LAST
 
                 var checklistValues = numberList.Select(number => $"\"{(checklistMap.TryGetValue(number, out var val) ? val : "")}\"");
 
-                decimal scores = (a.spbu.audit_current_score.HasValue && a.spbu.audit_current_score.Value != 0) ? a.spbu.audit_current_score.Value : finalScore;
+                decimal scores = (decimal)(totalScore ?? a.score);
 
                 csv.AppendLine(string.Join(",", new[]
         {

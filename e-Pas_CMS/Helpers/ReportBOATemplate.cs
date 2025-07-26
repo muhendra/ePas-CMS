@@ -102,7 +102,7 @@ public class ReportBOATemplate : IDocument
             // Step 1: Set compliance per elemen
             decimal sss = _model.SSS ?? GetCompliance("Skilled Staff & Services", 30);
             decimal eqnq = _model.EQnQ ?? GetCompliance("Exact Quality & Quantity", 30);
-            decimal rve = _model.RFS ?? GetCompliance("Reliable Facilities & Safety", 40);
+            decimal rve = _model.RFS ?? GetCompliance("Reliability, Visual, Extensiveness", 40);
 
             _model.SSS = sss;
             _model.EQnQ = eqnq;
@@ -690,21 +690,21 @@ public class ReportBOATemplate : IDocument
     void ComposeSubElementTable(IContainer container, List<AuditChecklistNode> children)
     {
         var subElementWeights = new Dictionary<string, decimal>(StringComparer.OrdinalIgnoreCase)
-    {
-        { "Sub-Elemen 1.1", 10.00m },
-        { "Sub-Elemen 1.2", 20.00m },
-        { "Sub-Elemen 2.1", 7.00m },
-        { "Sub-Elemen 2.2", 23.00m },
-        { "Sub-Elemen 3.1", 14.50m },
-        { "Sub-Elemen 3.2", 4.50m },
-        { "Sub-Elemen 3.3", 1.00m },
-        { "Sub-Element 3.3", 1.00m },
-        { "Sub-Elemen 4.1", 4.00m },
-        { "Sub-Elemen 4.2", 2.00m },
-        { "Sub-Elemen 4.3", 4.00m },
-        { "Sub-Elemen 5.1", 2.00m },
-        { "Sub-Elemen 5.2", 8.00m }
-    };
+{
+    { "Sub-Elemen 1.1", 10.00m },
+    { "Sub-Elemen 1.2", 20.00m },
+    { "Sub-Elemen 2.1", 7.00m },
+    { "Sub-Elemen 2.2", 23.00m },
+    { "Sub-Elemen 3.1", 7.50m },
+    { "Sub-Elemen 3.2", 22.50m },
+    { "Sub-Elemen 3.3", 3.00m },
+    { "Sub-Elemen 3.4", 1.00m },
+    { "Sub-Elemen 3.5", 1.50m },
+    { "Sub-Elemen 3.6", 1.00m },
+    { "Sub-Elemen 3.7", 1.00m },
+    { "Sub-Elemen 3.8", 2.50m },
+};
+
 
         container.Table(table =>
         {

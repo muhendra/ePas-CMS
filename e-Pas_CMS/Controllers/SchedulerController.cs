@@ -198,7 +198,7 @@ namespace e_Pas_CMS.Controllers
             if (model.AuditType == "Basic Operational")
             {
                 audit.master_questioner_intro_id = null;
-                audit.master_questioner_checklist_id = "fe0d1ec2-513f-4e6f-bb0e-54c8ffdf38d6";
+                audit.master_questioner_checklist_id = "4b295bf0-9d29-4a56-9004-4b96ab656257";
             }
             else
             {

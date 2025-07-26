@@ -281,31 +281,7 @@ namespace e_Pas_CMS.Controllers
                     string passedAuditLevel = auditFlow.passed_audit_level;
                     string failed_audit_level = auditFlow.failed_audit_level;
 
-                    if (string.IsNullOrWhiteSpace(passedGood) && string.IsNullOrWhiteSpace(passedExcellent) && goodStatus == "CERTIFIED" && excellentStatus == "CERTIFIED")
-                    {
-                        auditNext = passedAuditLevel;
-                    }
-                    else if (string.IsNullOrWhiteSpace(passedGood) && string.IsNullOrWhiteSpace(passedExcellent) && goodStatus == "CERTIFIED" && excellentStatus == "NOT CERTIFIED")
-                    {
-                        auditNext = passedAuditLevel;
-                    }
-                    else if (string.IsNullOrWhiteSpace(passedGood) && string.IsNullOrWhiteSpace(passedExcellent) && goodStatus == "NOT CERTIFIED" && excellentStatus == "NOT CERTIFIED")
-                    {
-                        auditNext = failed_audit_level;
-                    }
-                    else if (goodStatus == "NOT CERTIFIED" && excellentStatus == "NOT CERTIFIED")
-                    {
-                        auditNext = failed_audit_level;
-                    }
-                    else if (goodStatus == "CERTIFIED" && excellentStatus == "NOT CERTIFIED")
-                    {
-                        auditNext = passedGood;
-                    }
-                    else if (goodStatus == "CERTIFIED" && excellentStatus == "CERTIFIED")
-                    {
-                        auditNext = passedExcellent;
-                    }
-                    else if (string.IsNullOrWhiteSpace(passedGood) && string.IsNullOrWhiteSpace(passedExcellent) && finalScore >= 75)
+                    if (string.IsNullOrWhiteSpace(passedAuditLevel) && goodStatus == "CERTIFIED")
                     {
                         auditNext = passedAuditLevel;
                     }
@@ -637,31 +613,7 @@ WHERE
                     string passedAuditLevel = auditFlow.passed_audit_level;
                     string failed_audit_level = auditFlow.failed_audit_level;
 
-                    if (string.IsNullOrWhiteSpace(passedGood) && string.IsNullOrWhiteSpace(passedExcellent) && goodStatus == "CERTIFIED" && excellentStatus == "CERTIFIED")
-                    {
-                        auditNext = passedAuditLevel;
-                    }
-                    else if (string.IsNullOrWhiteSpace(passedGood) && string.IsNullOrWhiteSpace(passedExcellent) && goodStatus == "CERTIFIED" && excellentStatus == "NOT CERTIFIED")
-                    {
-                        auditNext = passedAuditLevel;
-                    }
-                    else if (string.IsNullOrWhiteSpace(passedGood) && string.IsNullOrWhiteSpace(passedExcellent) && goodStatus == "NOT CERTIFIED" && excellentStatus == "NOT CERTIFIED")
-                    {
-                        auditNext = failed_audit_level;
-                    }
-                    else if (goodStatus == "NOT CERTIFIED" && excellentStatus == "NOT CERTIFIED")
-                    {
-                        auditNext = failed_audit_level;
-                    }
-                    else if (goodStatus == "CERTIFIED" && excellentStatus == "NOT CERTIFIED")
-                    {
-                        auditNext = passedGood;
-                    }
-                    else if (goodStatus == "CERTIFIED" && excellentStatus == "CERTIFIED")
-                    {
-                        auditNext = passedExcellent;
-                    }
-                    else if (string.IsNullOrWhiteSpace(passedGood) && string.IsNullOrWhiteSpace(passedExcellent) && finalScore >= 75)
+                    if (string.IsNullOrWhiteSpace(passedAuditLevel) && goodStatus == "CERTIFIED")
                     {
                         auditNext = passedAuditLevel;
                     }
@@ -948,14 +900,14 @@ ORDER BY mqd.number, tac.updated_date DESC NULLS LAST
                     string passedAuditLevel = auditFlow.passed_audit_level;
                     string failed_audit_level = auditFlow.failed_audit_level;
 
-                    if (string.IsNullOrWhiteSpace(passedGood) && string.IsNullOrWhiteSpace(passedExcellent) && goodStatus == "CERTIFIED" && excellentStatus == "CERTIFIED")
+                    if (string.IsNullOrWhiteSpace(passedAuditLevel) && goodStatus == "CERTIFIED")
+                    {
                         auditNext = passedAuditLevel;
-                    else if (goodStatus == "CERTIFIED" && excellentStatus == "NOT CERTIFIED")
-                        auditNext = passedGood;
-                    else if (goodStatus == "CERTIFIED" && excellentStatus == "CERTIFIED")
-                        auditNext = passedExcellent;
+                    }
                     else
+                    {
                         auditNext = failed_audit_level;
+                    }
 
                     var auditClass = await conn.QueryFirstOrDefaultAsync<dynamic>(
                         "SELECT audit_level_class FROM master_audit_flow WHERE audit_level = @level LIMIT 1",
@@ -1144,22 +1096,51 @@ ORDER BY mqd.number, tac.updated_date DESC NULLS LAST
             model.GoodStatus = (model.TotalScore >= 75 && !hasGoodPenalty) ? "CERTIFIED" : "NOT CERTIFIED";
             model.ExcellentStatus = (model.TotalScore >= 80 && !hasExcellentPenalty) ? "CERTIFIED" : "NOT CERTIFIED";
 
+            var auditFlowSql = @"SELECT * FROM master_audit_flow WHERE audit_level = @level LIMIT 1;";
+            var auditFlow = await conn.QueryFirstOrDefaultAsync<dynamic>(auditFlowSql, new { level = model.AuditCurrent });
+
+            if (auditFlow != null)
+            {
+                string goodStatus = model.GoodStatus;
+                string excellentStatus = model.ExcellentStatus;
+                string auditNext = null;
+
+                string passedLevel = auditFlow.passed_audit_level;
+                string passedGood = auditFlow.passed_good;
+                string passedExcellent = auditFlow.passed_excellent;
+                string passedAuditLevel = auditFlow.passed_audit_level;
+                string failed_audit_level = auditFlow.failed_audit_level;
+
+                if (string.IsNullOrWhiteSpace(passedAuditLevel) && goodStatus == "CERTIFIED")
+                {
+                    auditNext = passedAuditLevel;
+                }
+                else
+                {
+                    auditNext = failed_audit_level;
+                }
+
+                var auditlevelClassSql = @"SELECT audit_level_class FROM master_audit_flow WHERE audit_level = @level LIMIT 1;";
+                var auditlevelClass = await conn.QueryFirstOrDefaultAsync<dynamic>(auditlevelClassSql, new { level = auditNext });
+                model.ClassSPBU = auditlevelClass?.audit_level_class ?? "";
+            }
+
             ViewBag.AuditId = id;
 
-            //// Update audit_current_score ke spbu
-            //var updateSql = @"UPDATE spbu SET audit_current_score = @score WHERE spbu_no = @spbuNo";
-            //await conn.ExecuteAsync(updateSql, new
-            //{
-            //    score = Math.Round(model.TotalScore, 2),
-            //    spbuNo = model.SpbuNo
-            //});
+            // Update audit_current_score ke spbu
+            var updateSql = @"UPDATE spbu SET audit_current_score = @score WHERE spbu_no = @spbuNo";
+            await conn.ExecuteAsync(updateSql, new
+            {
+                score = Math.Round(model.TotalScore, 2),
+                spbuNo = model.SpbuNo
+            });
 
-            //var updateSqltrx_audit = @"UPDATE trx_audit SET score = @score WHERE id = @id";
-            //await conn.ExecuteAsync(updateSqltrx_audit, new
-            //{
-            //    score = Math.Round(model.TotalScore, 2),
-            //    id = id
-            //});
+            var updateSqltrx_audit = @"UPDATE trx_audit SET score = @score WHERE id = @id";
+            await conn.ExecuteAsync(updateSqltrx_audit, new
+            {
+                score = Math.Round(model.TotalScore, 2),
+                id = id
+            });
 
             return View(model);
         }
