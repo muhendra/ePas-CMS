@@ -1362,7 +1362,7 @@ WHERE
         {
             try
             {
-                var outputDirectory = Path.Combine("/var/www/epas-cms", "wwwroot", "reports");
+                var outputDirectory = Path.Combine("/var/www/epas-asset", "wwwroot", "uploads", "reports");
                 if (!Directory.Exists(outputDirectory))
                     Directory.CreateDirectory(outputDirectory);
 
