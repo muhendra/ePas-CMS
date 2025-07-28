@@ -1357,37 +1357,46 @@ WHERE
         [HttpGet]
         public async Task<IActionResult> GenerateAllVerifiedPdfReports()
         {
-            var outputDirectory = Path.Combine("/var/www/epas-cms", "wwwroot", "reports");
-            if (!Directory.Exists(outputDirectory))
-                Directory.CreateDirectory(outputDirectory);
-
-            using var conn = _context.Database.GetDbConnection();
-            if (conn.State != ConnectionState.Open)
-                await conn.OpenAsync();
-
-            // 🔧 Cast id ke string dulu agar tidak gagal parsing
-            var auditIdStrings = await conn.QueryAsync<string>("SELECT id::text FROM trx_audit WHERE status = 'VERIFIED' LIMIT 10");
-            var auditIds = auditIdStrings.Select(idStr => Guid.Parse(idStr)).ToList();
-
-            foreach (var id in auditIds)
+            try
             {
-                var model = await GetDetailReportAsync(id);
+                var outputDirectory = Path.Combine("/var/www/epas-cms", "wwwroot", "reports");
+                if (!Directory.Exists(outputDirectory))
+                    Directory.CreateDirectory(outputDirectory);
 
-                var document = new ReportExcellentTemplate(model); // atau ReportGoodTemplate
-                var pdfStream = new MemoryStream();
-                document.GeneratePdf(pdfStream);
-                pdfStream.Position = 0;
+                // Gunakan EF Core langsung agar connection management lebih aman
+                var auditIds = await _context.trx_audits
+                    .Where(a => a.status == "VERIFIED")
+                    .OrderByDescending(a => a.audit_execution_time)
+                    .Take(10)
+                    .Select(a => a.id)
+                    .ToListAsync();
 
-                string spbuNo = model.SpbuNo?.Replace(" ", "") ?? "SPBU";
-                string tanggalAudit = model.TanggalAudit?.ToString("yyyyMMdd") ?? "00000000";
-                string fileName = $"audit_{spbuNo}_{tanggalAudit}.pdf";
-                string fullPath = Path.Combine(outputDirectory, fileName);
+                foreach (var id in auditIds)
+                {
+                    var model = await GetDetailReportAsync(id);
+                    if (model == null)
+                        continue;
 
-                using var fileStream = new FileStream(fullPath, FileMode.Create, FileAccess.Write);
-                await pdfStream.CopyToAsync(fileStream);
+                    var document = new ReportExcellentTemplate(model); // atau logika pemilihan ReportGoodTemplate
+                    using var pdfStream = new MemoryStream();
+                    document.GeneratePdf(pdfStream);
+                    pdfStream.Position = 0;
+
+                    string spbuNo = model.SpbuNo?.Replace(" ", "") ?? "SPBU";
+                    string tanggalAudit = model.TanggalAudit?.ToString("yyyyMMdd") ?? "00000000";
+                    string fileName = $"audit_{spbuNo}_{tanggalAudit}.pdf";
+                    string fullPath = Path.Combine(outputDirectory, fileName);
+
+                    await using var fileStream = new FileStream(fullPath, FileMode.Create, FileAccess.Write);
+                    await pdfStream.CopyToAsync(fileStream);
+                }
+
+                return Ok(new { message = "PDF generation completed", count = auditIds.Count });
             }
-
-            return Ok(new { message = "PDF generation completed", count = auditIds.Count });
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { error = ex.Message, detail = ex.StackTrace });
+            }
         }
 
         private async Task<DetailReportViewModel> GetDetailReportAsync(Guid id)
