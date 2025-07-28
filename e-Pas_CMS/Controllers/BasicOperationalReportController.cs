@@ -281,7 +281,7 @@ namespace e_Pas_CMS.Controllers
                     string passedAuditLevel = auditFlow.passed_audit_level;
                     string failed_audit_level = auditFlow.failed_audit_level;
 
-                    if (string.IsNullOrWhiteSpace(passedAuditLevel) && goodStatus == "CERTIFIED")
+                    if (passedAuditLevel != null && goodStatus == "CERTIFIED")
                     {
                         auditNext = passedAuditLevel;
                     }
@@ -613,7 +613,7 @@ WHERE
                     string passedAuditLevel = auditFlow.passed_audit_level;
                     string failed_audit_level = auditFlow.failed_audit_level;
 
-                    if (string.IsNullOrWhiteSpace(passedAuditLevel) && goodStatus == "CERTIFIED")
+                    if (passedAuditLevel != null && goodStatus == "CERTIFIED")
                     {
                         auditNext = passedAuditLevel;
                     }
@@ -900,7 +900,7 @@ ORDER BY mqd.number, tac.updated_date DESC NULLS LAST
                     string passedAuditLevel = auditFlow.passed_audit_level;
                     string failed_audit_level = auditFlow.failed_audit_level;
 
-                    if (string.IsNullOrWhiteSpace(passedAuditLevel) && goodStatus == "CERTIFIED")
+                    if (passedAuditLevel != null && goodStatus == "CERTIFIED")
                     {
                         auditNext = passedAuditLevel;
                     }
@@ -1030,7 +1030,7 @@ ORDER BY mqd.number, tac.updated_date DESC NULLS LAST
                 string passedAuditLevel = auditFlow.passed_audit_level;
                 string failed_audit_level = auditFlow.failed_audit_level;
 
-                if (string.IsNullOrWhiteSpace(passedAuditLevel) && goodStatus == "CERTIFIED")
+                if (passedAuditLevel != null && goodStatus == "CERTIFIED")
                 {
                     auditNext = passedAuditLevel;
                 }
@@ -1140,7 +1140,7 @@ ORDER BY mqd.number, tac.updated_date DESC NULLS LAST
                 string passedAuditLevel = auditFlow.passed_audit_level;
                 string failed_audit_level = auditFlow.failed_audit_level;
 
-                if (string.IsNullOrWhiteSpace(passedAuditLevel) && goodStatus == "CERTIFIED")
+                if (passedAuditLevel != null && goodStatus == "CERTIFIED")
                 {
                     auditNext = passedAuditLevel;
                 }
@@ -1151,6 +1151,7 @@ ORDER BY mqd.number, tac.updated_date DESC NULLS LAST
 
                 var auditlevelClassSql = @"SELECT audit_level_class FROM master_audit_flow WHERE audit_level = @level LIMIT 1;";
                 var auditlevelClass = await conn.QueryFirstOrDefaultAsync<dynamic>(auditlevelClassSql, new { level = auditNext });
+                model.AuditNext = auditNext;
                 model.ClassSPBU = auditlevelClass?.audit_level_class ?? "";
             }
 
@@ -1336,7 +1337,7 @@ WHERE
             bool hasExcellentPenalty = !string.IsNullOrEmpty(model.PenaltyAlerts);
             bool hasGoodPenalty = !string.IsNullOrEmpty(model.PenaltyAlertsGood);
 
-            if (finalScore >= 75 && !hasGoodPenalty && !failGood)
+            if (finalScore >= 75 && !hasGoodPenalty)
                 model.GoodStatus = "CERTIFIED";
 
             if (finalScore >= 80 && !hasExcellentPenalty && !failExcellent)
@@ -1358,18 +1359,13 @@ WHERE
                 string passedAuditLevel = auditFlow.passed_audit_level;
                 string failed_audit_level = auditFlow.failed_audit_level;
 
-                if (goodStatus == "CERTIFIED" && excellentStatus == "CERTIFIED")
-                    auditNext = passedExcellent;
-                else if (goodStatus == "CERTIFIED" && excellentStatus == "NOT CERTIFIED")
-                    auditNext = passedGood;
-                else
-                    auditNext = failed_audit_level;
-
-                string passedLevel = auditFlow.passed_audit_level;
-
-                if (auditNext == null)
+                if (passedAuditLevel != null && goodStatus == "CERTIFIED")
                 {
-                    auditNext = passedLevel;
+                    auditNext = passedAuditLevel;
+                }
+                else
+                {
+                    auditNext = failed_audit_level;
                 }
 
                 var auditlevelClassSql = @"SELECT audit_level_class FROM master_audit_flow WHERE audit_level = @level LIMIT 1;";
