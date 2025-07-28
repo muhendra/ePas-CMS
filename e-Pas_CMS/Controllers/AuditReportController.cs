@@ -1418,7 +1418,7 @@ WHERE
                     Directory.CreateDirectory(outputDirectory);
 
                 var auditIds = await _context.trx_audits
-                    .Where(a => a.status == "VERIFIED" && a.audit_type != "Basic Operational")
+                    .Where(a => a.status == "VERIFIED" && a.audit_type != "Basic Operational" && a.report_file_excellent == null)
                     .OrderByDescending(a => a.audit_execution_time)
                     //.Take(10)
                     .Select(a => a.id)
