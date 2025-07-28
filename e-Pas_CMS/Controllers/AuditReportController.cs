@@ -1420,7 +1420,7 @@ WHERE
                 var auditIds = await _context.trx_audits
                     .Where(a => a.status == "VERIFIED" && a.audit_type != "Basic Operational")
                     .OrderByDescending(a => a.audit_execution_time)
-                    .Take(10)
+                    //.Take(10)
                     .Select(a => a.id)
                     .ToListAsync(token);  // <- inject token
 
@@ -1441,7 +1441,7 @@ WHERE
                     string tanggalAudit = model.TanggalAudit?.ToString("yyyyMMdd") ?? "00000000";
                     string idSuffix = id.Replace("-", "");
                     idSuffix = idSuffix.Substring(idSuffix.Length - 6);
-                    string fileName = $"audit_{spbuNo}_{tanggalAudit}_{idSuffix}.pdf";
+                    string fileName = $"report_excellent_{spbuNo}_{tanggalAudit}_{idSuffix}.pdf";
                     string fullPath = Path.Combine(outputDirectory, fileName);
                     
 
@@ -1449,7 +1449,7 @@ WHERE
                     await pdfStream.CopyToAsync(fileStream, token);
 
                     await _context.Database.ExecuteSqlRawAsync(
-                    "UPDATE trx_audit SET report_file = {0} WHERE id = {1}",
+                    "UPDATE trx_audit SET report_file_excellent = {0} WHERE id = {1}",
                     fileName, id.ToString());
                 }
 
@@ -1465,6 +1465,67 @@ WHERE
             }
         }
 
+        [HttpGet]
+        public async Task<IActionResult> GenerateAllVerifiedPdfReportsGood()
+        {
+            using var timeoutCts = new CancellationTokenSource(TimeSpan.FromHours(6));
+            var token = CancellationTokenSource
+                .CreateLinkedTokenSource(timeoutCts.Token, HttpContext.RequestAborted)
+                .Token;
+
+            try
+            {
+                var outputDirectory = Path.Combine("/var/www/epas-asset", "wwwroot", "uploads", "reports");
+                if (!Directory.Exists(outputDirectory))
+                    Directory.CreateDirectory(outputDirectory);
+
+                var auditIds = await _context.trx_audits
+                    .Where(a => a.status == "VERIFIED" && a.audit_type != "Basic Operational")
+                    .OrderByDescending(a => a.audit_execution_time)
+                    //.Take(10)
+                    .Select(a => a.id)
+                    .ToListAsync(token);  // <- inject token
+
+                foreach (var id in auditIds)
+                {
+                    token.ThrowIfCancellationRequested();
+
+                    var model = await GetDetailReportAsync2(Guid.Parse(id));
+                    if (model == null)
+                        continue;
+
+                    var document = new ReportGoodTemplate(model);
+                    await using var pdfStream = new MemoryStream();
+                    document.GeneratePdf(pdfStream);
+                    pdfStream.Position = 0;
+
+                    string spbuNo = model.SpbuNo?.Replace(" ", "") ?? "SPBU";
+                    string tanggalAudit = model.TanggalAudit?.ToString("yyyyMMdd") ?? "00000000";
+                    string idSuffix = id.Replace("-", "");
+                    idSuffix = idSuffix.Substring(idSuffix.Length - 6);
+                    string fileName = $"report_good_{spbuNo}_{tanggalAudit}_{idSuffix}.pdf";
+                    string fullPath = Path.Combine(outputDirectory, fileName);
+
+
+                    await using var fileStream = new FileStream(fullPath, FileMode.Create, FileAccess.Write);
+                    await pdfStream.CopyToAsync(fileStream, token);
+
+                    await _context.Database.ExecuteSqlRawAsync(
+                    "UPDATE trx_audit SET report_file_good = {0} WHERE id = {1}",
+                    fileName, id.ToString());
+                }
+
+                return Ok(new { message = "PDF generation completed" });
+            }
+            catch (OperationCanceledException)
+            {
+                return StatusCode(408, new { error = "Operation timed out or request was cancelled." });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { error = ex.Message, stack = ex.StackTrace });
+            }
+        }
 
         private async Task<DetailReportViewModel> GetDetailReportAsync(Guid id)
         {
