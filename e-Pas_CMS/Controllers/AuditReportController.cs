@@ -1357,7 +1357,8 @@ WHERE
         [HttpPost]
         public async Task<IActionResult> GenerateAllVerifiedPdfReports()
         {
-            string outputDirectory = "/var/www/epas-cms/reports";
+            //string outputDirectory = "/var/www/epas-cms/reports";
+            var outputDirectory = Path.Combine("/var/www/epas-cms", "wwwroot", "reports");
             if (!Directory.Exists(outputDirectory))
                 Directory.CreateDirectory(outputDirectory);
 
