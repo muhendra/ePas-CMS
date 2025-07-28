@@ -1363,7 +1363,7 @@ WHERE
                 if (!Directory.Exists(outputDirectory))
                     Directory.CreateDirectory(outputDirectory);
 
-                // Gunakan EF Core langsung agar connection management lebih aman
+                // ✅ Gunakan EF Core langsung agar koneksi tidak conflict dengan GetDetailReportAsync
                 var auditIds = await _context.trx_audits
                     .Where(a => a.status == "VERIFIED")
                     .OrderByDescending(a => a.audit_execution_time)
@@ -1377,8 +1377,8 @@ WHERE
                     if (model == null)
                         continue;
 
-                    var document = new ReportExcellentTemplate(model); // atau logika pemilihan ReportGoodTemplate
-                    using var pdfStream = new MemoryStream();
+                    var document = new ReportExcellentTemplate(model); // ganti logic jika perlu
+                    await using var pdfStream = new MemoryStream();
                     document.GeneratePdf(pdfStream);
                     pdfStream.Position = 0;
 
@@ -1391,11 +1391,11 @@ WHERE
                     await pdfStream.CopyToAsync(fileStream);
                 }
 
-                return Ok(new { message = "PDF generation completed", count = auditIds.Count });
+                return Ok(new { message = "PDF generation completed"});
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { error = ex.Message, detail = ex.StackTrace });
+                return StatusCode(500, new { error = ex.Message, stack = ex.StackTrace });
             }
         }
 
