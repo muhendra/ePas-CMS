@@ -1366,7 +1366,7 @@ WHERE
             if (conn.State != ConnectionState.Open)
                 await conn.OpenAsync();
 
-            var auditIds = await conn.QueryAsync<Guid>("SELECT top 10 id FROM trx_audit WHERE status = 'VERIFIED' limit 10");
+            var auditIds = await conn.QueryAsync<Guid>("SELECT id FROM trx_audit WHERE status = 'VERIFIED' LIMIT 10");
 
             foreach (var id in auditIds)
             {
