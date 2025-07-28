@@ -49,6 +49,8 @@ public partial class trx_audit
     public DateTime? approval_date { get; set; }
     public string? approval_by { get; set; }
 
+    public string? report_file { get; set; }
+
     public virtual app_user? app_user { get; set; }
 
     public virtual master_questioner? master_questioner_checklist { get; set; }
