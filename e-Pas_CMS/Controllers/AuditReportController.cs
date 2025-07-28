@@ -1354,7 +1354,7 @@ WHERE
 
         }
 
-        [HttpPost]
+        [HttpGet]
         public async Task<IActionResult> GenerateAllVerifiedPdfReports()
         {
             //string outputDirectory = "/var/www/epas-cms/reports";
