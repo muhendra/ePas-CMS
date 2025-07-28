@@ -1357,51 +1357,118 @@ WHERE
 
         }
 
+        //[HttpGet]
+        //public async Task<IActionResult> GenerateAllVerifiedPdfReports()
+        //{
+        //    try
+        //    {
+        //        var outputDirectory = Path.Combine("/var/www/epas-asset", "wwwroot", "uploads", "reports");
+        //        if (!Directory.Exists(outputDirectory))
+        //            Directory.CreateDirectory(outputDirectory);
+
+        //        // ✅ Gunakan EF Core langsung agar koneksi tidak conflict dengan GetDetailReportAsync
+        //        var auditIds = await _context.trx_audits
+        //            .Where(a => a.status == "VERIFIED")
+        //            .OrderByDescending(a => a.audit_execution_time)
+        //            .Take(10)
+        //            .Select(a => a.id)
+        //            .ToListAsync();
+
+        //        foreach (var id in auditIds)
+        //        {
+        //            var model = await GetDetailReportAsync2(Guid.Parse(id));
+
+        //            if (model == null)
+        //                continue;
+
+        //            var document = new ReportExcellentTemplate(model); // ganti logic jika perlu
+        //            await using var pdfStream = new MemoryStream();
+        //            document.GeneratePdf(pdfStream);
+        //            pdfStream.Position = 0;
+
+        //            string spbuNo = model.SpbuNo?.Replace(" ", "") ?? "SPBU";
+        //            string tanggalAudit = model.TanggalAudit?.ToString("yyyyMMdd") ?? "00000000";
+        //            string fileName = $"audit_{spbuNo}_{tanggalAudit}.pdf";
+        //            string fullPath = Path.Combine(outputDirectory, fileName);
+
+        //            await using var fileStream = new FileStream(fullPath, FileMode.Create, FileAccess.Write);
+        //            await pdfStream.CopyToAsync(fileStream);
+        //        }
+
+        //        return Ok(new { message = "PDF generation completed"});
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //        return StatusCode(500, new { error = ex.Message, stack = ex.StackTrace });
+        //    }
+        //}
+
         [HttpGet]
         public async Task<IActionResult> GenerateAllVerifiedPdfReports()
         {
+            using var timeoutCts = new CancellationTokenSource(TimeSpan.FromHours(6));
+            var token = CancellationTokenSource
+                .CreateLinkedTokenSource(timeoutCts.Token, HttpContext.RequestAborted)
+                .Token;
+
             try
             {
                 var outputDirectory = Path.Combine("/var/www/epas-asset", "wwwroot", "uploads", "reports");
                 if (!Directory.Exists(outputDirectory))
                     Directory.CreateDirectory(outputDirectory);
 
-                // ✅ Gunakan EF Core langsung agar koneksi tidak conflict dengan GetDetailReportAsync
                 var auditIds = await _context.trx_audits
-                    .Where(a => a.status == "VERIFIED")
+                    .Where(a => a.status == "VERIFIED" && a.audit_type != "Basic Operational")
                     .OrderByDescending(a => a.audit_execution_time)
                     .Take(10)
                     .Select(a => a.id)
-                    .ToListAsync();
+                    .ToListAsync(token);  // <- inject token
 
                 foreach (var id in auditIds)
                 {
-                    var model = await GetDetailReportAsync2(Guid.Parse(id));
+                    token.ThrowIfCancellationRequested();
 
+                    var model = await GetDetailReportAsync2(Guid.Parse(id));
                     if (model == null)
                         continue;
 
-                    var document = new ReportExcellentTemplate(model); // ganti logic jika perlu
+                    var document = new ReportExcellentTemplate(model);
                     await using var pdfStream = new MemoryStream();
                     document.GeneratePdf(pdfStream);
                     pdfStream.Position = 0;
 
                     string spbuNo = model.SpbuNo?.Replace(" ", "") ?? "SPBU";
                     string tanggalAudit = model.TanggalAudit?.ToString("yyyyMMdd") ?? "00000000";
-                    string fileName = $"audit_{spbuNo}_{tanggalAudit}.pdf";
+                    string idSuffix = id.Replace("-", "");
+                    idSuffix = idSuffix.Substring(idSuffix.Length - 6);
+                    string fileName = $"audit_{spbuNo}_{tanggalAudit}_{idSuffix}.pdf";
                     string fullPath = Path.Combine(outputDirectory, fileName);
+                    
 
                     await using var fileStream = new FileStream(fullPath, FileMode.Create, FileAccess.Write);
-                    await pdfStream.CopyToAsync(fileStream);
+                    await pdfStream.CopyToAsync(fileStream, token);
+
+                    var audit = await _context.trx_audits.FirstOrDefaultAsync(a => a.id == id.ToString(), token);
+                    if (audit != null)
+                    {
+                        audit.report_file = fileName;
+                        _context.trx_audits.Update(audit);
+                        await _context.SaveChangesAsync(token);
+                    }
                 }
 
-                return Ok(new { message = "PDF generation completed"});
+                return Ok(new { message = "PDF generation completed" });
+            }
+            catch (OperationCanceledException)
+            {
+                return StatusCode(408, new { error = "Operation timed out or request was cancelled." });
             }
             catch (Exception ex)
             {
                 return StatusCode(500, new { error = ex.Message, stack = ex.StackTrace });
             }
         }
+
 
         private async Task<DetailReportViewModel> GetDetailReportAsync(Guid id)
         {
