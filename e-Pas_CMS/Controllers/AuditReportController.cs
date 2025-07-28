@@ -1357,7 +1357,6 @@ WHERE
         [HttpGet]
         public async Task<IActionResult> GenerateAllVerifiedPdfReports()
         {
-            //string outputDirectory = "/var/www/epas-cms/reports";
             var outputDirectory = Path.Combine("/var/www/epas-cms", "wwwroot", "reports");
             if (!Directory.Exists(outputDirectory))
                 Directory.CreateDirectory(outputDirectory);
@@ -1366,13 +1365,15 @@ WHERE
             if (conn.State != ConnectionState.Open)
                 await conn.OpenAsync();
 
-            var auditIds = await conn.QueryAsync<Guid>("SELECT id FROM trx_audit WHERE status = 'VERIFIED' LIMIT 10");
+            // 🔧 Cast id ke string dulu agar tidak gagal parsing
+            var auditIdStrings = await conn.QueryAsync<string>("SELECT id::text FROM trx_audit WHERE status = 'VERIFIED' LIMIT 10");
+            var auditIds = auditIdStrings.Select(idStr => Guid.Parse(idStr)).ToList();
 
             foreach (var id in auditIds)
             {
                 var model = await GetDetailReportAsync(id);
 
-                var document = new ReportExcellentTemplate(model); // atau gunakan ReportGoodTemplate jika perlu logika pemilihan
+                var document = new ReportExcellentTemplate(model); // atau ReportGoodTemplate
                 var pdfStream = new MemoryStream();
                 document.GeneratePdf(pdfStream);
                 pdfStream.Position = 0;
@@ -1386,9 +1387,8 @@ WHERE
                 await pdfStream.CopyToAsync(fileStream);
             }
 
-            return Ok(new { message = "PDF generation completed", count = auditIds.Count() });
+            return Ok(new { message = "PDF generation completed", count = auditIds.Count });
         }
-
 
         private async Task<DetailReportViewModel> GetDetailReportAsync(Guid id)
         {
