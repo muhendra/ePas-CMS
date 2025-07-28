@@ -1376,7 +1376,7 @@ WHERE
 
                 foreach (var id in auditIds)
                 {
-                    var model = await GetDetailReportAsync(Guid.Parse(id));
+                    var model = await GetDetailReportAsync2(Guid.Parse(id));
 
                     if (model == null)
                         continue;
