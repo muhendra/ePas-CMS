@@ -9,6 +9,8 @@ var builder = WebApplication.CreateBuilder(args);
 builder.WebHost.ConfigureKestrel(serverOptions =>
 {
     serverOptions.ListenAnyIP(5050); // Ganti dari 5000 ke 5050
+    serverOptions.Limits.KeepAliveTimeout = TimeSpan.FromHours(6);
+    serverOptions.Limits.RequestHeadersTimeout = TimeSpan.FromMinutes(5);
 });
 
 
