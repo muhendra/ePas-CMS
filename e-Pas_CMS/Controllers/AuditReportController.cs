@@ -1448,13 +1448,9 @@ WHERE
                     await using var fileStream = new FileStream(fullPath, FileMode.Create, FileAccess.Write);
                     await pdfStream.CopyToAsync(fileStream, token);
 
-                    var audit = await _context.trx_audits.FirstOrDefaultAsync(a => a.id == id.ToString(), token);
-                    if (audit != null)
-                    {
-                        audit.report_file = fileName;
-                        _context.trx_audits.Update(audit);
-                        await _context.SaveChangesAsync(token);
-                    }
+                    await _context.Database.ExecuteSqlRawAsync(
+    "UPDATE trx_audit SET report_file = {0}WHERE id = {1}",
+    fileName, id.ToString());
                 }
 
                 return Ok(new { message = "PDF generation completed" });
