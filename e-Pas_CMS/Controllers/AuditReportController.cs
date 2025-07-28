@@ -1354,6 +1354,41 @@ WHERE
 
         }
 
+        [HttpPost]
+        public async Task<IActionResult> GenerateAllVerifiedPdfReports()
+        {
+            string outputDirectory = "/var/www/epas-cms/reports";
+            if (!Directory.Exists(outputDirectory))
+                Directory.CreateDirectory(outputDirectory);
+
+            using var conn = _context.Database.GetDbConnection();
+            if (conn.State != ConnectionState.Open)
+                await conn.OpenAsync();
+
+            var auditIds = await conn.QueryAsync<Guid>("SELECT top 10 id FROM trx_audit WHERE status = 'VERIFIED' limit 10");
+
+            foreach (var id in auditIds)
+            {
+                var model = await GetDetailReportAsync(id);
+
+                var document = new ReportExcellentTemplate(model); // atau gunakan ReportGoodTemplate jika perlu logika pemilihan
+                var pdfStream = new MemoryStream();
+                document.GeneratePdf(pdfStream);
+                pdfStream.Position = 0;
+
+                string spbuNo = model.SpbuNo?.Replace(" ", "") ?? "SPBU";
+                string tanggalAudit = model.TanggalAudit?.ToString("yyyyMMdd") ?? "00000000";
+                string fileName = $"audit_{spbuNo}_{tanggalAudit}.pdf";
+                string fullPath = Path.Combine(outputDirectory, fileName);
+
+                using var fileStream = new FileStream(fullPath, FileMode.Create, FileAccess.Write);
+                await pdfStream.CopyToAsync(fileStream);
+            }
+
+            return Ok(new { message = "PDF generation completed", count = auditIds.Count() });
+        }
+
+
         private async Task<DetailReportViewModel> GetDetailReportAsync(Guid id)
         {
             using var conn = _context.Database.GetDbConnection();
