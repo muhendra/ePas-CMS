@@ -343,6 +343,21 @@ namespace e_Pas_CMS.Controllers
             }
             // --- END: Handle Region yang DIKURANGI ---
 
+            // --- START: Delete app_user_role where region IS NULL if Region changed ---
+            if (removedRegions.Any() || model.SelectedRegionIds.Except(existingRegions).Any())
+            {
+                var nullRegionRoles = await _context.app_user_roles
+                    .Where(x => x.app_user_id == model.AuditorId && x.region == null)
+                    .ToListAsync();
+
+                if (nullRegionRoles.Any())
+                {
+                    _context.app_user_roles.RemoveRange(nullRegionRoles);
+                    await _context.SaveChangesAsync();
+                }
+            }
+            // --- END: Delete app_user_role where region IS NULL ---
+
             // --- START: Tambahkan Role-Region Combination yang belum ada ---
             var existingRoleCombinations = existingRoles
                 .Where(x => x.region != null)
