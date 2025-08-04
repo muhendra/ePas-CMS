@@ -77,8 +77,8 @@ namespace e_Pas_CMS.Controllers
             if (filterMonth.HasValue && filterYear.HasValue)
             {
                 query = query.Where(a =>
-                    a.created_date.Month == filterMonth.Value &&
-                    a.created_date.Year == filterYear.Value);
+                ((a.audit_execution_time != null ? a.audit_execution_time.Value.Month : a.created_date.Month) == filterMonth.Value) &&
+                ((a.audit_execution_time != null ? a.audit_execution_time.Value.Year : a.created_date.Year) == filterYear.Value));
             }
 
             ViewBag.FilterMonth = filterMonth;
