@@ -1,0 +1,173 @@
+﻿@model e_Pas_CMS.ViewModels.RoleAuditorEditViewModel
+
+@{
+    Layout = "~/Views/Shared/_Layout.cshtml";
+}
+
+<div class="container mt-5">
+    <h3 class="fw-bold mb-4">Edit User Management</h3>
+
+    <form asp-action="Edit" asp-route-id="@Model.AuditorId" method="post" class="row g-4">
+        @* Hidden AuditorId *@
+        <input type="hidden" name="AuditorId" value="@Model.AuditorId" />
+
+        <div class="col-md-6">
+            <label class="form-label">User Auditor</label>
+            <input type="text" class="form-control" value="@Model.AuditorName" disabled />
+        </div>
+
+        <div class="col-md-6">
+            <label class="form-label">Password (Kosongkan jika tidak diubah)</label>
+            <input type="password" name="Password" class="form-control" placeholder="Masukkan Password Baru" />
+        </div>
+
+        <div class="col-md-6">
+            <label class="form-label">Nama Role</label>
+            <button type="button" id="btnOpenRole" class="btn btn-outline-primary w-100">Pilih Role</button>
+            <div id="RoleBadgeContainer" class="selected-display mt-2 d-flex flex-wrap gap-2">
+                @foreach (var role in Model.SelectedRoleNames)
+                {
+                    <span class="badge bg-primary">@role</span>
+                }
+            </div>
+            @* Generate multiple hidden inputs dynamically *@
+            @foreach (var roleId in Model.SelectedRoleIds)
+            {
+                <input type="hidden" name="SelectedRoleIds" value="@roleId" />
+            }
+        </div>
+
+        <div class="col-md-6">
+            <label class="form-label">Region</label>
+            <button type="button" id="btnOpenRegion" class="btn btn-outline-success w-100">Pilih Region</button>
+            <div id="RegionBadgeContainer" class="selected-display mt-2 d-flex flex-wrap gap-2">
+                @foreach (var region in Model.SelectedRegionNames)
+                {
+                    <span class="badge bg-primary">@region</span>
+                }
+            </div>
+            @foreach (var regionId in Model.SelectedRegionIds)
+            {
+                <input type="hidden" name="SelectedRegionIds" value="@regionId" />
+            }
+        </div>
+
+        <div class="col-12 text-end">
+            <a href="@Url.Action("Index", "Role")" class="btn btn-secondary">Kembali</a>
+            <button type="submit" class="btn btn-primary">Simpan Perubahan</button>
+        </div>
+    </form>
+</div>
+
+<!-- Role Modal -->
+<div class="modal fade" id="roleModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header"><h5 class="modal-title">Pilih Role</h5></div>
+            <div class="modal-body">
+                @foreach (var role in Model.RoleList)
+                {
+                    <div class="form-check">
+                        <input class="form-check-input role-checkbox" type="checkbox" value="@role.Value" data-name="@role.Text">
+                        <label class="form-check-label">@role.Text</label>
+                    </div>
+                }
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" data-bs-dismiss="modal">Tutup</button>
+                <button class="btn btn-primary" id="btnPilihRole">Pilih</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Region Modal -->
+<div class="modal fade" id="regionModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header"><h5 class="modal-title">Pilih Region</h5></div>
+            <div class="modal-body">
+                @foreach (var region in Model.RegionList)
+                {
+                    <div class="form-check">
+                        <input class="form-check-input region-checkbox" type="checkbox" value="@region.Value" data-name="@region.Text">
+                        <label class="form-check-label">@region.Text</label>
+                    </div>
+                }
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" data-bs-dismiss="modal">Tutup</button>
+                <button class="btn btn-primary" id="btnPilihRegion">Pilih</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        $(document).ready(function () {
+            $('#btnOpenRole').click(function () {
+                var selectedIds = $('input[name="SelectedRoleIds"]').map(function () { return this.value; }).get();
+                $('.role-checkbox').each(function () {
+                    $(this).prop('checked', selectedIds.includes($(this).val()));
+                });
+                var modal = new bootstrap.Modal(document.getElementById('roleModal'));
+                modal.show();
+            });
+
+            $('#btnOpenRegion').click(function () {
+                var selectedIds = $('input[name="SelectedRegionIds"]').map(function () { return this.value; }).get();
+                $('.region-checkbox').each(function () {
+                    $(this).prop('checked', selectedIds.includes($(this).val()));
+                });
+                var modal = new bootstrap.Modal(document.getElementById('regionModal'));
+                modal.show();
+            });
+
+            $('#btnPilihRole').click(function () {
+                var selected = $('.role-checkbox:checked');
+                var ids = selected.map(function () { return this.value; }).get();
+                var names = selected.map(function () { return $(this).data('name'); }).get();
+
+                // Clear existing hidden inputs
+                $('input[name="SelectedRoleIds"]').remove();
+
+                // Add new hidden inputs
+                ids.forEach(id => {
+                    $('<input>').attr({ type: 'hidden', name: 'SelectedRoleIds', value: id }).appendTo('form');
+                });
+
+                updateBadge('RoleBadgeContainer', names);
+                bootstrap.Modal.getInstance(document.getElementById('roleModal')).hide();
+            });
+
+            $('#btnPilihRegion').click(function () {
+                var selected = $('.region-checkbox:checked');
+                var ids = selected.map(function () { return this.value; }).get();
+                var names = selected.map(function () { return $(this).data('name'); }).get();
+
+                // Clear existing hidden inputs
+                $('input[name="SelectedRegionIds"]').remove();
+
+                // Add new hidden inputs
+                ids.forEach(id => {
+                    $('<input>').attr({ type: 'hidden', name: 'SelectedRegionIds', value: id }).appendTo('form');
+                });
+
+                updateBadge('RegionBadgeContainer', names);
+                bootstrap.Modal.getInstance(document.getElementById('regionModal')).hide();
+            });
+
+            function updateBadge(containerId, items) {
+                const container = document.getElementById(containerId);
+                container.innerHTML = '';
+                items.forEach(item => {
+                    const badge = document.createElement('span');
+                    badge.className = 'badge bg-primary';
+                    badge.innerText = item;
+                    container.appendChild(badge);
+                });
+            }
+        });
+    </script>
+}

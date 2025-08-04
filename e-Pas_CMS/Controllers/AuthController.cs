@@ -71,11 +71,41 @@ namespace e_Pas_CMS.Controllers
                 claims.Add(new Claim(ClaimTypes.Role, role));
             }
 
+
+            // Ambil semua Menu Function Code (ex: ARA, ARP, etc)
+            var menuFunctionsRaw = await (from aur in _context.app_user_roles
+                                          join ar in _context.app_roles on aur.app_role_id equals ar.id
+                                          select ar.menu_function)
+                                          .Where(mf => mf != null && mf != "")
+                                          .ToListAsync();
+
+            // Pecah berdasarkan '#' dan ambil yang unik
+            var menuFunctionTokens = menuFunctionsRaw
+                .SelectMany(mf => mf.Split('#'))
+                .Where(token => !string.IsNullOrWhiteSpace(token))
+                .Distinct()
+                .OrderBy(token => token) // Optional: urutkan alphabetically
+                .ToList();
+
+            // Gabungkan kembali menjadi 1 string
+            var mergedMenuFunction = string.Join("#", menuFunctionTokens);
+
+            // Tambahkan ke Claims (hanya 1 klaim)
+            claims.Add(new Claim("MenuFunction", mergedMenuFunction));
+
             var claimsIdentity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
+
+            // IMPORTANT: Build the principal explicitly with full claims.
+            var claimsPrincipal = new ClaimsPrincipal(claimsIdentity);
 
             await HttpContext.SignInAsync(
                 CookieAuthenticationDefaults.AuthenticationScheme,
-                new ClaimsPrincipal(claimsIdentity));
+                claimsPrincipal,
+                new AuthenticationProperties
+                {
+                    IsPersistent = true, // Optional: persistent login (keep cookie)
+                    ExpiresUtc = DateTime.UtcNow.AddHours(8) // Optional: expiry time
+                });
 
             // Set session jika diperlukan
             HttpContext.Session.SetString("UserId", user.id);

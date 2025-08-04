@@ -1,0 +1,182 @@
+﻿@model e_Pas_CMS.ViewModels.RoleAuditorAddViewModel
+
+@{
+    Layout = "~/Views/Shared/_Layout.cshtml";
+}
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>Add UserManagement</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            background-color: #f8fafc;
+            padding: 40px;
+        }
+
+        .form-label {
+            font-weight: 600;
+        }
+
+        .selected-display {
+            font-weight: 500;
+            color: #0d6efd;
+            margin-top: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="mb-4">
+            <h2 class="fw-bold">Add User</h2>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item">Dashboard</li>
+                    <li class="breadcrumb-item active text-primary" aria-current="page">Role</li>
+                </ol>
+            </nav>
+        </div>
+
+        <form method="post" asp-action="Add">
+            <div class="row g-4">
+                <div class="col-md-6">
+                    <label class="form-label">Username</label>
+                    <input type="text" name="Username" class="form-control" placeholder="Masukkan Username" required />
+                </div>
+
+                <div class="col-md-6">
+                    <label class="form-label">Password</label>
+                    <input type="password" name="Password" class="form-control" placeholder="Masukkan Password" required />
+                </div>
+
+                <div class="col-md-6">
+                    <label class="form-label">Handphone</label>
+                    <input type="text" name="Handphone" class="form-control" placeholder="Masukkan No Handphone" required />
+                </div>
+
+                <div class="col-md-6">
+                    <label class="form-label">Email</label>
+                    <input type="email" name="Email" class="form-control" placeholder="Masukkan Email" required />
+                </div>
+
+                <div class="col-md-6">
+                    <label class="form-label">Pilih Role</label>
+                    <button type="button" id="btnOpenRole" class="btn btn-outline-primary w-100 d-flex align-items-center justify-content-center gap-2 rounded-pill shadow-sm py-2 px-3">
+                        <i class="bi bi-people"></i> Pilih Role
+                    </button>
+                    <div id="RoleBadgeContainer" class="selected-display mt-2 d-flex flex-wrap gap-2"></div>
+                    <input type="hidden" id="SelectedRoleIds" name="SelectedRoleIds" />
+                </div>
+
+                <div class="col-md-6">
+                    <label class="form-label">Pilih Region</label>
+                    <button type="button" id="btnOpenRegion" class="btn btn-outline-success w-100 d-flex align-items-center justify-content-center gap-2 rounded-pill shadow-sm py-2 px-3">
+                        <i class="bi bi-geo-alt"></i> Pilih Region
+                    </button>
+                    <div id="RegionBadgeContainer" class="selected-display mt-2 d-flex flex-wrap gap-2"></div>
+                    <input type="hidden" id="SelectedRegionIds" name="SelectedRegionIds" />
+                </div>
+            </div>
+
+            <div class="mt-4 text-end">
+                <a href="@Url.Action("Index", "Role")" class="btn btn-secondary px-4 py-2">
+                    <i class="bi bi-arrow-left-circle"></i> Kembali
+                </a>
+                <button type="submit" class="btn btn-info text-white px-4 py-2">
+                    <i class="bi bi-plus-circle"></i> Add User
+                </button>
+            </div>
+        </form>
+
+    </div>
+
+    <!-- Role Modal -->
+    <div class="modal fade" id="roleModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header"><h5 class="modal-title">Pilih Role</h5></div>
+                <div class="modal-body">
+                    @foreach (var role in Model.RoleList)
+                    {
+                        <div class="form-check">
+                            <input class="form-check-input role-checkbox" type="checkbox" value="@role.Value" data-name="@role.Text">
+                            <label class="form-check-label">@role.Text</label>
+                        </div>
+                    }
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" data-bs-dismiss="modal">Tutup</button>
+                    <button class="btn btn-primary" id="btnPilihRole">Pilih</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Region Modal -->
+    <div class="modal fade" id="regionModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header"><h5 class="modal-title">Pilih Region</h5></div>
+                <div class="modal-body">
+                    @foreach (var region in Model.RegionList)
+                    {
+                        <div class="form-check">
+                            <input class="form-check-input region-checkbox" type="checkbox" value="@region.Value" data-name="@region.Text">
+                            <label class="form-check-label">@region.Text</label>
+                        </div>
+                    }
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" data-bs-dismiss="modal">Tutup</button>
+                    <button class="btn btn-primary" id="btnPilihRegion">Pilih</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // OPEN ROLE MODAL
+        document.getElementById('btnOpenRole').addEventListener('click', () => {
+            const modal = new bootstrap.Modal(document.getElementById('roleModal'));
+            modal.show();
+        });
+
+        // OPEN REGION MODAL
+        document.getElementById('btnOpenRegion').addEventListener('click', () => {
+            const modal = new bootstrap.Modal(document.getElementById('regionModal'));
+            modal.show();
+        });
+
+        document.getElementById('btnPilihRole').addEventListener('click', () => {
+            const selected = Array.from(document.querySelectorAll('.role-checkbox:checked'));
+            const ids = selected.map(x => x.value);
+            const names = selected.map(x => x.getAttribute('data-name'));
+            document.getElementById('SelectedRoleIds').value = ids.join(',');
+            updateBadge('RoleBadgeContainer', names);
+            bootstrap.Modal.getInstance(document.getElementById('roleModal')).hide();
+        });
+
+        document.getElementById('btnPilihRegion').addEventListener('click', () => {
+            const selected = Array.from(document.querySelectorAll('.region-checkbox:checked'));
+            const ids = selected.map(x => x.value);
+            const names = selected.map(x => x.getAttribute('data-name'));
+            document.getElementById('SelectedRegionIds').value = ids.join(',');
+            updateBadge('RegionBadgeContainer', names);
+            bootstrap.Modal.getInstance(document.getElementById('regionModal')).hide();
+        });
+
+        function updateBadge(containerId, items) {
+            const container = document.getElementById(containerId);
+            container.innerHTML = '';
+            items.forEach(item => {
+                const badge = document.createElement('span');
+                badge.className = 'badge bg-primary';
+                badge.innerText = item;
+                container.appendChild(badge);
+            });
+        }
+    </script>
+</body>
+</html>

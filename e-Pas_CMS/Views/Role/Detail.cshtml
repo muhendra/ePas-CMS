@@ -1,0 +1,63 @@
+﻿@model e_Pas_CMS.ViewModels.RoleAuditorDetailViewModel
+
+@{
+    Layout = "~/Views/Shared/_Layout.cshtml";
+}
+
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h3 class="fw-bold">Detail User Management</h3>
+        <a href="@Url.Action("Index", "Role")" class="btn btn-secondary">
+            <i class="bi bi-arrow-left-circle"></i> Kembali
+        </a>
+    </div>
+
+    <div class="card mb-4">
+        <div class="card-body">
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    <label class="form-label fw-bold">User Auditor</label>
+                    <div>@Model.AuditorName</div>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label fw-bold">Status</label>
+                    <span class="badge @(Model.AuditorStatus == "ACTIVE" ? "bg-success" : "bg-secondary")">@Model.AuditorStatus</span>
+                </div>
+            </div>
+
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    <label class="form-label fw-bold">Roles</label>
+                    <div>
+                        @foreach (var role in Model.RoleNames)
+                        {
+                            <span class="badge bg-primary me-1">@role</span>
+                        }
+                    </div>
+                </div>
+
+                <div class="col-md-6">
+                    <label class="form-label fw-bold">Regions</label>
+                    <div>
+                        @foreach (var region in Model.RegionNames)
+                        {
+                            <span class="badge bg-success me-1">@region</span>
+                        }
+                    </div>
+                </div>
+            </div>
+
+            <div class="row">
+                <div class="col-md-12">
+                    <label class="form-label fw-bold">SPBU Terkait</label>
+                    <div>
+                        @foreach (var spbu in Model.SpbuList)
+                        {
+                            <span class="badge bg-info text-dark me-1">@spbu</span>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

@@ -1,4 +1,26 @@
-﻿@using System.Security.Claims
+﻿@inject e_Pas_CMS.Data.EpasDbContext _context
+@using System.Security.Claims
+@using System
+
+@{
+    var userIdString = Context.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+
+    var userRoles = _context.app_user_roles
+        .AsEnumerable() // <-- Pindahkan ke memory, agar ToString bisa jalan
+        .Where(aur => aur.app_user_id.ToString() == userIdString)
+        .ToList();
+
+    var userMenuFunctions = userRoles
+        .Join(_context.app_roles,
+              aur => aur.app_role_id,
+              ar => ar.id,
+              (aur, ar) => ar.menu_function)
+        .Where(mf => !string.IsNullOrEmpty(mf))
+        .AsEnumerable()
+        .SelectMany(mf => mf.Split('#', StringSplitOptions.RemoveEmptyEntries))
+        .Distinct()
+        .ToList();
+}
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -8,10 +30,8 @@
 
     <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
     <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
-    @* <link rel="stylesheet" href="~/e_Pas_CMS.styles.css" asp-append-version="true" /> *@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css" />
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-
 
     @RenderSection("Styles", required: false)
 
@@ -138,87 +158,143 @@
                 <img src="https://epas-assets.zarata.co.id/uploads/pasti-pas.png" alt="E-PAS Logo" class="img-fluid" style="max-width: 150px;">
             </div>
             <ul class="nav flex-column">
-                @if (!User.IsInRole("Report"))
+
+                @* --- Audit Menu --- *@
+                @if (userMenuFunctions.Contains("ARA") || userMenuFunctions.Contains("ARP"))
                 {
-                    <li class="nav-item mb-2">
-                        <a class="nav-link d-flex align-items-center" asp-controller="Dashboard" asp-action="Index">
-                            <i class="bi bi-speedometer2 me-2"></i> Dashboard
+                    <li class="nav-item mt-3">
+                        <a class="nav-link d-flex justify-content-between align-items-center" data-bs-toggle="collapse" href="#menu-audit">
+                            <strong>Audit</strong>
+                            <i class="bi bi-caret-down-fill"></i>
                         </a>
+                        <div class="collapse" id="menu-audit">
+                            <ul class="nav flex-column ms-3 mt-2">
+                                @if (userMenuFunctions.Contains("ARA"))
+                                {
+                                    <li class="nav-item"><a class="nav-link" asp-controller="Audit" asp-action="Index">Review Audit</a></li>
+                                }
+                                @if (userMenuFunctions.Contains("ARP"))
+                                {
+                                    <li class="nav-item"><a class="nav-link" asp-controller="AuditReport" asp-action="Index">Report</a></li>
+                                }
+                            </ul>
+                        </div>
                     </li>
                 }
 
-                <!-- Audit Menu -->
-                <li class="nav-item mt-3">
-                    <a class="nav-link d-flex justify-content-between align-items-center" data-bs-toggle="collapse" href="#menu-audit">
-                        <strong>Audit</strong>
-                        <i class="bi bi-caret-down-fill"></i>
-                    </a>
-                    <div class="collapse" id="menu-audit">
-                        <ul class="nav flex-column ms-3 mt-2">
-                            @if (!User.IsInRole("Report"))
-                            {
-                                <li class="nav-item"><a class="nav-link" asp-controller="Audit" asp-action="Index">Review Audit</a></li>
-                            }
-                            <li class="nav-item"><a class="nav-link" asp-controller="AuditReport" asp-action="Index">Report</a></li>
-                        </ul>
-                    </div>
-                </li>
-
-                <!-- Audit BOA Menu -->
-                <li class="nav-item mt-3">
-                    <a class="nav-link d-flex justify-content-between align-items-center" data-bs-toggle="collapse" href="#menu-audit-boa">
-                        <strong>Audit Basic Operational</strong>
-                        <i class="bi bi-caret-down-fill"></i>
-                    </a>
-                    <div class="collapse" id="menu-audit-boa">
-                        <ul class="nav flex-column ms-3 mt-2">
-                            @if (!User.IsInRole("Report"))
-                            {
-                                <li class="nav-item"><a class="nav-link" asp-controller="BasicOperational" asp-action="Index">Review Audit BOA</a></li>
-                            }
-                            <li class="nav-item"><a class="nav-link" asp-controller="BasicOperationalReport" asp-action="Index">Report BOA</a></li>
-                        </ul>
-                    </div>
-                </li>
-
-                @if (!User.IsInRole("Report"))
+                @* --- Audit BOA Menu --- *@
+                @if (userMenuFunctions.Contains("BOARA") || userMenuFunctions.Contains("BOARP"))
                 {
-                <!-- Scheduler Menu -->
-                <li class="nav-item mt-3">
-                    <a class="nav-link d-flex justify-content-between align-items-center" data-bs-toggle="collapse" href="#menu-scheduler">
-                        <strong>Scheduler</strong>
-                        <i class="bi bi-caret-down-fill"></i>
-                    </a>
-                    <div class="collapse" id="menu-scheduler">
-                        <ul class="nav flex-column ms-3 mt-2">
-                            <li class="nav-item">
-                                <a class="nav-link" asp-controller="Scheduler" asp-action="Index">Add Scheduler</a>
-                            </li>
-                        </ul>
-                    </div>
-                </li>
+                    <li class="nav-item mt-3">
+                        <a class="nav-link d-flex justify-content-between align-items-center" data-bs-toggle="collapse" href="#menu-audit-boa">
+                            <strong>Audit Basic Operational</strong>
+                            <i class="bi bi-caret-down-fill"></i>
+                        </a>
+                        <div class="collapse" id="menu-audit-boa">
+                            <ul class="nav flex-column ms-3 mt-2">
+                                @if (userMenuFunctions.Contains("BOARA"))
+                                {
+                                    <li class="nav-item"><a class="nav-link" asp-controller="BasicOperational" asp-action="Index">Review Audit BOA</a></li>
+                                }
+                                @if (userMenuFunctions.Contains("BOARP"))
+                                {
+                                    <li class="nav-item"><a class="nav-link" asp-controller="BasicOperationalReport" asp-action="Index">Report BOA</a></li>
+                                }
+                            </ul>
+                        </div>
+                    </li>
                 }
 
-                <!-- Master Menu -->
-                @if (User.Identity?.Name == "admin")
+                @* --- Scheduler Menu --- *@
+                @if (userMenuFunctions.Contains("SSCH"))
                 {
-                <li class="nav-item mt-3">
-                    <a class="nav-link d-flex justify-content-between align-items-center" data-bs-toggle="collapse" href="#menu-master">
-                        <strong>Master</strong>
-                        <i class="bi bi-caret-down-fill"></i>
-                    </a>
-                    
+                    <li class="nav-item mt-3">
+                        <a class="nav-link d-flex justify-content-between align-items-center" data-bs-toggle="collapse" href="#menu-scheduler">
+                            <strong>Scheduler</strong>
+                            <i class="bi bi-caret-down-fill"></i>
+                        </a>
+                        <div class="collapse" id="menu-scheduler">
+                            <ul class="nav flex-column ms-3 mt-2">
+                                <li class="nav-item">
+                                    <a class="nav-link" asp-controller="Scheduler" asp-action="Index">Add Scheduler</a>
+                                </li>
+                            </ul>
+                        </div>
+                    </li>
+                }
+
+                @* --- Master Menu --- *@
+                @if (userMenuFunctions.Contains("MSPBU"))
+                {
+                    <li class="nav-item mt-3">
+                        <a class="nav-link d-flex justify-content-between align-items-center" data-bs-toggle="collapse" href="#menu-master">
+                            <strong>Master</strong>
+                            <i class="bi bi-caret-down-fill"></i>
+                        </a>
                         <div class="collapse" id="menu-master">
-                        <ul class="nav flex-column ms-3 mt-2">
-                            <li class="nav-item">
-                                <a class="nav-link" asp-controller="Spbu" asp-action="Index">SPBU</a>
-                            </li>
-                        </ul>
-                    </div>
-                    
-                    
-                </li>
+                            <ul class="nav flex-column ms-3 mt-2">
+                                <li class="nav-item">
+                                    <a class="nav-link" asp-controller="Spbu" asp-action="Index">SPBU</a>
+                                </li>
+                            </ul>
+                        </div>
+                    </li>
                 }
+
+                @* --- Access Menu --- *@
+                @if (userMenuFunctions.Contains("AROLE") || userMenuFunctions.Contains("AUSER"))
+                {
+                    <li class="nav-item mt-3">
+                        <a class="nav-link d-flex justify-content-between align-items-center" data-bs-toggle="collapse" href="#menu-access">
+                            <strong>User & Role Management</strong>
+                            <i class="bi bi-caret-down-fill"></i>
+                        </a>
+                        <div class="collapse" id="menu-access">
+                            <ul class="nav flex-column ms-3 mt-2">
+                                @if (userMenuFunctions.Contains("AUSER"))
+                                {
+                                    <li class="nav-item">
+                                        <a class="nav-link" asp-controller="Role" asp-action="Index">User Management</a>
+                                    </li>
+                                }
+                                @if (userMenuFunctions.Contains("AROLE"))
+                                {
+                                    <li class="nav-item">
+                                        <a class="nav-link" asp-controller="RoleManagement" asp-action="Index">Role Management</a>
+                                    </li>
+                                }
+                            </ul>
+                        </div>
+                    </li>
+                }
+
+                @* --- Feedback Menu --- *@
+                @if (userMenuFunctions.Contains("FKOM") || userMenuFunctions.Contains("FBAN"))
+                {
+                    <li class="nav-item mt-3">
+                        <a class="nav-link d-flex justify-content-between align-items-center" data-bs-toggle="collapse" href="#menu-feedback">
+                            <strong>Feedback</strong>
+                            <i class="bi bi-caret-down-fill"></i>
+                        </a>
+                        <div class="collapse" id="menu-feedback">
+                            <ul class="nav flex-column ms-3 mt-2">
+                                @if (userMenuFunctions.Contains("FKOM"))
+                                {
+                                    <li class="nav-item">
+                                        <a class="nav-link" asp-controller="Feedback" asp-action="Komplain">Komplain</a>
+                                    </li>
+                                }
+                                @if (userMenuFunctions.Contains("FBAN"))
+                                {
+                                    <li class="nav-item">
+                                        <a class="nav-link" asp-controller="Feedback" asp-action="Banding">Banding</a>
+                                    </li>
+                                }
+                            </ul>
+                        </div>
+                    </li>
+                }
+
             </ul>
         </div>
 

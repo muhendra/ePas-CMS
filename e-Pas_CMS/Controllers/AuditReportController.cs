@@ -1505,8 +1505,7 @@ WHERE
                     idSuffix = idSuffix.Substring(idSuffix.Length - 6);
                     string fileName = $"report_good_{spbuNo}_{tanggalAudit}_{idSuffix}.pdf";
                     string fullPath = Path.Combine(outputDirectory, fileName);
-
-
+                    
                     await using var fileStream = new FileStream(fullPath, FileMode.Create, FileAccess.Write);
                     await pdfStream.CopyToAsync(fileStream, token);
 

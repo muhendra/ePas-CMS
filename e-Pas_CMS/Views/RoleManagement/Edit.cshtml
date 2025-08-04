@@ -1,0 +1,117 @@
+﻿@model e_Pas_CMS.ViewModels.RoleManagementEditViewModel
+
+@{
+    Layout = "~/Views/Shared/_Layout.cshtml";
+}
+
+<div class="container mt-5">
+    <h3 class="fw-bold mb-4">Edit Role Management</h3>
+
+    <form asp-action="Edit" asp-route-id="@Model.Id" method="post" class="row g-4">
+        <input type="hidden" asp-for="Id" />
+
+        <div class="col-md-6">
+            <label class="form-label">Nama Role</label>
+            <input asp-for="NamaRole" class="form-control" />
+        </div>
+
+        <div class="col-md-6">
+            <label class="form-label">App</label>
+            <input asp-for="App" class="form-control" />
+        </div>
+
+        <div class="col-md-6">
+            <label class="form-label">Menu Function</label>
+            <button type="button" id="btnOpenMenuFunction" class="btn btn-outline-primary w-100">Pilih Menu Function</button>
+            <div id="MenuFunctionBadgeContainer" class="selected-display mt-2 d-flex flex-wrap gap-2">
+                @foreach (var func in Model.SelectedMenuFunctions)
+                {
+                    var text = Model.MenuFunctionList.FirstOrDefault(x => x.Value == func)?.Text ?? func;
+                    <span class="badge bg-primary">@text</span>
+                }
+            </div>
+            @foreach (var func in Model.SelectedMenuFunctions)
+            {
+                <input type="hidden" name="SelectedMenuFunctions" value="@func" />
+            }
+        </div>
+
+        <div class="col-md-6">
+            <label class="form-label">Status</label>
+            <select asp-for="Status" class="form-select">
+                <option value="ACTIVE" selected="@("ACTIVE" == Model.Status)">Aktif</option>
+                <option value="Non Aktif" selected="@("Non Aktif" == Model.Status)">Non Aktif</option>
+            </select>
+        </div>
+
+        <div class="col-12 text-end">
+            <a href="@Url.Action("Index", "RoleManagement")" class="btn btn-secondary">Kembali</a>
+            <button type="submit" class="btn btn-primary">Simpan Perubahan</button>
+        </div>
+    </form>
+</div>
+
+<!-- Menu Function Modal -->
+<div class="modal fade" id="menuFunctionModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header"><h5 class="modal-title">Pilih Menu Function</h5></div>
+            <div class="modal-body">
+                @foreach (var func in Model.MenuFunctionList)
+                {
+                    <div class="form-check">
+                        <input class="form-check-input menu-function-checkbox" type="checkbox" value="@func.Value" data-name="@func.Text">
+                        <label class="form-check-label">@func.Text</label>
+                    </div>
+                }
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" data-bs-dismiss="modal">Tutup</button>
+                <button class="btn btn-primary" id="btnPilihMenuFunction">Pilih</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        $(document).ready(function () {
+            $('#btnOpenMenuFunction').click(function () {
+                var selectedIds = $('input[name="SelectedMenuFunctions"]').map(function () { return this.value; }).get();
+                $('.menu-function-checkbox').each(function () {
+                    $(this).prop('checked', selectedIds.includes($(this).val()));
+                });
+                var modal = new bootstrap.Modal(document.getElementById('menuFunctionModal'));
+                modal.show();
+            });
+
+            $('#btnPilihMenuFunction').click(function () {
+                var selected = $('.menu-function-checkbox:checked');
+                var ids = selected.map(function () { return this.value; }).get();
+                var names = selected.map(function () { return $(this).data('name'); }).get();
+
+                // Clear existing hidden inputs
+                $('input[name="SelectedMenuFunctions"]').remove();
+
+                // Add new hidden inputs
+                ids.forEach(id => {
+                    $('<input>').attr({ type: 'hidden', name: 'SelectedMenuFunctions', value: id }).appendTo('form');
+                });
+
+                updateBadge('MenuFunctionBadgeContainer', names);
+                bootstrap.Modal.getInstance(document.getElementById('menuFunctionModal')).hide();
+            });
+
+            function updateBadge(containerId, items) {
+                const container = document.getElementById(containerId);
+                container.innerHTML = '';
+                items.forEach(item => {
+                    const badge = document.createElement('span');
+                    badge.className = 'badge bg-primary';
+                    badge.innerText = item;
+                    container.appendChild(badge);
+                });
+            }
+        });
+    </script>
+}

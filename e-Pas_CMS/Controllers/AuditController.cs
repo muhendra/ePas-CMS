@@ -106,21 +106,21 @@ namespace e_Pas_CMS.Controllers
                 foreach (var a in items)
                 {
                     var sql = @"
-        SELECT 
-            mqd.weight, 
-            tac.score_input, 
-            tac.score_x, 
-            mqd.is_relaksasi
-        FROM master_questioner_detail mqd
-        LEFT JOIN trx_audit_checklist tac 
-            ON tac.master_questioner_detail_id = mqd.id 
-            AND tac.trx_audit_id = @id
-        WHERE mqd.master_questioner_id = (
-            SELECT master_questioner_checklist_id 
-            FROM trx_audit 
-            WHERE id = @id
-        )
-        AND mqd.type = 'QUESTION'";
+                    SELECT 
+                        mqd.weight, 
+                        tac.score_input, 
+                        tac.score_x, 
+                        mqd.is_relaksasi
+                    FROM master_questioner_detail mqd
+                    LEFT JOIN trx_audit_checklist tac 
+                        ON tac.master_questioner_detail_id = mqd.id 
+                        AND tac.trx_audit_id = @id
+                    WHERE mqd.master_questioner_id = (
+                        SELECT master_questioner_checklist_id 
+                        FROM trx_audit 
+                        WHERE id = @id
+                    )
+                    AND mqd.type = 'QUESTION'";
 
                     var checklist = (await conn.QueryAsync<(decimal? weight, string score_input, decimal? score_x, bool? is_relaksasi)>(sql, new { id = a.Audit.id }))
                         .ToList();
