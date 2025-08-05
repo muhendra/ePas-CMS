@@ -11,6 +11,7 @@ using e_Pas_CMS.ViewModels;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 using static NpgsqlTypes.NpgsqlTsQuery;
 
 namespace e_Pas_CMS.Controllers
@@ -73,9 +74,6 @@ namespace e_Pas_CMS.Controllers
                     );
                 }
 
-                query = query.OrderBy(x => x.Audit.created_date);
-
-                // Apply sorting
                 query = sortColumn switch
                 {
                     "Auditor" => sortDirection == "asc" ? query.OrderBy(q => q.AuditorName) : query.OrderByDescending(q => q.AuditorName),
@@ -91,15 +89,12 @@ namespace e_Pas_CMS.Controllers
                 };
 
                 var totalItems = await query.CountAsync();
-                var items = await query
-                    .Skip((pageNumber - 1) * pageSize)
-                    .Take(pageSize)
-                    .ToListAsync();
+                var items = await query.Skip((pageNumber - 1) * pageSize).Take(pageSize).ToListAsync();
 
-                using var conn = _context.Database.GetDbConnection();
-
-                if (conn.State != ConnectionState.Open)
-                    await conn.OpenAsync();
+                // OPEN NEW DAPPER CONNECTION - NOT _context.Database.GetDbConnection()!
+                var connectionString = _context.Database.GetConnectionString();
+                await using var conn = new NpgsqlConnection(connectionString);
+                await conn.OpenAsync();
 
                 var result = new List<SpbuViewModel>();
 
