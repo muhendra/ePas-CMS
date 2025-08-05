@@ -7,6 +7,8 @@ namespace e_Pas_CMS.ViewModels
         public string Id { get; set; }
         public string NamaRole { get; set; }
         public string Auditor { get; set; }
+        public string Username { get; set; }
+        public string email { get; set; }
         public string Region { get; set; }
         public List<string> SpbuList { get; set; } = new List<string>();
         public string Status { get; set; }
@@ -16,6 +18,7 @@ namespace e_Pas_CMS.ViewModels
     public class RoleAuditorAddViewModel
     {
         // Input User Baru
+        public string Name { get; set; }
         public string Username { get; set; }
         public string Password { get; set; }
         public string Handphone { get; set; }
@@ -33,8 +36,10 @@ namespace e_Pas_CMS.ViewModels
     public class RoleAuditorEditViewModel
     {
         public string AuditorId { get; set; }
+        public string UserName { get; set; }
         public string AuditorName { get; set; }
-
+        public string Handphone { get; set; }
+        public string Email { get; set; }
         public string Password { get; set; }
 
         public List<string> SelectedRoleIds { get; set; } = new List<string>();

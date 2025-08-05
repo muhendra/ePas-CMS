@@ -29,9 +29,13 @@ namespace e_Pas_CMS.Controllers
             if (!string.IsNullOrWhiteSpace(searchTerm))
             {
                 var lowerSearch = searchTerm.ToLower();
-                query = query.Where(x => x.name.ToLower().Contains(lowerSearch));
-            }
 
+                query = query.Where(x =>
+                    (!string.IsNullOrEmpty(x.name) && x.name.ToLower().Contains(lowerSearch)) ||
+                    (!string.IsNullOrEmpty(x.username) && x.username.ToLower().Contains(lowerSearch))
+                );
+            }
+        
             var totalItems = await query.CountAsync();
             var totalPages = (int)Math.Ceiling(totalItems / (double)pageSize);
 
@@ -57,6 +61,8 @@ namespace e_Pas_CMS.Controllers
             {
                 Id = u.id,
                 Auditor = u.name,
+                Username = u.username,
+                email = u.email,
                 NamaRole = string.Join(", ", userRoles.Where(x => x.UserId == u.id).Select(x => x.RoleName).Distinct()),
                 Region = string.Join(", ", userRoles.Where(x => x.UserId == u.id && x.Region != null).Select(x => x.Region).Distinct().OrderBy(x => x)),
                 Status = u.status == "ACTIVE" ? "ACTIVE" : "Nonaktif",
@@ -115,12 +121,11 @@ namespace e_Pas_CMS.Controllers
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Add(RoleAuditorAddViewModel model)
         {
+            // Validasi username & password wajib diisi
             if (string.IsNullOrEmpty(model.Username) ||
-                string.IsNullOrEmpty(model.Password) ||
-                string.IsNullOrEmpty(model.SelectedRoleIds) ||
-                string.IsNullOrEmpty(model.SelectedRegionIds))
+                string.IsNullOrEmpty(model.Password))
             {
-                ModelState.AddModelError("", "Semua field harus diisi.");
+                ModelState.AddModelError("", "Username dan Password wajib diisi.");
                 return View(model);
             }
 
@@ -132,7 +137,7 @@ namespace e_Pas_CMS.Controllers
                 return View(model);
             }
 
-            // Hash Password (bisa pakai BCrypt atau hashing Anda sendiri)
+            // Hash Password
             var passwordHash = BCrypt.Net.BCrypt.HashPassword(model.Password);
 
             // Insert ke app_user
@@ -141,7 +146,7 @@ namespace e_Pas_CMS.Controllers
                 id = Guid.NewGuid().ToString(),
                 username = model.Username,
                 password_hash = passwordHash,
-                name = model.Username, // Jika ada Name field di form, gunakan itu
+                name = model.Name,
                 phone_number = model.Handphone,
                 email = model.Email,
                 status = "ACTIVE",
@@ -154,17 +159,46 @@ namespace e_Pas_CMS.Controllers
             _context.app_users.Add(newUser);
             await _context.SaveChangesAsync();
 
-            var roleIds = model.SelectedRoleIds.Split(',', StringSplitOptions.RemoveEmptyEntries);
-            var regionIds = model.SelectedRegionIds.Split(',', StringSplitOptions.RemoveEmptyEntries);
-
-            foreach (var roleId in roleIds)
+            if (!string.IsNullOrEmpty(model.SelectedRoleIds) && !string.IsNullOrEmpty(model.SelectedRegionIds))
             {
-                foreach (var region in regionIds)
+                var roleIds = model.SelectedRoleIds.Split(',', StringSplitOptions.RemoveEmptyEntries);
+                var regionIds = model.SelectedRegionIds.Split(',', StringSplitOptions.RemoveEmptyEntries);
+
+                foreach (var roleId in roleIds)
                 {
-                    var exists = _context.app_user_roles.Any(x =>
+                    foreach (var region in regionIds)
+                    {
+                        var exists = await _context.app_user_roles.AnyAsync(x =>
+                            x.app_user_id == newUser.id &&
+                            x.app_role_id == roleId &&
+                            x.region == region);
+
+                        if (!exists)
+                        {
+                            var newUserRole = new app_user_role
+                            {
+                                id = Guid.NewGuid().ToString(),
+                                app_user_id = newUser.id,
+                                app_role_id = roleId,
+                                region = region
+                            };
+                            _context.app_user_roles.Add(newUserRole);
+                        }
+                    }
+                }
+
+                await _context.SaveChangesAsync();
+            }
+            else if (!string.IsNullOrEmpty(model.SelectedRoleIds) && string.IsNullOrEmpty(model.SelectedRegionIds))
+            {
+                var roleIds = model.SelectedRoleIds.Split(',', StringSplitOptions.RemoveEmptyEntries);
+
+                foreach (var roleId in roleIds)
+                {
+                    var exists = await _context.app_user_roles.AnyAsync(x =>
                         x.app_user_id == newUser.id &&
                         x.app_role_id == roleId &&
-                        x.region == region);
+                        x.region == null);
 
                     if (!exists)
                     {
@@ -173,20 +207,18 @@ namespace e_Pas_CMS.Controllers
                             id = Guid.NewGuid().ToString(),
                             app_user_id = newUser.id,
                             app_role_id = roleId,
-                            region = region
+                            region = null // tidak ada region, set null
                         };
-
                         _context.app_user_roles.Add(newUserRole);
                     }
                 }
-            }
 
-            await _context.SaveChangesAsync();
+                await _context.SaveChangesAsync();
+            }
 
             TempData["Success"] = "User berhasil ditambahkan.";
             return RedirectToAction("Index");
         }
-
 
         [HttpGet("GetAuditorList")]
         public async Task<IActionResult> GetAuditorList(int page = 1, int pageSize = 10, string search = "")
@@ -241,7 +273,10 @@ namespace e_Pas_CMS.Controllers
             var model = new RoleAuditorEditViewModel
             {
                 AuditorId = auditor.id,
+                UserName = auditor.username,
                 AuditorName = auditor.name,
+                Handphone = auditor.phone_number,
+                Email = auditor.email,
                 SelectedRoleIds = userRoles
                          .Select(x => x.app_role_id)
                          .Distinct()
@@ -274,62 +309,63 @@ namespace e_Pas_CMS.Controllers
         [HttpPost("Edit/{id}")]
         public async Task<IActionResult> Edit(RoleAuditorEditViewModel model)
         {
-            if (string.IsNullOrEmpty(model.AuditorId) ||
-                model.SelectedRoleIds == null || !model.SelectedRoleIds.Any() ||
-                model.SelectedRegionIds == null || !model.SelectedRegionIds.Any())
+            if (string.IsNullOrEmpty(model.AuditorId))
             {
-                ModelState.AddModelError("", "Semua field harus diisi.");
+                ModelState.AddModelError("", "Auditor ID tidak ditemukan.");
                 return View(model);
             }
 
-            // --- START: Update Password jika diisi ---
+            var user = await _context.app_users.FirstOrDefaultAsync(x => x.id == model.AuditorId);
+            if (user == null)
+            {
+                ModelState.AddModelError("", "User tidak ditemukan.");
+                return View(model);
+            }
+
+            // --- START: Update User Information ---
+            user.username = model.UserName;
+            user.name = model.AuditorName;
+            user.phone_number = model.Handphone;
+            user.email = model.Email;
+            user.updated_by = User.Identity.Name ?? "SYSTEM";
+            user.updated_date = DateTime.Now;
+
+            // Update Password jika diisi
             if (!string.IsNullOrEmpty(model.Password))
             {
-                var user = await _context.app_users.FirstOrDefaultAsync(x => x.id == model.AuditorId);
-                if (user != null)
-                {
-                    user.password_hash = BCrypt.Net.BCrypt.HashPassword(model.Password);
-                    user.updated_by = User.Identity.Name ?? "SYSTEM";
-                    user.updated_date = DateTime.Now;
-
-                    _context.app_users.Update(user);
-                    await _context.SaveChangesAsync();
-                }
+                user.password_hash = BCrypt.Net.BCrypt.HashPassword(model.Password);
             }
-            // --- END: Update Password ---
+
+            _context.app_users.Update(user);
+            await _context.SaveChangesAsync();
+            // --- END: Update User Information ---
 
             // Ambil data existing roles & regions
             var existingRoles = await _context.app_user_roles
                 .Where(x => x.app_user_id == model.AuditorId)
                 .ToListAsync();
 
-            // --- START: Handle Role yang DIKURANGI ---
-            var existingRoleIds = existingRoles
-                .Select(x => x.app_role_id)
-                .Distinct()
-                .ToList();
+            var existingRoleIds = existingRoles.Select(x => x.app_role_id).Distinct().ToList();
+            var modelRoleIds = model.SelectedRoleIds ?? new List<string>();
 
-            var removedRoleIds = existingRoleIds.Except(model.SelectedRoleIds).ToList();
-
+            // --- Handle Role yang DIKURANGI ---
+            var removedRoleIds = existingRoleIds.Except(modelRoleIds).ToList();
             if (removedRoleIds.Any())
             {
-                var rolesToDelete = existingRoles
-                    .Where(x => removedRoleIds.Contains(x.app_role_id))
-                    .ToList();
-
+                var rolesToDelete = existingRoles.Where(x => removedRoleIds.Contains(x.app_role_id)).ToList();
                 _context.app_user_roles.RemoveRange(rolesToDelete);
                 await _context.SaveChangesAsync();
             }
-            // --- END: Handle Role yang DIKURANGI ---
 
-            // --- START: Handle Region yang DIKURANGI ---
+            // --- Handle Region yang DIKURANGI ---
             var existingRegions = existingRoles
                 .Where(x => x.region != null)
                 .Select(x => x.region)
                 .Distinct()
                 .ToList();
 
-            var removedRegions = existingRegions.Except(model.SelectedRegionIds).ToList();
+            var modelRegionIds = model.SelectedRegionIds ?? new List<string>();
+            var removedRegions = existingRegions.Except(modelRegionIds).ToList();
 
             if (removedRegions.Any())
             {
@@ -341,10 +377,9 @@ namespace e_Pas_CMS.Controllers
                 }
                 await _context.SaveChangesAsync();
             }
-            // --- END: Handle Region yang DIKURANGI ---
 
-            // --- START: Delete app_user_role where region IS NULL if Region changed ---
-            if (removedRegions.Any() || model.SelectedRegionIds.Except(existingRegions).Any())
+            // --- Handle app_user_role where Region IS NULL (bersihkan jika Region diubah) ---
+            if (removedRegions.Any() || modelRegionIds.Except(existingRegions).Any())
             {
                 var nullRegionRoles = await _context.app_user_roles
                     .Where(x => x.app_user_id == model.AuditorId && x.region == null)
@@ -356,19 +391,41 @@ namespace e_Pas_CMS.Controllers
                     await _context.SaveChangesAsync();
                 }
             }
-            // --- END: Delete app_user_role where region IS NULL ---
 
-            // --- START: Tambahkan Role-Region Combination yang belum ada ---
+            // --- Tambahkan Role-Region Combination yang belum ada ---
             var existingRoleCombinations = existingRoles
                 .Where(x => x.region != null)
                 .Select(x => new { x.app_role_id, x.region })
                 .ToList();
 
-            foreach (var roleId in model.SelectedRoleIds)
+            // Jika ada Region dipilih, buat kombinasi Role + Region
+            if (modelRoleIds.Any() && modelRegionIds.Any())
             {
-                foreach (var region in model.SelectedRegionIds)
+                foreach (var roleId in modelRoleIds)
                 {
-                    var exists = existingRoleCombinations.Any(x => x.app_role_id == roleId && x.region == region);
+                    foreach (var region in modelRegionIds)
+                    {
+                        var exists = existingRoleCombinations.Any(x => x.app_role_id == roleId && x.region == region);
+                        if (!exists)
+                        {
+                            var newRole = new app_user_role
+                            {
+                                id = Guid.NewGuid().ToString(),
+                                app_user_id = model.AuditorId,
+                                app_role_id = roleId,
+                                region = region
+                            };
+                            _context.app_user_roles.Add(newRole);
+                        }
+                    }
+                }
+            }
+            // Jika hanya Role yang dipilih (Region kosong)
+            else if (modelRoleIds.Any() && !modelRegionIds.Any())
+            {
+                foreach (var roleId in modelRoleIds)
+                {
+                    var exists = existingRoles.Any(x => x.app_role_id == roleId && x.region == null);
                     if (!exists)
                     {
                         var newRole = new app_user_role
@@ -376,19 +433,44 @@ namespace e_Pas_CMS.Controllers
                             id = Guid.NewGuid().ToString(),
                             app_user_id = model.AuditorId,
                             app_role_id = roleId,
-                            region = region
+                            region = null
                         };
                         _context.app_user_roles.Add(newRole);
                     }
                 }
             }
-            // --- END: Tambahkan Combination Baru ---
 
             await _context.SaveChangesAsync();
 
             TempData["Success"] = "Data berhasil diperbarui.";
             return RedirectToAction("Index");
         }
+
+        [HttpPost]
+        public async Task<IActionResult> Delete(string id)
+        {
+            if (string.IsNullOrEmpty(id))
+            {
+                return BadRequest("Invalid User ID.");
+            }
+
+            var user = await _context.app_users.FirstOrDefaultAsync(x => x.id == id);
+            if (user == null)
+            {
+                return NotFound("User tidak ditemukan.");
+            }
+
+            user.status = "INACTIVE";
+            user.updated_by = User.Identity.Name ?? "SYSTEM";
+            user.updated_date = DateTime.Now;
+
+            _context.app_users.Update(user);
+            await _context.SaveChangesAsync();
+
+            TempData["Success"] = "User berhasil di-nonaktifkan.";
+            return RedirectToAction("Index");
+        }
+
 
         private ActionResult HttpNotFound()
         {
@@ -719,19 +801,5 @@ namespace e_Pas_CMS.Controllers
             return RedirectToAction("Add");
         }
 
-        [HttpPost]
-        [ValidateAntiForgeryToken]
-        public ActionResult Delete(string id)
-        {
-            var audit = _context.trx_audits.FirstOrDefault(a => a.id == id && a.status != "DELETED");
-            if (audit != null)
-            {
-                audit.status = "DELETED";
-                audit.updated_date = DateTime.Now;
-                _context.SaveChanges();
-                TempData["Success"] = "Jadwal audit berhasil dihapus.";
-            }
-            return RedirectToAction("Index");
-        }
     }
 }

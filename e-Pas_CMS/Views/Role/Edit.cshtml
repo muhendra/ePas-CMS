@@ -12,8 +12,23 @@
         <input type="hidden" name="AuditorId" value="@Model.AuditorId" />
 
         <div class="col-md-6">
-            <label class="form-label">User Auditor</label>
-            <input type="text" class="form-control" value="@Model.AuditorName" disabled />
+            <label class="form-label">Username (Dipakai Login, ubah seperlunya)</label>
+            <input type="text" name="UserName" class="form-control" value="@Model.UserName" required />
+        </div>
+
+        <div class="col-md-6">
+            <label class="form-label">Nama Lengkap</label>
+            <input type="text" name="AuditorName" class="form-control" value="@Model.AuditorName" required />
+        </div>
+
+        <div class="col-md-6">
+            <label class="form-label">Handphone</label>
+            <input type="text" name="Handphone" class="form-control" value="@Model.Handphone" />
+        </div>
+
+        <div class="col-md-6">
+            <label class="form-label">Email</label>
+            <input type="email" name="Email" class="form-control" value="@Model.Email" />
         </div>
 
         <div class="col-md-6">

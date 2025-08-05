@@ -1,5 +1,6 @@
 ﻿@using e_Pas_CMS.ViewModels
 @model RoleAuditorIndexViewModel
+@Html.AntiForgeryToken()
 
 @{
     Layout = "~/Views/Shared/_Layout.cshtml";
@@ -45,7 +46,9 @@
                 <tr class="align-middle text-center">
                     <th>No</th>
                     <th>Nama Role</th>
-                    <th>Auditor</th>
+                    <th>Nama </th>
+                    <th>Username </th>
+                    @* <th>E-mail </th> *@
                     <th>Region</th>
                     @* <th>SPBU</th> *@
                     <th>Status</th>
@@ -62,6 +65,8 @@
                             <td>@index</td>
                             <td>@item.NamaRole</td>
                             <td>@item.Auditor</td>
+                            <td>@item.Username</td>
+                            @* <td>@item.email</td> *@
                             <td>@item.Region</td>
                             @* <td>@string.Join(", ", item.SpbuList)</td> *@
                             <td>
@@ -76,6 +81,9 @@
                                 <a href="@Url.Action("Edit", "Role", new { id = item.Id })" class="btn btn-sm btn-outline-secondary me-1">
                                     <i class="bi bi-pencil me-1"></i> Edit
                                 </a>
+                                <button type="button" class="btn btn-sm btn-outline-danger btnDelete" data-id="@item.Id">
+                                    <i class="bi bi-trash me-1"></i> Delete
+                                </button>
                             </td>
                         </tr>
                         index++;
@@ -121,13 +129,53 @@
 </div>
 
 @section Scripts {
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script>
-        setTimeout(function () {
-            var alert = document.querySelector('.alert');
-            if (alert) {
-                var bsAlert = bootstrap.Alert.getOrCreateInstance(alert);
-                bsAlert.close();
-            }
-        }, 5000);
+        document.querySelectorAll('.btnDelete').forEach(btn => {
+            btn.addEventListener('click', function () {
+                var userId = this.getAttribute('data-id');
+                // var userName = this.getAttribute('data-name');
+                var token = document.querySelector('input[name="__RequestVerificationToken"]').value;
+
+                Swal.fire({
+                    title: 'Yakin Hapus User?',
+                    // text: "User: " + userName,
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonColor: '#d33',
+                    cancelButtonColor: '#3085d6',
+                    confirmButtonText: 'Ya, Hapus!',
+                    cancelButtonText: 'Batal'
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        var formData = new FormData();
+                        formData.append('id', userId);
+                        formData.append('__RequestVerificationToken', token);
+
+                        fetch('@Url.Action("Delete", "Role")', {
+                            method: 'POST',
+                            body: formData
+                        })
+                        .then(response => {
+                            if (response.ok) {
+                                Swal.fire(
+                                    'Berhasil!',
+                                    'User telah di-nonaktifkan.',
+                                    'success'
+                                ).then(() => {
+                                    location.reload();
+                                });
+                            } else {
+                                Swal.fire(
+                                    'Gagal!',
+                                    'Terjadi kesalahan saat menghapus user.',
+                                    'error'
+                                );
+                            }
+                        });
+                    }
+                });
+            });
+        });
     </script>
 }
