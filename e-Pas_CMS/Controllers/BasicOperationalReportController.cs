@@ -958,10 +958,12 @@ ORDER BY mqd.number, tac.updated_date DESC NULLS LAST
         [HttpGet("BasicOperationalReport/PreviewDetail/{id}")]
         public async Task<IActionResult> PreviewDetail(string id)
         {
-            using var conn = _context.Database.GetDbConnection();
-            if (conn.State != ConnectionState.Open)
-                await conn.OpenAsync();
+            // === Open New Manual Connection ===
+            var connectionString = _context.Database.GetConnectionString();
+            await using var conn = new NpgsqlConnection(connectionString);
+            await conn.OpenAsync();
 
+            // === Audit Header ===
             var basic = await GetAuditHeaderAsync(conn, id);
             if (basic == null)
                 return NotFound();
@@ -1068,10 +1070,12 @@ ORDER BY mqd.number, tac.updated_date DESC NULLS LAST
         [HttpGet("BasicOperationalReport/Detail/{id}")]
         public async Task<IActionResult> Detail(string id)
         {
-            using var conn = _context.Database.GetDbConnection();
-            if (conn.State != ConnectionState.Open)
-                await conn.OpenAsync();
+            // OPEN NEW Dapper Connection (Manual)
+            var connectionString = _context.Database.GetConnectionString();
+            await using var conn = new NpgsqlConnection(connectionString);
+            await conn.OpenAsync();
 
+            // Load Audit Header pakai Dapper (bukan EF _context lagi)
             var basic = await GetAuditHeaderAsync(conn, id);
             if (basic == null)
                 return NotFound();

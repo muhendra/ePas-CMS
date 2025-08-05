@@ -307,11 +307,7 @@ namespace e_Pas_CMS.Controllers
         [HttpGet("BasicOperational/Detail/{id}")]
         public async Task<IActionResult> Detail(string id)
         {
-            using var conn = _context.Database.GetDbConnection();
-            if (conn.State != ConnectionState.Open)
-                await conn.OpenAsync();
-
-            // Pull the main audit header
+            // Get EF data (header audit tetap aman pakai _context)
             var audit = await (
                 from ta in _context.trx_audits
                 join au in _context.app_users on ta.app_user_id equals au.id
@@ -321,8 +317,7 @@ namespace e_Pas_CMS.Controllers
                 {
                     ReportNo = ta.report_no,
                     NamaAuditor = au.name,
-                    TanggalSubmit = (ta.audit_execution_time == null
-                                    || ta.audit_execution_time.Value == DateTime.MinValue)
+                    TanggalSubmit = (ta.audit_execution_time == null || ta.audit_execution_time.Value == DateTime.MinValue)
                                     ? ta.updated_date.Value
                                     : ta.audit_execution_time.Value,
                     Status = ta.status,
@@ -337,6 +332,11 @@ namespace e_Pas_CMS.Controllers
 
             if (audit == null)
                 return NotFound();
+
+            // Open NEW NpgsqlConnection (SAFE)
+            var connectionString = _context.Database.GetConnectionString();
+            await using var conn = new NpgsqlConnection(connectionString);
+            await conn.OpenAsync();
 
             // Load QUESTION-type media notes
             var mediaQuestionSql = @"

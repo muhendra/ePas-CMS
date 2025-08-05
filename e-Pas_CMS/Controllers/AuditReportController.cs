@@ -1010,10 +1010,12 @@ ORDER BY mqd.number, tac.updated_date DESC NULLS LAST
         [HttpGet("Report/PreviewDetail/{id}")]
         public async Task<IActionResult> PreviewDetail(string id)
         {
-            using var conn = _context.Database.GetDbConnection();
-            if (conn.State != ConnectionState.Open)
-                await conn.OpenAsync();
+            // --- Open Manual NpgsqlConnection (SAFE) ---
+            var connectionString = _context.Database.GetConnectionString();
+            await using var conn = new NpgsqlConnection(connectionString);
+            await conn.OpenAsync();
 
+            // --- Header Audit ---
             var basic = await GetAuditHeaderAsync(conn, id);
             if (basic == null)
                 return NotFound();
@@ -1192,10 +1194,12 @@ WHERE
         [HttpGet("Report/Detail/{id}")]
         public async Task<IActionResult> Detail(string id)
         {
-            using var conn = _context.Database.GetDbConnection();
-            if (conn.State != ConnectionState.Open)
-                await conn.OpenAsync();
+            // Buka koneksi manual, bukan _context.Database.GetDbConnection()
+            var connectionString = _context.Database.GetConnectionString();
+            await using var conn = new NpgsqlConnection(connectionString);
+            await conn.OpenAsync();
 
+            // Pull the main audit header pakai Dapper helper
             var basic = await GetAuditHeaderAsync(conn, id);
             if (basic == null)
                 return NotFound();
