@@ -27,10 +27,13 @@ namespace e_Pas_CMS.ViewModels
         // Role & Region Selections (comma-separated IDs)
         public string SelectedRoleIds { get; set; }
         public string SelectedRegionIds { get; set; }
+        public string SelectedSbmIds { get; set; }
 
         // Dropdown Data
         public List<SelectListItem> RoleList { get; set; } = new List<SelectListItem>();
         public List<SelectListItem> RegionList { get; set; } = new List<SelectListItem>();
+
+        public List<SelectListItem> SbmList { get; set; } = new List<SelectListItem>();
     }
 
     public class RoleAuditorEditViewModel
@@ -41,6 +44,9 @@ namespace e_Pas_CMS.ViewModels
         public string Handphone { get; set; }
         public string Email { get; set; }
         public string Password { get; set; }
+        public List<string> SelectedSbmIds { get; set; }
+        public List<string> SelectedSbmNames { get; set; }
+        public List<SelectListItem> SbmList { get; set; }
 
         public List<string> SelectedRoleIds { get; set; } = new List<string>();
         public List<string> SelectedRoleNames { get; set; } = new List<string>();

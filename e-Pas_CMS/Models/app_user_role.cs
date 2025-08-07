@@ -14,6 +14,7 @@ public partial class app_user_role
     public string? spbu_id { get; set; }
 
     public string? region { get; set; }
+    public string? sbm { get; set; }
 
     public virtual app_role app_role { get; set; } = null!;
 

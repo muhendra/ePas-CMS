@@ -44,6 +44,14 @@ namespace e_Pas_CMS.Controllers
                        .Where(r => r != null)
                        .ToListAsync();
 
+                var userSbm = await (from aur in _context.app_user_roles
+                                     join au in _context.app_users on aur.app_user_id equals au.id
+                                     where au.username == currentUser
+                                     select aur.sbm)
+                    .Where(s => s != null)
+                    .Distinct()
+                    .ToListAsync();
+
                 var query = from a in _context.trx_audits
                             join s in _context.spbus on a.spbu_id equals s.id
                             join u in _context.app_users on a.app_user_id equals u.id into aud
@@ -56,9 +64,12 @@ namespace e_Pas_CMS.Controllers
                                 AuditorName = u.name
                             };
 
-                if (userRegion.Any())
+                if (userRegion.Any() || userSbm.Any())
                 {
-                    query = query.Where(x => userRegion.Contains(x.Spbu.region));
+                    query = query.Where(x =>
+                        (x.Spbu.region != null && userRegion.Contains(x.Spbu.region)) ||
+                        (x.Spbu.sbm != null && userSbm.Contains(x.Spbu.sbm))
+                    );
                 }
 
                 if (!string.IsNullOrWhiteSpace(searchTerm))

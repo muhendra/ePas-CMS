@@ -51,14 +51,25 @@ namespace e_Pas_CMS.Controllers
                        .Where(r => r != null)
                        .ToListAsync();
 
+            var userSbm = await (from aur in _context.app_user_roles
+                                 join au in _context.app_users on aur.app_user_id equals au.id
+                                 where au.username == currentUser
+                                 select aur.sbm)
+                    .Where(s => s != null)
+                    .Distinct()
+                    .ToListAsync();
+
             var query = _context.trx_audits
                 .Include(a => a.spbu)
                 .Include(a => a.app_user)
                 .Where(a => a.status == "VERIFIED" && a.audit_type != "Basic Operational");
 
-            if (userRegion.Any())
+            if (userRegion.Any() || userSbm.Any())
             {
-                query = query.Where(x => userRegion.Contains(x.spbu.region));
+                query = query.Where(x =>
+                    (x.spbu.region != null && userRegion.Contains(x.spbu.region)) ||
+                    (x.spbu.sbm != null && userSbm.Contains(x.spbu.sbm))
+                );
             }
 
             if (!string.IsNullOrWhiteSpace(searchTerm))

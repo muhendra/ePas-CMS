@@ -67,6 +67,21 @@
             }
         </div>
 
+        <div class="col-md-6">
+            <label class="form-label">SBM</label>
+            <button type="button" id="btnOpenSbm" class="btn btn-outline-warning w-100">Pilih SBM</button>
+            <div id="SbmBadgeContainer" class="selected-display mt-2 d-flex flex-wrap gap-2">
+                @foreach (var sbm in Model.SelectedSbmNames)
+                {
+                    <span class="badge bg-primary">@sbm</span>
+                }
+            </div>
+            @foreach (var sbmId in Model.SelectedSbmIds)
+            {
+                <input type="hidden" name="SelectedSbmIds" value="@sbmId" />
+            }
+        </div>
+
         <div class="col-12 text-end">
             <a href="@Url.Action("Index", "Role")" class="btn btn-secondary">Kembali</a>
             <button type="submit" class="btn btn-primary">Simpan Perubahan</button>
@@ -117,6 +132,29 @@
         </div>
     </div>
 </div>
+
+<!-- SBM Modal -->
+<div class="modal fade" id="sbmModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header"><h5 class="modal-title">Pilih SBM</h5></div>
+            <div class="modal-body">
+                @foreach (var sbm in Model.SbmList)
+                {
+                    <div class="form-check">
+                        <input class="form-check-input sbm-checkbox" type="checkbox" value="@sbm.Value" data-name="@sbm.Text">
+                        <label class="form-check-label">@sbm.Text</label>
+                    </div>
+                }
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" data-bs-dismiss="modal">Tutup</button>
+                <button class="btn btn-warning" id="btnPilihSbm">Pilih</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 
 @section Scripts {
     <script>
@@ -172,6 +210,33 @@
                 updateBadge('RegionBadgeContainer', names);
                 bootstrap.Modal.getInstance(document.getElementById('regionModal')).hide();
             });
+
+            $('#btnOpenSbm').click(function () {
+                var selectedIds = $('input[name="SelectedSbmIds"]').map(function () { return this.value; }).get();
+                $('.sbm-checkbox').each(function () {
+                    $(this).prop('checked', selectedIds.includes($(this).val()));
+                });
+                var modal = new bootstrap.Modal(document.getElementById('sbmModal'));
+                modal.show();
+            });
+
+            $('#btnPilihSbm').click(function () {
+                var selected = $('.sbm-checkbox:checked');
+                var ids = selected.map(function () { return this.value; }).get();
+                var names = selected.map(function () { return $(this).data('name'); }).get();
+            
+                // Clear existing hidden inputs
+                $('input[name="SelectedSbmIds"]').remove();
+            
+                // Add new hidden inputs
+                ids.forEach(id => {
+                    $('<input>').attr({ type: 'hidden', name: 'SelectedSbmIds', value: id }).appendTo('form');
+                });
+            
+                updateBadge('SbmBadgeContainer', names);
+                bootstrap.Modal.getInstance(document.getElementById('sbmModal')).hide();
+            });
+
 
             function updateBadge(containerId, items) {
                 const container = document.getElementById(containerId);
