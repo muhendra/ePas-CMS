@@ -260,6 +260,9 @@ WHERE
                     foreach (var element in elements) AssignWeightRecursive(element);
                     CalculateChecklistScores(elements);
                     CalculateOverallScore(new DetailReportViewModel { Elements = elements }, checklistData);
+                    var modelstotal = new DetailReportViewModel { Elements = elements };
+                    CalculateOverallScore(modelstotal, checklistData);
+                    decimal? totalScore = modelstotal.TotalScore;
                     var compliance = HitungComplianceLevelDariElements(elements);
 
                     // === Compliance validation
@@ -337,7 +340,7 @@ WHERE
                         TipeSpbu = a.Spbu.type,
                         Tahun = a.Audit.created_date.ToString("yyyy"),
                         Audit = a.Audit.audit_level,
-                        Score = Math.Round(finalScore, 2),
+                        Score = Math.Round((decimal)totalScore, 2),
                         Good = goodStatus,
                         Excelent = excellentStatus,
                         Provinsi = a.Spbu.province_name,
