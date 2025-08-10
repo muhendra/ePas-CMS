@@ -42,4 +42,10 @@ public partial class master_questioner_detail
     public virtual ICollection<trx_audit_checklist> trx_audit_checklists { get; set; } = new List<trx_audit_checklist>();
 
     public virtual ICollection<trx_audit_medium> trx_audit_media { get; set; } = new List<trx_audit_medium>();
+
+    public virtual ICollection<TrxFeedbackPointElement> TrxFeedbackPointElements { get; set; } = new List<TrxFeedbackPointElement>();
+
+    public virtual ICollection<TrxFeedbackPoint> TrxFeedbackPoints { get; set; } = new List<TrxFeedbackPoint>();
+
+    public virtual ICollection<TrxSurveyElement> TrxSurveyElements { get; set; } = new List<TrxSurveyElement>();
 }

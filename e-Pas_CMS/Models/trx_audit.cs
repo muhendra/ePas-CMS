@@ -66,4 +66,6 @@ public partial class trx_audit
     public virtual ICollection<trx_audit_medium> trx_audit_media { get; set; } = new List<trx_audit_medium>();
 
     public virtual ICollection<trx_audit_qq> trx_audit_qqs { get; set; } = new List<trx_audit_qq>();
+
+    public virtual ICollection<TrxFeedback> TrxFeedbacks { get; set; } = new List<TrxFeedback>();
 }

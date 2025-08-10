@@ -60,4 +60,6 @@ public partial class TrxAudit
     public virtual ICollection<TrxAuditMedium> TrxAuditMedia { get; set; } = new List<TrxAuditMedium>();
 
     public virtual ICollection<TrxAuditQq> TrxAuditQqs { get; set; } = new List<TrxAuditQq>();
+
+    public virtual ICollection<TrxFeedback> TrxFeedbacks { get; set; } = new List<TrxFeedback>();
 }

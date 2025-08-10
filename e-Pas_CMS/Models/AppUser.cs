@@ -35,7 +35,11 @@ public partial class AppUser
 
     public DateTime? UpdatedDate { get; set; }
 
-    public virtual ICollection<AppUserRole> AppUserRoles { get; set; } = new List<AppUserRole>();
+    public virtual ICollection<Notification> Notifications { get; set; } = new List<Notification>();
 
     public virtual ICollection<TrxAudit> TrxAudits { get; set; } = new List<TrxAudit>();
+
+    public virtual ICollection<TrxFeedback> TrxFeedbacks { get; set; } = new List<TrxFeedback>();
+
+    public virtual ICollection<TrxSurvey> TrxSurveys { get; set; } = new List<TrxSurvey>();
 }

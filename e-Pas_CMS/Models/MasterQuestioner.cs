@@ -32,4 +32,6 @@ public partial class MasterQuestioner
     public virtual ICollection<TrxAudit> TrxAuditMasterQuestionerChecklists { get; set; } = new List<TrxAudit>();
 
     public virtual ICollection<TrxAudit> TrxAuditMasterQuestionerIntros { get; set; } = new List<TrxAudit>();
+
+    public virtual ICollection<TrxSurvey> TrxSurveys { get; set; } = new List<TrxSurvey>();
 }

@@ -48,6 +48,31 @@ public class ReportBOATemplate : IDocument
                     col.Item().Element(ComposeContent);
                 });
             });
+
+            page.Footer().Row(row =>
+            {
+                // Kiri
+                row.RelativeItem()
+                    .AlignLeft()
+                    .Text("VER 2015 REBORN.v05")
+                    .FontSize(8)
+                    .Italic();
+
+                // Tengah
+                row.RelativeItem()
+                    .AlignCenter()
+                    .Text(text =>
+                    {
+                        text.Span("Page ").FontSize(8);
+                        text.CurrentPageNumber().FontSize(8);
+                        text.Span(" of ").FontSize(8);
+                        text.TotalPages().FontSize(8);
+                    });
+
+                // Kanan kosong
+                row.RelativeItem();
+            });
+
         });
     }
 
@@ -174,8 +199,8 @@ public class ReportBOATemplate : IDocument
 
                         // 3/4 KANAN
                         var status = passed
-    ? "PASSED BASIC OPERATIONAL"
-    : "NOT PASSED";
+                        ? "PASSED BASIC OPERATIONAL"
+                        : "NOT PASSED";
 
 
                         row.RelativeItem(3).AlignMiddle().Column(right =>
@@ -540,35 +565,37 @@ public class ReportBOATemplate : IDocument
         {
             table.ColumnsDefinition(columns =>
             {
-                columns.RelativeColumn();
-                columns.RelativeColumn();
-                columns.RelativeColumn();
-                columns.RelativeColumn();
+                columns.RelativeColumn(); // label kiri
+                columns.RelativeColumn(); // value kiri
+                columns.RelativeColumn(); // label kanan
+                columns.RelativeColumn(); // value kanan
             });
 
-            void InfoRow(string label, string value)
+            void InfoRow(string labelLeft, string valueLeft, string labelRight, string valueRight)
             {
-                table.Cell().Text(label).SemiBold();
-                table.Cell().Text(value ?? "-");
+                table.Cell().Text(labelLeft).SemiBold();
+                table.Cell().Text(valueLeft ?? "-");
+                table.Cell().Text(labelRight).SemiBold();
+                table.Cell().Text(valueRight ?? "-");
             }
 
-            InfoRow("NOMOR SPBU", _model.SpbuNo);
-            InfoRow("REGION", _model.Region);
-            InfoRow("KOTA", _model.Kota);
-            InfoRow("ALAMAT", _model.Alamat);
+            InfoRow("Nomor SPBU", _model.SpbuNo,
+                    "Region", _model.Region);
 
-            InfoRow("NAMA PEMILIK", _model.OwnerName);
-            InfoRow("NAMA MANAJER", _model.ManagerName);
-            InfoRow("TIPE KEPEMILIKAN", _model.OwnershipType);
-            InfoRow("QUARTER", _model.Quarter);
+            InfoRow("Kota", _model.Kota,
+                    "Alamat", _model.Alamat);
 
-            InfoRow("TAHUN", _model.Year.ToString());
-            InfoRow("MOR", _model.MOR);
-            InfoRow("SALES AREA", _model.SalesArea);
-            InfoRow("SBM", _model.SBM);
+            InfoRow("Nama Pemilik", _model.OwnerName,
+                    "Nama Manager", _model.ManagerName);
 
-            InfoRow("KELAS SPBU", _model.ClassSPBU);
-            InfoRow("TELEPON", _model.Phone);
+            InfoRow("Tipe Kepemilikan", _model.OwnershipType,
+                    "Quarter", _model.Quarter);
+
+            InfoRow("Tahun", _model.Year.ToString(),
+                    "Telepon", _model.Phone);
+
+            InfoRow("Sales Area", _model.SalesArea,
+                    "SBM", _model.SBM);
         });
     }
 
@@ -578,29 +605,40 @@ public class ReportBOATemplate : IDocument
         {
             table.ColumnsDefinition(columns =>
             {
-                columns.RelativeColumn();
-                columns.RelativeColumn();
-                columns.RelativeColumn();
-                columns.RelativeColumn();
+                columns.RelativeColumn(); // label kiri
+                columns.RelativeColumn(); // value kiri
+                columns.RelativeColumn(); // label kanan
+                columns.RelativeColumn(); // value kanan
             });
 
-            void InfoRow(string label, string value)
+            void InfoRow(string labelLeft, string valueLeft, string labelRight, string valueRight)
             {
-                table.Cell().Text(label).SemiBold();
-                table.Cell().Text(value ?? "-");
+                table.Cell().Text(labelLeft).SemiBold();
+                table.Cell().Text(valueLeft ?? "-");
+                table.Cell().Text(labelRight).SemiBold();
+                table.Cell().Text(valueRight ?? "-");
             }
 
-            InfoRow("No. Report", _model.ReportNo);
-            InfoRow("Tanggal Audit", _model.TanggalAudit?.ToString("dd/MM/yyyy"));
-            InfoRow("Verifikator", _model.ApproveBy);
+            InfoRow("Tanggal Audit", _model.TanggalAudit?.ToString("dd/MM/yyyy"),
+                    "No. Report", _model.ReportNo);
 
-            InfoRow("Auditor 1", _model.NamaAuditor);
-            InfoRow("Auditor 2", "-"); // ganti jika ada field spesifik
-            InfoRow("Tipe Audit", _model.AuditCurrent);
-            InfoRow("Next Audit", _model.AuditNext); // ganti jika ada field spesifik
+            InfoRow("Tipe Audit", _model.AuditCurrent,
+                    "Next Audit", _model.AuditNext);
 
-            InfoRow("Ko-ordinator", "Sabar Kembaren");
-            InfoRow("Sent Date", _model.TanggalSubmit?.ToString("dd/MM/yyyy"));
+            InfoRow("Koordinator", "Rommy Irawan",
+                    "Sent Date", _model.TanggalSubmit?.ToString("dd/MM/yyyy"));
+
+            InfoRow("Verifikator", _model.ApproveBy,
+                    "Kelas SPBU", _model.ClassSPBU);
+
+            InfoRow("Auditor 1", _model.NamaAuditor,
+                    "", "");
+
+            InfoRow("Auditor 2", "-",
+                    "", "");
+
+            InfoRow("Acknowledge", "Sabar Kembaren",
+                    "", "");
         });
     }
 

@@ -3,21 +3,15 @@ using System.Collections.Generic;
 
 namespace e_Pas_CMS.Models;
 
-public partial class MasterAuditFlow
+public partial class TrxSurveyElement
 {
     public string Id { get; set; } = null!;
 
-    public string AuditLevel { get; set; } = null!;
+    public string TrxSurveyId { get; set; } = null!;
 
-    public string? PassedAuditLevel { get; set; }
+    public string MasterQuestionerDetailId { get; set; } = null!;
 
-    public string? FailedAuditLevel { get; set; }
-
-    public string? PassedExcellent { get; set; }
-
-    public string? PassedGood { get; set; }
-
-    public int? RangeAuditMonth { get; set; }
+    public string? ScoreInput { get; set; }
 
     public string Status { get; set; } = null!;
 
@@ -29,5 +23,7 @@ public partial class MasterAuditFlow
 
     public DateTime? UpdatedDate { get; set; }
 
-    public string audit_level_class { get; set; }
+    public virtual master_questioner_detail MasterQuestionerDetail { get; set; } = null!;
+
+    public virtual TrxSurvey TrxSurvey { get; set; } = null!;
 }

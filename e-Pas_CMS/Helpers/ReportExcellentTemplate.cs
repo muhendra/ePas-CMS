@@ -48,6 +48,31 @@ public class ReportExcellentTemplate : IDocument
                     col.Item().Element(ComposeContent);
                 });
             });
+
+            page.Footer().Row(row =>
+            {
+                // Kiri
+                row.RelativeItem()
+                    .AlignLeft()
+                    .Text("VER 2015 REBORN.v04")
+                    .FontSize(8)
+                    .Italic();
+
+                // Tengah
+                row.RelativeItem()
+                    .AlignCenter()
+                    .Text(text =>
+                    {
+                        text.Span("Page ").FontSize(8);
+                        text.CurrentPageNumber().FontSize(8);
+                        text.Span(" of ").FontSize(8);
+                        text.TotalPages().FontSize(8);
+                    });
+
+                // Kanan kosong
+                row.RelativeItem();
+            });
+
         });
     }
 
@@ -98,13 +123,20 @@ public class ReportExcellentTemplate : IDocument
     {
         container.Column(col =>
         {
-            // Cek special node override
+            // 0) Pastikan TotalScore ada
+            if (_model.TotalScore == 0)
+            {
+                HitungSemuaTotalScore();
+                _model.TotalScore = Math.Round(_model.Elements.Sum(x => x.TotalScore ?? 0), 2);
+            }
+
+            // 1) Special node override (C => Good only, non-A => Not Certified)
             var specialNodeIds = new[]
             {
             "555fe2e4-b95b-461b-9c92-ad8b5c837119",
             "bafc206f-ed29-4bbc-8053-38799e186fb0",
             "d26f4caa-e849-4ab4-9372-298693247272"
-        };
+            };
 
             bool forceGoodOnly = false;
             bool forceNotCertified = false;
@@ -114,26 +146,24 @@ public class ReportExcellentTemplate : IDocument
                 var node = FindNodeById(_model.Elements, nodeId);
                 var score = node?.ScoreInput?.Trim().ToUpperInvariant();
 
-                if (score == "C")
-                    forceGoodOnly = true;
-                else if (score != "A")
-                    forceNotCertified = true;
+                if (score == "C") forceGoodOnly = true;
+                else if (score != "A") forceNotCertified = true;
             }
 
-            // Hitung hanya jika compliance belum tersedia
-            _model.SSS = _model.SSS ?? GetCompliance("Skilled Staff & Services", 30);
-            _model.EQnQ = _model.EQnQ ?? GetCompliance("Exact Quality & Quantity", 30);
-            _model.RFS = _model.RFS ?? GetCompliance("Reliable Facilities & Safety", 20);
-            _model.VFC = _model.VFC ?? GetCompliance("Visual Format Consistency", 10);
-            _model.EPO = _model.EPO ?? GetCompliance("Expansive Product Offer", 10);
+            // 2) Compliance per elemen (pakai yang ada, atau hitung jika null)
+            _model.SSS ??= GetCompliance("Skilled Staff & Services", 30);
+            _model.EQnQ ??= GetCompliance("Exact Quality & Quantity", 30);
+            _model.RFS ??= GetCompliance("Reliable Facilities & Safety", 20);
+            _model.VFC ??= GetCompliance("Visual Format Consistency", 10);
+            _model.EPO ??= GetCompliance("Expansive Product Offer", 10);
 
-            // Ambil untuk validasi sertifikasi
             var sss = _model.SSS;
             var eqnq = _model.EQnQ;
             var rfs = _model.RFS;
             var vfc = _model.VFC;
             var epo = _model.EPO;
 
+            // 3) Validasi EXCELLENT
             bool failExcellent = sss < 85 || eqnq < 85 || rfs < 85 || vfc < 20 || epo < 50;
 
             bool isCertified = _model.TotalScore >= 80 &&
@@ -141,73 +171,83 @@ public class ReportExcellentTemplate : IDocument
                                !failExcellent &&
                                !forceNotCertified;
 
-            string statusBoxText = isCertified
+            var statusText = isCertified
                 ? (forceGoodOnly ? "PASTI PAS GOOD!" : "PASTI PAS EXCELLENT!")
                 : "NOT CERTIFIED";
 
-            string statusColor = isCertified
-                ? (forceGoodOnly ? "#00A64F" : "#FFC107")
-                : "#F44336";
+            var barColor = isCertified ? "#FFB900" : "#F44336";
 
-            string boxColor = statusColor;
-            string scoreFontColor = Colors.White;
-
-            col.Item().PaddingTop(-18).AlignRight().Width(100).Background(boxColor).Padding(4).Column(score =>
-            {
-                score.Item().AlignLeft().Text("TOTAL SCORE (TS):").Bold().FontColor(scoreFontColor).FontSize(9);
-                score.Item().AlignLeft().Text($"{_model.TotalScore:0.00}").FontSize(16).Bold().FontColor(scoreFontColor);
-                score.Item().AlignLeft().Text("Minimum Skor: 80").FontSize(8).FontColor(scoreFontColor);
-            });
-
+            // ==== INFO SPBU & AUDIT ====
             col.Item().PaddingTop(15).PaddingBottom(5).Text("Informasi SPBU").Bold().FontSize(12);
             col.Item().PaddingBottom(15).Element(ComposeInfoTable);
             col.Item().PaddingBottom(5).Text("Informasi Kegiatan Audit").Bold().FontSize(12);
             col.Item().PaddingBottom(20).Element(ComposeAuditInfoTable);
 
-            col.Item().PaddingBottom(15);
-            col.Item().Background(statusColor).Padding(10).Column(box =>
+            // ==== BAR TOTAL SCORE ala BOA (full width) ====
+            col.Item().PaddingTop(10).Element(containerBar =>
             {
-                box.Item().AlignCenter().Text(statusBoxText).FontSize(16).Bold().FontColor(Colors.White);
-
-                if (!isCertified)
-                {
-                    var alasan = new List<string>();
-                    if (!string.IsNullOrWhiteSpace(_model.PenaltyAlerts))
-                        alasan.Add(_model.PenaltyAlerts);
-
-                    var failedElements = new[]
+                containerBar
+                    .Background(barColor)
+                    .ExtendHorizontal()
+                    .PaddingVertical(15)
+                    .PaddingHorizontal(20)
+                    .Row(row =>
                     {
-                    ("SSS", 85, _model.SSS),
-                    ("EQnQ", 85, _model.EQnQ),
-                    ("RFS", 85, _model.RFS),
-                    ("VFC", 20, _model.VFC),
-                    ("EPO", 50, _model.EPO)
-                }
-                    .Where(e => (e.Item3 ?? 0) < e.Item2)
-                    .Select(e => e.Item1)
-                    .ToList();
+                        // Kiri: TOTAL SCORE + minimum
+                        row.RelativeItem(1).Column(left =>
+                        {
+                            left.Item().AlignLeft().Text("TOTAL SCORE (TS):")
+                                .FontSize(10).FontColor(Colors.White).SemiBold();
 
-                    if (failedElements.Any())
-                        alasan.Add("Gagal di elemen: " + string.Join(", ", failedElements));
+                            left.Item().AlignLeft().Text($"{_model.TotalScore:0.00}")
+                                .FontSize(16).FontColor(Colors.White).Bold();
 
-                    if (alasan.Any())
-                    {
-                        box.Item().PaddingTop(5).AlignCenter()
-                            .Text(string.Join("\n", alasan))
-                            .FontSize(9).Italic().FontColor(Colors.White);
-                    }
-                }
+                            left.Item().AlignLeft().Text("Minimum Skor: 80")
+                                .FontSize(9).FontColor(Colors.White);
+                        });
+
+                        // Separator
+                        row.ConstantItem(2).Element(e =>
+                        {
+                            e.BorderLeft(2).BorderColor(Colors.White).Height(40);
+                        });
+
+                        // Kanan: STATUS + alasan gagal (kalau ada)
+                        row.RelativeItem(3).AlignMiddle().Column(right =>
+                        {
+                            right.Item().AlignCenter().Text(statusText)
+                                .FontSize(14).Bold().FontColor(Colors.White);
+
+                            if (!isCertified)
+                            {
+                                if (!string.IsNullOrWhiteSpace(_model.PenaltyAlerts))
+                                {
+                                    right.Item().AlignCenter().PaddingTop(5)
+                                        .Text($"Penalty: {_model.PenaltyAlerts}")
+                                        .FontSize(9).Italic().FontColor(Colors.White);
+                                }
+
+                                var failed = new List<string>();
+                                if (sss < 85) failed.Add("SSS");
+                                if (eqnq < 85) failed.Add("EQnQ");
+                                if (rfs < 85) failed.Add("RFS");
+                                if (vfc < 20) failed.Add("VFC");
+                                if (epo < 50) failed.Add("EPO");
+
+                                if (failed.Any())
+                                {
+                                    right.Item().AlignCenter().PaddingTop(3)
+                                        .Text($"Gagal di elemen: {string.Join(", ", failed)}")
+                                        .FontSize(9).Italic().FontColor(Colors.White);
+                                }
+                            }
+                        });
+                    });
             });
 
             col.Item().Height(20);
 
-            // Render checklist (tanpa hitung ulang total score)
-            foreach (var root in _model.Elements)
-                RenderChecklistStructured(new ColumnDescriptor(), root, root.Title, 0);
-
-            // Hapus hitungan ulang total_score
-            // _model.TotalScore = Math.Round(_model.Elements.Sum(x => x.TotalScore ?? 0), 2);
-
+            // ==== Tabel Element & SubElement ====
             col.Item().PaddingVertical(10).Element(ComposeElementTable);
 
             foreach (var element in _model.Elements.Where(x => !string.IsNullOrWhiteSpace(x.Description)))
@@ -216,13 +256,13 @@ public class ReportExcellentTemplate : IDocument
                 col.Item().Element(c => ComposeSubElementTable(c, element.Children));
             }
 
+            // ==== Komentar Auditor ====
             col.Item().PaddingTop(20).Text("KOMENTAR AUDITOR").Bold().FontSize(12);
             void KomentarItem(string label, string value)
             {
                 col.Item().Text(label).Bold().FontSize(10);
                 col.Item().PaddingBottom(10).Text(value ?? "-").FontSize(9);
             }
-
             KomentarItem("Staf Terlatih dan Termotivasi", _model.KomentarStaf);
             KomentarItem("Jaminan Kualitas dan Kuantitas", _model.KomentarQuality);
             KomentarItem("Peralatan Terpelihara dan HSSE", _model.KomentarHSSE);
@@ -230,15 +270,18 @@ public class ReportExcellentTemplate : IDocument
             KomentarItem("Penawaran Produk Komperhensif", _model.PenawaranKomperhensif);
             KomentarItem("Komentar Manajer SPBU", _model.KomentarManager);
 
+            // ==== Halaman baru: Checklist ====
             col.Item().PageBreak();
             col.Item().PaddingTop(20).Text("DETAIL CHECKLIST").Bold().FontSize(12);
             foreach (var root in _model.Elements)
                 RenderChecklistStructured(col, root, root.Title, 0);
 
+            // ==== Halaman baru: Q&Q ====
             col.Item().PageBreak();
             col.Item().PaddingTop(20).Text("PENGECEKAN Q&Q").Bold().FontSize(12);
             col.Item().Element(ComposeQqTable);
 
+            // ==== Halaman baru: Foto Temuan ====
             col.Item().PageBreak();
             col.Item().Element(container =>
             {
@@ -546,35 +589,37 @@ public class ReportExcellentTemplate : IDocument
         {
             table.ColumnsDefinition(columns =>
             {
-                columns.RelativeColumn();
-                columns.RelativeColumn();
-                columns.RelativeColumn();
-                columns.RelativeColumn();
+                columns.RelativeColumn(); // label kiri
+                columns.RelativeColumn(); // value kiri
+                columns.RelativeColumn(); // label kanan
+                columns.RelativeColumn(); // value kanan
             });
 
-            void InfoRow(string label, string value)
+            void InfoRow(string labelLeft, string valueLeft, string labelRight, string valueRight)
             {
-                table.Cell().Text(label).SemiBold();
-                table.Cell().Text(value ?? "-");
+                table.Cell().Text(labelLeft).SemiBold();
+                table.Cell().Text(valueLeft ?? "-");
+                table.Cell().Text(labelRight).SemiBold();
+                table.Cell().Text(valueRight ?? "-");
             }
 
-            InfoRow("NOMOR SPBU", _model.SpbuNo);
-            InfoRow("REGION", _model.Region);
-            InfoRow("KOTA", _model.Kota);
-            InfoRow("ALAMAT", _model.Alamat);
+            InfoRow("Nomor SPBU", _model.SpbuNo,
+                    "Region", _model.Region);
 
-            InfoRow("NAMA PEMILIK", _model.OwnerName);
-            InfoRow("NAMA MANAJER", _model.ManagerName);
-            InfoRow("TIPE KEPEMILIKAN", _model.OwnershipType);
-            InfoRow("QUARTER", _model.Quarter);
+            InfoRow("Kota", _model.Kota,
+                    "Alamat", _model.Alamat);
 
-            InfoRow("TAHUN", _model.Year.ToString());
-            InfoRow("MOR", _model.MOR);
-            InfoRow("SALES AREA", _model.SalesArea);
-            InfoRow("SBM", _model.SBM);
+            InfoRow("Nama Pemilik", _model.OwnerName,
+                    "Nama Manager", _model.ManagerName);
 
-            InfoRow("KELAS SPBU", _model.ClassSPBU);
-            InfoRow("TELEPON", _model.Phone);
+            InfoRow("Tipe Kepemilikan", _model.OwnershipType,
+                    "Quarter", _model.Quarter);
+
+            InfoRow("Tahun", _model.Year.ToString(),
+                    "Telepon", _model.Phone);
+
+            InfoRow("Sales Area", _model.SalesArea,
+                    "SBM", _model.SBM);
         });
     }
 
@@ -584,29 +629,40 @@ public class ReportExcellentTemplate : IDocument
         {
             table.ColumnsDefinition(columns =>
             {
-                columns.RelativeColumn();
-                columns.RelativeColumn();
-                columns.RelativeColumn();
-                columns.RelativeColumn();
+                columns.RelativeColumn(); // label kiri
+                columns.RelativeColumn(); // value kiri
+                columns.RelativeColumn(); // label kanan
+                columns.RelativeColumn(); // value kanan
             });
 
-            void InfoRow(string label, string value)
+            void InfoRow(string labelLeft, string valueLeft, string labelRight, string valueRight)
             {
-                table.Cell().Text(label).SemiBold();
-                table.Cell().Text(value ?? "-");
+                table.Cell().Text(labelLeft).SemiBold();
+                table.Cell().Text(valueLeft ?? "-");
+                table.Cell().Text(labelRight).SemiBold();
+                table.Cell().Text(valueRight ?? "-");
             }
 
-            InfoRow("No. Report", _model.ReportNo);
-            InfoRow("Tanggal Audit", _model.TanggalAudit?.ToString("dd/MM/yyyy"));
-            InfoRow("Verifikator", _model.ApproveBy);
+            InfoRow("Tanggal Audit", _model.TanggalAudit?.ToString("dd/MM/yyyy"),
+                    "No. Report", _model.ReportNo);
 
-            InfoRow("Auditor 1", _model.NamaAuditor);
-            InfoRow("Auditor 2", "-"); // Ganti jika ada properti khusus
-            InfoRow("Tipe Audit", _model.AuditCurrent);
-            InfoRow("Next Audit", _model.AuditNext); // Ganti jika ada properti khusus
+            InfoRow("Tipe Audit", _model.AuditCurrent,
+                    "Next Audit", _model.AuditNext);
 
-            InfoRow("Ko-ordinator", "Sabar Kembaren");
-            InfoRow("Sent Date", _model.TanggalSubmit?.ToString("dd/MM/yyyy"));
+            InfoRow("Koordinator", "Rommy Irawan",
+                    "Sent Date", _model.TanggalSubmit?.ToString("dd/MM/yyyy"));
+
+            InfoRow("Verifikator", _model.ApproveBy,
+                    "Kelas SPBU", _model.ClassSPBU);
+
+            InfoRow("Auditor 1", _model.NamaAuditor,
+                    "", "");
+
+            InfoRow("Auditor 2", "-",
+                    "", "");
+
+            InfoRow("Acknowledge", "Sabar Kembaren",
+                    "", "");
         });
     }
 

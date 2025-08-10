@@ -37,5 +37,11 @@ public partial class app_user
 
     public virtual ICollection<app_user_role> app_user_roles { get; set; } = new List<app_user_role>();
 
+    public virtual ICollection<Notification> Notifications { get; set; } = new List<Notification>();
+
     public virtual ICollection<trx_audit> trx_audits { get; set; } = new List<trx_audit>();
+
+    public virtual ICollection<TrxFeedback> TrxFeedbacks { get; set; } = new List<TrxFeedback>();
+
+    public virtual ICollection<TrxSurvey> TrxSurveys { get; set; } = new List<TrxSurvey>();
 }
