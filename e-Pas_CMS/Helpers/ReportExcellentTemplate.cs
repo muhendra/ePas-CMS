@@ -557,32 +557,32 @@ public class ReportExcellentTemplate : IDocument
                 var qtyVarMTextColor = qtyVarM < -60m ? Colors.White : Colors.Black;
 
                 table.Cell()
-                     .Background(qtyVarMColor)
-                     .Border(0.5f)
-                     .BorderColor(Colors.Black)
-                     .AlignCenter()
-                     .AlignMiddle()
-                     .Padding(2)
-                     .Text($"{qtyVarM:0}")
+                    .Background(qtyVarMColor)
+                    .Border(0.5f)
+                    .BorderColor(Colors.Black)
+                    .AlignCenter()
+                    .AlignMiddle()
+                    .Padding(2)
+                    .Text($"{qtyVarM:0}")
                         .FontColor(qtyVarMTextColor)
                         .FontSize(8)
                         .SemiBold();
 
-                // Kolom Qty Var (%) dengan warna background penuh
-                var qtyVarPercent = qq.QuantityVariationInPercentage;
-                var qtyVarColor = qtyVarPercent < -0.003m ? "#ff0000" :  // merah
-                                  qtyVarPercent > 0.003m ? "#ffff00" :  // kuning
-                                  "#ffffff";                            // putih
-                var qtyTextColor = qtyVarPercent < -0.003m ? Colors.White : Colors.Black;
+                // Qty Var (%) dihitung dari Qty Var (m) / 20000 x 100%
+                decimal qtyVarPercent = (decimal)((qtyVarM / 20000m) * 100m); // -120 -> -0.60%
+                var qtyVarColor = qtyVarPercent < -0.3m ? "#ff0000" :  // merah jika kurang dari -0.3%
+                                  qtyVarPercent > 0.3m ? "#ffff00" :  // kuning jika lebih dari 0.3%
+                                                          "#ffffff";   // putih jika normal
+                var qtyTextColor = qtyVarPercent < -0.3m ? Colors.White : Colors.Black;
 
                 table.Cell()
-                     .Background(qtyVarColor)
-                     .Border(0.5f)
-                     .BorderColor(Colors.Black)
-                     .AlignCenter()
-                     .AlignMiddle()
-                     .Padding(2)
-                     .Text($"{qtyVarPercent:0.00}")
+                    .Background(qtyVarColor)
+                    .Border(0.5f)
+                    .BorderColor(Colors.Black)
+                    .AlignCenter()
+                    .AlignMiddle()
+                    .Padding(2)
+                    .Text($"{qtyVarPercent:0.00}%") // tampilkan dengan tanda %
                         .FontColor(qtyTextColor)
                         .FontSize(8)
                         .SemiBold();

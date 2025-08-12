@@ -98,12 +98,22 @@
                         <td>@item.DuSerialNo</td>
                         <td>@item.Product</td>
                         <td>@item.Mode</td>
+                        <!-- Qty Var (m) -->
                         <td style="
-                        background-color: @(item.QuantityVariationWithMeasure < -60m ? "#ff0000" :
-                       item.QuantityVariationWithMeasure > 0.003m ? "#ffff00" : "transparent");">
+    background-color: @(item.QuantityVariationWithMeasure < -60m ? "#ff0000" : "transparent");">
                             @item.QuantityVariationWithMeasure
                         </td>
-                        <td>@item.QuantityVariationInPercentage?.ToString("0.00")</td>
+
+                        <!-- Qty Var (%) hitung dari Qty Var (m) -->
+                        @{
+                            var qtyVarPercent = (item.QuantityVariationWithMeasure / 20000m) * 100m; // -120 -> -0.60%
+                        }
+                        <td style="
+    background-color: @(qtyVarPercent < -0.3m ? "#ff0000" :
+                        qtyVarPercent >  0.3m ? "#ffff00" : "transparent");">
+                            @($"{qtyVarPercent:0.00}%")
+                        </td>
+
                         <td>@item.ObservedDensity?.ToString("0.000")</td>
                         <td>@item.ObservedTemp?.ToString("0.0")</td>
                         <td>@item.ObservedDensity15Degree?.ToString("0.000")</td>
