@@ -1673,7 +1673,7 @@ WHERE
 
         private async Task<List<FotoTemuan>> GetMediaReportFAsync(IDbConnection conn, string id)
         {
-            string sql = @"SELECT mqd.title,am.media_path
+            string sql = @"SELECT ac.""comment"" as title,am.media_path
                         FROM trx_audit_media am
                         JOIN trx_audit_checklist ac
                           ON am.trx_audit_id = ac.trx_audit_id
