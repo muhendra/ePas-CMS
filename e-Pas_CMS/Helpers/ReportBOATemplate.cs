@@ -527,7 +527,22 @@ public class ReportBOATemplate : IDocument
                 DataCell(qq.DuSerialNo);
                 DataCell(qq.Product);
                 DataCell(qq.Mode);
-                DataCell($"{qq.QuantityVariationWithMeasure:0}");
+                // Qty Var (m)
+                var qtyVarM = qq.QuantityVariationWithMeasure;
+                var qtyVarMColor = qtyVarM < -60m ? "#ff0000" : "#ffffff"; // merah jika < -60
+                var qtyVarMTextColor = qtyVarM < -60m ? Colors.White : Colors.Black;
+
+                table.Cell()
+                     .Background(qtyVarMColor)
+                     .Border(0.5f)
+                     .BorderColor(Colors.Black)
+                     .AlignCenter()
+                     .AlignMiddle()
+                     .Padding(2)
+                     .Text($"{qtyVarM:0}")
+                        .FontColor(qtyVarMTextColor)
+                        .FontSize(8)
+                        .SemiBold();
 
                 // Kolom Qty Var (%) dengan warna background penuh
                 var qtyVarPercent = qq.QuantityVariationInPercentage;
