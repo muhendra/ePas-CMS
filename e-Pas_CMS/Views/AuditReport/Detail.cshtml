@@ -426,7 +426,12 @@
                         <td>@qq.DuSerialNo</td>
                         <td>@qq.Product</td>
                         <td>@qq.Mode</td>
-                        <td>@qq.QuantityVariationWithMeasure</td>
+                        <td style="
+                        background-color: @(qq.QuantityVariationWithMeasure < -60m ? "#ff0000" :
+                       qq.QuantityVariationWithMeasure > 0.003m ? "#ffff00" : "transparent");">
+                            @qq.QuantityVariationWithMeasure
+                        </td>
+
                         <td style="
                         background-color: @(qq.QuantityVariationInPercentage < -0.003m ? "#ff0000" : 
                                            qq.QuantityVariationInPercentage > 0.003m ? "#ffff00" : "transparent");">

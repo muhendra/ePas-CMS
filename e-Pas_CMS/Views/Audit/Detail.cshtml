@@ -98,7 +98,11 @@
                         <td>@item.DuSerialNo</td>
                         <td>@item.Product</td>
                         <td>@item.Mode</td>
-                        <td>@item.QuantityVariationWithMeasure?.ToString("0.00")</td>
+                        <td style="
+                        background-color: @(item.QuantityVariationWithMeasure < -60m ? "#ff0000" :
+                       item.QuantityVariationWithMeasure > 0.003m ? "#ffff00" : "transparent");">
+                            @item.QuantityVariationWithMeasure
+                        </td>
                         <td>@item.QuantityVariationInPercentage?.ToString("0.00")</td>
                         <td>@item.ObservedDensity?.ToString("0.000")</td>
                         <td>@item.ObservedTemp?.ToString("0.0")</td>
