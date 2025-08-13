@@ -335,7 +335,7 @@ namespace e_Pas_CMS.Controllers
                     .ToListAsync(),
 
                 SbmList = await _context.spbus
-                    .Where(x => x.sbm != null)
+                    .Where(x => !string.IsNullOrEmpty(x.sbm))
                     .Select(x => x.sbm)
                     .Distinct()
                     .OrderBy(s => s)

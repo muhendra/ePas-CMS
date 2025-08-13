@@ -11,6 +11,7 @@
         public string NamaAuditor { get; set; }
         public string Provinsi { get; set; }
         public string Kota { get; set; }
+        public string Sbm { get; set; }
         public string Report { get; set; }
         public DateTime TanggalSubmit { get; set; }
         public string Status { get; set; }       // PASS / FAIL

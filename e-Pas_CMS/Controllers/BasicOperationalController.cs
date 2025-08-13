@@ -11,7 +11,9 @@ using e_Pas_CMS.ViewModels;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Npgsql;
+using QuestPDF.Fluent;
 using static NpgsqlTypes.NpgsqlTsQuery;
 
 namespace e_Pas_CMS.Controllers
@@ -22,11 +24,13 @@ namespace e_Pas_CMS.Controllers
         private readonly EpasDbContext _context;
         private const int DefaultPageSize = 10;
         private readonly ILogger<BasicOperationalController> _logger;
+        private readonly IConfiguration _configuration;
 
-        public BasicOperationalController(EpasDbContext context, ILogger<BasicOperationalController> logger)
+        public BasicOperationalController(EpasDbContext context, ILogger<BasicOperationalController> logger, IConfiguration configuration)
         {
             _context = context;
             _logger = logger;
+            _configuration = configuration;
         }
 
         public async Task<IActionResult> Index(int pageNumber = 1, int pageSize = DefaultPageSize, string searchTerm = "", string sortColumn = "TanggalAudit", string sortDirection = "desc")
@@ -582,6 +586,8 @@ namespace e_Pas_CMS.Controllers
                 auditnext = model.AuditNext,
                 spbuNo = model.SpbuNo
             });
+
+            await GenerateAllVerifiedPdfReports(id);
 
             TempData["Success"] = "Laporan audit telah disetujui.";
             return RedirectToAction("Detail", new { id });
@@ -1259,48 +1265,287 @@ VALUES
             );
         }
 
-        //        [HttpPost("BasicOperational/UploadDocument")]
-        //        public async Task<IActionResult> UploadDocument(IFormFile file, string nodeId, string auditId)
-        //        {
-        //            if (file == null || file.Length == 0)
-        //                return BadRequest("File tidak ditemukan atau kosong.");
+        [HttpGet]
+        public async Task GenerateAllVerifiedPdfReports(string id)
+        {
+            using var timeoutCts = new CancellationTokenSource(TimeSpan.FromHours(6));
+            var token = CancellationTokenSource
+                .CreateLinkedTokenSource(timeoutCts.Token, HttpContext.RequestAborted)
+                .Token;
 
-        //            // Direktori penyimpanan
-        //            var uploadsPath = Path.Combine("/var/www/epas-asset", "wwwroot", "uploads", auditId);
-        //            Directory.CreateDirectory(uploadsPath);
+            try
+            {
+                var outputDirectory = Path.Combine("/var/www/epas-asset", "wwwroot", "uploads", "reports");
+                if (!Directory.Exists(outputDirectory))
+                    Directory.CreateDirectory(outputDirectory);
 
-        //            var fileName = Path.GetFileName(file.FileName);
-        //            var filePath = Path.Combine(uploadsPath, fileName);
+                var auditIds = new List<string>();
 
-        //            // Simpan file fisik
-        //            using (var stream = new FileStream(filePath, FileMode.Create))
-        //            {
-        //                await file.CopyToAsync(stream);
-        //            }
+                if (id != null)
+                {
+                    // Hanya 1 ID dari parameter
+                    auditIds.Add(id.ToString());
+                }
+                else
+                {
+                    // Semua VERIFIED yang belum punya file
+                    auditIds = await _context.trx_audits
+                        .Where(a => a.status == "VERIFIED" && a.audit_type == "Basic Operational" && a.report_file_excellent == null && a.id == id)
+                        .OrderByDescending(a => a.audit_execution_time)
+                        .Select(a => a.id)
+                        .ToListAsync(token);
+                }
 
-        //            // Simpan informasi file ke database
-        //            using var conn = _context.Database.GetDbConnection();
-        //            if (conn.State != ConnectionState.Open)
-        //                await conn.OpenAsync();
+                foreach (var auditId in auditIds)
+                {
+                    token.ThrowIfCancellationRequested();
 
-        //            var insertSql = @"
-        //INSERT INTO trx_audit_media 
-        //    (id, trx_audit_id, master_questioner_detail_id, media_type, media_path, type, status, created_date, created_by, updated_date, updated_by)
-        //VALUES 
-        //    (uuid_generate_v4(), @auditId, @nodeId, @mediaType, @mediaPath, 'QUESTION', 'ACTIVE', NOW(), @createdBy, NOW(), @createdBy)";
+                    var model = await GetDetailReportAsync2(Guid.Parse(auditId));
+                    if (model == null)
+                        continue;
 
+                    var document = new ReportExcellentTemplate(model);
+                    await using var pdfStream = new MemoryStream();
+                    document.GeneratePdf(pdfStream);
+                    pdfStream.Position = 0;
 
-        //            await conn.ExecuteAsync(insertSql, new
-        //            {
-        //                auditId,
-        //                nodeId,
-        //                mediaType = Path.GetExtension(fileName).Trim('.').ToLower(),
-        //                mediaPath = $"/uploads/{auditId}/{fileName}",
-        //                createdBy = User.Identity?.Name ?? "anonymous"
-        //            });
+                    string spbuNo = model.SpbuNo?.Replace(" ", "") ?? "SPBU";
+                    string tanggalAudit = model.TanggalAudit?.ToString("yyyyMMdd") ?? "00000000";
+                    string idSuffix = auditId.Replace("-", "");
+                    idSuffix = idSuffix.Substring(idSuffix.Length - 6);
+                    string fileName = $"report_excellent_{spbuNo}_{tanggalAudit}_{idSuffix}.pdf";
+                    string fullPath = Path.Combine(outputDirectory, fileName);
 
-        //            return RedirectToAction("Detail", new { id = auditId });
-        //        }
+                    await using var fileStream = new FileStream(fullPath, FileMode.Create, FileAccess.Write);
+                    await pdfStream.CopyToAsync(fileStream, token);
+
+                    await _context.Database.ExecuteSqlRawAsync(
+                        "UPDATE trx_audit SET report_file_excellent = {0} WHERE id = {1}",
+                        fileName, auditId);
+                }
+            }
+            catch
+            {
+                // Biarkan error propagate ke log / middleware
+                throw;
+            }
+        }
+
+        private async Task<DetailReportViewModel> GetDetailReportAsync2(Guid id)
+        {
+            await using var conn = new NpgsqlConnection(_configuration.GetConnectionString("DefaultConnection"));
+            await conn.OpenAsync();
+
+            var idStr = id.ToString();
+
+            var auditHeader = await GetAuditHeaderAsync(conn, idStr);
+            if (auditHeader == null)
+                throw new Exception("Data tidak ditemukan.");
+
+            var model = MapToViewModel(auditHeader);
+            model.FinalDocuments = await GetMediaNotesAsync(conn, idStr, "FINAL");
+            model.QqChecks = await GetQqCheckDataAsync(conn, idStr);
+
+            var checklistData = await GetChecklistDataAsync(conn, idStr);
+            var mediaList = await GetMediaPerNodeAsync(conn, idStr);
+            model.Elements = BuildHierarchy(checklistData, mediaList);
+            model.FotoTemuan = await GetMediaReportFAsync(conn, idStr);
+            _logger.LogInformation("FotoTemuan: {Path}", model.FotoTemuan);
+
+            foreach (var element in model.Elements)
+                AssignWeightRecursive(element);
+
+            CalculateChecklistScores(model.Elements);
+
+            var scoreSql = @"
+SELECT mqd.weight, tac.score_input, mqd.is_relaksasi
+FROM master_questioner_detail mqd
+LEFT JOIN trx_audit_checklist tac 
+    ON tac.master_questioner_detail_id = mqd.id 
+    AND tac.trx_audit_id = @id
+WHERE mqd.master_questioner_id = (
+    SELECT master_questioner_checklist_id 
+    FROM trx_audit 
+    WHERE id = @id
+)
+AND mqd.type = 'QUESTION'";
+            var checklist = (await conn.QueryAsync<(decimal? weight, string score_input, bool? is_relaksasi)>(scoreSql, new { id = idStr })).ToList();
+
+            decimal totalScore = 0, maxScore = 0;
+            foreach (var item in checklist)
+            {
+                decimal w = item.weight ?? 0;
+                decimal v = item.is_relaksasi == true
+                    ? 1.00m
+                    : item.score_input switch
+                    {
+                        "A" => 1.00m,
+                        "B" => 0.80m,
+                        "C" => 0.60m,
+                        "D" => 0.40m,
+                        "E" => 0.20m,
+                        "F" => 0.00m,
+                        _ => 0.00m
+                    };
+                totalScore += v * w;
+                maxScore += w;
+            }
+
+            decimal finalScore = maxScore > 0 ? totalScore / maxScore * 100 : 0m;
+            model.Score = finalScore;
+
+            // Penalty
+            model.PenaltyAlerts = await conn.ExecuteScalarAsync<string>(@"SELECT STRING_AGG(mqd.penalty_alert, ', ') AS penalty_alerts
+                FROM trx_audit_checklist tac
+                INNER JOIN master_questioner_detail mqd ON mqd.id = tac.master_questioner_detail_id
+                INNER JOIN trx_audit ta ON ta.id = tac.trx_audit_id
+                WHERE 
+                tac.trx_audit_id = @id
+                AND (
+                    (
+                        tac.master_questioner_detail_id IN (
+                    '555fe2e4-b95b-461b-9c92-ad8b5c837119',
+                    'bafc206f-ed29-4bbc-8053-38799e186fb0',
+                    'd26f4caa-e849-4ab4-9372-298693247272'
+                )
+                AND tac.score_input <> 'A'
+                )
+                OR
+                (
+                tac.master_questioner_detail_id = '5e9ffc47-de99-4d7d-b8bc-0fb9b7acc81b'
+                AND ta.created_date < '2025-06-01'
+                AND tac.score_input <> 'A')
+                OR
+                (
+                    (
+                    (mqd.penalty_excellent_criteria = 'LT_1' AND tac.score_input <> 'A') OR
+                    (mqd.penalty_excellent_criteria = 'EQ_0' AND tac.score_input = 'F')
+                )
+                AND (mqd.is_relaksasi = false OR mqd.is_relaksasi IS NULL)
+                AND mqd.is_penalty = true
+                AND NOT (
+                    mqd.id = '5e9ffc47-de99-4d7d-b8bc-0fb9b7acc81b'
+                    AND ta.created_date >= '2025-06-01'
+                )));", new { id = idStr });
+
+            model.PenaltyAlertsGood = await conn.ExecuteScalarAsync<string>(@"
+            SELECT STRING_AGG(mqd.penalty_alert, ', ') AS penalty_alerts
+            FROM trx_audit_checklist tac
+            INNER JOIN master_questioner_detail mqd ON mqd.id = tac.master_questioner_detail_id
+            WHERE 
+                tac.trx_audit_id = @id AND
+                tac.score_input = 'F' AND
+                mqd.is_penalty = true AND 
+                (mqd.is_relaksasi = false OR mqd.is_relaksasi IS NULL) and mqd.id <> '5e9ffc47-de99-4d7d-b8bc-0fb9b7acc81b';", new { id = idStr });
+
+            CalculateOverallScore(model, checklistData);
+            var compliance = HitungComplianceLevelDariElements(model.Elements);
+            model.SSS = Math.Round(compliance.SSS ?? 0, 2);
+            model.EQnQ = Math.Round(compliance.EQnQ ?? 0, 2);
+            model.RFS = Math.Round(compliance.RFS ?? 0, 2);
+
+            model.GoodStatus = "NOT CERTIFIED";
+            model.ExcellentStatus = "NOT CERTIFIED";
+
+            model.TanggalAudit = await conn.ExecuteScalarAsync<DateTime?>(
+                @"SELECT audit_execution_time FROM trx_audit WHERE id = @id", new { id = idStr });
+
+            bool failGood = model.SSS < 80 || model.EQnQ < 85 || model.RFS < 85 || model.VFC < 15 || model.EPO < 25;
+            bool failExcellent = model.SSS < 85 || model.EQnQ < 85 || model.RFS < 85 || model.VFC < 20 || model.EPO < 50;
+            bool hasExcellentPenalty = !string.IsNullOrEmpty(model.PenaltyAlerts);
+            bool hasGoodPenalty = !string.IsNullOrEmpty(model.PenaltyAlertsGood);
+
+            if (finalScore >= 75 && !hasGoodPenalty && !failGood)
+                model.GoodStatus = "CERTIFIED";
+
+            if (finalScore >= 80 && !hasExcellentPenalty && !failExcellent)
+                model.ExcellentStatus = "CERTIFIED";
+
+            var auditFlowSql = @"SELECT * FROM master_audit_flow WHERE audit_level = @level LIMIT 1;";
+            var auditFlow = await conn.QueryFirstOrDefaultAsync<dynamic>(auditFlowSql, new { level = model.AuditCurrent });
+
+            string auditNext = null, levelspbu = null;
+            if (auditFlow != null)
+            {
+                if (model.GoodStatus == "CERTIFIED" && model.ExcellentStatus == "CERTIFIED")
+                    auditNext = auditFlow.passed_excellent;
+                else if (model.GoodStatus == "CERTIFIED")
+                    auditNext = auditFlow.passed_good;
+                else
+                    auditNext = auditFlow.failed_audit_level;
+
+                if (auditNext == null)
+                    auditNext = auditFlow.passed_audit_level;
+
+                var auditLevelClass = await conn.QueryFirstOrDefaultAsync<dynamic>(
+                    @"SELECT audit_level_class FROM master_audit_flow WHERE audit_level = @level LIMIT 1;",
+                    new { level = auditNext });
+
+                levelspbu = auditLevelClass?.audit_level_class ?? "";
+            }
+
+            model.AuditNext = auditNext;
+            model.ClassSPBU = levelspbu;
+
+            return model;
+        }
+
+        private async Task<List<MediaItem>> GetMediaNotesAsync(IDbConnection conn, string id, string type)
+        {
+            string sql = @"SELECT media_type, media_path
+                   FROM trx_audit_media
+                   WHERE trx_audit_id = @id AND type = @type";
+
+            var raw = await conn.QueryAsync<(string media_type, string media_path)>(sql, new { id, type });
+
+            return raw.Select(x => new MediaItem
+            {
+                MediaType = x.media_type,
+                MediaPath = "https://epas-assets.zarata.co.id" + x.media_path
+            }).ToList();
+        }
+
+        private async Task<List<AuditQqCheckItem>> GetQqCheckDataAsync(IDbConnection conn, string id)
+        {
+            string sql = @"SELECT nozzle_number AS NozzleNumber,
+                       du_make  AS DuMake,
+                       du_serial_no AS DuSerialNo,
+                       product  AS Product,
+                       mode     AS Mode,
+                       quantity_variation_with_measure AS QuantityVariationWithMeasure,
+                       quantity_variation_in_percentage  AS QuantityVariationInPercentage,
+                       observed_density      AS ObservedDensity,
+                       observed_temp         AS ObservedTemp,
+                       observed_density_15_degree   AS ObservedDensity15Degree,
+                       reference_density_15_degree  AS ReferenceDensity15Degree,
+                       tank_number  AS TankNumber,
+                       density_variation AS DensityVariation
+                FROM trx_audit_qq
+                WHERE trx_audit_id = @id";
+            var data = await conn.QueryAsync<AuditQqCheckItem>(sql, new { id });
+            return data.ToList();
+        }
+
+        private async Task<List<FotoTemuan>> GetMediaReportFAsync(IDbConnection conn, string id)
+        {
+            string sql = @"SELECT ac.""comment"" as title,am.media_path
+                        FROM trx_audit_media am
+                        JOIN trx_audit_checklist ac
+                          ON am.trx_audit_id = ac.trx_audit_id
+                          AND am.master_questioner_detail_id = ac.master_questioner_detail_id
+                         join master_questioner_detail mqd on mqd.id  = ac.master_questioner_detail_id 
+                        WHERE ac.score_input = 'F'
+                          AND am.trx_audit_id = @id";
+
+            var raw = await conn.QueryAsync<(string media_type, string media_path)>(sql, new { id });
+
+            return raw.Select(x => new FotoTemuan
+            {
+                Caption = x.media_type,
+                Path = x.media_path
+            }).ToList();
+        }
+
 
         [HttpPost("BasicOperational/UploadDocument")]
         public async Task<IActionResult> UploadDocument(IFormFile file, string nodeId, string auditId)

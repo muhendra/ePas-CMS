@@ -142,7 +142,8 @@
                 @foreach (var sbm in Model.SbmList)
                 {
                     <div class="form-check">
-                        <input class="form-check-input sbm-checkbox" type="checkbox" value="@sbm.Value" data-name="@sbm.Text">
+                        <input class="form-check-input sbm-checkbox" type="checkbox" value="@sbm.Value" data-name="@sbm.Text"
+                        @(Model.SelectedSbmIds.Contains(sbm.Value) ? "checked" : "")>
                         <label class="form-check-label">@sbm.Text</label>
                     </div>
                 }
