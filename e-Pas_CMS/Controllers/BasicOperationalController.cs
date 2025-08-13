@@ -1266,7 +1266,7 @@ VALUES
         }
 
         [HttpGet]
-        public async Task GenerateAllVerifiedPdfReports(string id)
+        public async Task GenerateAllVerifiedPdfReports(string ids)
         {
             using var timeoutCts = new CancellationTokenSource(TimeSpan.FromHours(6));
             var token = CancellationTokenSource
@@ -1279,28 +1279,18 @@ VALUES
                 if (!Directory.Exists(outputDirectory))
                     Directory.CreateDirectory(outputDirectory);
 
-                var auditIds = new List<string>();
+                var auditIds = await _context.trx_audits
+                    .Where(a => a.status == "VERIFIED" && a.audit_type != "Basic Operational" && a.report_file_excellent == null && a.id == ids)
+                    .OrderByDescending(a => a.audit_execution_time)
+                    //.Take(10)
+                    .Select(a => a.id)
+                    .ToListAsync(token);  // <- inject token
 
-                if (id != null)
-                {
-                    // Hanya 1 ID dari parameter
-                    auditIds.Add(id.ToString());
-                }
-                else
-                {
-                    // Semua VERIFIED yang belum punya file
-                    auditIds = await _context.trx_audits
-                        .Where(a => a.status == "VERIFIED" && a.audit_type == "Basic Operational" && a.report_file_excellent == null && a.id == id)
-                        .OrderByDescending(a => a.audit_execution_time)
-                        .Select(a => a.id)
-                        .ToListAsync(token);
-                }
-
-                foreach (var auditId in auditIds)
+                foreach (var id in auditIds)
                 {
                     token.ThrowIfCancellationRequested();
 
-                    var model = await GetDetailReportAsync2(Guid.Parse(auditId));
+                    var model = await GetDetailReportAsync2(Guid.Parse(id));
                     if (model == null)
                         continue;
 
@@ -1311,26 +1301,31 @@ VALUES
 
                     string spbuNo = model.SpbuNo?.Replace(" ", "") ?? "SPBU";
                     string tanggalAudit = model.TanggalAudit?.ToString("yyyyMMdd") ?? "00000000";
-                    string idSuffix = auditId.Replace("-", "");
+                    string idSuffix = id.Replace("-", "");
                     idSuffix = idSuffix.Substring(idSuffix.Length - 6);
                     string fileName = $"report_excellent_{spbuNo}_{tanggalAudit}_{idSuffix}.pdf";
                     string fullPath = Path.Combine(outputDirectory, fileName);
+
 
                     await using var fileStream = new FileStream(fullPath, FileMode.Create, FileAccess.Write);
                     await pdfStream.CopyToAsync(fileStream, token);
 
                     await _context.Database.ExecuteSqlRawAsync(
-                        "UPDATE trx_audit SET report_file_excellent = {0} WHERE id = {1}",
-                        fileName, auditId);
+                    "UPDATE trx_audit SET report_file_excellent = {0} WHERE id = {1}",
+                    fileName, id.ToString());
                 }
+
+                //return Ok(new { message = "PDF generation completed" });
             }
-            catch
+            catch (OperationCanceledException)
             {
-                // Biarkan error propagate ke log / middleware
-                throw;
+                //return StatusCode(408, new { error = "Operation timed out or request was cancelled." });
+            }
+            catch (Exception ex)
+            {
+                //return StatusCode(500, new { error = ex.Message, stack = ex.StackTrace });
             }
         }
-
         private async Task<DetailReportViewModel> GetDetailReportAsync2(Guid id)
         {
             await using var conn = new NpgsqlConnection(_configuration.GetConnectionString("DefaultConnection"));

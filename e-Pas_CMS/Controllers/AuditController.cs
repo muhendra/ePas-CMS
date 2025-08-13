@@ -479,7 +479,7 @@ WHERE
         }
 
         [HttpGet]
-        public async Task GenerateAllVerifiedPdfReportsGood()
+        public async Task GenerateAllVerifiedPdfReportsGood(string ids)
         {
             using var timeoutCts = new CancellationTokenSource(TimeSpan.FromHours(6));
             var token = CancellationTokenSource
@@ -493,7 +493,7 @@ WHERE
                     Directory.CreateDirectory(outputDirectory);
 
                 var auditIds = await _context.trx_audits
-                    .Where(a => a.status == "VERIFIED" && a.audit_type != "Basic Operational" && a.report_file_good == null)
+                    .Where(a => a.status == "VERIFIED" && a.audit_type != "Basic Operational" && a.report_file_good == null && a.id == ids)
                     .OrderByDescending(a => a.audit_execution_time)
                     //.Take(10)
                     .Select(a => a.id)
@@ -538,8 +538,6 @@ WHERE
                 //return StatusCode(500, new { error = ex.Message, stack = ex.StackTrace });
             }
         }
-
-
 
         private async Task<DetailReportViewModel> GetDetailReportAsync2(Guid id)
         {
@@ -1139,8 +1137,7 @@ AND mqd.type = 'QUESTION'";
             });
 
             await GenerateAllVerifiedPdfReports(id);
-
-            //await GenerateAllVerifiedPdfReportsGood(id);
+            await GenerateAllVerifiedPdfReportsGood(id);
 
             TempData["Success"] = "Laporan audit telah disetujui.";
             return RedirectToAction("Detail", new { id });
