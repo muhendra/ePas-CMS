@@ -1,11 +1,15 @@
-﻿using Dapper;
+﻿using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Threading.Tasks;
+using Dapper;
 using e_Pas_CMS.Data;
 using e_Pas_CMS.ViewModels;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
-
 
 namespace e_Pas_CMS.Controllers
 {
@@ -20,22 +24,19 @@ namespace e_Pas_CMS.Controllers
             _context = context;
         }
 
-        //Complain? type = KOMPLAIN   atau   /Complain? type = BANDING
+        // GET: /Complain?type=KOMPLAIN|BANDING
         public async Task<IActionResult> Index(
             string type = "BANDING",
             int pageNumber = 1,
             int pageSize = DefaultPageSize,
             string search = "")
         {
-            // Filter akses region/sbm seperti di AuditController (opsional, aktifkan kalau perlu)
-            var currentUser = User.Identity?.Name;
-
             var baseQuery =
                 from fb in _context.TrxFeedbacks
                 join ta in _context.trx_audits on fb.TrxAuditId equals ta.id
                 join sp in _context.spbus on ta.spbu_id equals sp.id
                 join au in _context.app_users on ta.app_user_id equals au.id
-                where fb.FeedbackType == type // "KOMPLAIN" / "BANDING"
+                where fb.FeedbackType == type
                 select new
                 {
                     Fb = fb,
@@ -61,13 +62,11 @@ namespace e_Pas_CMS.Controllers
                 .Take(pageSize)
                 .ToListAsync();
 
-            // buka koneksi Dapper untuk hitung skor (mengikuti pola di AuditController)
             var connectionString = _context.Database.GetConnectionString();
             await using var conn = new NpgsqlConnection(connectionString);
             await conn.OpenAsync();
 
             var result = new List<ComplainListItemViewModel>();
-
             foreach (var it in pageItems)
             {
                 var sql = @"
@@ -151,95 +150,167 @@ namespace e_Pas_CMS.Controllers
             };
 
             ViewBag.Search = search;
-            ViewBag.Type = type; // untuk tab aktif
+            ViewBag.Type = type;
 
             return View(vm);
         }
 
+        // GET: /Complain/Detail/{id}
         [HttpGet("Complain/Detail/{id}")]
         public async Task<IActionResult> Detail(string id)
         {
             if (string.IsNullOrWhiteSpace(id))
                 return NotFound();
 
-            var q =
-                from tf in _context.TrxFeedbacks
-                join ta in _context.trx_audits on tf.TrxAuditId equals ta.id
-                join s in _context.spbus on ta.spbu_id equals s.id
-                join au in _context.app_users on ta.app_user_id equals au.id into aud1
-                join tfp in _context.TrxFeedbackPoints on tf.Id equals tfp.TrxFeedbackId
-                from au in aud1.DefaultIfEmpty()
-                where tf.Id == id
-                select new
-                {
-                    Tf = tf,
-                    Ta = ta,
-                    S = s,
-                    tfp = tfp,
-                    Auditor1 = au != null ? au.name : "-"
-                    // kalau ada kolom auditor2/koordinator/verifikator lain, bisa di-join tambahan di sini
-                };
+            var header =
+                await (from tf in _context.TrxFeedbacks
+                       join ta in _context.trx_audits on tf.TrxAuditId equals ta.id
+                       join s in _context.spbus on ta.spbu_id equals s.id
+                       join au in _context.app_users on ta.app_user_id equals au.id into aud1
+                       from au in aud1.DefaultIfEmpty()
+                       where tf.Id == id
+                       select new
+                       {
+                           Tf = tf,
+                           Ta = ta,
+                           S = s,
+                           Auditor1 = au != null ? au.name : "-"
+                       }).FirstOrDefaultAsync();
 
-            var data = await q.FirstOrDefaultAsync();
-            if (data == null) return NotFound();
+            if (header == null) return NotFound();
 
             var vm = new ComplainDetailViewModel
             {
-                // Flag halaman
-                IsBanding = string.Equals(data.Tf.FeedbackType, "BANDING", StringComparison.OrdinalIgnoreCase),
-                StatusCode = data.Tf.Status,
-                StatusText = MapStatusText(data.Tf.Status),
+                // Status & jenis
+                IsBanding = string.Equals(header.Tf.FeedbackType, "BANDING", StringComparison.OrdinalIgnoreCase),
+                StatusCode = header.Tf.Status,
+                StatusText = MapStatusText(header.Tf.Status),
 
                 // SPBU
-                NoSpbu = data.S.spbu_no,
-                Region = data.S.region,
-                City = data.S.city_name,
-                Address = data.S.address,
+                NoSpbu = header.S.spbu_no,
+                Region = header.S.region,
+                City = header.S.city_name,
+                Address = header.S.address,
 
-                // AUDIT – ngikut AuditController.Detail
-                ReportNo = data.Ta.report_no,                                       // No. Report
-                TanggalAudit = (data.Ta.audit_execution_time == null ||
-                                data.Ta.audit_execution_time == DateTime.MinValue)
-                                ? data.Ta.updated_date
-                                : data.Ta.audit_execution_time,                           // Tanggal Audit
-                SentDate = data.Ta.updated_date,                                    // “Sent Date” (pakai updated_date seperti di Audit)
-                Verifikator = data.Ta.approval_by,                                     // kalau kolom ada
-                Auditor1 = data.Auditor1,
-                Auditor2 = "",                                   // kalau kolom ada
-                TipeAudit = data.Ta.audit_type,
-                NextAudit = data.Ta.audit_level,                                     // label next/level yang ditampilkan di screenshot
-                Koordinator = "Sabar Kembaren",                                     // kalau kolom ada
+                // Audit
+                ReportNo = header.Ta.report_no,
+                TanggalAudit = (header.Ta.audit_execution_time == null || header.Ta.audit_execution_time == DateTime.MinValue)
+                                ? header.Ta.updated_date
+                                : header.Ta.audit_execution_time,
+                SentDate = header.Ta.updated_date,
+                Verifikator = header.Ta.approval_by,
+                Auditor1 = header.Auditor1,
+                Auditor2 = "",
+                TipeAudit = header.Ta.audit_type,
+                NextAudit = header.Ta.audit_level,
+                Koordinator = "Sabar Kembaren",
 
-                // Info Komplain/Banding
-                Id = data.Tf.Id,
-                TicketNo = data.Tf.TicketNo,
-                NomorBanding = data.Tf.TicketNo,                                   // kalau kolom ada
-                CreatedDate = data.Tf.CreatedDate,
+                // Tiket
+                Id = header.Tf.Id,
+                TicketNo = header.Tf.TicketNo,
+                NomorBanding = header.Tf.TicketNo,
+                CreatedDate = header.Tf.CreatedDate,
 
-                // Opsional – kalau isi komplain disimpan di trx_feedback
-                BodyText = data.tfp.Description,                                     // ganti ke kolom sebenarnya kalau beda
+                // Body global (jika kosong akan diisi dari poin pertama)
+                BodyText = null,
 
-                // Dokumen & poin – isi dari tabel terpisah kalau ada
                 Points = new List<PointItem>(),
                 Attachments = new List<AttachmentItem>(),
 
                 // Aksi
-                CanApprove = string.Equals(data.Tf.Status, "MENUNGGU", StringComparison.OrdinalIgnoreCase),
-                CanReject = string.Equals(data.Tf.Status, "MENUNGGU", StringComparison.OrdinalIgnoreCase),
+                CanApprove = string.Equals(header.Tf.Status, "IN_PROGRESS_SUBMIT", StringComparison.OrdinalIgnoreCase),
+                CanReject = string.Equals(header.Tf.Status, "IN_PROGRESS_SUBMIT", StringComparison.OrdinalIgnoreCase),
             };
 
-            // ==== contoh ambil lampiran & poin kalau tabelnya ada ====
-            // vm.Attachments = await _context.trx_feedback_files
-            //     .Where(f => f.trx_feedback_id == id)
-            //     .Select(f => new AttachmentItem { Id = f.id, FileName = f.file_name, SizeReadable = f.size_readable })
-            //     .ToListAsync();
-            //
-            // vm.Points = await _context.trx_feedback_points
-            //     .Where(p => p.trx_feedback_id == id)
-            //     .Select(p => new PointItem { Element = p.element, SubElement = p.sub_element, DetailElement = p.detail_element, DetailDibantah = p.detail_dibantah })
-            //     .ToListAsync();
+            var cs = _context.Database.GetConnectionString();
+            await using var conn = new NpgsqlConnection(cs);
+            await conn.OpenAsync();
 
-            return View(vm); // Views/Complain/Detail.cshtml
+            // Ambil poin + label element/sub/detail + elemen yang dibanding (string_agg nomor)
+            var pointRows = await conn.QueryAsync<PointRow>(@"
+                SELECT 
+                p.element_master_questioner_detail_id AS point_id,
+                p.description AS description,
+                COALESCE(e.title || '. ' || e.description, '-')  AS element_label,
+                COALESCE(se.title || '. ' || se.description, '-') AS sub_element_label,
+                COALESCE(de.number || '. ' || de.title, '-') AS detail_element_label,
+                COALESCE((
+                SELECT string_agg(me.number, ', ' ORDER BY me.number)
+                FROM trx_feedback_point_element pe
+                JOIN master_questioner_detail me ON me.id = pe.master_questioner_detail_id
+                WHERE pe.trx_feedback_point_id = p.id
+            ), '') AS compared_elements
+            FROM trx_feedback_point p
+            LEFT JOIN master_questioner_detail e  ON e.id  = p.element_master_questioner_detail_id
+            LEFT JOIN master_questioner_detail se ON se.id = p.sub_element_master_questioner_detail_id
+            LEFT JOIN master_questioner_detail de ON de.id = p.detail_element_master_questioner_detail_id
+            WHERE p.trx_feedback_id = @fid
+            ORDER BY p.created_date asc", new { fid = id });
+
+            var pointList = pointRows.ToList();
+            int idx = 1;
+            foreach (var pr in pointList)
+            {
+                var pointVm = new PointItem
+                {
+                    Element = pr.element_label,
+                    SubElement = pr.sub_element_label,
+                    DetailElement = pr.detail_element_label,
+                    DetailDibantah = string.IsNullOrWhiteSpace(pr.compared_elements) ? "-" : pr.compared_elements,
+                    Description = pr.description,
+                    Attachments = new List<AttachmentItem>()
+                };
+
+                // Isi Body global dari poin pertama jika BodyText masih kosong
+                if (idx == 1 && string.IsNullOrWhiteSpace(vm.BodyText))
+                    vm.BodyText = pr.description;
+
+                // Media per poin
+                var medias = await conn.QueryAsync<MediaRow>(@"
+                    SELECT id, media_type, media_path
+                    FROM trx_feedback_point_media
+                    WHERE trx_feedback_point_id = @pid
+                      AND (status IS NULL OR status <> 'DELETED')
+                    ORDER BY created_date ASC;", new { pid = pr.point_id });
+
+                int fileIdx = 1;
+                foreach (var m in medias)
+                {
+                    var fileName = Path.GetFileName(m.media_path);
+                    if (string.IsNullOrWhiteSpace(fileName))
+                        fileName = $"Dokumen Pendukung {fileIdx}.pdf";
+
+                    pointVm.Attachments.Add(new AttachmentItem
+                    {
+                        Id = m.id,
+                        FileName = fileName,
+                        SizeReadable = null
+                    });
+                    fileIdx++;
+                }
+
+                vm.Points.Add(pointVm);
+                idx++;
+            }
+
+            return View(vm);
+        }
+
+        private sealed class PointRow
+        {
+            public string point_id { get; set; } = default!;
+            public string description { get; set; } = default!;
+            public string element_label { get; set; } = default!;
+            public string sub_element_label { get; set; } = default!;
+            public string detail_element_label { get; set; } = default!;
+            public string compared_elements { get; set; } = default!;
+        }
+
+        private sealed class MediaRow
+        {
+            public string id { get; set; } = default!;
+            public string media_type { get; set; } = default!;
+            public string media_path { get; set; } = default!;
         }
 
         private static string MapStatusText(string raw)
@@ -254,6 +325,7 @@ namespace e_Pas_CMS.Controllers
                 _ => raw
             };
         }
+
         // POST: /Complain/Approve
         [HttpPost]
         [ValidateAntiForgeryToken]
@@ -276,7 +348,7 @@ namespace e_Pas_CMS.Controllers
             return RedirectToAction(nameof(Detail), new { id });
         }
 
-        // GET (atau POST) /Complain/Reject?id=...&reason=...
+        // GET: /Complain/Reject?id=...&reason=...
         [HttpGet]
         public async Task<IActionResult> Reject(string id, string reason = "")
         {
@@ -292,7 +364,7 @@ namespace e_Pas_CMS.Controllers
             entity.UpdatedBy = entity.ApprovalBy;
             entity.UpdatedDate = DateTime.UtcNow;
 
-            // simpan reason bila kamu punya kolom reason di trx_feedback (mis: reject_reason)
+            // Jika ada kolom alasan penolakan:
             // entity.reject_reason = reason;
 
             await _context.SaveChangesAsync();
@@ -300,18 +372,36 @@ namespace e_Pas_CMS.Controllers
             return RedirectToAction(nameof(Detail), new { id });
         }
 
-        // GET: /Complain/Download/{idFile}
-        // Sesuaikan dengan storage/lampiran kamu.
+        // GET: /Complain/Download/{idMedia}
         public async Task<IActionResult> Download(string id)
         {
-            // Contoh implementasi jika punya tabel file:
-            // var f = await _context.trx_feedback_files.FirstOrDefaultAsync(x => x.id == id);
-            // if (f == null) return NotFound();
-            // var bytes = System.IO.File.ReadAllBytes(Path.Combine(_env.WebRootPath, "uploads", f.storage_name));
-            // return File(bytes, f.content_type ?? "application/octet-stream", f.file_name ?? "lampiran");
+            if (string.IsNullOrWhiteSpace(id))
+                return NotFound();
 
-            return NotFound(); // hapus setelah kamu isi implementasi download
+            var cs = _context.Database.GetConnectionString();
+            await using var conn = new NpgsqlConnection(cs);
+            await conn.OpenAsync();
+
+            var media = await conn.QueryFirstOrDefaultAsync<MediaRow>(@"
+                SELECT id, media_type, media_path
+                FROM trx_feedback_point_media
+                WHERE id = @id;", new { id });
+
+            if (media == null) return NotFound();
+
+            // Atur root sesuai storage Anda
+            var baseUploadRoot = Path.Combine("/var/www/epas-asset", "wwwroot"); // sesuaikan
+            var fullPath = media.media_path;
+            if (!Path.IsPathRooted(fullPath))
+                fullPath = Path.Combine(baseUploadRoot, media.media_path.TrimStart('/', '\\'));
+
+            if (!System.IO.File.Exists(fullPath))
+                return NotFound();
+
+            var fileName = Path.GetFileName(fullPath);
+            var contentType = string.IsNullOrWhiteSpace(media.media_type) ? "application/octet-stream" : media.media_type;
+            var bytes = await System.IO.File.ReadAllBytesAsync(fullPath);
+            return File(bytes, contentType, fileName);
         }
-
     }
 }

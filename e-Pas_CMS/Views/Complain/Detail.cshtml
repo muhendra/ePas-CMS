@@ -2,7 +2,7 @@
 @{
     ViewData["Title"] = Model.IsBanding ? "Detail Banding" : "Detail Komplain";
 
-    string statusClass = "bg-warning text-dark";
+    string statusClass = "bg-warning";
     string statusText = Model.StatusText ?? "-";
     switch ((Model.StatusCode ?? "").Trim().ToUpperInvariant())
     {
@@ -13,54 +13,19 @@
 }
 
 <style>
-    .card-soft {
-        border: 1px solid #eef2f7;
-        border-radius: .75rem;
-    }
-
-    .section-title {
-        font-weight: 600;
-        font-size: 1.05rem;
-        margin-bottom: .75rem;
-    }
-
-    .kv .label {
-        color: #6b7280;
-        font-size: .85rem;
-    }
-
-    .kv .value {
-        font-weight: 500;
-    }
-
-    .banner-status {
-        border-radius: .75rem;
-        font-weight: 600;
-        text-align: center;
-        padding: .9rem 1rem;
-    }
-
-    .muted {
-        color: #6b7280;
-    }
-
-    .min-h-row {
-        min-height: 28px;
-    }
-
-    .table-sm th, .table-sm td {
-        vertical-align: middle;
-    }
-
-    .banner-status {
-        border-radius: .75rem;
-        text-align: center;
-        padding: 1rem;
-    }
+    .card-soft { border: 1px solid #eef2f7; border-radius: .75rem; }
+    .section-title { font-weight: 600; font-size: 1.05rem; margin-bottom: .75rem; }
+    .kv .label { color: #6b7280; font-size: .85rem; }
+    .kv .value { font-weight: 500; }
+    .banner-status { border-radius: .75rem; text-align: center; padding: .95rem 1rem; }
+    .muted { color: #6b7280; }
+    .min-h-row { min-height: 28px; }
+    .table-sm th, .table-sm td { vertical-align: middle; }
+    .point-title { font-weight: 600; margin-bottom: .5rem; }
+    .divider { height: 1px; background: #eef2f7; margin: 1rem 0; }
 </style>
 
 <div class="container-fluid px-0">
-
     <!-- Breadcrumb + Title -->
     <div class="mb-3">
         <nav aria-label="breadcrumb">
@@ -72,7 +37,7 @@
         <h4 class="mb-0">@ViewData["Title"]</h4>
     </div>
 
-    <!-- Status Banner -->
+    <!-- Status Banner (kuning/merah/hijau sesuai status) -->
     <div class="mb-3">
         <div class="banner-status @statusClass text-white">
             <h4 class="fw-bold mb-0">@statusText</h4>
@@ -153,11 +118,15 @@
         </div>
     </div>
 
-    <!-- Informasi Komplain/Banding -->
+    <!-- Informasi Banding/Komplain -->
     <div class="card card-soft mb-3">
         <div class="card-body">
             <div class="section-title">Informasi @(Model.IsBanding ? "Banding" : "Komplain")</div>
             <div class="row row-cols-1 row-cols-md-2 row-cols-lg-4 g-3 kv">
+                <div class="col">
+                    <div class="label">Status @(Model.IsBanding ? "Banding" : "Komplain")</div>
+                    <div class="value">@statusText</div>
+                </div>
                 <div class="col">
                     <div class="label">Nomor Tiket</div>
                     <div class="value">@Model.TicketNo</div>
@@ -167,88 +136,80 @@
                     <div class="value">@(!string.IsNullOrWhiteSpace(Model.NomorBanding) ? Model.NomorBanding : "-")</div>
                 </div>
                 <div class="col">
-                    <div class="label">Status @(Model.IsBanding ? "Banding" : "Komplain")</div>
-                    <div class="value">@statusText</div>
-                </div>
-                <div class="col">
                     <div class="label">Tgl Pengajuan</div>
                     <div class="value">
                         @(Model.CreatedDate.HasValue ? Model.CreatedDate.Value.ToString("dd/MM/yyyy, HH:mm") + " WIB" : "-")
                     </div>
                 </div>
             </div>
+        </div>
+    </div>
 
-            @if (Model.Points != null && Model.Points.Any())
-            {
-                <div class="mt-3">
-                    <div class="section-title mb-2">Poin @(Model.IsBanding ? "Banding" : "Komplain")</div>
-                    <div class="table-responsive">
+    <!-- Daftar Poin Banding/Komplain (per poin seperti gambar) -->
+    @if (Model.Points != null && Model.Points.Any())
+    {
+        var idx = 1;
+        foreach (var p in Model.Points)
+        {
+            <div class="card card-soft mb-3">
+                <div class="card-body">
+                    <div class="point-title">Poin @idx</div>
+
+                    <div class="table-responsive mb-3">
                         <table class="table table-sm align-middle mb-0">
                             <thead class="table-light">
                                 <tr>
-                                    <th style="width:120px">Element</th>
-                                    <th style="width:140px">Sub Element</th>
-                                    <th style="width:160px">Detail Element</th>
-                                    <th>Detail yang @(Model.IsBanding ? "dibantah" : "dikomplain")</th>
+                                    <th style="width:140px">Element</th>
+                                    <th style="width:160px">Sub Element</th>
+                                    <th style="width:180px">Detail Element</th>
+                                    <th>Element yang @(Model.IsBanding ? "dibanding" : "dikomplain")</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                @foreach (var p in Model.Points)
-                                {
-                                    <tr>
-                                        <td>@p.Element</td>
-                                        <td>@p.SubElement</td>
-                                        <td>@p.DetailElement</td>
-                                        <td>@p.DetailDibantah</td>
-                                    </tr>
-                                }
+                                <tr>
+                                    <td>@(string.IsNullOrWhiteSpace(p.Element) ? "-" : p.Element)</td>
+                                    <td>@(string.IsNullOrWhiteSpace(p.SubElement) ? "-" : p.SubElement)</td>
+                                    <td>@(string.IsNullOrWhiteSpace(p.DetailElement) ? "-" : p.DetailElement)</td>
+                                    <td>@(string.IsNullOrWhiteSpace(p.DetailDibantah) ? "-" : p.DetailDibantah)</td>
+                                </tr>
                             </tbody>
                         </table>
                     </div>
-                </div>
-            }
-        </div>
-    </div>
 
-    <!-- Isi Banding/Komplain -->
-    <div class="card card-soft mb-3">
-        <div class="card-body">
-            <div class="section-title">Isi @(Model.IsBanding ? "Banding" : "Komplain")</div>
-            <div class="muted">
-                @(string.IsNullOrWhiteSpace(Model.BodyText) ? "-" : Model.BodyText)
-            </div>
-        </div>
-    </div>
+                    <div class="mb-2 fw-semibold">Isi @(Model.IsBanding ? "Banding" : "Komplain")</div>
+                    <div class="muted mb-3">
+                        @(string.IsNullOrWhiteSpace(p.Description) ? "-" : p.Description)
+                    </div>
 
-    <!-- Dokumen Pendukung -->
-    <div class="card card-soft mb-4">
-        <div class="card-body">
-            <div class="section-title">Dokumen Pendukung</div>
-            @if (Model.Attachments != null && Model.Attachments.Any())
-            {
-                <ul class="list-unstyled mb-0">
-                    @foreach (var f in Model.Attachments)
+                    <div class="mb-2 fw-semibold">Dokumen Pendukung</div>
+                    @if (p.Attachments != null && p.Attachments.Any())
                     {
-                        <li class="mb-1">
-                            <a asp-controller="Complain" asp-action="Download" asp-route-id="@f.Id" class="link-primary text-decoration-none">
-                                @(!string.IsNullOrWhiteSpace(f.FileName) ? f.FileName : "Lampiran")
-                            </a>
-                            @if (!string.IsNullOrEmpty(f.SizeReadable))
+                        <ul class="list-unstyled mb-0">
+                            @foreach (var f in p.Attachments)
                             {
-                                <span class="text-muted small ms-2">(@f.SizeReadable)</span>
+                                <li class="mb-1">
+                                    <a asp-controller="Complain" asp-action="Download" asp-route-id="@f.Id" class="link-primary text-decoration-none">
+                                        @(!string.IsNullOrWhiteSpace(f.FileName) ? f.FileName : "Lampiran")
+                                    </a>
+                                    @if (!string.IsNullOrEmpty(f.SizeReadable))
+                                    {
+                                        <span class="text-muted small ms-2">(@f.SizeReadable)</span>
+                                    }
+                                </li>
                             }
-                        </li>
+                        </ul>
                     }
-                </ul>
-            }
-            else
-            {
-                <div class="muted">Tidak ada dokumen pendukung.</div>
-            }
-        </div>
-    </div>
+                    else
+                    {
+                        <div class="muted">Tidak ada dokumen pendukung.</div>
+                    }
+                </div>
+            </div>
+            idx++;
+        }
+    }
 
-    <!-- Action buttons -->
+    <!-- Tombol aksi -->
     <div class="d-flex gap-2">
         <a asp-controller="Complain" asp-action="Index" class="btn btn-outline-secondary">&laquo; Kembali</a>
 
@@ -264,5 +225,4 @@
             <a asp-controller="Complain" asp-action="Reject" asp-route-id="@Model.Id" class="btn btn-danger">Tolak</a>
         }
     </div>
-
 </div>

@@ -45,6 +45,10 @@
         public string SubElement { get; set; }
         public string DetailElement { get; set; }
         public string DetailDibantah { get; set; }
+
+        // Tambahan untuk Detail
+        public string Description { get; set; }
+        public List<AttachmentItem> Attachments { get; set; } = new();
     }
 
     public class AttachmentItem
@@ -53,5 +57,4 @@
         public string FileName { get; set; }
         public string SizeReadable { get; set; } // opsional
     }
-
 }
