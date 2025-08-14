@@ -362,6 +362,8 @@ namespace e_Pas_CMS.Controllers
             public string id { get; set; } = default!;
             public string media_type { get; set; } = default!;
             public string media_path { get; set; } = default!;
+
+            public string trx_feedback_point_id { get; set; }
         }
 
         private static string MapStatusText(string raw)
@@ -452,13 +454,13 @@ namespace e_Pas_CMS.Controllers
             await conn.OpenAsync();
 
             var media = await conn.QueryFirstOrDefaultAsync<MediaRow>(@"
-                SELECT id, media_type, media_path
+                SELECT id, media_type, media_path, trx_feedback_point_id
                 FROM trx_feedback_point_media
                 WHERE id = @id;", new { id });
 
             if (media == null) return NotFound();
 
-            var baseUploadRoot = Path.Combine("/var/www/epas-asset", "wwwroot", "uploads", "feedback");
+            var baseUploadRoot = Path.Combine("/var/www/epas-asset", "wwwroot", "uploads", "feedback" , media.trx_feedback_point_id);
             var fullPath = media.media_path;
             if (!Path.IsPathRooted(fullPath))
                 fullPath = Path.Combine(baseUploadRoot, media.media_path.TrimStart('/', '\\'));
