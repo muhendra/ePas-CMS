@@ -182,27 +182,61 @@
                     </div>
 
                     <div class="mb-2 fw-semibold">Dokumen Pendukung</div>
+
                     @if (p.Attachments != null && p.Attachments.Any())
                     {
-                        <ul class="list-unstyled mb-0">
+                        <div class="row g-3">
                             @foreach (var f in p.Attachments)
                             {
-                                <li class="mb-1">
-                                    <a asp-controller="Complain" asp-action="Download" asp-route-id="@f.Id" class="link-primary text-decoration-none">
-                                        @(!string.IsNullOrWhiteSpace(f.FileName) ? f.FileName : "Lampiran")
-                                    </a>
-                                    @if (!string.IsNullOrEmpty(f.SizeReadable))
-                                    {
-                                        <span class="text-muted small ms-2">(@f.SizeReadable)</span>
-                                    }
-                                </li>
+                                // Pastikan Anda sudah isi MediaType & Url dari controller kalau mau preview
+                                var mt = (f.MediaType ?? "").ToLowerInvariant();
+                                <div class="col-12 col-sm-6 col-md-4 col-lg-3">
+                                    <div class="card h-100 shadow-sm border-0">
+                                        <div class="ratio ratio-4x3 bg-light d-flex align-items-center justify-content-center overflow-hidden">
+                                            @if (mt == "jpg" || mt == "jpeg" || mt == "png" || mt == "gif")
+                                            {
+                                                <img src="@f.Url" alt="@f.FileName" class="w-100 h-100 object-fit-cover" />
+                                            }
+                                            else if (mt == "mp4" || mt == "webm")
+                                            {
+                                                <video src="@f.Url" class="w-100 h-100" controls></video>
+                                            }
+                                            else if (mt == "pdf")
+                                            {
+                                                <i class="bi bi-filetype-pdf fs-1 text-danger"></i>
+                                            }
+                                            else
+                                            {
+                                                <i class="bi bi-file-earmark-text fs-1 text-muted"></i>
+                                            }
+                                        </div>
+                                        <div class="card-body p-2">
+                                            <div class="small fw-semibold text-truncate" title="@f.FileName">
+                                                @(!string.IsNullOrWhiteSpace(f.FileName) ? f.FileName : "Lampiran")
+                                            </div>
+                                            @if (!string.IsNullOrEmpty(f.SizeReadable))
+                                            {
+                                                <div class="text-muted small">@f.SizeReadable</div>
+                                            }
+                                        </div>
+                                        <div class="card-footer bg-transparent border-0 pt-0 pb-2">
+                                            <a asp-controller="Complain"
+                                               asp-action="Download"
+                                               asp-route-id="@f.Id"
+                                               class="btn btn-outline-primary btn-sm w-100">
+                                                Unduh
+                                            </a>
+                                        </div>
+                                    </div>
+                                </div>
                             }
-                        </ul>
+                        </div>
                     }
                     else
                     {
                         <div class="muted">Tidak ada dokumen pendukung.</div>
                     }
+
                 </div>
             </div>
             idx++;

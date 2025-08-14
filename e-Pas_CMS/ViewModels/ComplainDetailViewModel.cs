@@ -24,6 +24,10 @@
         public string NextAudit { get; set; }
         public string Koordinator { get; set; }
 
+        // Tambahan untuk galeri Berita Acara (FINAL)
+        public string AuditId { get; set; }  // <-- tambahkan
+        public List<MediaItem> FinalDocuments { get; set; } = new(); // <-- tambahkan
+
         // Complain/Banding
         public string TicketNo { get; set; }
         public string NomorBanding { get; set; }
@@ -56,5 +60,10 @@
         public string Id { get; set; }
         public string FileName { get; set; }
         public string SizeReadable { get; set; } // opsional
+
+        // Opsional (kalau ingin preview juga untuk attachment per-poin)
+        public string Url { get; set; }       // absolute/relative file url
+        public string MediaType { get; set; } // "jpg","png","pdf","mp4", dll
     }
+
 }

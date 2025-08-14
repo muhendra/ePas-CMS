@@ -34,6 +34,8 @@
     {
         public string MediaType { get; set; } // "IMAGE" or "VIDEO"
         public string MediaPath { get; set; }
+        public string FileName { get; set; }    // opsional, untuk caption
+        public string SizeReadable { get; set; } // opsional
     }
 
     public class UpdateScoreRequest

@@ -155,7 +155,6 @@ namespace e_Pas_CMS.Controllers
             return View(vm);
         }
 
-        // GET: /Complain/Detail/{id}
         [HttpGet("Complain/Detail/{id}")]
         public async Task<IActionResult> Detail(string id)
         {
@@ -220,32 +219,57 @@ namespace e_Pas_CMS.Controllers
                 // Aksi
                 CanApprove = string.Equals(header.Tf.Status, "IN_PROGRESS_SUBMIT", StringComparison.OrdinalIgnoreCase),
                 CanReject = string.Equals(header.Tf.Status, "IN_PROGRESS_SUBMIT", StringComparison.OrdinalIgnoreCase),
+
+                // Tambahan utk galeri FINAL
+                AuditId = header.Ta.id  // <-- penting: simpan id audit
             };
 
             var cs = _context.Database.GetConnectionString();
             await using var conn = new NpgsqlConnection(cs);
             await conn.OpenAsync();
 
-            // Ambil poin + label element/sub/detail + elemen yang dibanding (string_agg nomor)
+            // =========================
+            // 1) MUAT MEDIA FINAL (BA)
+            // =========================
+            var finalRows = await conn.QueryAsync<MediaRow>(@"
+        SELECT media_type, media_path
+        FROM trx_audit_media
+        WHERE trx_audit_id = @aid
+          AND type = 'FINAL'
+          AND (status IS NULL OR status <> 'DELETED')
+        ORDER BY created_date ASC;", new { aid = vm.AuditId });
+
+            vm.FinalDocuments = finalRows.Select(m => new MediaItem
+            {
+                MediaPath = ToPublicUrl(m.media_path),
+                MediaType = NormalizeType(m.media_type),
+                FileName = Path.GetFileName(m.media_path),
+                SizeReadable = null
+            }).ToList();
+
+            // ============================================================
+            // 2) Ambil poin + label + elemen yang dibanding (string_agg)
+            //    PERBAIKI point_id -> gunakan p.id AS point_id
+            // ============================================================
             var pointRows = await conn.QueryAsync<PointRow>(@"
-                SELECT 
-                p.element_master_questioner_detail_id AS point_id,
-                p.description AS description,
-                COALESCE(e.title || '. ' || e.description, '-')  AS element_label,
-                COALESCE(se.title || '. ' || se.description, '-') AS sub_element_label,
-                COALESCE(de.number || '. ' || de.title, '-') AS detail_element_label,
-                COALESCE((
+        SELECT 
+            p.id AS point_id,  -- <-- FIX di sini
+            p.description AS description,
+            COALESCE(e.title || '. ' || e.description, '-')  AS element_label,
+            COALESCE(se.title || '. ' || se.description, '-') AS sub_element_label,
+            COALESCE(de.number || '. ' || de.title, '-') AS detail_element_label,
+            COALESCE((
                 SELECT string_agg(me.number, ', ' ORDER BY me.number)
                 FROM trx_feedback_point_element pe
                 JOIN master_questioner_detail me ON me.id = pe.master_questioner_detail_id
                 WHERE pe.trx_feedback_point_id = p.id
             ), '') AS compared_elements
-            FROM trx_feedback_point p
-            LEFT JOIN master_questioner_detail e  ON e.id  = p.element_master_questioner_detail_id
-            LEFT JOIN master_questioner_detail se ON se.id = p.sub_element_master_questioner_detail_id
-            LEFT JOIN master_questioner_detail de ON de.id = p.detail_element_master_questioner_detail_id
-            WHERE p.trx_feedback_id = @fid
-            ORDER BY p.created_date asc", new { fid = id });
+        FROM trx_feedback_point p
+        LEFT JOIN master_questioner_detail e  ON e.id  = p.element_master_questioner_detail_id
+        LEFT JOIN master_questioner_detail se ON se.id = p.sub_element_master_questioner_detail_id
+        LEFT JOIN master_questioner_detail de ON de.id = p.detail_element_master_questioner_detail_id
+        WHERE p.trx_feedback_id = @fid
+        ORDER BY p.created_date ASC;", new { fid = id });
 
             var pointList = pointRows.ToList();
             int idx = 1;
@@ -261,30 +285,35 @@ namespace e_Pas_CMS.Controllers
                     Attachments = new List<AttachmentItem>()
                 };
 
-                // Isi Body global dari poin pertama jika BodyText masih kosong
                 if (idx == 1 && string.IsNullOrWhiteSpace(vm.BodyText))
                     vm.BodyText = pr.description;
 
-                // Media per poin
+                // ============================
+                // 3) Media per poin (preview)
+                // ============================
                 var medias = await conn.QueryAsync<MediaRow>(@"
-                    SELECT id, media_type, media_path
-                    FROM trx_feedback_point_media
-                    WHERE trx_feedback_point_id = @pid
-                      AND (status IS NULL OR status <> 'DELETED')
-                    ORDER BY created_date ASC;", new { pid = pr.point_id });
+            SELECT id, media_type, media_path
+            FROM trx_feedback_point_media
+            WHERE trx_feedback_point_id = @pid
+              AND (status IS NULL OR status <> 'DELETED')
+            ORDER BY created_date ASC;", new { pid = pr.point_id });
 
                 int fileIdx = 1;
                 foreach (var m in medias)
                 {
+                    var extName = NormalizeType(m.media_type);
                     var fileName = Path.GetFileName(m.media_path);
                     if (string.IsNullOrWhiteSpace(fileName))
-                        fileName = $"Dokumen Pendukung {fileIdx}.pdf";
+                        fileName = $"Dokumen Pendukung {fileIdx}.{(extName == "pdf" ? "pdf" : extName)}";
 
                     pointVm.Attachments.Add(new AttachmentItem
                     {
                         Id = m.id,
                         FileName = fileName,
-                        SizeReadable = null
+                        SizeReadable = null,
+                        // Tambahan agar bisa preview di cshtml:
+                        Url = ToPublicUrl(m.media_path),
+                        MediaType = extName
                     });
                     fileIdx++;
                 }
@@ -294,6 +323,28 @@ namespace e_Pas_CMS.Controllers
             }
 
             return View(vm);
+        }
+
+        private static string NormalizeType(string type)
+        {
+            var t = (type ?? "").Trim().ToLowerInvariant();
+            // beberapa backend menyimpan "image/jpeg", "video/mp4", dsb
+            if (t.Contains("/"))
+            {
+                // ambil sub-type
+                t = t.Split('/').LastOrDefault() ?? t;
+            }
+            // samakan alias umum
+            return t switch
+            {
+                "jpg" or "jpeg" => "jpg",
+                "png" => "png",
+                "gif" => "gif",
+                "mp4" => "mp4",
+                "webm" => "webm",
+                "pdf" => "pdf",
+                _ => t // biarkan apa adanya jika tipe lain
+            };
         }
 
         private sealed class PointRow
@@ -372,6 +423,24 @@ namespace e_Pas_CMS.Controllers
             return RedirectToAction(nameof(Detail), new { id });
         }
 
+        private static string ToPublicUrl(string path)
+        {
+            if (string.IsNullOrWhiteSpace(path))
+                return path;
+
+            // Jika path sudah absolute (http/https), langsung kembalikan
+            if (path.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
+                path.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+                return path;
+
+            // Jika relatif, gabungkan dengan base asset host Anda
+            const string AssetsBase = "https://epas-assets.zarata.co.id"; // sesuaikan bila perlu
+            if (path.StartsWith("/"))
+                return AssetsBase + path;
+
+            return $"{AssetsBase}/{path}";
+        }
+
         // GET: /Complain/Download/{idMedia}
         public async Task<IActionResult> Download(string id)
         {
@@ -389,8 +458,7 @@ namespace e_Pas_CMS.Controllers
 
             if (media == null) return NotFound();
 
-            // Atur root sesuai storage Anda
-            var baseUploadRoot = Path.Combine("/var/www/epas-asset", "wwwroot"); // sesuaikan
+            var baseUploadRoot = Path.Combine("/var/www/epas-asset", "wwwroot", "uploads", "feedback");
             var fullPath = media.media_path;
             if (!Path.IsPathRooted(fullPath))
                 fullPath = Path.Combine(baseUploadRoot, media.media_path.TrimStart('/', '\\'));

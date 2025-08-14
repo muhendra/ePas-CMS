@@ -114,21 +114,21 @@ namespace e_Pas_CMS.Controllers
             foreach (var a in pagedAudits)
             {
                 var sql = @"
-        SELECT 
-            mqd.weight, 
-            tac.score_input, 
-            tac.score_x, 
-            mqd.is_relaksasi
-        FROM master_questioner_detail mqd
-        LEFT JOIN trx_audit_checklist tac 
-            ON tac.master_questioner_detail_id = mqd.id 
-            AND tac.trx_audit_id = @id
-        WHERE mqd.master_questioner_id = (
-            SELECT master_questioner_checklist_id 
-            FROM trx_audit 
-            WHERE id = @id
-        )
-        AND mqd.type = 'QUESTION'";
+                SELECT 
+                    mqd.weight, 
+                    tac.score_input, 
+                    tac.score_x, 
+                    mqd.is_relaksasi
+                FROM master_questioner_detail mqd
+                LEFT JOIN trx_audit_checklist tac 
+                    ON tac.master_questioner_detail_id = mqd.id 
+                    AND tac.trx_audit_id = @id
+                WHERE mqd.master_questioner_id = (
+                    SELECT master_questioner_checklist_id 
+                    FROM trx_audit 
+                    WHERE id = @id
+                )
+                AND mqd.type = 'QUESTION'";
 
                 var checklist = (await conn.QueryAsync<(decimal? weight, string score_input, decimal? score_x, bool? is_relaksasi)>(sql, new { id = a.id }))
                     .ToList();
@@ -641,12 +641,6 @@ namespace e_Pas_CMS.Controllers
                 bool hasExcellentPenalty = !string.IsNullOrEmpty(penaltyExcellentResult);
                 bool hasGoodPenalty = !string.IsNullOrEmpty(penaltyGoodResult);
 
-                //string goodStatus = (finalScore >= 75 && !hasGoodPenalty) ? "CERTIFIED" : "NOT CERTIFIED";
-
-                //string excellentStatus = (finalScore >= 80 && !hasExcellentPenalty && !forceNotCertified)
-                //    ? (forceGoodOnly ? "GOOD" : "CERTIFIED")
-                //    : "NOT CERTIFIED";
-
                 // === Audit Next
                 string auditNext = null;
                 string levelspbu = null;
@@ -671,7 +665,6 @@ namespace e_Pas_CMS.Controllers
 
                 var submitDate = a.approval_date == null || a.approval_date == DateTime.MinValue
                     ? a.updated_date
-
                     : a.approval_date;
                 // === Compliance validation
                 var sss = Math.Round(compliance.SSS ?? 0, 2);
@@ -740,58 +733,58 @@ namespace e_Pas_CMS.Controllers
                 }
 
                 var checklistRaw = await conn.QueryAsync<(string number, decimal? weight, string score_input, decimal? score_x, bool? is_relaksasi)>(@"
-    SELECT DISTINCT ON (mqd.number) 
-    mqd.number, mqd.weight, tac.score_input, tac.score_x, mqd.is_relaksasi
-FROM master_questioner_detail mqd
-LEFT JOIN trx_audit_checklist tac 
-    ON tac.master_questioner_detail_id = mqd.id 
-    AND tac.trx_audit_id = @id
-WHERE mqd.number IS NOT NULL AND TRIM(mqd.number) <> ''
-ORDER BY mqd.number, tac.updated_date DESC NULLS LAST
-", new { id = a.id });
+                    SELECT DISTINCT ON (mqd.number) 
+                    mqd.number, mqd.weight, tac.score_input, tac.score_x, mqd.is_relaksasi
+                FROM master_questioner_detail mqd
+                LEFT JOIN trx_audit_checklist tac 
+                    ON tac.master_questioner_detail_id = mqd.id 
+                    AND tac.trx_audit_id = @id
+                WHERE mqd.number IS NOT NULL AND TRIM(mqd.number) <> ''
+                ORDER BY mqd.number, tac.updated_date DESC NULLS LAST
+                ", new { id = a.id });
 
                 var checklistMap = checklistRaw
-    .GroupBy(x => x.number)
-    .ToDictionary(
-        g => g.Key,
-        g => g.First().score_input?.Trim().ToUpperInvariant() ?? ""
-    );
+                .GroupBy(x => x.number)
+                .ToDictionary(
+                    g => g.Key,
+                    g => g.First().score_input?.Trim().ToUpperInvariant() ?? ""
+                );
 
                 var checklistValues = numberList.Select(number => $"\"{(checklistMap.TryGetValue(number, out var val) ? val : "")}\"");
 
                 decimal scores = (decimal)(totalScore ?? a.score);
 
                 csv.AppendLine(string.Join(",", new[]
-        {
-            $"\"{submitDate:yyyy-MM-dd}\"",
-            $"\"{auditDate:yyyy-MM-dd}\"",
-            $"\"{a.spbu.spbu_no}\"",
-            $"\"{a.spbu.region}\"",
-            $"\"{a.spbu.year ?? DateTime.Now.Year}\"",
-            $"\"{a.spbu.address}\"",
-            $"\"{a.spbu.city_name}\"",
-            $"\"{a.spbu.owner_type}\"",
-            $"\"{a.spbu.sbm}\"",
-            $"\"{a.audit_level}\"",
-            $"\"{auditNext}\"",
-            $"\"{goodStatus}\"",
-            $"\"{excellentStatus}\"",
-            $"\"{scores:0.##}\"",
-            $"\"{sss}\"",
-            $"\"{eqnq}\"",
-            $"\"{rfs}\"",
-            $"\"{vfc}\"",
-            $"\"{epo}\"",
-            $"\"{a.spbu.wtms}\"",
-            $"\"{a.spbu.qq}\"",
-            $"\"{a.spbu.wmef}\"",
-            $"\"{a.spbu.format_fisik}\"",
-            $"\"{a.spbu.cpo}\"",
-            $"\"{levelspbu}\"",
-            $"\"{penaltyGoodResult}\"",
-            $"\"{penaltyExcellentResult}\""
-        }.Concat(checklistValues)));
-            }
+                {
+                    $"\"{submitDate:yyyy-MM-dd}\"",
+                    $"\"{auditDate:yyyy-MM-dd}\"",
+                    $"\"{a.spbu.spbu_no}\"",
+                    $"\"{a.spbu.region}\"",
+                    $"\"{a.spbu.year ?? DateTime.Now.Year}\"",
+                    $"\"{a.spbu.address}\"",
+                    $"\"{a.spbu.city_name}\"",
+                    $"\"{a.spbu.owner_type}\"",
+                    $"\"{a.spbu.sbm}\"",
+                    $"\"{a.audit_level}\"",
+                    $"\"{auditNext}\"",
+                    $"\"{goodStatus}\"",
+                    $"\"{excellentStatus}\"",
+                    $"\"{scores:0.##}\"",
+                    $"\"{sss}\"",
+                    $"\"{eqnq}\"",
+                    $"\"{rfs}\"",
+                    $"\"{vfc}\"",
+                    $"\"{epo}\"",
+                    $"\"{a.spbu.wtms}\"",
+                    $"\"{a.spbu.qq}\"",
+                    $"\"{a.spbu.wmef}\"",
+                    $"\"{a.spbu.format_fisik}\"",
+                    $"\"{a.spbu.cpo}\"",
+                    $"\"{levelspbu}\"",
+                    $"\"{penaltyGoodResult}\"",
+                    $"\"{penaltyExcellentResult}\""
+                }.Concat(checklistValues)));
+                    }
 
             var fileName = $"Audit_Summary_{DateTime.Now:yyyyMMddHHmmss}.csv";
             var bytes = Encoding.UTF8.GetBytes(csv.ToString());
