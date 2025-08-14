@@ -221,39 +221,37 @@ namespace e_Pas_CMS.Controllers
                 CanReject = string.Equals(header.Tf.Status, "IN_PROGRESS_SUBMIT", StringComparison.OrdinalIgnoreCase),
 
                 // Tambahan utk galeri FINAL
-                AuditId = header.Ta.id  // <-- penting: simpan id audit
+                AuditId = header.Ta.id
             };
 
             var cs = _context.Database.GetConnectionString();
             await using var conn = new NpgsqlConnection(cs);
             await conn.OpenAsync();
 
-            // ============================================================
             // 1) Ambil poin + label + elemen yang dibanding (string_agg)
-            //    PERBAIKI point_id -> gunakan p.id AS point_id
-            // ============================================================
             var pointRows = await conn.QueryAsync<PointRow>(@"
-        SELECT 
-            p.id AS point_id,  -- <-- FIX di sini
-            p.description AS description,
-            COALESCE(e.title || '. ' || e.description, '-')  AS element_label,
-            COALESCE(se.title || '. ' || se.description, '-') AS sub_element_label,
-            COALESCE(de.number || '. ' || de.title, '-') AS detail_element_label,
-            COALESCE((
-                SELECT string_agg(me.number, ', ' ORDER BY me.number)
-                FROM trx_feedback_point_element pe
-                JOIN master_questioner_detail me ON me.id = pe.master_questioner_detail_id
-                WHERE pe.trx_feedback_point_id = p.id
-            ), '') AS compared_elements
-        FROM trx_feedback_point p
-        LEFT JOIN master_questioner_detail e  ON e.id  = p.element_master_questioner_detail_id
-        LEFT JOIN master_questioner_detail se ON se.id = p.sub_element_master_questioner_detail_id
-        LEFT JOIN master_questioner_detail de ON de.id = p.detail_element_master_questioner_detail_id
-        WHERE p.trx_feedback_id = @fid
-        ORDER BY p.created_date ASC;", new { fid = id });
+SELECT 
+    p.id AS point_id,
+    p.description AS description,
+    COALESCE(e.number || '. ' || e.title, COALESCE(e.title, COALESCE(e.description, '-'))) AS element_label,
+    COALESCE(se.number || '. ' || se.title, COALESCE(se.title, COALESCE(se.description, '-'))) AS sub_element_label,
+    COALESCE(de.number || '. ' || de.title, COALESCE(de.title, '-')) AS detail_element_label,
+    COALESCE((
+        SELECT string_agg(me.number, ', ' ORDER BY me.number)
+        FROM trx_feedback_point_element pe
+        JOIN master_questioner_detail me ON me.id = pe.master_questioner_detail_id
+        WHERE pe.trx_feedback_point_id = p.id
+    ), '') AS compared_elements
+FROM trx_feedback_point p
+LEFT JOIN master_questioner_detail e  ON e.id  = p.element_master_questioner_detail_id
+LEFT JOIN master_questioner_detail se ON se.id = p.sub_element_master_questioner_detail_id
+LEFT JOIN master_questioner_detail de ON de.id = p.detail_element_master_questioner_detail_id
+WHERE p.trx_feedback_id = @fid
+ORDER BY p.created_date ASC;", new { fid = id });
 
             var pointList = pointRows.ToList();
             int idx = 1;
+
             foreach (var pr in pointList)
             {
                 var pointVm = new PointItem
@@ -269,58 +267,63 @@ namespace e_Pas_CMS.Controllers
                 if (idx == 1 && string.IsNullOrWhiteSpace(vm.BodyText))
                     vm.BodyText = pr.description;
 
-                // ============================
-                // 2) Media per poin (preview)
-                // ============================
+                // 2) Media per poin (untuk preview & unduh)
                 var medias = await conn.QueryAsync<MediaRow>(@"
-    SELECT id, media_type, media_path
-    FROM trx_feedback_point_media
-    WHERE trx_feedback_point_id = @pid
-      AND media_path IS NOT NULL
-      AND btrim(media_path) <> ''
-    ORDER BY created_date ASC;",
-    new { pid = pr.point_id });
+SELECT id, trx_feedback_point_id, media_type, media_path
+FROM trx_feedback_point_media
+WHERE trx_feedback_point_id = @pid
+  AND media_path IS NOT NULL
+  AND btrim(media_path) <> ''
+ORDER BY created_date ASC;",
+                new { pid = pr.point_id });
 
                 int fileIdx = 1;
                 foreach (var m in medias)
                 {
-                    // Safety guard: path kosong -> skip
-                    if (string.IsNullOrWhiteSpace(m.media_path))
-                        continue;
-
                     // Tentukan ekstensi/type
-                    string extName = NormalizeType(m.media_type);  // bisa return null/"" kalau tidak dikenal
+                    var extName = NormalizeType(m.media_type);
                     if (string.IsNullOrWhiteSpace(extName))
                     {
                         var ext = Path.GetExtension(m.media_path);
                         if (!string.IsNullOrWhiteSpace(ext))
                             extName = ext.Trim('.').ToLowerInvariant();
                     }
-
-                    // Jika tetap tidak ketemu type, skip biar tidak jadi attachment “kosong”
                     if (string.IsNullOrWhiteSpace(extName))
                         continue;
 
-                    // Tentukan nama file
+                    // Nama file
                     var fileName = Path.GetFileName(m.media_path);
                     if (string.IsNullOrWhiteSpace(fileName))
                         fileName = $"Dokumen Pendukung {fileIdx}.{extName}";
 
-                    // Bentuk path publik sesuai pola: uploads/feedback/{trx_feedback_point_id},{id}/{fileName}
-                    var relative = $"uploads/feedback/{pr.point_id}/{fileName}".Replace("\\", "/");
-                    var physical = Path.Combine("/var/www/epas-asset", "wwwroot", relative);
+                    // Skema baru: uploads/feedback/{trx_feedback_point_id},{media_id}/{filename}
+                    var relativeNew = BuildRelativePath(m.trx_feedback_point_id, fileName);
 
-                    // (Opsional) cek file fisik; kalau tidak ada -> skip
-                    if (!System.IO.File.Exists(physical))
+                    // Fallback: pakai path lama dari media_path jika ada
+                    // (misal media_path: uploads/feedback/xxxx/namafile.ext)
+                    var relativeOld = (m.media_path ?? string.Empty)
+                                        .TrimStart('/', '\\')
+                                        .Replace("\\", "/");
+
+                    var physicalRoot = Path.Combine("/var/www/epas-asset", "wwwroot");
+                    string? chosenRelative = null;
+
+                    if (FileExists(physicalRoot, relativeNew))
+                        chosenRelative = relativeNew;
+                    else if (FileExists(physicalRoot, relativeOld))
+                        chosenRelative = relativeOld;
+
+                    // Jika dua2nya tidak ada, skip entry agar tidak menampilkan attachment “kosong”
+                    if (string.IsNullOrWhiteSpace(chosenRelative))
                         continue;
 
                     pointVm.Attachments.Add(new AttachmentItem
                     {
                         Id = m.id,
                         FileName = fileName,
-                        SizeReadable = null,
-                        Url = "/" + relative,          // atau ToPublicUrl(relative) kalau kamu punya helper
-                        MediaType = extName
+                        Url = "/" + chosenRelative,     // dipakai untuk preview (img/video/pdf) & "Buka di Tab Baru"
+                        MediaType = extName,
+                        SizeReadable = null
                     });
 
                     fileIdx++;
@@ -331,6 +334,19 @@ namespace e_Pas_CMS.Controllers
             }
 
             return View(vm);
+        }
+
+        private static string BuildRelativePath(string pointId, string fileName)
+        {
+            // Sesuai arahan: uploads/feedback/{trx_feedback_point_id},{id}/{filename}
+            return $"uploads/feedback/{pointId}/{fileName}".Replace("\\", "/");
+        }
+
+        private static bool FileExists(string physicalRoot, string relativePath)
+        {
+            if (string.IsNullOrWhiteSpace(relativePath)) return false;
+            var full = Path.Combine(physicalRoot, relativePath.Replace("/", Path.DirectorySeparatorChar.ToString()));
+            return System.IO.File.Exists(full);
         }
 
         private static string NormalizeType(string type)
