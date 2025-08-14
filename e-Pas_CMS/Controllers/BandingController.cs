@@ -460,7 +460,7 @@ namespace e_Pas_CMS.Controllers
 
             if (media == null) return NotFound();
 
-            var baseUploadRoot = Path.Combine("/var/www/epas-asset", "wwwroot", "uploads", "feedback" , media.trx_feedback_point_id);
+            var baseUploadRoot = Path.Combine("/var/www/epas-asset", "wwwroot");
             var fullPath = media.media_path;
             if (!Path.IsPathRooted(fullPath))
                 fullPath = Path.Combine(baseUploadRoot, media.media_path.TrimStart('/', '\\'));
