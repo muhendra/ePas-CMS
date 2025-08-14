@@ -228,27 +228,8 @@ namespace e_Pas_CMS.Controllers
             await using var conn = new NpgsqlConnection(cs);
             await conn.OpenAsync();
 
-            // =========================
-            // 1) MUAT MEDIA FINAL (BA)
-            // =========================
-            var finalRows = await conn.QueryAsync<MediaRow>(@"
-        SELECT media_type, media_path
-        FROM trx_audit_media
-        WHERE trx_audit_id = @aid
-          AND type = 'FINAL'
-          AND (status IS NULL OR status <> 'DELETED')
-        ORDER BY created_date ASC;", new { aid = vm.AuditId });
-
-            vm.FinalDocuments = finalRows.Select(m => new MediaItem
-            {
-                MediaPath = ToPublicUrl(m.media_path),
-                MediaType = NormalizeType(m.media_type),
-                FileName = Path.GetFileName(m.media_path),
-                SizeReadable = null
-            }).ToList();
-
             // ============================================================
-            // 2) Ambil poin + label + elemen yang dibanding (string_agg)
+            // 1) Ambil poin + label + elemen yang dibanding (string_agg)
             //    PERBAIKI point_id -> gunakan p.id AS point_id
             // ============================================================
             var pointRows = await conn.QueryAsync<PointRow>(@"
@@ -289,32 +270,59 @@ namespace e_Pas_CMS.Controllers
                     vm.BodyText = pr.description;
 
                 // ============================
-                // 3) Media per poin (preview)
+                // 2) Media per poin (preview)
                 // ============================
                 var medias = await conn.QueryAsync<MediaRow>(@"
-            SELECT id, media_type, media_path
-            FROM trx_feedback_point_media
-            WHERE trx_feedback_point_id = @pid
-              AND (status IS NULL OR status <> 'DELETED')
-            ORDER BY created_date ASC;", new { pid = pr.point_id });
+    SELECT id, media_type, media_path
+    FROM trx_feedback_point_media
+    WHERE trx_feedback_point_id = @pid
+      AND media_path IS NOT NULL
+      AND btrim(media_path) <> ''
+    ORDER BY created_date ASC;",
+    new { pid = pr.point_id });
 
                 int fileIdx = 1;
                 foreach (var m in medias)
                 {
-                    var extName = NormalizeType(m.media_type);
+                    // Safety guard: path kosong -> skip
+                    if (string.IsNullOrWhiteSpace(m.media_path))
+                        continue;
+
+                    // Tentukan ekstensi/type
+                    string extName = NormalizeType(m.media_type);  // bisa return null/"" kalau tidak dikenal
+                    if (string.IsNullOrWhiteSpace(extName))
+                    {
+                        var ext = Path.GetExtension(m.media_path);
+                        if (!string.IsNullOrWhiteSpace(ext))
+                            extName = ext.Trim('.').ToLowerInvariant();
+                    }
+
+                    // Jika tetap tidak ketemu type, skip biar tidak jadi attachment “kosong”
+                    if (string.IsNullOrWhiteSpace(extName))
+                        continue;
+
+                    // Tentukan nama file
                     var fileName = Path.GetFileName(m.media_path);
                     if (string.IsNullOrWhiteSpace(fileName))
-                        fileName = $"Dokumen Pendukung {fileIdx}.{(extName == "pdf" ? "pdf" : extName)}";
+                        fileName = $"Dokumen Pendukung {fileIdx}.{extName}";
+
+                    // Bentuk path publik sesuai pola: uploads/feedback/{trx_feedback_point_id},{id}/{fileName}
+                    var relative = $"uploads/feedback/{pr.point_id}/{fileName}".Replace("\\", "/");
+                    var physical = Path.Combine("/var/www/epas-asset", "wwwroot", relative);
+
+                    // (Opsional) cek file fisik; kalau tidak ada -> skip
+                    if (!System.IO.File.Exists(physical))
+                        continue;
 
                     pointVm.Attachments.Add(new AttachmentItem
                     {
                         Id = m.id,
                         FileName = fileName,
                         SizeReadable = null,
-                        // Tambahan agar bisa preview di cshtml:
-                        Url = ToPublicUrl(m.media_path),
+                        Url = "/" + relative,          // atau ToPublicUrl(relative) kalau kamu punya helper
                         MediaType = extName
                     });
+
                     fileIdx++;
                 }
 
