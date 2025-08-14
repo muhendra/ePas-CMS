@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Data;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
@@ -161,6 +162,8 @@ namespace e_Pas_CMS.Controllers
             if (string.IsNullOrWhiteSpace(id))
                 return NotFound();
 
+            string pid = "";
+
             var header =
                 await (from tf in _context.TrxFeedbacks
                        join ta in _context.trx_audits on tf.TrxAuditId equals ta.id
@@ -269,13 +272,15 @@ ORDER BY p.created_date ASC;", new { fid = id });
 
                 // 2) Media per poin (untuk preview & unduh)
                 var medias = await conn.QueryAsync<MediaRow>(@"
-SELECT id, trx_feedback_point_id, media_type, media_path
-FROM trx_feedback_point_media
-WHERE trx_feedback_point_id = @pid
-  AND media_path IS NOT NULL
-  AND btrim(media_path) <> ''
-ORDER BY created_date ASC;",
-                new { pid = pr.point_id });
+            SELECT id, trx_feedback_point_id, media_type, media_path
+            FROM trx_feedback_point_media
+            WHERE trx_feedback_point_id = @pid
+              AND media_path IS NOT NULL
+              AND btrim(media_path) <> ''
+            ORDER BY created_date ASC;",
+                    new { pid = pr.point_id });
+
+                pid = pr.point_id;
 
                 int fileIdx = 1;
                 foreach (var m in medias)
@@ -297,10 +302,9 @@ ORDER BY created_date ASC;",
                         fileName = $"Dokumen Pendukung {fileIdx}.{extName}";
 
                     // Skema baru: uploads/feedback/{trx_feedback_point_id},{media_id}/{filename}
-                    var relativeNew = BuildRelativePath(m.trx_feedback_point_id, fileName);
+                    var relativeNew = $"uploads/feedback/{m.trx_feedback_point_id},{m.id}/{fileName}";
 
                     // Fallback: pakai path lama dari media_path jika ada
-                    // (misal media_path: uploads/feedback/xxxx/namafile.ext)
                     var relativeOld = (m.media_path ?? string.Empty)
                                         .TrimStart('/', '\\')
                                         .Replace("\\", "/");
@@ -326,6 +330,19 @@ ORDER BY created_date ASC;",
                         SizeReadable = null
                     });
 
+                    var notes = await GetMediaNotesAsync(conn, pid);
+                    vm.Attachments = notes
+                        .Where(n => !string.IsNullOrWhiteSpace(n.MediaPath))
+                        .Select(n => new AttachmentItem
+                        {
+                            Id = null, // tidak ada id media per baris di trx_audit_media untuk keperluan ini
+                            FileName = SafeGetFileName(n.MediaPath),
+                            Url = n.MediaPath, // sudah full URL dari GetMediaNotesAsync
+                            MediaType = NormalizeType(n.MediaType) ?? GetExtFromUrl(n.MediaPath),
+                            SizeReadable = null
+                        })
+                        .ToList();
+
                     fileIdx++;
                 }
 
@@ -333,20 +350,103 @@ ORDER BY created_date ASC;",
                 idx++;
             }
 
+            // 3) Isi vm.Attachments (GLOBAL) mengikuti pola GetMediaNotesAsync (tabel trx_audit_media)
+            
+
             return View(vm);
         }
 
-        private static string BuildRelativePath(string pointId, string fileName)
+        /// <summary>
+        /// Mengambil media notes (GLOBAL attachment) dari trx_audit_media dan mengubah menjadi full URL,
+        /// sekaligus memfilter yang path-nya kosong.
+        /// </summary>
+        private async Task<List<MediaItem>> GetMediaNotesAsync(IDbConnection conn, string id)
         {
-            // Sesuai arahan: uploads/feedback/{trx_feedback_point_id},{id}/{filename}
-            return $"uploads/feedback/{pointId}/{fileName}".Replace("\\", "/");
+            const string sql = @"
+        SELECT id, media_type, media_path
+FROM trx_feedback_point_media
+WHERE trx_feedback_point_id = @id
+ORDER BY created_date ASC;";
+
+            var rows = await conn.QueryAsync<MediaRow>(sql, new { id });
+
+            const string baseHost = "https://epas-assets.zarata.co.id";
+
+            List<MediaItem> result = new();
+
+            foreach (var r in rows)
+            {
+                string path = (r.media_path ?? string.Empty).Trim();
+
+                // Jika sudah absolute (http/https), pakai apa adanya
+                if (Uri.TryCreate(path, UriKind.Absolute, out var absoluteUri)
+                    && (absoluteUri.Scheme == Uri.UriSchemeHttp || absoluteUri.Scheme == Uri.UriSchemeHttps))
+                {
+                    result.Add(new MediaItem
+                    {
+                        MediaType = r.media_type,
+                        MediaPath = absoluteUri.ToString()
+                    });
+                    continue;
+                }
+
+                // Normalisasi leading slash agar tidak double-slash saat digabung dengan host
+                if (!path.StartsWith("/"))
+                    path = "/" + path;
+
+                // Gabungkan dengan host CDN
+                string fullUrl = baseHost + path;
+
+                result.Add(new MediaItem
+                {
+                    MediaType = r.media_type,
+                    MediaPath = fullUrl
+                });
+            }
+
+            return result;
         }
+
+        // ===== Helper lokal yang dipakai di atas =====
 
         private static bool FileExists(string physicalRoot, string relativePath)
         {
             if (string.IsNullOrWhiteSpace(relativePath)) return false;
-            var full = Path.Combine(physicalRoot, relativePath.Replace("/", Path.DirectorySeparatorChar.ToString()));
-            return System.IO.File.Exists(full);
+            var fullPath = Path.Combine(physicalRoot, relativePath
+                .Replace('/', Path.DirectorySeparatorChar)
+                .Replace("\\", Path.DirectorySeparatorChar.ToString()));
+            return System.IO.File.Exists(fullPath);
+        }
+
+        private static string SafeGetFileName(string urlOrPath)
+        {
+            try
+            {
+                // Coba parse URL
+                if (Uri.TryCreate(urlOrPath, UriKind.Absolute, out var u))
+                    return Path.GetFileName(u.LocalPath);
+
+                // Fallback path biasa
+                return Path.GetFileName(urlOrPath);
+            }
+            catch
+            {
+                return "attachment";
+            }
+        }
+
+        private static string? GetExtFromUrl(string url)
+        {
+            try
+            {
+                var name = SafeGetFileName(url);
+                var ext = Path.GetExtension(name);
+                return string.IsNullOrWhiteSpace(ext) ? null : ext.Trim('.').ToLowerInvariant();
+            }
+            catch
+            {
+                return null;
+            }
         }
 
         private static string NormalizeType(string type)
@@ -484,10 +584,7 @@ ORDER BY created_date ASC;",
 
             if (media == null) return NotFound();
 
-            var baseUploadRoot = Path.Combine("/var/www/epas-asset", "wwwroot");
-            var fullPath = media.media_path;
-            if (!Path.IsPathRooted(fullPath))
-                fullPath = Path.Combine(baseUploadRoot, media.media_path.TrimStart('/', '\\'));
+            var fullPath = Path.Combine("/var/www/epas-asset", "wwwroot", media.media_path);
 
             if (!System.IO.File.Exists(fullPath))
                 return NotFound();
