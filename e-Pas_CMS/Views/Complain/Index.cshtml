@@ -2,7 +2,7 @@
 @{
     ViewData["Title"] = "Komplain & Banding";
     string type = (ViewBag.Type as string) ?? "BANDING";
-    string search = (ViewBag.Search as string) ?? "";
+    string searchTerm = (ViewBag.SearchTerm as string) ?? "";
 }
 
 @section Styles {
@@ -68,9 +68,7 @@
                     cursor: pointer;
                 }
 
-                    .table thead th.sorting:after,
-                    .table thead th.sorting_asc:after,
-                    .table thead th.sorting_desc:after {
+                    .table thead th.sorting:after, .table thead th.sorting_asc:after, .table thead th.sorting_desc:after {
                         position: absolute;
                         right: 8px;
                         display: block;
@@ -181,7 +179,6 @@
             justify-content: flex-start;
             gap: 0.25rem;
         }
-
 
             .pagination .page-item.active .page-link {
                 background-color: #21B6D7;
@@ -299,6 +296,14 @@
 <div class="container-fluid px-0">
     <h3 class="mb-4 fw-bold px-3">Komplain & Banding</h3>
 
+    @if (TempData["Success"] != null)
+    {
+        <div class="alert alert-success alert-dismissible fade show mx-3" role="alert">
+            @TempData["Success"]
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+    }
+
     @if (TempData["Error"] != null)
     {
         <div class="alert alert-danger alert-dismissible fade show mx-3" role="alert">
@@ -308,9 +313,12 @@
     }
 
     <div class="search-container">
-        <form method="get" class="row g-3">
+        <form method="get" asp-action="Index" class="row g-3">
+            <input type="hidden" name="type" value="@type" />
+            <input type="hidden" name="sortColumn" value="@ViewBag.SortColumn" />
+            <input type="hidden" name="sortDirection" value="@ViewBag.SortDirection" />
             <div class="col-md-8">
-                <input type="text" name="searchTerm" value="@ViewBag.SearchTerm" class="form-control" placeholder="🔍 Cari SPBU, Auditor, Status...">
+                <input type="text" name="searchTerm" value="@searchTerm" class="form-control" placeholder="🔍 Cari SPBU, Auditor, Status...">
             </div>
             <div class="col-md-2">
                 <select name="pageSize" class="form-select">
@@ -318,7 +326,14 @@
                         var pageSizes = new[] { 10, 25, 50 };
                         foreach (var size in pageSizes)
                         {
-                            <option value="@size" selected="@(Model.PageSize == size)">@size per halaman</option>
+                            if (Model.PageSize == size)
+                            {
+                                <option value="@size" selected>@size per halaman</option>
+                            }
+                            else
+                            {
+                                <option value="@size">@size per halaman</option>
+                            }
                         }
                     }
                 </select>
@@ -340,9 +355,10 @@
                                 <th>No</th>
                                 <th>
                                     <a asp-action="Index"
+                                       asp-route-type="@type"
                                        asp-route-pageNumber="1"
                                        asp-route-pageSize="@Model.PageSize"
-                                       asp-route-searchTerm="@ViewBag.SearchTerm"
+                                       asp-route-searchTerm="@searchTerm"
                                        asp-route-sortColumn="TicketNo"
                                        asp-route-sortDirection="@(ViewBag.SortColumn == "TicketNo" && ViewBag.SortDirection == "asc" ? "desc" : "asc")">
                                         No. Tiket
@@ -354,9 +370,10 @@
                                 </th>
                                 <th>
                                     <a asp-action="Index"
+                                       asp-route-type="@type"
                                        asp-route-pageNumber="1"
                                        asp-route-pageSize="@Model.PageSize"
-                                       asp-route-searchTerm="@ViewBag.SearchTerm"
+                                       asp-route-searchTerm="@searchTerm"
                                        asp-route-sortColumn="NoSpbu"
                                        asp-route-sortDirection="@(ViewBag.SortColumn == "NoSpbu" && ViewBag.SortDirection == "asc" ? "desc" : "asc")">
                                         No. SPBU
@@ -368,9 +385,10 @@
                                 </th>
                                 <th>
                                     <a asp-action="Index"
+                                       asp-route-type="@type"
                                        asp-route-pageNumber="1"
                                        asp-route-pageSize="@Model.PageSize"
-                                       asp-route-searchTerm="@ViewBag.SearchTerm"
+                                       asp-route-searchTerm="@searchTerm"
                                        asp-route-sortColumn="City"
                                        asp-route-sortDirection="@(ViewBag.SortColumn == "City" && ViewBag.SortDirection == "asc" ? "desc" : "asc")">
                                         Kab/Kota
@@ -382,9 +400,10 @@
                                 </th>
                                 <th>
                                     <a asp-action="Index"
+                                       asp-route-type="@type"
                                        asp-route-pageNumber="1"
                                        asp-route-pageSize="@Model.PageSize"
-                                       asp-route-searchTerm="@ViewBag.SearchTerm"
+                                       asp-route-searchTerm="@searchTerm"
                                        asp-route-sortColumn="Rayon"
                                        asp-route-sortDirection="@(ViewBag.SortColumn == "Rayon" && ViewBag.SortDirection == "asc" ? "desc" : "asc")">
                                         Region
@@ -396,9 +415,10 @@
                                 </th>
                                 <th>
                                     <a asp-action="Index"
+                                       asp-route-type="@type"
                                        asp-route-pageNumber="1"
                                        asp-route-pageSize="@Model.PageSize"
-                                       asp-route-searchTerm="@ViewBag.SearchTerm"
+                                       asp-route-searchTerm="@searchTerm"
                                        asp-route-sortColumn="Auditor"
                                        asp-route-sortDirection="@(ViewBag.SortColumn == "Auditor" && ViewBag.SortDirection == "asc" ? "desc" : "asc")">
                                         Auditor
@@ -410,9 +430,10 @@
                                 </th>
                                 <th>
                                     <a asp-action="Index"
+                                       asp-route-type="@type"
                                        asp-route-pageNumber="1"
                                        asp-route-pageSize="@Model.PageSize"
-                                       asp-route-searchTerm="@ViewBag.SearchTerm"
+                                       asp-route-searchTerm="@searchTerm"
                                        asp-route-sortColumn="TanggalAudit"
                                        asp-route-sortDirection="@(ViewBag.SortColumn == "TanggalAudit" && ViewBag.SortDirection == "asc" ? "desc" : "asc")">
                                         Tanggal Audit
@@ -424,9 +445,10 @@
                                 </th>
                                 <th>
                                     <a asp-action="Index"
+                                       asp-route-type="@type"
                                        asp-route-pageNumber="1"
                                        asp-route-pageSize="@Model.PageSize"
-                                       asp-route-searchTerm="@ViewBag.SearchTerm"
+                                       asp-route-searchTerm="@searchTerm"
                                        asp-route-sortColumn="TipeAudit"
                                        asp-route-sortDirection="@(ViewBag.SortColumn == "TipeAudit" && ViewBag.SortDirection == "asc" ? "desc" : "asc")">
                                         Tipe Audit
@@ -438,9 +460,10 @@
                                 </th>
                                 <th>
                                     <a asp-action="Index"
+                                       asp-route-type="@type"
                                        asp-route-pageNumber="1"
                                        asp-route-pageSize="@Model.PageSize"
-                                       asp-route-searchTerm="@ViewBag.SearchTerm"
+                                       asp-route-searchTerm="@searchTerm"
                                        asp-route-sortColumn="AuditLevel"
                                        asp-route-sortDirection="@(ViewBag.SortColumn == "AuditLevel" && ViewBag.SortDirection == "asc" ? "desc" : "asc")">
                                         AuditLevel
@@ -452,9 +475,10 @@
                                 </th>
                                 <th>
                                     <a asp-action="Index"
+                                       asp-route-type="@type"
                                        asp-route-pageNumber="1"
                                        asp-route-pageSize="@Model.PageSize"
-                                       asp-route-searchTerm="@ViewBag.SearchTerm"
+                                       asp-route-searchTerm="@searchTerm"
                                        asp-route-sortColumn="Score"
                                        asp-route-sortDirection="@(ViewBag.SortColumn == "Score" && ViewBag.SortDirection == "asc" ? "desc" : "asc")">
                                         Score
@@ -485,8 +509,8 @@
                                         <td>@((Model.PageNumber - 1) * Model.PageSize + i + 1)</td>
                                         <td>@item.TicketNo</td>
                                         <td>@item.NoSpbu</td>
-                                        <td>@item.Region</td>
                                         <td>@item.City</td>
+                                        <td>@item.Region</td>
                                         <td>@item.Auditor</td>
                                         <td>@item.TanggalAudit.ToString("dd/MM/yyyy")</td>
                                         <td>@item.TipeAudit</td>
@@ -522,21 +546,23 @@
                 {
                     <li class="page-item">
                         <a class="page-link" href="@Url.Action("Index", new {
-                        pageNumber = 1,
-                        pageSize = Model.PageSize,
-                        searchTerm = ViewBag.SearchTerm,
-                        sortColumn = ViewBag.SortColumn,
-                        sortDirection = ViewBag.SortDirection
-                    })">First</a>
+                            type = type,
+                            pageNumber = 1,
+                            pageSize = Model.PageSize,
+                            searchTerm = searchTerm,
+                            sortColumn = ViewBag.SortColumn,
+                            sortDirection = ViewBag.SortDirection
+                        })">First</a>
                     </li>
                     <li class="page-item">
                         <a class="page-link" href="@Url.Action("Index", new {
-                        pageNumber = Model.PageNumber - 1,
-                        pageSize = Model.PageSize,
-                        searchTerm = ViewBag.SearchTerm,
-                        sortColumn = ViewBag.SortColumn,
-                        sortDirection = ViewBag.SortDirection
-                    })">&laquo;</a>
+                            type = type,
+                            pageNumber = Model.PageNumber - 1,
+                            pageSize = Model.PageSize,
+                            searchTerm = searchTerm,
+                            sortColumn = ViewBag.SortColumn,
+                            sortDirection = ViewBag.SortDirection
+                        })">&laquo;</a>
                     </li>
                 }
 
@@ -551,12 +577,13 @@
                 {
                     <li class="page-item @(i == Model.PageNumber ? "active" : "")">
                         <a class="page-link" href="@Url.Action("Index", new {
-                        pageNumber = i,
-                        pageSize = Model.PageSize,
-                        searchTerm = ViewBag.SearchTerm,
-                        sortColumn = ViewBag.SortColumn,
-                        sortDirection = ViewBag.SortDirection
-                    })">@i</a>
+                            type = type,
+                            pageNumber = i,
+                            pageSize = Model.PageSize,
+                            searchTerm = searchTerm,
+                            sortColumn = ViewBag.SortColumn,
+                            sortDirection = ViewBag.SortDirection
+                        })">@i</a>
                     </li>
                 }
 
@@ -564,33 +591,40 @@
                 {
                     <li class="page-item">
                         <a class="page-link" href="@Url.Action("Index", new {
-                        pageNumber = Model.PageNumber + 1,
-                        pageSize = Model.PageSize,
-                        searchTerm = ViewBag.SearchTerm,
-                        sortColumn = ViewBag.SortColumn,
-                        sortDirection = ViewBag.SortDirection
-                    })">&raquo;</a>
+                            type = type,
+                            pageNumber = Model.PageNumber + 1,
+                            pageSize = Model.PageSize,
+                            searchTerm = searchTerm,
+                            sortColumn = ViewBag.SortColumn,
+                            sortDirection = ViewBag.SortDirection
+                        })">&raquo;</a>
                     </li>
                     <li class="page-item">
                         <a class="page-link" href="@Url.Action("Index", new {
-                        pageNumber = Model.TotalPages,
-                        pageSize = Model.PageSize,
-                        searchTerm = ViewBag.SearchTerm,
-                        sortColumn = ViewBag.SortColumn,
-                        sortDirection = ViewBag.SortDirection
-                    })">Last</a>
+                            type = type,
+                            pageNumber = Model.TotalPages,
+                            pageSize = Model.PageSize,
+                            searchTerm = searchTerm,
+                            sortColumn = ViewBag.SortColumn,
+                            sortDirection = ViewBag.SortDirection
+                        })">Last</a>
                     </li>
                 }
             </ul>
         </nav>
     }
-
 </div>
 
 @section Scripts {
     <script>
-        $(document).ready(function () {
-            // Any other initialization code can go here
+        document.addEventListener("DOMContentLoaded", function () {
+            const alertEl = document.getElementById("successAlert");
+            if (alertEl) {
+                setTimeout(function () {
+                    let alert = bootstrap.Alert.getOrCreateInstance(alertEl);
+                    alert.close();
+                }, 5000);
+            }
         });
     </script>
 }

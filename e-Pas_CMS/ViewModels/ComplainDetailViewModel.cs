@@ -41,6 +41,8 @@
         // Permission flags
         public bool CanApprove { get; set; }
         public bool CanReject { get; set; }
+
+        public string feedback_type { get; set; }
     }
 
     public class PointItem

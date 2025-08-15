@@ -26,134 +26,279 @@ namespace e_Pas_CMS.Controllers
         }
 
         // GET: /Complain?type=KOMPLAIN|BANDING
+        [HttpGet]
         public async Task<IActionResult> Index(
-            string type = "BANDING",
-            int pageNumber = 1,
-            int pageSize = DefaultPageSize,
-            string search = "")
+    string type = "BANDING",
+    string searchTerm = "",
+    int pageNumber = 1,
+    int pageSize = DefaultPageSize,
+    string sortColumn = "TanggalAudit",
+    string sortDirection = "desc")
         {
+            ViewBag.Type = type;
+            ViewBag.SearchTerm = searchTerm ?? "";
+            ViewBag.SortColumn = sortColumn;
+            ViewBag.SortDirection = sortDirection;
+
             var baseQuery =
                 from fb in _context.TrxFeedbacks
                 join ta in _context.trx_audits on fb.TrxAuditId equals ta.id
                 join sp in _context.spbus on ta.spbu_id equals sp.id
-                join au in _context.app_users on ta.app_user_id equals au.id
+                join au0 in _context.app_users on ta.app_user_id equals au0.id into aud1
+                from au in aud1.DefaultIfEmpty()
                 where fb.FeedbackType == type
                 select new
                 {
                     Fb = fb,
                     Ta = ta,
                     Sp = sp,
-                    Auditor = au.name
+                    Auditor = au != null ? au.name : null
                 };
 
-            if (!string.IsNullOrWhiteSpace(search))
+            // SEARCH
+            if (!string.IsNullOrWhiteSpace(searchTerm))
             {
-                var term = search.ToLower().Trim();
+                var term = searchTerm.ToLower().Trim();
                 baseQuery = baseQuery.Where(x =>
-                       x.Fb.TicketNo.ToLower().Contains(term)
-                    || x.Sp.spbu_no.ToLower().Contains(term)
-                    || (x.Sp.city_name != null && x.Sp.city_name.ToLower().Contains(term))
-                    || (x.Auditor != null && x.Auditor.ToLower().Contains(term)));
+                       (x.Fb.TicketNo ?? "").ToLower().Contains(term)
+                    || (x.Sp.spbu_no ?? "").ToLower().Contains(term)
+                    || (x.Sp.city_name ?? "").ToLower().Contains(term)
+                    || (x.Sp.region ?? "").ToLower().Contains(term)
+                    || ((x.Auditor ?? "").ToLower().Contains(term)));
             }
 
             var totalItems = await baseQuery.CountAsync();
-            var pageItems = await baseQuery
-                .OrderByDescending(x => x.Ta.updated_date)
-                .Skip((pageNumber - 1) * pageSize)
-                .Take(pageSize)
-                .ToListAsync();
 
-            var connectionString = _context.Database.GetConnectionString();
-            await using var conn = new NpgsqlConnection(connectionString);
-            await conn.OpenAsync();
+            bool asc = string.Equals(sortDirection, "asc", StringComparison.OrdinalIgnoreCase);
 
-            var result = new List<ComplainListItemViewModel>();
-            foreach (var it in pageItems)
+            if (string.Equals(sortColumn, "Score", StringComparison.OrdinalIgnoreCase))
             {
-                var sql = @"
-                    SELECT 
-                        mqd.weight, 
-                        tac.score_input, 
-                        tac.score_x,
-                        mqd.is_relaksasi
-                    FROM master_questioner_detail mqd
-                    LEFT JOIN trx_audit_checklist tac 
-                      ON tac.master_questioner_detail_id = mqd.id
-                     AND tac.trx_audit_id = @id
-                    WHERE mqd.master_questioner_id = (
-                        SELECT master_questioner_checklist_id 
-                        FROM trx_audit 
-                        WHERE id = @id
-                    )
-                    AND mqd.type = 'QUESTION';";
+                // Ambil semua dulu agar bisa sort by skor
+                var allItems = await baseQuery
+                    .OrderByDescending(x => x.Ta.updated_date) // fallback
+                    .ToListAsync();
 
-                var rows = (await conn.QueryAsync<(decimal? weight, string score_input, decimal? score_x, bool? is_relaksasi)>(sql, new { id = it.Ta.id })).ToList();
+                var connectionString = _context.Database.GetConnectionString();
+                await using var connAll = new Npgsql.NpgsqlConnection(connectionString);
+                await connAll.OpenAsync();
 
-                decimal sumAF = 0, sumW = 0, sumX = 0;
-                foreach (var r in rows)
+                const string sqlScore = @"
+            SELECT 
+                mqd.weight, 
+                tac.score_input, 
+                tac.score_x,
+                mqd.is_relaksasi
+            FROM master_questioner_detail mqd
+            LEFT JOIN trx_audit_checklist tac 
+              ON tac.master_questioner_detail_id = mqd.id
+             AND tac.trx_audit_id = @id
+            WHERE mqd.master_questioner_id = (
+                SELECT master_questioner_checklist_id 
+                FROM trx_audit 
+                WHERE id = @id
+            )
+            AND mqd.type = 'QUESTION';";
+
+                var scored = new List<(dynamic Row, decimal Score)>(allItems.Count);
+
+                foreach (var it in allItems)
                 {
-                    var w = r.weight ?? 0;
-                    var input = (r.score_input ?? "").Trim().ToUpperInvariant();
+                    var rows = (await connAll.QueryAsync<(decimal? weight, string score_input, decimal? score_x, bool? is_relaksasi)>(
+                        sqlScore, new { id = it.Ta.id })).ToList();
 
-                    if (input == "X")
+                    decimal sumAF = 0, sumW = 0, sumX = 0;
+                    foreach (var r in rows)
                     {
-                        sumX += w;
-                        sumAF += r.score_x ?? 0;
-                    }
-                    else if (input == "F" && r.is_relaksasi == true)
-                    {
-                        sumAF += 1.00m * w;
-                    }
-                    else
-                    {
-                        decimal af = input switch
+                        var w = r.weight ?? 0;
+                        var input = (r.score_input ?? "").Trim().ToUpperInvariant();
+
+                        if (input == "X")
                         {
-                            "A" => 1.00m,
-                            "B" => 0.80m,
-                            "C" => 0.60m,
-                            "D" => 0.40m,
-                            "E" => 0.20m,
-                            "F" => 0.00m,
-                            _ => 0.00m
-                        };
-                        sumAF += af * w;
+                            sumX += w;
+                            sumAF += r.score_x ?? 0;
+                        }
+                        else if (input == "F" && r.is_relaksasi == true)
+                        {
+                            sumAF += 1.00m * w;
+                        }
+                        else
+                        {
+                            decimal af = input switch
+                            {
+                                "A" => 1.00m,
+                                "B" => 0.80m,
+                                "C" => 0.60m,
+                                "D" => 0.40m,
+                                "E" => 0.20m,
+                                "F" => 0.00m,
+                                _ => 0.00m
+                            };
+                            sumAF += af * w;
+                        }
+                        sumW += w;
                     }
 
-                    sumW += w;
+                    var finalScore = (sumW - sumX) > 0 ? (sumAF / (sumW - sumX)) * 100m : 0m;
+                    scored.Add((it, Math.Round(finalScore, 2)));
                 }
 
-                var finalScore = (sumW - sumX) > 0 ? (sumAF / (sumW - sumX)) * 100m : 0m;
+                var ordered = asc
+                    ? scored.OrderBy(x => x.Score).ThenByDescending(x => x.Row.Ta.updated_date)
+                    : scored.OrderByDescending(x => x.Score).ThenByDescending(x => x.Row.Ta.updated_date);
 
-                result.Add(new ComplainListItemViewModel
+                var paged = ordered
+                    .Skip((pageNumber - 1) * pageSize)
+                    .Take(pageSize)
+                    .ToList();
+
+                var resultByScore = paged.Select(x =>
                 {
-                    FeedbackId = it.Fb.Id,
-                    TicketNo = it.Fb.TicketNo,
-                    AuditId = it.Ta.id,
-                    NoSpbu = it.Sp.spbu_no,
-                    Region = it.Sp.region,
-                    City = it.Sp.city_name,
-                    Auditor = it.Auditor,
-                    TanggalAudit = (it.Ta.audit_execution_time == null || it.Ta.audit_execution_time == DateTime.MinValue)
-                        ? it.Ta.updated_date ?? DateTime.Now
-                        : it.Ta.audit_execution_time.Value,
-                    TipeAudit = it.Ta.audit_type,
-                    AuditLevel = it.Ta.audit_level,
-                    Score = Math.Round(finalScore, 2)
-                });
+                    // SAFE audit date (audit_execution_time: DateTime non-nullable)
+                    DateTime auditDate = x.Row.Ta.audit_execution_time;
+                    if (auditDate == default || auditDate == DateTime.MinValue)
+                        auditDate = x.Row.Ta.updated_date ?? DateTime.Now;
+
+                    return new ComplainListItemViewModel
+                    {
+                        FeedbackId = x.Row.Fb.Id,
+                        TicketNo = x.Row.Fb.TicketNo,
+                        AuditId = x.Row.Ta.id,
+                        NoSpbu = x.Row.Sp.spbu_no,
+                        Region = x.Row.Sp.region,
+                        City = x.Row.Sp.city_name,
+                        Auditor = x.Row.Auditor,
+                        TanggalAudit = auditDate,
+                        TipeAudit = x.Row.Ta.audit_type,
+                        AuditLevel = x.Row.Ta.audit_level,
+                        Score = x.Score
+                    };
+                }).ToList();
+
+                var vmScore = new PaginationModel<ComplainListItemViewModel>
+                {
+                    Items = resultByScore,
+                    PageNumber = pageNumber,
+                    PageSize = pageSize,
+                    TotalItems = totalItems
+                };
+
+                return View(vmScore);
             }
-
-            var vm = new PaginationModel<ComplainListItemViewModel>
+            else
             {
-                Items = result,
-                PageNumber = pageNumber,
-                PageSize = pageSize,
-                TotalItems = totalItems
-            };
+                // Sorting kolom non-Score di DB
+                IOrderedQueryable<dynamic> ordered = sortColumn switch
+                {
+                    "TicketNo" => asc ? baseQuery.OrderBy(x => x.Fb.TicketNo) : baseQuery.OrderByDescending(x => x.Fb.TicketNo),
+                    "NoSpbu" => asc ? baseQuery.OrderBy(x => x.Sp.spbu_no) : baseQuery.OrderByDescending(x => x.Sp.spbu_no),
+                    "City" => asc ? baseQuery.OrderBy(x => x.Sp.city_name) : baseQuery.OrderByDescending(x => x.Sp.city_name),
+                    "Rayon" => asc ? baseQuery.OrderBy(x => x.Sp.region) : baseQuery.OrderByDescending(x => x.Sp.region),
+                    "Auditor" => asc ? baseQuery.OrderBy(x => x.Auditor) : baseQuery.OrderByDescending(x => x.Auditor),
+                    "TanggalAudit" => asc ? baseQuery.OrderBy(x => x.Ta.audit_execution_time)
+                                           : baseQuery.OrderByDescending(x => x.Ta.audit_execution_time),
+                    "TipeAudit" => asc ? baseQuery.OrderBy(x => x.Ta.audit_type) : baseQuery.OrderByDescending(x => x.Ta.audit_type),
+                    "AuditLevel" => asc ? baseQuery.OrderBy(x => x.Ta.audit_level) : baseQuery.OrderByDescending(x => x.Ta.audit_level),
+                    _ => asc ? baseQuery.OrderBy(x => x.Ta.audit_execution_time)
+                                           : baseQuery.OrderByDescending(x => x.Ta.audit_execution_time),
+                };
 
-            ViewBag.Search = search;
-            ViewBag.Type = type;
+                var pageItems = await ordered
+                    .Skip((pageNumber - 1) * pageSize)
+                    .Take(pageSize)
+                    .ToListAsync();
 
-            return View(vm);
+                var connectionString = _context.Database.GetConnectionString();
+                await using var conn = new Npgsql.NpgsqlConnection(connectionString);
+                await conn.OpenAsync();
+
+                const string sql = @"
+            SELECT 
+                mqd.weight, 
+                tac.score_input, 
+                tac.score_x,
+                mqd.is_relaksasi
+            FROM master_questioner_detail mqd
+            LEFT JOIN trx_audit_checklist tac 
+              ON tac.master_questioner_detail_id = mqd.id
+             AND tac.trx_audit_id = @id
+            WHERE mqd.master_questioner_id = (
+                SELECT master_questioner_checklist_id 
+                FROM trx_audit 
+                WHERE id = @id
+            )
+            AND mqd.type = 'QUESTION';";
+
+                var result = new List<ComplainListItemViewModel>(pageItems.Count);
+                foreach (var it in pageItems)
+                {
+                    var rows = (await conn.QueryAsync<(decimal? weight, string score_input, decimal? score_x, bool? is_relaksasi)>(
+                        sql, new { id = it.Ta.id })).ToList();
+
+                    decimal sumAF = 0, sumW = 0, sumX = 0;
+                    foreach (var r in rows)
+                    {
+                        var w = r.weight ?? 0;
+                        var input = (r.score_input ?? "").Trim().ToUpperInvariant();
+
+                        if (input == "X")
+                        {
+                            sumX += w;
+                            sumAF += r.score_x ?? 0;
+                        }
+                        else if (input == "F" && r.is_relaksasi == true)
+                        {
+                            sumAF += 1.00m * w;
+                        }
+                        else
+                        {
+                            decimal af = input switch
+                            {
+                                "A" => 1.00m,
+                                "B" => 0.80m,
+                                "C" => 0.60m,
+                                "D" => 0.40m,
+                                "E" => 0.20m,
+                                "F" => 0.00m,
+                                _ => 0.00m
+                            };
+                            sumAF += af * w;
+                        }
+                        sumW += w;
+                    }
+
+                    var finalScore = (sumW - sumX) > 0 ? (sumAF / (sumW - sumX)) * 100m : 0m;
+
+                    // SAFE audit date (audit_execution_time: DateTime non-nullable)
+                    DateTime auditDate = it.Ta.audit_execution_time;
+                    if (auditDate == default || auditDate == DateTime.MinValue)
+                        auditDate = it.Ta.updated_date ?? DateTime.Now;
+
+                    result.Add(new ComplainListItemViewModel
+                    {
+                        FeedbackId = it.Fb.Id,
+                        TicketNo = it.Fb.TicketNo,
+                        AuditId = it.Ta.id,
+                        NoSpbu = it.Sp.spbu_no,
+                        Region = it.Sp.region,
+                        City = it.Sp.city_name,
+                        Auditor = it.Auditor,
+                        TanggalAudit = auditDate,
+                        TipeAudit = it.Ta.audit_type,
+                        AuditLevel = it.Ta.audit_level,
+                        Score = Math.Round(finalScore, 2)
+                    });
+                }
+
+                var vm = new PaginationModel<ComplainListItemViewModel>
+                {
+                    Items = result,
+                    PageNumber = pageNumber,
+                    PageSize = pageSize,
+                    TotalItems = totalItems
+                };
+
+                return View(vm);
+            }
         }
 
         [HttpGet("Complain/Detail/{id}")]
@@ -222,6 +367,8 @@ namespace e_Pas_CMS.Controllers
                 // Aksi
                 CanApprove = string.Equals(header.Tf.Status, "IN_PROGRESS_SUBMIT", StringComparison.OrdinalIgnoreCase),
                 CanReject = string.Equals(header.Tf.Status, "IN_PROGRESS_SUBMIT", StringComparison.OrdinalIgnoreCase),
+
+                feedback_type = header.Tf.FeedbackType,
 
                 // Tambahan utk galeri FINAL
                 AuditId = header.Ta.id
@@ -356,10 +503,6 @@ ORDER BY p.created_date ASC;", new { fid = id });
             return View(vm);
         }
 
-        /// <summary>
-        /// Mengambil media notes (GLOBAL attachment) dari trx_audit_media dan mengubah menjadi full URL,
-        /// sekaligus memfilter yang path-nya kosong.
-        /// </summary>
         private async Task<List<MediaItem>> GetMediaNotesAsync(IDbConnection conn, string id)
         {
             const string sql = @"
@@ -496,9 +639,11 @@ ORDER BY created_date ASC;";
             var s = raw.Trim().ToUpperInvariant();
             return s switch
             {
-                "APPROVED" => "Disetujui",
                 "REJECTED" => "Ditolak",
-                "IN_PROGRESS_SUBMIT" => "Menunggu Persetujuan",
+                "IN_PROGRESS_SUBMIT" => "Menunggu Persetujuan SBM",
+                "APPROVE_SBM" => "Menunggu Persetujuan PPN",
+                "APPROVE_PPN" => "Banding Disetujui",
+                "APPROVE" => "Banding Disetujui",
                 _ => raw
             };
         }
@@ -512,20 +657,36 @@ ORDER BY created_date ASC;";
                 return NotFound();
 
             var entity = await _context.TrxFeedbacks.FirstOrDefaultAsync(x => x.Id == id);
-            if (entity == null) return NotFound();
+            if (entity == null)
+                return NotFound();
 
-            entity.Status = "APPROVED";
+            // Tentukan status baru berdasarkan status saat ini
+            if (entity.Status == "IN_PROGRESS_SUBMIT")
+            {
+                entity.Status = "APPROVE_SBM";
+            }
+            else if (entity.Status == "APPROVE_SBM")
+            {
+                entity.Status = "APPROVE_PPN";
+            }
+            else
+            {
+                // Default jika bukan kedua status di atas
+                entity.Status = "APPROVED";
+            }
+
             entity.ApprovalBy = User?.Identity?.Name ?? "system";
-            entity.ApprovalDate = DateTime.UtcNow;
+            entity.ApprovalDate = DateTime.Now;
             entity.UpdatedBy = entity.ApprovalBy;
-            entity.UpdatedDate = DateTime.UtcNow;
+            entity.UpdatedDate = DateTime.Now;
 
             await _context.SaveChangesAsync();
+
             TempData["AlertSuccess"] = "Pengajuan telah disetujui.";
             return RedirectToAction(nameof(Detail), new { id });
         }
 
-        // GET: /Complain/Reject?id=...&reason=...
+
         [HttpGet]
         public async Task<IActionResult> Reject(string id, string reason = "")
         {
@@ -537,17 +698,57 @@ ORDER BY created_date ASC;";
 
             entity.Status = "REJECTED";
             entity.ApprovalBy = User?.Identity?.Name ?? "system";
-            entity.ApprovalDate = DateTime.UtcNow;
+            entity.ApprovalDate = DateTime.Now;
             entity.UpdatedBy = entity.ApprovalBy;
-            entity.UpdatedDate = DateTime.UtcNow;
-
-            // Jika ada kolom alasan penolakan:
-            // entity.reject_reason = reason;
+            entity.UpdatedDate = DateTime.Now;
 
             await _context.SaveChangesAsync();
             TempData["AlertSuccess"] = "Pengajuan telah ditolak.";
             return RedirectToAction(nameof(Detail), new { id });
         }
+
+        [HttpPost("Complain/Reassign/{id}")]
+        public async Task<IActionResult> Reassign(string id)
+        {
+            var currentUser = User.Identity?.Name;
+
+            // 1. Ambil trx_auditid dari trx_feedback
+            var trxAuditId = await _context.TrxFeedbacks
+                .Where(tf => tf.Id == id)
+                .Select(tf => tf.TrxAuditId)
+                .FirstOrDefaultAsync();
+
+            if (trxAuditId == null)
+                return NotFound();
+
+            // 2. Update trx_audit
+            string sqlAudit = @"
+        UPDATE trx_audit
+        SET approval_date = now(),
+            approval_by = @p0,
+            updated_date = now(),
+            updated_by = @p0,
+            status = 'UNDER_REVIEW'
+        WHERE id = @p1";
+
+            int affectedAudit = await _context.Database.ExecuteSqlRawAsync(sqlAudit, currentUser, trxAuditId);
+            if (affectedAudit == 0)
+                return NotFound();
+
+            // 3. Update trx_feedback
+            string sqlFeedback = @"
+        UPDATE trx_feedback
+        SET status = 'APPROVE',
+            updated_date = now(),
+            updated_by = @p0
+        WHERE id = @p1";
+
+            await _context.Database.ExecuteSqlRawAsync(sqlFeedback, currentUser, id);
+
+            TempData["Success"] = "Laporan audit telah Reassign ke Review.";
+            return RedirectToAction("Index");
+        }
+
 
         private static string ToPublicUrl(string path)
         {
