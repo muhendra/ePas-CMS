@@ -10,6 +10,7 @@ using e_Pas_CMS.ViewModels;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Newtonsoft.Json.Linq;
 using Npgsql;
 
 namespace e_Pas_CMS.Controllers
@@ -380,24 +381,24 @@ namespace e_Pas_CMS.Controllers
 
             // 1) Ambil poin + label + elemen yang dibanding (string_agg)
             var pointRows = await conn.QueryAsync<PointRow>(@"
-SELECT 
-    p.id AS point_id,
-    p.description AS description,
-    COALESCE(e.number || '. ' || e.title, COALESCE(e.title, COALESCE(e.description, '-'))) AS element_label,
-    COALESCE(se.number || '. ' || se.title, COALESCE(se.title, COALESCE(se.description, '-'))) AS sub_element_label,
-    COALESCE(de.number || '. ' || de.title, COALESCE(de.title, '-')) AS detail_element_label,
-    COALESCE((
-        SELECT string_agg(me.number, ', ' ORDER BY me.number)
-        FROM trx_feedback_point_element pe
-        JOIN master_questioner_detail me ON me.id = pe.master_questioner_detail_id
-        WHERE pe.trx_feedback_point_id = p.id
-    ), '') AS compared_elements
-FROM trx_feedback_point p
-LEFT JOIN master_questioner_detail e  ON e.id  = p.element_master_questioner_detail_id
-LEFT JOIN master_questioner_detail se ON se.id = p.sub_element_master_questioner_detail_id
-LEFT JOIN master_questioner_detail de ON de.id = p.detail_element_master_questioner_detail_id
-WHERE p.trx_feedback_id = @fid
-ORDER BY p.created_date ASC;", new { fid = id });
+            SELECT 
+                p.id AS point_id,
+                p.description AS description,
+                COALESCE(e.number || '. ' || e.title, COALESCE(e.title, COALESCE(e.description, '-'))) AS element_label,
+                COALESCE(se.number || '. ' || se.title, COALESCE(se.title, COALESCE(se.description, '-'))) AS sub_element_label,
+                COALESCE(de.number || '. ' || de.title, COALESCE(de.title, '-')) AS detail_element_label,
+                COALESCE((
+                    SELECT string_agg(me.number, ', ' ORDER BY me.number)
+                    FROM trx_feedback_point_element pe
+                    JOIN master_questioner_detail me ON me.id = pe.master_questioner_detail_id
+                    WHERE pe.trx_feedback_point_id = p.id
+                ), '') AS compared_elements
+            FROM trx_feedback_point p
+            LEFT JOIN master_questioner_detail e  ON e.id  = p.element_master_questioner_detail_id
+            LEFT JOIN master_questioner_detail se ON se.id = p.sub_element_master_questioner_detail_id
+            LEFT JOIN master_questioner_detail de ON de.id = p.detail_element_master_questioner_detail_id
+            WHERE p.trx_feedback_id = @fid
+            ORDER BY p.created_date ASC;", new { fid = id });
 
             var pointList = pointRows.ToList();
             int idx = 1;
@@ -477,19 +478,7 @@ ORDER BY p.created_date ASC;", new { fid = id });
                         SizeReadable = null
                     });
 
-                    var notes = await GetMediaNotesAsync(conn, pid);
-                    vm.Attachments = notes
-                        .Where(n => !string.IsNullOrWhiteSpace(n.MediaPath))
-                        .Select(n => new AttachmentItem
-                        {
-                            Id = null, // tidak ada id media per baris di trx_audit_media untuk keperluan ini
-                            FileName = SafeGetFileName(n.MediaPath),
-                            Url = n.MediaPath, // sudah full URL dari GetMediaNotesAsync
-                            MediaType = NormalizeType(n.MediaType) ?? GetExtFromUrl(n.MediaPath),
-                            SizeReadable = null
-                        })
-                        .ToList();
-
+                    
                     fileIdx++;
                 }
 
@@ -498,7 +487,18 @@ ORDER BY p.created_date ASC;", new { fid = id });
             }
 
             // 3) Isi vm.Attachments (GLOBAL) mengikuti pola GetMediaNotesAsync (tabel trx_audit_media)
-            
+            var notes = await GetMediaNotesAsync(conn, pid);
+            vm.Attachments = notes
+                .Where(n => !string.IsNullOrWhiteSpace(n.MediaPath))
+                .Select(n => new AttachmentItem
+                {
+                    Id = null, // tidak ada id media per baris di trx_audit_media untuk keperluan ini
+                    FileName = SafeGetFileName(n.MediaPath),
+                    Url = n.MediaPath, // sudah full URL dari GetMediaNotesAsync
+                    MediaType = NormalizeType(n.MediaType) ?? GetExtFromUrl(n.MediaPath),
+                    SizeReadable = null
+                })
+                .ToList();
 
             return View(vm);
         }
@@ -506,48 +506,18 @@ ORDER BY p.created_date ASC;", new { fid = id });
         private async Task<List<MediaItem>> GetMediaNotesAsync(IDbConnection conn, string id)
         {
             const string sql = @"
-        SELECT id, media_type, media_path
-FROM trx_feedback_point_media
-WHERE trx_feedback_point_id = @id
-ORDER BY created_date ASC;";
+            SELECT id, media_type, media_path
+            FROM trx_feedback_point_media
+            WHERE trx_feedback_point_id = @id
+            ORDER BY created_date ASC;";
 
             var rows = await conn.QueryAsync<MediaRow>(sql, new { id });
 
-            const string baseHost = "https://epas-assets.zarata.co.id";
-
-            List<MediaItem> result = new();
-
-            foreach (var r in rows)
+            return rows.Select(x => new MediaItem
             {
-                string path = (r.media_path ?? string.Empty).Trim();
-
-                // Jika sudah absolute (http/https), pakai apa adanya
-                if (Uri.TryCreate(path, UriKind.Absolute, out var absoluteUri)
-                    && (absoluteUri.Scheme == Uri.UriSchemeHttp || absoluteUri.Scheme == Uri.UriSchemeHttps))
-                {
-                    result.Add(new MediaItem
-                    {
-                        MediaType = r.media_type,
-                        MediaPath = absoluteUri.ToString()
-                    });
-                    continue;
-                }
-
-                // Normalisasi leading slash agar tidak double-slash saat digabung dengan host
-                if (!path.StartsWith("/"))
-                    path = "/" + path;
-
-                // Gabungkan dengan host CDN
-                string fullUrl = baseHost + path;
-
-                result.Add(new MediaItem
-                {
-                    MediaType = r.media_type,
-                    MediaPath = fullUrl
-                });
-            }
-
-            return result;
+                MediaType = x.media_type,
+                MediaPath = "https://epas-assets.zarata.co.id" + x.media_path
+            }).ToList();
         }
 
         // ===== Helper lokal yang dipakai di atas =====

@@ -1,5 +1,6 @@
 ﻿@inject e_Pas_CMS.Data.EpasDbContext _context
 @using System.Security.Claims
+@using Newtonsoft.Json
 @using System
 
 @model e_Pas_CMS.ViewModels.ComplainDetailViewModel
@@ -262,83 +263,20 @@
                     <div class="muted mb-3">
                         @(string.IsNullOrWhiteSpace(p.Description) ? "-" : p.Description)
                     </div>
-                    @* ================== BEGIN: Dokumen Pendukung (versi seperti Audit Detail) ================== *@
-                    <div class="mb-2 fw-semibold">Dokumen Pendukung</div>
-
-                    @if (p.Attachments != null && p.Attachments.Any())
-                    {
-                        <div class="row g-3">
-                            @foreach (var f in p.Attachments)
-                            {
-                                var mt = (f.MediaType ?? "").ToLowerInvariant();
-                                var isImage = mt == "jpg" || mt == "jpeg" || mt == "png" || mt == "gif";
-                                var isVideo = mt == "mp4" || mt == "webm" || mt == "mov";
-                                var isPdf = mt == "pdf";
-
-                                <div class="col-6 col-md-4 col-lg-3">
-                                    <div class="card h-100 border-0 shadow-sm attachment-card">
-                                        <div class="ratio ratio-4x3 bg-light position-relative overflow-hidden">
-                                            @if (isImage)
-                                            {
-                                                <img src="@f.Url" alt="@f.FileName" class="w-100 h-100 object-fit-cover" />
-                                            }
-                                            else if (isVideo)
-                                            {
-                                                <div class="d-flex align-items-center justify-content-center w-100 h-100">
-                                                    <i class="bi bi-camera-reels fs-1 text-muted"></i>
-                                                </div>
-                                            }
-                                            else if (isPdf)
-                                            {
-                                                <div class="d-flex align-items-center justify-content-center w-100 h-100">
-                                                    <i class="bi bi-filetype-pdf fs-1 text-danger"></i>
-                                                </div>
-                                            }
-                                            else
-                                            {
-                                                <div class="d-flex align-items-center justify-content-center w-100 h-100">
-                                                    <i class="bi bi-file-earmark-text fs-1 text-muted"></i>
-                                                </div>
-                                            }
-
-                                            <!-- Hover overlay actions seperti di audit -->
-                                            <div class="attachment-actions d-flex gap-2 position-absolute top-50 start-50 translate-middle">
-                                                <button type="button"
-                                                        class="btn btn-light btn-sm shadow-sm fw-semibold px-3 btn-preview"
-                                                        data-id="@f.Id"
-                                                        data-url="@f.Url"
-                                                        data-filename="@(!string.IsNullOrWhiteSpace(f.FileName) ? f.FileName : "Lampiran")"
-                                                        data-mediatype="@mt">
-                                                    <i class="bi bi-eye me-1"></i> Lihat
-                                                </button>
-
-                                                <a asp-controller="Complain"
-                                                   asp-action="Download"
-                                                   asp-route-id="@f.Id"
-                                                   class="btn btn-primary btn-sm shadow-sm fw-semibold px-3">
-                                                    <i class="bi bi-download me-1"></i> Unduh
-                                                </a>
-                                            </div>
-                                        </div>
-
-                                        <div class="card-body p-2">
-                                            <div class="small fw-semibold text-truncate" title="@f.FileName">
-                                                @(!string.IsNullOrWhiteSpace(f.FileName) ? f.FileName : "Lampiran")
-                                            </div>
-                                            @if (!string.IsNullOrEmpty(f.SizeReadable))
-                                            {
-                                                <div class="text-muted small">@f.SizeReadable</div>
-                                            }
-                                        </div>
-                                    </div>
-                                </div>
-                            }
-                        </div>
-                    }
-                    else
-                    {
-                        <div class="muted">Tidak ada dokumen pendukung.</div>
-                    }
+                    @* ================== BEGIN: Dokumen Pendukung ================== *@
+                    
+                    <div class="mb-2 fw-semibold mt-4">Dokumen Pendukung</div>
+                        <ul class="list-unstyled">
+                            <li class="mb-2">
+                                <i class="bi bi-file-earmark-image text-primary"></i>
+                                <button type="button"
+                                        class="btn btn-link text-decoration-none p-0"
+                                    onclick='showFinalMediaPopup(@Html.Raw(JsonConvert.SerializeObject(Model.Attachments)))'>
+                                    Lihat Lampiran
+                                </button>
+                            </li>
+                        </ul>
+                    
                     @* ================== END: Dokumen Pendukung ================== *@
 
                 </div>
@@ -427,29 +365,35 @@
         </div>
     </div>
 </div>
-<div class="modal fade" id="attachmentPreviewModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-xl modal-dialog-centered modal-fullscreen-sm-down">
+<!-- Modal Media -->
+<div class="modal fade" id="mediaModal" tabindex="-1" aria-labelledby="mediaModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-centered">
         <div class="modal-content">
             <div class="modal-header">
-                <h6 class="modal-title" id="attachmentTitle">Pratinjau Lampiran</h6>
+                <h5 class="modal-title" id="mediaModalLabel">Dokumentasi Foto / Video</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Tutup"></button>
             </div>
-            <div class="modal-body">
-                <!-- Konten dinamis: img / video / pdf / generic -->
-                <div id="attachmentViewer" class="w-100"></div>
+            <div class="modal-body" id="mediaModalBody">
+                <!-- Media will be inserted here -->
             </div>
-            <div class="modal-footer justify-content-between">
-                <div class="d-flex gap-2">
-                    <a id="btnOpenNewTab" href="#" target="_blank" rel="noopener" class="btn btn-outline-secondary">
-                        <i class="bi bi-box-arrow-up-right me-1"></i> Buka di Tab Baru
-                    </a>
-                </div>
-                <div class="d-flex gap-2">
-                    <a id="btnDownload" class="btn btn-primary">
-                        <i class="bi bi-download me-1"></i> Unduh
-                    </a>
-                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">Tutup</button>
-                </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Full Size Media -->
+<div class="modal fade" id="fullSizeMediaModal" tabindex="-1" aria-labelledby="fullSizeMediaModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-fullscreen">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Tutup"></button>
+            </div>
+            <div class="modal-body p-0 position-relative" id="fullSizeMediaModalBody">
+                <!-- Full size media will be inserted here -->
+            </div>
+            <div class="modal-footer justify-content-end">
+                <button type="button" class="btn btn-primary" id="useMediaBtn" style="display: none;">
+                    Gunakan media ini
+                </button>
             </div>
         </div>
     </div>
@@ -458,59 +402,112 @@
 
 @section Scripts {
     <script>
-        (function () {
-          const modalEl = document.getElementById('attachmentPreviewModal');
-          const viewer  = document.getElementById('attachmentViewer');
-          const titleEl = document.getElementById('attachmentTitle');
-          const btnOpen = document.getElementById('btnOpenNewTab');
-          const btnDown = document.getElementById('btnDownload');
+        function showFinalMediaPopup(mediaItems) {
+          showMediaPopup(mediaItems);
+        }
 
-          // Delegate: klik tombol Lihat
-          document.addEventListener('click', function (e) {
-            const btn = e.target.closest('.btn-preview');
-            if (!btn) return;
+        // Ambil properti pertama yang ada + non-empty
+        function pick(obj, ...keys) {
+          for (const k of keys) {
+            if (obj && typeof obj === 'object' && Object.prototype.hasOwnProperty.call(obj, k)) {
+              const v = obj[k];
+              if (v !== null && v !== undefined && v !== '') return v;
+            }
+          }
+          return '';
+        }
 
-            const url  = btn.getAttribute('data-url');
-            const name = btn.getAttribute('data-filename') || 'Lampiran';
-            const mt   = (btn.getAttribute('data-mediatype') || '').toLowerCase();
+        function toSrc(item) {
+          // Kalau server kirim string langsung
+          if (typeof item === 'string') return item;
 
-            // Set judul & tombol aksi
-            titleEl.textContent = name;
-            btnOpen.href = url;
+          // Coba semua varian penamaan yang mungkin
+          const raw = pick(
+            item,
+            'MediaPath','mediaPath','media_path',
+            'Url','URL','url',
+            'Path','path',
+            'Href','href'
+          );
 
-            const id = btn.getAttribute('data-id');
-            btnDown.href = '@Url.Action("Download", "Complain")' + '/' + id;
+          return raw || '';
+        }
 
-            // Render preview
-            viewer.innerHTML = '';
-            let html = '';
+        function toType(item) {
+          if (typeof item === 'string') {
+            // Kasih hint dari ekstensi
+            return item.toLowerCase().endsWith('.mp4') ? 'VIDEO' : 'IMAGE';
+          }
+          return (pick(item, 'MediaType','mediaType','media_type','type') || '').toUpperCase();
+        }
 
-            if (['jpg','jpeg','png','gif','webp'].includes(mt)) {
-              html = '<img src="' + url + '" alt="' + name + '" class="img-fluid w-100">';
-            } else if (['mp4','webm','mov'].includes(mt)) {
-              html = '<video src="' + url + '" controls class="w-100" playsinline></video>';
-            } else if (mt === 'pdf') {
-              // iframe untuk PDF
-              html = '<iframe src="' + url + '" class="w-100" style="height:70vh" frameborder="0"></iframe>';
-            } else {
-              // fallback generic
-              html = '<div class="text-center text-muted py-5">' +
-                     '<i class="bi bi-file-earmark-text fs-1 d-block mb-2"></i>' +
-                     '<div>Tidak ada pratinjau untuk tipe berkas ini.</div>' +
-                     '</div>';
+        function safeUrl(u) {
+          try { return encodeURI(u); } catch { return u || ''; }
+        }
+
+        function showMediaPopup(mediaItems) {
+          const container = document.getElementById('mediaModalBody');
+          container.innerHTML = '';
+
+          console.debug('mediaItems:', mediaItems);
+
+          if (!Array.isArray(mediaItems) || mediaItems.length === 0) {
+            container.innerHTML = '<p class="text-muted">Tidak ada media tersedia.</p>';
+            new bootstrap.Modal(document.getElementById('mediaModal'), { backdrop:'static', keyboard:false, focus:false }).show();
+            return;
+          }
+
+          const items = mediaItems.map((it, i) => {
+            const srcRaw = toSrc(it);
+            const src = safeUrl((srcRaw || '').trim());
+            const t   = toType(it);
+            const isVideo = t === 'VIDEO' || src.toLowerCase().endsWith('.mp4');
+
+            console.debug(`item[${i}] -> src:`, src, 'type:', t);
+
+            if (!src) {
+              return { html: '<div class="p-4 text-center text-muted">Media tidak memiliki URL.</div>', isActive: false };
             }
 
-            viewer.insertAdjacentHTML('afterbegin', html);
+            const html = isVideo
+              ? `<video controls class="d-block w-100 rounded"><source src="${src}" type="video/mp4"></video>`
+              : `<img src="${src}" class="d-block w-100 rounded" alt="">`;
 
-            // Tampilkan modal
-            const bsModal = bootstrap.Modal.getOrCreateInstance(modalEl);
-            bsModal.show();
+            return { html, isActive: false };
           });
 
-          // Bersihkan viewer saat modal ditutup (stop video, bebaskan memori)
-          modalEl.addEventListener('hidden.bs.modal', function () {
-            viewer.innerHTML = '';
-          });
-        })();
+          if (items.length === 1) {
+            container.innerHTML = items[0].html;
+          } else {
+            const carouselId = 'mediaCarousel_' + Date.now();
+            const indicators = [];
+            const inner = [];
+
+            items.forEach((x, idx) => {
+              const active = idx === 0 ? 'active' : '';
+              indicators.push(
+                `<button type="button" data-bs-target="#${carouselId}" data-bs-slide-to="${idx}" class="${active}" aria-current="${active ? 'true' : ''}" aria-label="Slide ${idx + 1}"></button>`
+              );
+              inner.push(`<div class="carousel-item ${active}">${x.html}</div>`);
+            });
+
+            container.innerHTML = `
+              <div id="${carouselId}" class="carousel slide" data-bs-ride="carousel">
+                <div class="carousel-indicators">${indicators.join('')}</div>
+                <div class="carousel-inner">${inner.join('')}</div>
+                <button class="carousel-control-prev" type="button" data-bs-target="#${carouselId}" data-bs-slide="prev">
+                  <span class="carousel-control-prev-icon" aria-hidden="true"></span>
+                  <span class="visually-hidden">Previous</span>
+                </button>
+                <button class="carousel-control-next" type="button" data-bs-target="#${carouselId}" data-bs-slide="next">
+                  <span class="carousel-control-next-icon" aria-hidden="true"></span>
+                  <span class="visually-hidden">Next</span>
+                </button>
+              </div>`;
+          }
+
+          new bootstrap.Modal(document.getElementById('mediaModal'), { backdrop:'static', keyboard:false, focus:false }).show();
+        }
     </script>
 }
+
