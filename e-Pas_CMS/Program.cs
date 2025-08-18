@@ -51,6 +51,8 @@ builder.Services.AddCors(options =>
     });
 });
 
+builder.Services.AddHostedService<ReminderNotificationService>();
+
 var app = builder.Build();
 
 // Middleware

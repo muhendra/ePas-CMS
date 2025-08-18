@@ -419,11 +419,20 @@
                         <td>@qq.DuSerialNo</td>
                         <td>@qq.Product</td>
                         <td>@qq.Mode</td>
-                        <td>@qq.QuantityVariationWithMeasure</td>
+                        <!-- Qty Var (m) -->
                         <td style="
-                        background-color: @(qq.QuantityVariationInPercentage < -0.003m ? "#ff0000" : 
-                                           qq.QuantityVariationInPercentage > 0.003m ? "#ffff00" : "transparent");">
-                        @qq.QuantityVariationInPercentage
+    background-color: @(qq.QuantityVariationWithMeasure < -60m ? "#ff0000" : "transparent");">
+                            @qq.QuantityVariationWithMeasure
+                        </td>
+
+                        <!-- Qty Var (%) hitung dari Qty Var (m) -->
+                        @{
+                            var qtyVarPercent = (qq.QuantityVariationWithMeasure / 20000m) * 100m; // -120 -> -0.60%
+                        }
+                        <td style="
+    background-color: @(qtyVarPercent < -0.3m ? "#ff0000" :
+                        qtyVarPercent >  0.3m ? "#ffff00" : "transparent");">
+                            @($"{qtyVarPercent:0.00}%")
                         </td>
                         <td>@qq.ObservedDensity</td>
                         <td>@qq.ObservedTemp</td>
