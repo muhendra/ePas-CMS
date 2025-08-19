@@ -28,13 +28,13 @@ public class ReminderNotificationService : BackgroundService
         {
             while (!stoppingToken.IsCancellationRequested)
             {
-                // 1. Hitung waktu menuju jam 18:00 hari ini
+                // 1. Hitung waktu menuju jam 06:00 hari ini
                 DateTime now = DateTime.Now;
-                DateTime today6pm = now.Date.AddHours(18); // hari ini jam 18:00
-                DateTime nextRunTime = now <= today6pm ? today6pm : now.Date.AddDays(1).AddHours(18);
+                DateTime today6am = now.Date.AddHours(6); // hari ini jam 6:00
+                DateTime nextRunTime = now <= today6am ? today6am : now.Date.AddDays(1).AddHours(6);
                 TimeSpan initialDelay = nextRunTime - now;
 
-                // 2. Delay hingga waktu 18:00 berikutnya
+                // 2. Delay hingga waktu 06:00 berikutnya
                 if (initialDelay > TimeSpan.Zero)
                     await Task.Delay(initialDelay, stoppingToken);
                 if (stoppingToken.IsCancellationRequested) break;
@@ -60,17 +60,6 @@ public class ReminderNotificationService : BackgroundService
     }
 
     private static readonly string ReminderH1Sql = @"
-    INSERT INTO notification (
-        id,
-        app_user_id,
-        title,
-        message,
-        status,
-        created_by,
-        created_date,
-        updated_by,
-        updated_date
-    )
     INSERT INTO notification (
     id,
     app_user_id,

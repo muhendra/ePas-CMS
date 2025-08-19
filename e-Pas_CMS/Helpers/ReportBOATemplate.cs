@@ -529,8 +529,8 @@ public class ReportBOATemplate : IDocument
                 DataCell(qq.Mode);
                 // Qty Var (m)
                 var qtyVarM = qq.QuantityVariationWithMeasure;
-                var qtyVarMColor = qtyVarM < -60m ? "#ff0000" : "#ffffff"; // merah jika < -60
-                var qtyVarMTextColor = qtyVarM < -60m ? Colors.White : Colors.Black;
+                var qtyVarMColor = qtyVarM < -100m ? "#ff0000" : "#ffffff"; // merah jika < -60
+                var qtyVarMTextColor = qtyVarM < -100m ? Colors.White : Colors.Black;
 
                 table.Cell()
                     .Background(qtyVarMColor)
@@ -546,10 +546,10 @@ public class ReportBOATemplate : IDocument
 
                 // Qty Var (%) dihitung dari Qty Var (m) / 20000 x 100%
                 decimal qtyVarPercent = (decimal)((qtyVarM / 20000m) * 100m); // -120 -> -0.60%
-                var qtyVarColor = qtyVarPercent < -0.3m ? "#ff0000" :  // merah jika kurang dari -0.3%
-                                  qtyVarPercent > 0.3m ? "#ffff00" :  // kuning jika lebih dari 0.3%
+                var qtyVarColor = qtyVarPercent < -0.5m ? "#ff0000" :  // merah jika kurang dari -0.3%
+                                  qtyVarPercent > 0.5m ? "#ffff00" :  // kuning jika lebih dari 0.3%
                                                           "#ffffff";   // putih jika normal
-                var qtyTextColor = qtyVarPercent < -0.3m ? Colors.White : Colors.Black;
+                var qtyTextColor = qtyVarPercent < -0.5m ? Colors.White : Colors.Black;
 
                 table.Cell()
                     .Background(qtyVarColor)
