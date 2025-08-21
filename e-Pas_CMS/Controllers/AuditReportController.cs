@@ -1841,14 +1841,6 @@ namespace e_Pas_CMS.Controllers
                     //    ? (forceGoodOnly ? "GOOD" : "CERTIFIED")
                     //    : "NOT CERTIFIED";
 
-                    // === Audit Next
-                    string auditNext = null;
-                    string levelspbu = null;
-
-                    var auditFlowSql = @"SELECT * FROM master_audit_flow WHERE audit_level = @level LIMIT 1;";
-                    var auditFlow = await conn.QueryFirstOrDefaultAsync<dynamic>(auditFlowSql, new { level = a.audit_level });
-
-
                     // === Hitung Compliance
                     var checklistData = await GetChecklistDataAsync(conn, a.id);
                     var mediaList = await GetMediaPerNodeAsync(conn, a.id);
@@ -1861,25 +1853,6 @@ namespace e_Pas_CMS.Controllers
                     decimal? totalScore = modelstotal.TotalScore;
                     var compliance = HitungComplianceLevelDariElements(elements);
 
-                    // === Compliance validation
-                    var sss = Math.Round(compliance.SSS ?? 0, 2);
-                    var eqnq = Math.Round(compliance.EQnQ ?? 0, 2);
-                    var rfs = Math.Round(compliance.RFS ?? 0, 2);
-                    var vfc = Math.Round(compliance.VFC ?? 0, 2);
-                    var epo = Math.Round(compliance.EPO ?? 0, 2);
-
-                    bool failGood = sss < 80 || eqnq < 85 || rfs < 85 || vfc < 15 || epo < 25;
-                    bool failExcellent = sss < 85 || eqnq < 85 || rfs < 85 || vfc < 20 || epo < 50;
-
-                    // === Update status with compliance logic
-                    string goodStatus = (finalScore >= 75 && !hasGoodPenalty && !failGood)
-                        ? "CERTIFIED"
-                        : "NOT CERTIFIED";
-
-                    string excellentStatus = (finalScore >= 80 && !hasExcellentPenalty && !failExcellent && !forceNotCertified)
-                        ? (forceGoodOnly ? "GOOD" : "CERTIFIED")
-                        : "NOT CERTIFIED";
-
                     decimal scoress = Math.Round((decimal)totalScore, 2);
 
                     string aaa = a.id;
@@ -1891,53 +1864,6 @@ namespace e_Pas_CMS.Controllers
 
                     int affected = await _context.Database.ExecuteSqlRawAsync(sql99, scoress, a.id);
 
-
-                    if (auditFlow != null)
-                    {
-                        string passedGood = auditFlow.passed_good;
-                        string passedExcellent = auditFlow.passed_excellent;
-                        string passedAuditLevel = auditFlow.passed_audit_level;
-                        string failed_audit_level = auditFlow.failed_audit_level;
-
-                        if (string.IsNullOrWhiteSpace(passedGood) && string.IsNullOrWhiteSpace(passedExcellent) && goodStatus == "CERTIFIED" && excellentStatus == "CERTIFIED")
-                        {
-                            auditNext = passedAuditLevel;
-                        }
-                        else if (string.IsNullOrWhiteSpace(passedGood) && string.IsNullOrWhiteSpace(passedExcellent) && goodStatus == "CERTIFIED" && excellentStatus == "NOT CERTIFIED")
-                        {
-                            auditNext = passedAuditLevel;
-                        }
-                        else if (string.IsNullOrWhiteSpace(passedGood) && string.IsNullOrWhiteSpace(passedExcellent) && goodStatus == "NOT CERTIFIED" && excellentStatus == "NOT CERTIFIED")
-                        {
-                            auditNext = failed_audit_level;
-                        }
-                        else if (goodStatus == "NOT CERTIFIED" && excellentStatus == "NOT CERTIFIED")
-                        {
-                            auditNext = failed_audit_level;
-                        }
-                        else if (goodStatus == "CERTIFIED" && excellentStatus == "NOT CERTIFIED")
-                        {
-                            auditNext = passedGood;
-                        }
-                        else if (goodStatus == "CERTIFIED" && excellentStatus == "CERTIFIED")
-                        {
-                            auditNext = passedExcellent;
-                        }
-                        else if (string.IsNullOrWhiteSpace(passedGood) && string.IsNullOrWhiteSpace(passedExcellent) && finalScore >= 75)
-                        {
-                            auditNext = passedAuditLevel;
-                        }
-                        else
-                        {
-                            auditNext = failed_audit_level;
-                        }
-
-                        var auditlevelClassSql = @"SELECT audit_level_class FROM master_audit_flow WHERE audit_level = @level LIMIT 1;";
-                        var auditlevelClass = await conn.QueryFirstOrDefaultAsync<dynamic>(auditlevelClassSql, new { level = auditNext });
-                        levelspbu = auditlevelClass != null
-                        ? (auditlevelClass.audit_level_class ?? "")
-                        : "";
-                    }
                 }
 
                 return Ok(new { message = "PDF generation completed" });
