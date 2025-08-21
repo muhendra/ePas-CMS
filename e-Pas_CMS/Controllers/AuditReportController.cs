@@ -22,6 +22,7 @@ using e_Pas_CMS.Models;
 using System.Text;
 using static System.Formats.Asn1.AsnWriter;
 using Microsoft.Extensions.Configuration;
+using System.Data.Common;
 
 namespace e_Pas_CMS.Controllers
 {
@@ -1605,7 +1606,7 @@ namespace e_Pas_CMS.Controllers
         }
 
         [HttpGet]
-        public async Task<IActionResult> GenerateScores(int pageNumber = 1, int pageSize = 10, string searchTerm = "", int? filterMonth = null, int? filterYear = null)
+        public async Task<IActionResult> GenerateScores(int batchSize = 200)
         {
             using var timeoutCts = new CancellationTokenSource(TimeSpan.FromHours(6));
             var token = CancellationTokenSource
@@ -1614,259 +1615,49 @@ namespace e_Pas_CMS.Controllers
 
             try
             {
-                var currentUser = User.Identity?.Name;
+                // 1) Matikan tracking untuk baca-only supaya hemat memori
+                var prevAutoDetect = _context.ChangeTracker.AutoDetectChangesEnabled;
+                _context.ChangeTracker.AutoDetectChangesEnabled = false;
+                _context.Database.SetCommandTimeout(TimeSpan.FromMinutes(5));
 
-                var userRegion = await (from aur in _context.app_user_roles
-                                        join au in _context.app_users on aur.app_user_id equals au.id
-                                        where au.username == currentUser
-                                        select aur.region)
-                           .Distinct()
-                           .Where(r => r != null)
-                           .ToListAsync();
+                // 2) Query ID saja (streaming), jangan Include apapun
+                var baseQuery = _context.trx_audits
+                    .AsNoTracking()
+                    .Where(a => a.status == "VERIFIED" && a.audit_type != "Basic Operational")
+                    .OrderByDescending(a => a.audit_execution_time)
+                    .ThenByDescending(a => a.id)
+                    .Select(a => a.id);
 
-                var userSbm = await (from aur in _context.app_user_roles
-                                     join au in _context.app_users on aur.app_user_id equals au.id
-                                     where au.username == currentUser
-                                     select aur.sbm)
-                        .Where(s => s != null)
-                        .Distinct()
-                        .ToListAsync();
-
-                var query = _context.trx_audits
-                    .Include(a => a.spbu)
-                    .Include(a => a.app_user)
-                    .Where(a => a.status == "VERIFIED" && a.audit_type != "Basic Operational");
-
-                if (userRegion.Any() || userSbm.Any())
-                {
-                    query = query.Where(x =>
-                        (x.spbu.region != null && userRegion.Contains(x.spbu.region)) ||
-                        (x.spbu.sbm != null && userSbm.Contains(x.spbu.sbm))
-                    );
-                }
-
-                if (!string.IsNullOrWhiteSpace(searchTerm))
-                {
-                    searchTerm = searchTerm.ToLower();
-                    query = query.Where(a =>
-                        a.spbu.spbu_no.ToLower().Contains(searchTerm) ||
-                        a.app_user.name.ToLower().Contains(searchTerm) ||
-                        a.status.ToLower().Contains(searchTerm) ||
-                        a.spbu.address.ToLower().Contains(searchTerm) ||
-                        a.spbu.province_name.ToLower().Contains(searchTerm) ||
-                        a.spbu.city_name.ToLower().Contains(searchTerm)
-                    );
-                }
-
-                if (filterMonth.HasValue && filterYear.HasValue)
-                {
-                    query = query.Where(a =>
-                    ((a.audit_execution_time != null ? a.audit_execution_time.Value.Month : a.created_date.Month) == filterMonth.Value) &&
-                    ((a.audit_execution_time != null ? a.audit_execution_time.Value.Year : a.created_date.Year) == filterYear.Value));
-                }
-
-                ViewBag.FilterMonth = filterMonth;
-                ViewBag.FilterYear = filterYear;
-
-                query = query.OrderByDescending(a => a.audit_execution_time)
-                             .ThenByDescending(a => a.id);
-
-                var totalItems = await query.CountAsync();
-
-                var pagedAudits = await query
-                    .ToListAsync();
-
+                // 3) Buka 1 koneksi Npgsql, pakai terus
                 var conn = _context.Database.GetDbConnection();
                 if (conn.State != ConnectionState.Open)
-                    await conn.OpenAsync();
+                    await conn.OpenAsync(token);
 
-                var result = new List<AuditReportListViewModel>();
+                // (Opsional) naikkan timeout per perintah Dapper
+                const int dapperCmdTimeout = 300; // detik
 
-                foreach (var a in pagedAudits)
+                // 4) Proses per batch agar transaksi tidak terlalu besar
+                var buffer = new List<string>(batchSize);
+
+                await foreach (var id in baseQuery.AsAsyncEnumerable().WithCancellation(token))
                 {
-                    var sql = @"
-                SELECT 
-                    mqd.weight, 
-                    tac.score_input, 
-                    tac.score_x, 
-                    mqd.is_relaksasi
-                FROM master_questioner_detail mqd
-                LEFT JOIN trx_audit_checklist tac 
-                    ON tac.master_questioner_detail_id = mqd.id 
-                    AND tac.trx_audit_id = @id
-                WHERE mqd.master_questioner_id = (
-                    SELECT master_questioner_checklist_id 
-                    FROM trx_audit 
-                    WHERE id = @id
-                )
-                AND mqd.type = 'QUESTION'";
+                    buffer.Add(id);
 
-                    var checklist = (await conn.QueryAsync<(decimal? weight, string score_input, decimal? score_x, bool? is_relaksasi)>(sql, new { id = a.id }))
-                        .ToList();
-
-                    decimal sumAF = 0, sumWeight = 0, sumX = 0;
-
-                    foreach (var item in checklist)
+                    if (buffer.Count >= batchSize)
                     {
-                        decimal w = item.weight ?? 0;
-                        string input = item.score_input?.Trim().ToUpperInvariant() ?? "";
-
-                        if (input == "X")
-                        {
-                            sumX += w;
-                            sumAF += item.score_x ?? 0;
-                        }
-                        else if (input == "F" && item.is_relaksasi == true)
-                        {
-                            sumAF += 1.00m * w;
-                        }
-                        else
-                        {
-                            decimal af = input switch
-                            {
-                                "A" => 1.00m,
-                                "B" => 0.80m,
-                                "C" => 0.60m,
-                                "D" => 0.40m,
-                                "E" => 0.20m,
-                                "F" => 0.00m,
-                                _ => 0.00m
-                            };
-                            sumAF += af * w;
-                        }
-
-                        sumWeight += w;
+                        await ProcessBatchAsync(conn, buffer, dapperCmdTimeout, token);
+                        buffer.Clear();
                     }
-
-                    decimal finalScore = (sumWeight - sumX) > 0
-                        ? (sumAF / (sumWeight - sumX)) * sumWeight
-                        : 0m;
-
-                    // === Special Node Score Check ===
-                    var specialNodeIds = new List<Guid>
-                {
-                    Guid.Parse("555fe2e4-b95b-461b-9c92-ad8b5c837119"),
-                    Guid.Parse("bafc206f-ed29-4bbc-8053-38799e186fb0"),
-                    Guid.Parse("d26f4caa-e849-4ab4-9372-298693247272")
-                };
-
-                    if (a.created_date > new DateTime(2025, 5, 31))
-                    {
-                        specialNodeIds.Add(Guid.Parse("5e9ffc47-de99-4d7d-b8bc-0fb9b7acc81b"));
-                    }
-
-                    var specialScoreSql = @"
-                SELECT mqd.id, tac.score_input, ta.created_date
-                FROM master_questioner_detail mqd
-                LEFT JOIN trx_audit_checklist tac 
-                    ON tac.master_questioner_detail_id = mqd.id 
-                    AND tac.trx_audit_id = @id
-                LEFT JOIN trx_audit ta ON ta.id = tac.trx_audit_id
-                WHERE mqd.id = ANY(@ids);";
-
-                    var specialScoresRaw = (await conn.QueryAsync<(string id, string score_input, DateTime? created_date)>(
-                        specialScoreSql,
-                        new { id = a.id, ids = specialNodeIds.Select(x => x.ToString()).ToArray() }
-                    )).ToList();
-
-                    var specialScores = specialScoresRaw
-                        .Where(x =>
-                            x.id != "5e9ffc47-de99-4d7d-b8bc-0fb9b7acc81b" ||
-                            (x.created_date != null && x.created_date.Value < new DateTime(2025, 6, 1))
-                        )
-                        .ToDictionary(x => x.id, x => x.score_input?.Trim().ToUpperInvariant());
-
-                    bool forceGoodOnly = false;
-                    bool forceNotCertified = false;
-
-                    foreach (var score in specialScores.Values)
-                    {
-                        if (score == "C")
-                            forceGoodOnly = true;
-                        else if (score != "A")
-                            forceNotCertified = true;
-                    }
-
-                    // === Penalty Check
-                    var penaltyExcellentQuery = @"SELECT STRING_AGG(mqd.penalty_alert, ', ') AS penalty_alerts
-                FROM trx_audit_checklist tac
-                INNER JOIN master_questioner_detail mqd ON mqd.id = tac.master_questioner_detail_id
-                INNER JOIN trx_audit ta ON ta.id = tac.trx_audit_id
-                WHERE 
-                tac.trx_audit_id = @id
-                AND (
-                    (
-                        tac.master_questioner_detail_id IN (
-                    '555fe2e4-b95b-461b-9c92-ad8b5c837119',
-                    'bafc206f-ed29-4bbc-8053-38799e186fb0',
-                    'd26f4caa-e849-4ab4-9372-298693247272'
-                )
-                AND tac.score_input <> 'A'
-                )
-                OR
-                (
-                tac.master_questioner_detail_id = '5e9ffc47-de99-4d7d-b8bc-0fb9b7acc81b'
-                AND ta.created_date < '2025-06-01'
-                AND tac.score_input <> 'A')
-                OR
-                (
-                    (
-                    (mqd.penalty_excellent_criteria = 'LT_1' AND tac.score_input <> 'A') OR
-                    (mqd.penalty_excellent_criteria = 'EQ_0' AND tac.score_input = 'F')
-                )
-                AND (mqd.is_relaksasi = false OR mqd.is_relaksasi IS NULL)
-                AND mqd.is_penalty = true
-                AND NOT (
-                    mqd.id = '5e9ffc47-de99-4d7d-b8bc-0fb9b7acc81b'
-                    AND ta.created_date >= '2025-06-01'
-                )));";
-
-                    var penaltyGoodQuery = @"SELECT STRING_AGG(mqd.penalty_alert, ', ') AS penalty_alerts
-            FROM trx_audit_checklist tac
-            INNER JOIN master_questioner_detail mqd ON mqd.id = tac.master_questioner_detail_id
-            WHERE tac.trx_audit_id = @id AND
-              tac.score_input = 'F' AND
-              mqd.is_penalty = true AND 
-              (mqd.is_relaksasi = false OR mqd.is_relaksasi IS NULL) and mqd.id <> '5e9ffc47-de99-4d7d-b8bc-0fb9b7acc81b';";
-
-                    var penaltyExcellentResult = await conn.ExecuteScalarAsync<string>(penaltyExcellentQuery, new { id = a.id });
-                    var penaltyGoodResult = await conn.ExecuteScalarAsync<string>(penaltyGoodQuery, new { id = a.id });
-
-                    bool hasExcellentPenalty = !string.IsNullOrEmpty(penaltyExcellentResult);
-                    bool hasGoodPenalty = !string.IsNullOrEmpty(penaltyGoodResult);
-
-                    //string goodStatus = (finalScore >= 75 && !hasGoodPenalty) ? "CERTIFIED" : "NOT CERTIFIED";
-
-                    //string excellentStatus = (finalScore >= 80 && !hasExcellentPenalty && !forceNotCertified)
-                    //    ? (forceGoodOnly ? "GOOD" : "CERTIFIED")
-                    //    : "NOT CERTIFIED";
-
-                    // === Hitung Compliance
-                    var checklistData = await GetChecklistDataAsync(conn, a.id);
-                    var mediaList = await GetMediaPerNodeAsync(conn, a.id);
-                    var elements = BuildHierarchy(checklistData, mediaList);
-                    foreach (var element in elements) AssignWeightRecursive(element);
-                    CalculateChecklistScores(elements);
-                    CalculateOverallScore(new DetailReportViewModel { Elements = elements }, checklistData);
-                    var modelstotal = new DetailReportViewModel { Elements = elements };
-                    CalculateOverallScore(modelstotal, checklistData);
-                    decimal? totalScore = modelstotal.TotalScore;
-                    var compliance = HitungComplianceLevelDariElements(elements);
-
-                    decimal scoress = Math.Round((decimal)totalScore, 2);
-
-                    string aaa = a.id;
-
-                    string sql99 = @"
-                UPDATE trx_audit
-                SET score = @p0
-                WHERE id = @p1";
-
-                    int affected = await _context.Database.ExecuteSqlRawAsync(sql99, scoress, a.id);
-
                 }
 
-                return Ok(new { message = "PDF generation completed" });
+                if (buffer.Count > 0)
+                {
+                    await ProcessBatchAsync(conn, buffer, dapperCmdTimeout, token);
+                    buffer.Clear();
+                }
+
+                _context.ChangeTracker.AutoDetectChangesEnabled = prevAutoDetect;
+                return Ok(new { message = "Score update completed" });
             }
             catch (OperationCanceledException)
             {
@@ -1876,6 +1667,94 @@ namespace e_Pas_CMS.Controllers
             {
                 return StatusCode(500, new { error = ex.Message, stack = ex.StackTrace });
             }
+        }
+
+        // === Helper: proses 1 batch id dengan 1 transaksi & 1 koneksi yang sama
+        private async Task ProcessBatchAsync(DbConnection conn, List<string> ids, int cmdTimeoutSeconds, CancellationToken token)
+        {
+            using var tran = await conn.BeginTransactionAsync(token);
+
+            foreach (var auditId in ids)
+            {
+                // Ambil checklist pakai koneksi yang sama (Dapper)
+                const string sqlChecklist = @"
+        SELECT 
+            mqd.weight, 
+            tac.score_input, 
+            tac.score_x, 
+            mqd.is_relaksasi
+        FROM master_questioner_detail mqd
+        LEFT JOIN trx_audit_checklist tac 
+            ON tac.master_questioner_detail_id = mqd.id 
+            AND tac.trx_audit_id = @id
+        WHERE mqd.master_questioner_id = (
+            SELECT master_questioner_checklist_id 
+            FROM trx_audit 
+            WHERE id = @id
+        )
+        AND mqd.type = 'QUESTION'";
+
+                var checklist = (await conn.QueryAsync<(decimal? weight, string score_input, decimal? score_x, bool? is_relaksasi)>(
+                        sqlChecklist, new { id = auditId }, transaction: tran, commandTimeout: cmdTimeoutSeconds))
+                    .ToList();
+
+                decimal sumAF = 0, sumWeight = 0, sumX = 0;
+
+                foreach (var item in checklist)
+                {
+                    decimal w = item.weight ?? 0;
+                    string input = item.score_input?.Trim().ToUpperInvariant() ?? "";
+
+                    if (input == "X")
+                    {
+                        sumX += w;
+                        sumAF += item.score_x ?? 0;
+                    }
+                    else if (input == "F" && item.is_relaksasi == true)
+                    {
+                        sumAF += 1.00m * w;
+                    }
+                    else
+                    {
+                        decimal af = input switch
+                        {
+                            "A" => 1.00m,
+                            "B" => 0.80m,
+                            "C" => 0.60m,
+                            "D" => 0.40m,
+                            "E" => 0.20m,
+                            "F" => 0.00m,
+                            _ => 0.00m
+                        };
+                        sumAF += af * w;
+                    }
+
+                    sumWeight += w;
+                }
+
+                decimal finalScore = (sumWeight - sumX) > 0
+                    ? (sumAF / (sumWeight - sumX)) * sumWeight
+                    : 0m;
+
+                // === Hitung compliance pakai helper Anda, tetap di koneksi yg sama
+                var checklistData = await GetChecklistDataAsync(conn, auditId);
+                var mediaList = await GetMediaPerNodeAsync(conn, auditId);
+                var elements = BuildHierarchy(checklistData, mediaList);
+                foreach (var element in elements) AssignWeightRecursive(element);
+                CalculateChecklistScores(elements);
+                var modelstotal = new DetailReportViewModel { Elements = elements };
+                CalculateOverallScore(modelstotal, checklistData);
+                decimal? totalScore = modelstotal.TotalScore; 
+                var compliance = HitungComplianceLevelDariElements(elements);
+                decimal scoress = Math.Round((decimal)totalScore, 2);
+
+                // Update skor pakai koneksi & transaksi yang sama (Dapper)
+                const string sqlUpdate = @"UPDATE trx_audit SET score = @score WHERE id = @id";
+                await conn.ExecuteAsync(sqlUpdate, new { score = scoress, id = auditId },
+                    transaction: tran, commandTimeout: cmdTimeoutSeconds);
+            }
+
+            await tran.CommitAsync(token);
         }
 
 
