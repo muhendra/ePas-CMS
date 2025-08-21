@@ -1674,8 +1674,6 @@ namespace e_Pas_CMS.Controllers
                 var totalItems = await query.CountAsync();
 
                 var pagedAudits = await query
-                    .Skip((pageNumber - 1) * pageSize)
-                    .Take(pageSize)
                     .ToListAsync();
 
                 var conn = _context.Database.GetDbConnection();
