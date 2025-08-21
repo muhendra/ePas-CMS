@@ -312,15 +312,6 @@ namespace e_Pas_CMS.Controllers
 
                 decimal scoress = Math.Round((decimal)totalScore, 2);
 
-                string aaa = a.id;
-
-                string sql99 = @"
-                UPDATE trx_audit
-                SET score = @p0
-                WHERE id = @p1";
-
-                int affected = await _context.Database.ExecuteSqlRawAsync(sql99, scoress, a.id);
-
 
                 if (auditFlow != null)
                 {
@@ -1615,49 +1606,32 @@ namespace e_Pas_CMS.Controllers
 
             try
             {
-                // 1) Matikan tracking untuk baca-only supaya hemat memori
-                var prevAutoDetect = _context.ChangeTracker.AutoDetectChangesEnabled;
+                // 1) Ambil list ID dulu (materialize) agar EF selesai memakai koneksinya
                 _context.ChangeTracker.AutoDetectChangesEnabled = false;
-                _context.Database.SetCommandTimeout(TimeSpan.FromMinutes(5));
 
-                // 2) Query ID saja (streaming), jangan Include apapun
-                var baseQuery = _context.trx_audits
+                var ids = await _context.trx_audits
                     .AsNoTracking()
                     .Where(a => a.status == "VERIFIED" && a.audit_type != "Basic Operational")
                     .OrderByDescending(a => a.audit_execution_time)
                     .ThenByDescending(a => a.id)
-                    .Select(a => a.id);
+                    .Select(a => a.id)
+                    .ToListAsync(token); // <= materialize: koneksi EF bebas setelah ini
 
-                // 3) Buka 1 koneksi Npgsql, pakai terus
-                var conn = _context.Database.GetDbConnection();
-                if (conn.State != ConnectionState.Open)
-                    await conn.OpenAsync(token);
+                // 2) Pakai koneksi baru, dedicated untuk batch (jangan reuse EF connection)
+                var cs = _context.Database.GetConnectionString(); // EF Core 5+
+                await using var conn = new Npgsql.NpgsqlConnection(cs);
+                await conn.OpenAsync(token);
 
-                // (Opsional) naikkan timeout per perintah Dapper
-                const int dapperCmdTimeout = 300; // detik
+                const int dapperCmdTimeout = 300;
 
-                // 4) Proses per batch agar transaksi tidak terlalu besar
-                var buffer = new List<string>(batchSize);
-
-                await foreach (var id in baseQuery.AsAsyncEnumerable().WithCancellation(token))
+                // 3) Proses per-batch (sekuensial)
+                for (int i = 0; i < ids.Count; i += batchSize)
                 {
-                    buffer.Add(id);
-
-                    if (buffer.Count >= batchSize)
-                    {
-                        await ProcessBatchAsync(conn, buffer, dapperCmdTimeout, token);
-                        buffer.Clear();
-                    }
+                    var chunk = ids.Skip(i).Take(batchSize).ToList();
+                    await ProcessBatchAsync(conn, chunk, dapperCmdTimeout, token);
                 }
 
-                if (buffer.Count > 0)
-                {
-                    await ProcessBatchAsync(conn, buffer, dapperCmdTimeout, token);
-                    buffer.Clear();
-                }
-
-                _context.ChangeTracker.AutoDetectChangesEnabled = prevAutoDetect;
-                return Ok(new { message = "Score update completed" });
+                return Ok(new { message = "Score update completed", processed = ids.Count });
             }
             catch (OperationCanceledException)
             {
@@ -1669,14 +1643,13 @@ namespace e_Pas_CMS.Controllers
             }
         }
 
-        // === Helper: proses 1 batch id dengan 1 transaksi & 1 koneksi yang sama
+        // Tidak berubah banyak, tapi pastikan semua QueryAsync di-ToList() / AsList() sebelum lanjut.
         private async Task ProcessBatchAsync(DbConnection conn, List<string> ids, int cmdTimeoutSeconds, CancellationToken token)
         {
-            using var tran = await conn.BeginTransactionAsync(token);
+            await using var tran = await conn.BeginTransactionAsync(token);
 
             foreach (var auditId in ids)
             {
-                // Ambil checklist pakai koneksi yang sama (Dapper)
                 const string sqlChecklist = @"
         SELECT 
             mqd.weight, 
@@ -1694,9 +1667,10 @@ namespace e_Pas_CMS.Controllers
         )
         AND mqd.type = 'QUESTION'";
 
+                // Penting: materialize hasil Dapper sepenuhnya
                 var checklist = (await conn.QueryAsync<(decimal? weight, string score_input, decimal? score_x, bool? is_relaksasi)>(
                         sqlChecklist, new { id = auditId }, transaction: tran, commandTimeout: cmdTimeoutSeconds))
-                    .ToList();
+                    .AsList();
 
                 decimal sumAF = 0, sumWeight = 0, sumX = 0;
 
@@ -1736,7 +1710,7 @@ namespace e_Pas_CMS.Controllers
                     ? (sumAF / (sumWeight - sumX)) * sumWeight
                     : 0m;
 
-                // === Hitung compliance pakai helper Anda, tetap di koneksi yg sama
+                // Hitung compliance (pastikan semua helper ini TIDAK membuat koneksi baru sendiri).
                 var checklistData = await GetChecklistDataAsync(conn, auditId);
                 var mediaList = await GetMediaPerNodeAsync(conn, auditId);
                 var elements = BuildHierarchy(checklistData, mediaList);
@@ -1745,10 +1719,9 @@ namespace e_Pas_CMS.Controllers
                 var modelstotal = new DetailReportViewModel { Elements = elements };
                 CalculateOverallScore(modelstotal, checklistData);
                 decimal? totalScore = modelstotal.TotalScore; 
-                var compliance = HitungComplianceLevelDariElements(elements);
+                var compliance = HitungComplianceLevelDariElements(elements); 
                 decimal scoress = Math.Round((decimal)totalScore, 2);
 
-                // Update skor pakai koneksi & transaksi yang sama (Dapper)
                 const string sqlUpdate = @"UPDATE trx_audit SET score = @score WHERE id = @id";
                 await conn.ExecuteAsync(sqlUpdate, new { score = scoress, id = auditId },
                     transaction: tran, commandTimeout: cmdTimeoutSeconds);
