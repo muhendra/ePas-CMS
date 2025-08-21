@@ -309,6 +309,18 @@ namespace e_Pas_CMS.Controllers
                     ? (forceGoodOnly ? "GOOD" : "CERTIFIED")
                     : "NOT CERTIFIED";
 
+                decimal scoress = Math.Round((decimal)totalScore, 2);
+
+                string aaa = a.id;
+
+                string sql99 = @"
+                UPDATE trx_audit
+                SET score = @p0
+                WHERE id = @p1";
+
+                int affected = await _context.Database.ExecuteSqlRawAsync(sql99, scoress, a.id);
+
+
                 if (auditFlow != null)
                 {
                     string passedGood = auditFlow.passed_good;
