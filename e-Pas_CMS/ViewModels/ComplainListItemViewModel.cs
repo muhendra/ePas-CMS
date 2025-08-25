@@ -1,6 +1,6 @@
 ﻿namespace e_Pas_CMS.ViewModels
 {
-    public class ComplainListItemViewModel
+    public class BandingListItemViewModel
     {
         public string FeedbackId { get; set; }
         public string TicketNo { get; set; }
@@ -13,5 +13,6 @@
         public string TipeAudit { get; set; }
         public string AuditLevel { get; set; }
         public decimal Score { get; set; }
+        public DateTime TanggalPengajuan { get; set; }
     }
 }

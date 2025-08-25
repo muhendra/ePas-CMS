@@ -501,7 +501,9 @@ public partial class EpasDbContext : DbContext
                 .HasDefaultValueSql("CURRENT_TIMESTAMP")
                 .HasColumnType("timestamp without time zone")
                 .HasColumnName("updated_date");
-
+            entity.Property(e => e.Klarifikasi)
+                .HasMaxLength(2000)
+                .HasColumnName("klarifikasi");
             entity.HasOne(d => d.AppUser).WithMany(p => p.TrxFeedbacks)
                 .HasForeignKey(d => d.AppUserId)
                 .OnDelete(DeleteBehavior.ClientSetNull)

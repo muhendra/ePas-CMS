@@ -1111,16 +1111,19 @@ AND mqd.type = 'QUESTION'";
                 : "";
             }
 
+            decimal score = Math.Round((decimal)model.TotalScore, 2);
+
             string sql = @"
             UPDATE trx_audit
             SET approval_date = now(),
-                approval_by = @p0,
+                score = @p0,
+                approval_by = @p1,
                 updated_date = now(),
-                updated_by = @p0,
+                updated_by = @p1,
                 status = 'VERIFIED'
-            WHERE id = @p1";
+            WHERE id = @p2";
 
-            int affected = await _context.Database.ExecuteSqlRawAsync(sql, currentUser, id);
+            int affected = await _context.Database.ExecuteSqlRawAsync(sql, score, currentUser, id);
 
             if (affected == 0)
                 return NotFound();

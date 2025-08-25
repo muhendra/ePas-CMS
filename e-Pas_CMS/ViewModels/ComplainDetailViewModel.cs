@@ -43,6 +43,7 @@
         public bool CanReject { get; set; }
 
         public string feedback_type { get; set; }
+        public string? Klarifikasi { get; set; }
     }
 
     public class PointItem
@@ -66,6 +67,25 @@
         // Opsional (kalau ingin preview juga untuk attachment per-poin)
         public string Url { get; set; }       // absolute/relative file url
         public string MediaType { get; set; } // "jpg","png","pdf","mp4", dll
+    }
+
+    public class PointRow
+    {
+        public string point_id { get; set; } = default!;
+        public string description { get; set; } = default!;
+        public string element_label { get; set; } = default!;
+        public string sub_element_label { get; set; } = default!;
+        public string detail_element_label { get; set; } = default!;
+        public string compared_elements { get; set; } = default!;
+    }
+
+    public class MediaRow
+    {
+        public string id { get; set; } = default!;
+        public string media_type { get; set; } = default!;
+        public string media_path { get; set; } = default!;
+
+        public string trx_feedback_point_id { get; set; }
     }
 
 }

@@ -15,17 +15,16 @@ using Npgsql;
 
 namespace e_Pas_CMS.Controllers
 {
-    [Authorize]
-    public class BandingController : Controller
+    public class ComplainController : Controller
     {
         private readonly EpasDbContext _context;
         private const int DefaultPageSize = 10;
 
-        public BandingController(EpasDbContext context)
+        public ComplainController(EpasDbContext context)
         {
             _context = context;
-        }
 
+        }
         // GET: /Complain?type=KOMPLAIN|BANDING
         [HttpGet]
         public async Task<IActionResult> Index(
@@ -84,21 +83,22 @@ namespace e_Pas_CMS.Controllers
                 await using var connAll = new Npgsql.NpgsqlConnection(connectionString);
                 await connAll.OpenAsync();
 
-                const string sqlScore = @"SELECT 
-                                                mqd.weight, 
-                                                tac.score_input, 
-                                                tac.score_x,
-                                                mqd.is_relaksasi
-                                            FROM master_questioner_detail mqd
-                                            LEFT JOIN trx_audit_checklist tac 
-                                              ON tac.master_questioner_detail_id = mqd.id
-                                             AND tac.trx_audit_id = @id
-                                            WHERE mqd.master_questioner_id = (
-                                                SELECT master_questioner_checklist_id 
-                                                FROM trx_audit 
-                                                WHERE id = @id
-                                            )
-                                            AND mqd.type = 'QUESTION';";
+                const string sqlScore = @"
+            SELECT 
+                mqd.weight, 
+                tac.score_input, 
+                tac.score_x,
+                mqd.is_relaksasi
+            FROM master_questioner_detail mqd
+            LEFT JOIN trx_audit_checklist tac 
+              ON tac.master_questioner_detail_id = mqd.id
+             AND tac.trx_audit_id = @id
+            WHERE mqd.master_questioner_id = (
+                SELECT master_questioner_checklist_id 
+                FROM trx_audit 
+                WHERE id = @id
+            )
+            AND mqd.type = 'QUESTION';";
 
                 var scored = new List<(dynamic Row, decimal Score)>(allItems.Count);
 
@@ -304,7 +304,7 @@ namespace e_Pas_CMS.Controllers
             }
         }
 
-        [HttpGet("Banding/Detail/{id}")]
+        [HttpGet("Complain/Detail/{id}")]
         public async Task<IActionResult> Detail(string id)
         {
             if (string.IsNullOrWhiteSpace(id))
@@ -480,7 +480,7 @@ namespace e_Pas_CMS.Controllers
                         SizeReadable = null
                     });
 
-                    
+
                     fileIdx++;
                 }
 

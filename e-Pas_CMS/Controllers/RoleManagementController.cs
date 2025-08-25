@@ -118,14 +118,14 @@ namespace e_Pas_CMS.Controllers
         new SelectListItem { Text = "Audit - Report", Value = "ARP" },
         new SelectListItem { Text = "Audit Basic Operational - Review Audit BOA", Value = "BOARA" },
         new SelectListItem { Text = "Audit Basic Operational - Report BOA", Value = "BOARP" },
+        new SelectListItem { Text = "Dashboard", Value = "DASH" },
         new SelectListItem { Text = "Scheduler - Add Scheduler", Value = "SSCH" },
         new SelectListItem { Text = "Master - SPBU", Value = "MSPBU" },
         new SelectListItem { Text = "Access - App Role", Value = "AROLE" },
         new SelectListItem { Text = "Access - App User", Value = "AUSER" },
         new SelectListItem { Text = "Feedback - Komplain", Value = "FKOM" },
         new SelectListItem { Text = "Feedback - Banding", Value = "FBAN" },
-    };
+            };
         }
-
     }
 }
