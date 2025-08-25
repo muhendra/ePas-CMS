@@ -1928,10 +1928,10 @@ WHERE
             bool hasExcellentPenalty = !string.IsNullOrEmpty(model.PenaltyAlerts);
             bool hasGoodPenalty = !string.IsNullOrEmpty(model.PenaltyAlertsGood);
 
-            if (finalScore >= 75 && !hasGoodPenalty && !failGood)
+            if (model.FinalScore >= 75 && !hasGoodPenalty && !failGood)
                 model.GoodStatus = "CERTIFIED";
 
-            if (finalScore >= 80 && !hasExcellentPenalty && !failExcellent)
+            if (model.FinalScore >= 80 && !hasExcellentPenalty && !failExcellent)
                 model.ExcellentStatus = "CERTIFIED";
 
             // Audit Next dan kelas SPBU
