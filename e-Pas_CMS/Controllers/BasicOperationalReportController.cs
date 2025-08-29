@@ -417,9 +417,9 @@ namespace e_Pas_CMS.Controllers
                 var headersNoData = new[]
                 {
             "send_date","Audit Date","spbu_no","region","year","address","city_name","tipe_spbu","rayon",
-            "audit_level","audit_next","good_status","excellent_status","Total Score",
-            "SSS","EQnQ","RFS","VFC","EPO","wtms","qq","wmef","format_fisik","cpo",
-            "kelas_spbu","penalty_good_alerts","penalty_excellent_alerts"
+            "audit_level","audit_next","result","Total Score",
+            "SSS","EQnQ","RFS","wtms","qq","wmef","format_fisik","cpo",
+            "kelas_spbu","penalty_alerts"
         };
                 var csvEmpty = string.Join(",", headersNoData.Select(h => $"\"{h}\"")) + Environment.NewLine;
                 var bytesEmpty = Encoding.UTF8.GetBytes(csvEmpty);
@@ -452,9 +452,9 @@ namespace e_Pas_CMS.Controllers
             var headers = new[]
             {
         "send_date","Audit Date","spbu_no","region","year","address","city_name","tipe_spbu","rayon",
-        "audit_level","audit_next","good_status","excellent_status","Total Score",
-        "SSS","EQnQ","RFS","VFC","EPO","wtms","qq","wmef","format_fisik","cpo",
-        "kelas_spbu","penalty_good_alerts","penalty_excellent_alerts"
+        "audit_level","audit_next","result","Total Score",
+        "SSS","EQnQ","RFS","wtms","qq","wmef","format_fisik","cpo",
+        "kelas_spbu","penalty_alerts"
     };
             csv.AppendLine(string.Join(",", headers.Concat(numberList).Select(h => $"\"{h}\"")));
 
@@ -528,36 +528,7 @@ namespace e_Pas_CMS.Controllers
                     : 0m;
 
                 // ========== Special Node Score Check ==========
-                var specialScoreSql = @"
-            SELECT mqd.id, tac.score_input
-            FROM master_questioner_detail mqd
-            LEFT JOIN trx_audit_checklist tac 
-                ON tac.master_questioner_detail_id = mqd.id 
-                AND tac.trx_audit_id = @id
-            WHERE mqd.id IN (
-                '555fe2e4-b95b-461b-9c92-ad8b5c837119',
-                'bafc206f-ed29-4bbc-8053-38799e186fb0',
-                'd26f4caa-e849-4ab4-9372-298693247272'
-            );";
-
-                var specialScores = (await conn.QueryAsync<(string id, string score_input)>(
-                    specialScoreSql, new { id = a.id }))
-                    .ToDictionary(x => x.id, x => x.score_input?.Trim().ToUpperInvariant());
-
-                bool forceGoodOnly = false;
-                bool forceNotCertified = false;
-
-                foreach (var score in specialScores.Values)
-                {
-                    if (score == "C")
-                        forceGoodOnly = true;
-                    else if (score != "A")
-                        forceNotCertified = true;
-                }
-
-                // ========== Penalties ==========
-                var penaltyExcellentQuery = @"
-            SELECT STRING_AGG(mqd.penalty_alert, ', ') AS penalty_alerts
+                var penaltyExcellentQuery = @"SELECT STRING_AGG(mqd.penalty_alert, ', ') AS penalty_alerts
             FROM trx_audit_checklist tac
             INNER JOIN master_questioner_detail mqd ON mqd.id = tac.master_questioner_detail_id
             WHERE 
@@ -575,10 +546,9 @@ namespace e_Pas_CMS.Controllers
                         AND (mqd.is_relaksasi = false OR mqd.is_relaksasi IS NULL)
                         AND mqd.is_penalty = true
                     )
-                );";
+            );";
 
-                var penaltyGoodQuery = @"
-            SELECT STRING_AGG(mqd.penalty_alert, ', ') AS penalty_alerts
+                var penaltyGoodQuery = @"SELECT STRING_AGG(mqd.penalty_alert, ', ') AS penalty_alerts
             FROM trx_audit_checklist tac
             INNER JOIN master_questioner_detail mqd ON mqd.id = tac.master_questioner_detail_id
             WHERE tac.trx_audit_id = @id AND
@@ -592,26 +562,33 @@ namespace e_Pas_CMS.Controllers
                 bool hasExcellentPenalty = !string.IsNullOrEmpty(penaltyExcellentResult);
                 bool hasGoodPenalty = !string.IsNullOrEmpty(penaltyGoodResult);
 
-                // ========== Compliance (pakai helper kamu yang sudah ada) ==========
+                //string goodStatus = (finalScore >= 75 && !hasGoodPenalty) ? "CERTIFIED" : "NOT CERTIFIED";
+
+                //string excellentStatus = (finalScore >= 80 && !hasExcellentPenalty && !forceNotCertified)
+                //    ? (forceGoodOnly ? "GOOD" : "CERTIFIED")
+                //    : "NOT CERTIFIED";
+
+                // === Audit Next
                 string auditNext = null;
                 string levelspbu = null;
 
                 var auditFlowSql = @"SELECT * FROM master_audit_flow WHERE audit_level = @level LIMIT 1;";
                 var auditFlow = await conn.QueryFirstOrDefaultAsync<dynamic>(auditFlowSql, new { level = a.audit_level });
 
+
+                // === Hitung Compliance
                 var checklistData = await GetChecklistDataAsync(conn, a.id);
                 var mediaList = await GetMediaPerNodeAsync(conn, a.id);
                 var elements = BuildHierarchy(checklistData, mediaList);
                 foreach (var element in elements) AssignWeightRecursive(element);
                 CalculateChecklistScores(elements);
                 CalculateOverallScore(new DetailReportViewModel { Elements = elements }, checklistData);
+                var modelstotal = new DetailReportViewModel { Elements = elements };
+                CalculateOverallScore(modelstotal, checklistData);
+                decimal? totalScore = modelstotal.TotalScore;
                 var compliance = HitungComplianceLevelDariElements(elements);
 
-                var auditDate = a.audit_execution_time ?? a.updated_date ?? DateTime.MinValue;
-                var submitDate = a.approval_date == null || a.approval_date == DateTime.MinValue
-                    ? a.updated_date
-                    : a.approval_date;
-
+                // === Compliance validation
                 var sss = Math.Round(compliance.SSS ?? 0, 2);
                 var eqnq = Math.Round(compliance.EQnQ ?? 0, 2);
                 var rfs = Math.Round(compliance.RFS ?? 0, 2);
@@ -621,26 +598,38 @@ namespace e_Pas_CMS.Controllers
                 bool failGood = sss < 80 || eqnq < 85 || rfs < 85 || vfc < 15 || epo < 25;
                 bool failExcellent = sss < 85 || eqnq < 85 || rfs < 85 || vfc < 20 || epo < 50;
 
-                string goodStatus = (finalScore >= 75 && !hasGoodPenalty && !failGood)
+
+                // === Update status with compliance logic
+                string goodStatus = (finalScore >= 75 && !hasGoodPenalty)
                     ? "CERTIFIED"
                     : "NOT CERTIFIED";
 
-                string excellentStatus = (finalScore >= 80 && !hasExcellentPenalty && !failExcellent && !forceNotCertified)
-                    ? (forceGoodOnly ? "GOOD" : "CERTIFIED")
+                string excellentStatus = (finalScore >= 80 && !hasExcellentPenalty)
+                    ? "CERTIFIED"
                     : "NOT CERTIFIED";
+
 
                 if (auditFlow != null)
                 {
+                    string passedGood = auditFlow.passed_good;
+                    string passedExcellent = auditFlow.passed_excellent;
                     string passedAuditLevel = auditFlow.passed_audit_level;
                     string failed_audit_level = auditFlow.failed_audit_level;
 
-                    auditNext = (passedAuditLevel != null && goodStatus == "CERTIFIED")
-                        ? passedAuditLevel
-                        : failed_audit_level;
+                    if (passedAuditLevel != null && goodStatus == "CERTIFIED")
+                    {
+                        auditNext = passedAuditLevel;
+                    }
+                    else
+                    {
+                        auditNext = failed_audit_level;
+                    }
 
                     var auditlevelClassSql = @"SELECT audit_level_class FROM master_audit_flow WHERE audit_level = @level LIMIT 1;";
                     var auditlevelClass = await conn.QueryFirstOrDefaultAsync<dynamic>(auditlevelClassSql, new { level = auditNext });
-                    levelspbu = auditlevelClass != null ? (auditlevelClass.audit_level_class ?? "") : "";
+                    levelspbu = auditlevelClass != null
+                    ? (auditlevelClass.audit_level_class ?? "")
+                    : "";
                 }
 
                 // ========== Ambil NILAI checklist per NOMOR (dibatasi mqId BOA) ==========
@@ -674,6 +663,12 @@ namespace e_Pas_CMS.Controllers
                     ? a.spbu.audit_current_score.Value
                     : finalScore;
 
+                var auditDate = a.audit_execution_time ?? a.updated_date ?? DateTime.MinValue;
+                var submitDate = a.approval_date == null || a.approval_date == DateTime.MinValue
+                    ? a.updated_date
+                    : a.approval_date;
+
+
                 // ========== Tulis baris CSV ==========
                 csv.AppendLine(string.Join(",", new[]
                 {
@@ -689,13 +684,10 @@ namespace e_Pas_CMS.Controllers
             $"\"{a.audit_level}\"",
             $"\"{auditNext}\"",
             $"\"{goodStatus}\"",
-            $"\"{excellentStatus}\"",
-            $"\"{scores:0.##}\"",
+            $"\"{totalScore:0.##}\"",
             $"\"{sss}\"",
             $"\"{eqnq}\"",
             $"\"{rfs}\"",
-            $"\"{vfc}\"",
-            $"\"{epo}\"",
             $"\"{a.spbu.wtms}\"",
             $"\"{a.spbu.qq}\"",
             $"\"{a.spbu.wmef}\"",
@@ -703,7 +695,6 @@ namespace e_Pas_CMS.Controllers
             $"\"{a.spbu.cpo}\"",
             $"\"{levelspbu}\"",
             $"\"{penaltyGoodResult}\"",
-            $"\"{penaltyExcellentResult}\""
         }.Concat(checklistValues)));
             }
 
@@ -711,62 +702,6 @@ namespace e_Pas_CMS.Controllers
             var bytes = Encoding.UTF8.GetBytes(csv.ToString());
             return File(bytes, "text/csv", fileName);
         }
-
-        //    public async Task<IActionResult> DownloadCsv(string searchTerm = "")
-        //    {
-        //        var currentUser = User.Identity?.Name;
-
-        //        var userRegion = await (from aur in _context.app_user_roles
-        //                                join au in _context.app_users on aur.app_user_id equals au.id
-        //                                where au.username == currentUser
-        //                                select aur.region)
-        //                   .Distinct()
-        //                   .Where(r => r != null)
-        //                   .ToListAsync();
-
-        //        var query = _context.trx_audits
-        //.Include(a => a.spbu)
-        //.Include(a => a.app_user)
-        //.Where(a => a.status == "VERIFIED"
-        //    && a.created_date >= new DateTime(2025, 5, 1)
-        //    && a.created_date < new DateTime(2025, 6, 1));
-
-        //        if (userRegion.Any())
-        //        {
-        //            query = query.Where(x => userRegion.Contains(x.spbu.region));
-        //        }
-
-        //        if (!string.IsNullOrWhiteSpace(searchTerm))
-        //        {
-        //            searchTerm = searchTerm.ToLower();
-        //            query = query.Where(a =>
-        //                a.spbu.spbu_no.ToLower().Contains(searchTerm) ||
-        //                a.app_user.name.ToLower().Contains(searchTerm) ||
-        //                a.status.ToLower().Contains(searchTerm) ||
-        //                a.spbu.address.ToLower().Contains(searchTerm) ||
-        //                a.spbu.province_name.ToLower().Contains(searchTerm) ||
-        //                a.spbu.city_name.ToLower().Contains(searchTerm)
-        //            );
-        //        }
-
-        //        var audits = await query
-        //            .OrderByDescending(a => a.audit_execution_time ?? a.updated_date)
-        //            .ToListAsync(); // ❗️ Tidak pakai Skip & Take
-
-        //        var result = await GetAuditReportViewModels(audits);
-
-        //        // Buat CSV
-        //        var csv = new StringBuilder();
-        //        csv.AppendLine("\"Submit Date\",\"Audit Date\",\"SPBU No\",\"Region\",\"Year\",\"Address\",\"City\",\"SBM\",\"Audit Level\",\"Next Audit\",\"Good Status\",\"Excellent Status\",\"Total Score\",\"SSS\",\"EQnQ\",\"RFS\",\"VFC\",\"EPO\",\"WTMS\",\"QQ\",\"WMEF\",\"Format Fisik\",\"CPO\",\"Kelas SPBU\"");
-
-        //        foreach (var r in result)
-        //        {
-        //            csv.AppendLine($"\"{r.SubmitDate:yyyy-MM-dd HH:mm:ss}\",\"{r.AuditDate:yyyy-MM-dd HH:mm:ss}\",\"{r.SpbuNo}\",\"{r.Region}\",\"{r.Year}\",\"{r.Address}\",\"{r.City}\",\"{r.SBM}\",\"{r.Auditlevel}\",\"{r.AuditNext}\",\"{r.GoodStatus}\",\"{r.ExcellentStatus}\",\"{r.Score:F2}\",\"{r.SSS:F2}\",\"{r.EQnQ:F2}\",\"{r.RFS:F2}\",\"{r.VFC:F2}\",\"{r.EPO:F2}\",\"{r.WTMS}\",\"{r.QQ}\",\"{r.WMEF}\",\"{r.FormatFisik}\",\"{r.CPO}\",\"{r.KelasSpbu}\"");
-        //        }
-
-        //        var bytes = Encoding.UTF8.GetBytes(csv.ToString());
-        //        return File(bytes, "text/csv", $"Audit_Report_{DateTime.Now:yyyyMMddHHmmss}.csv");
-        //    }
 
         private async Task<List<AuditReportListViewModel>> GetAuditReportViewModels(List<trx_audit> audits)
         {
