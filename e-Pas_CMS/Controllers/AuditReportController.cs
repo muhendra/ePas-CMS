@@ -432,8 +432,8 @@ namespace e_Pas_CMS.Controllers
                 .Include(a => a.app_user)
                 .Where(a =>
                     allowedStatuses.Contains(a.status) &&
-                    a.created_date >= new DateTime(2025, 7, 1) &&
-                    a.created_date < new DateTime(2025, 8, 1)
+                    a.created_date >= new DateTime(2025, 8, 1) &&
+                    a.created_date < new DateTime(2025, 9, 1) && a.audit_type == "Basic Operational"
                 );
 
             if (userRegion.Any())

@@ -106,7 +106,7 @@
     <div class="mb-3">
         <nav aria-label="breadcrumb">
             <ol class="breadcrumb small mb-1">
-                <li class="breadcrumb-item"><a asp-controller="Banding" asp-action="Index">Banding</a></li>
+                <li class="breadcrumb-item"><a asp-controller="Complain" asp-action="Index">Complain</a></li>
                 <li class="breadcrumb-item active" aria-current="page">@ViewData["Title"]</li>
             </ol>
         </nav>
@@ -197,34 +197,36 @@
         </div>
     </div>
 
-    <!-- Informasi Banding/Komplain -->
+    <!-- Informasi Komplain -->
     <div class="card card-soft mb-3">
         <div class="card-body">
-            <div class="section-title">Informasi @(Model.IsBanding ? "Banding" : "Komplain")</div>
-            <div class="row row-cols-1 row-cols-md-2 row-cols-lg-4 g-3 kv">
-                @if (Model.feedback_type != "COMPLAINT")
-                {
-                    <div class="col">
-                        <div class="label">Status @(Model.IsBanding ? "Banding" : "Komplain")</div>
-                        <div class="value">@statusText</div>
-                    </div>
-                }
-                
+            <div class="section-title">Informasi Komplain</div>
+
+            <div class="row row-cols-1 row-cols-md-2 g-3 kv">
+                <div class="col">
+                    <div class="label">Status Komplain</div>
+                    <div class="value">@statusText</div>
+                </div>
                 <div class="col">
                     <div class="label">Nomor Tiket</div>
                     <div class="value">@Model.TicketNo</div>
                 </div>
-                <div class="col">
-                    <div class="label">Nomor Banding</div>
-                    <div class="value">@(!string.IsNullOrWhiteSpace(Model.NomorBanding) ? Model.NomorBanding : "-")</div>
-                </div>
-                <div class="col">
-                    <div class="label">Tgl Pengajuan</div>
-                    <div class="value">
-                        @(Model.CreatedDate.HasValue ? Model.CreatedDate.Value.ToString("dd/MM/yyyy, HH:mm") + " WIB" : "-")
-                    </div>
-                </div>
             </div>
+
+            <div class="divider"></div>
+
+            @{
+                // Ambil isi komplain dari properti model; fallback dari deskripsi per poin jika perlu
+                var isiKomplain = !string.IsNullOrWhiteSpace(Model.Description)
+                ? Model.Description
+                : (Model.Points != null
+                ? string.Join("\n\n", Model.Points.Where(pp => !string.IsNullOrWhiteSpace(pp.Description))
+                .Select(pp => pp.Description))
+                : "-");
+            }
+
+            <div class="section-title">Isi Komplain</div>
+            <div class="muted-pre">@isiKomplain</div>
         </div>
     </div>
 
@@ -285,23 +287,9 @@
         }
     }
 
-    <div class="card card-soft mb-3">
-        <div class="card-body">
-            <div class="section-title">Klarifikasi (Diisi oleh User Approval)</div>
-            <p class="text-muted mb-2">
-                Masukkan ringkasan klarifikasi untuk <strong>keseluruhan</strong> komplain/banding ini.
-            </p>
-            <textarea id="txtKlarifikasi"
-                      class="form-control"
-                      rows="4"
-                      placeholder="Tulis klarifikasi di sini...">@Model.Klarifikasi</textarea>
-            <small class="text-muted">Klarifikasi ini akan ikut tersimpan saat Anda menekan tombol Approve/Reject.</small>
-        </div>
-    </div>
-
     <!-- Tombol aksi -->
     <div class="d-flex flex-wrap gap-2 align-items-center mb-4">
-        <a asp-controller="Banding" asp-action="Index"
+        <a asp-controller="Complain" asp-action="Index"
            class="btn btn-outline-secondary rounded-pill px-4 py-2 shadow-sm hover-scale">
             <i class="bi bi-arrow-left-circle"></i> Kembali
         </a>

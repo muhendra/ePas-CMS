@@ -1,6 +1,6 @@
 ﻿@model e_Pas_CMS.ViewModels.PaginationModel<e_Pas_CMS.ViewModels.BandingListItemViewModel>
 @{
-    ViewData["Title"] = "Komplain & Banding";
+    ViewData["Title"] = "Banding";
     string type = (ViewBag.Type as string) ?? "BANDING";
     string searchTerm = (ViewBag.SearchTerm as string) ?? "";
 }
@@ -282,7 +282,7 @@
     </style>
 }
 
-<div class="d-flex align-items-center gap-3 mb-4">
+@* <div class="d-flex align-items-center gap-3 mb-4">
     <a asp-controller="Banding" asp-action="Index" asp-route-type="BANDING"
        class="btn-modern @(type=="BANDING" ? "btn-gradient-green" : "btn-outline-secondary")">
         Banding
@@ -291,10 +291,10 @@
        class="btn-modern @(type=="COMPLAINT" ? "btn-gradient-blue" : "btn-outline-secondary")">
         Komplain
     </a>
-</div>
+</div> *@
 
 <div class="container-fluid px-0">
-    <h3 class="mb-4 fw-bold px-3">Komplain & Banding</h3>
+    <h3 class="mb-4 fw-bold px-3">Banding</h3>
 
     @if (TempData["Success"] != null)
     {

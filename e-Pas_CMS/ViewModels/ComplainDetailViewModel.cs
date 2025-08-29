@@ -44,6 +44,7 @@
 
         public string feedback_type { get; set; }
         public string? Klarifikasi { get; set; }
+        public string Description { get; set; }
     }
 
     public class PointItem
