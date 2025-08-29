@@ -87,8 +87,8 @@ namespace e_Pas_CMS.Controllers
             if (filterMonth.HasValue && filterYear.HasValue)
             {
                 query = query.Where(a =>
-                    a.created_date.Month == filterMonth.Value &&
-                    a.created_date.Year == filterYear.Value);
+                ((a.audit_execution_time != null ? a.audit_execution_time.Value.Month : a.created_date.Month) == filterMonth.Value) &&
+                ((a.audit_execution_time != null ? a.audit_execution_time.Value.Year : a.created_date.Year) == filterYear.Value));
             }
 
             ViewBag.FilterMonth = filterMonth;
@@ -370,18 +370,18 @@ namespace e_Pas_CMS.Controllers
                                     select aur.region)
                                .Distinct()
                                .Where(r => r != null)
-
                                .ToListAsync();
 
-            var allowedStatuses = new[] { "VERIFIED", "UNDER_REVIEW" };
+            var allowedStatuses = new[] { "VERIFIED" };
 
             var query = _context.trx_audits
                 .Include(a => a.spbu)
                 .Include(a => a.app_user)
                 .Where(a =>
                     allowedStatuses.Contains(a.status) &&
-                    a.created_date >= new DateTime(2025, 6, 1) &&
-                    a.created_date < new DateTime(2025, 7, 1)
+                    a.created_date >= new DateTime(2025, 8, 1) &&
+                    a.created_date < new DateTime(2025, 9, 1) &&
+                    a.audit_type == "Basic Operational"
                 );
 
             if (userRegion.Any())
@@ -406,19 +406,48 @@ namespace e_Pas_CMS.Controllers
                 .OrderByDescending(a => a.audit_execution_time ?? a.updated_date)
                 .ToListAsync();
 
+            // Siapkan koneksi untuk ambil nomor checklist (KHUSUS MQ BOA)
             await using var conn2 = _context.Database.GetDbConnection();
             if (conn2.State != ConnectionState.Open)
                 await conn2.OpenAsync();
 
-            var checklistNumbers = await conn2.QueryAsync<string>(@"
-        SELECT DISTINCT number 
-        FROM master_questioner_detail 
-        WHERE number IS NOT NULL AND TRIM(number) <> '' 
+            // Kalau tidak ada data audit -> kembalikan CSV dengan header dasar
+            if (audits.Count == 0)
+            {
+                var headersNoData = new[]
+                {
+            "send_date","Audit Date","spbu_no","region","year","address","city_name","tipe_spbu","rayon",
+            "audit_level","audit_next","good_status","excellent_status","Total Score",
+            "SSS","EQnQ","RFS","VFC","EPO","wtms","qq","wmef","format_fisik","cpo",
+            "kelas_spbu","penalty_good_alerts","penalty_excellent_alerts"
+        };
+                var csvEmpty = string.Join(",", headersNoData.Select(h => $"\"{h}\"")) + Environment.NewLine;
+                var bytesEmpty = Encoding.UTF8.GetBytes(csvEmpty);
+                return File(bytesEmpty, "text/csv", $"Audit_Summary_{DateTime.Now:yyyyMMddHHmmss}.csv");
+            }
+
+            // Ambil master_questioner_checklist_id (mqId) dari audit pertama (semua audit sudah BOA)
+            var firstAuditId = audits.First().id;
+            var mqId = await conn2.ExecuteScalarAsync<string?>(@"
+        SELECT master_questioner_checklist_id 
+        FROM trx_audit 
+        WHERE id = @id
+    ", new { id = firstAuditId });
+
+            if (mqId == null)
+                throw new Exception("master_questioner_checklist_id tidak ditemukan untuk audit BOA.");
+
+            // Ambil daftar nomor KHUSUS BOA & type QUESTION -> biasanya 3 elemen
+            var numberList = (await conn2.QueryAsync<string>(@"
+        SELECT DISTINCT number
+        FROM master_questioner_detail
+        WHERE master_questioner_id = @mqId
+          AND type = 'QUESTION'
+          AND number IS NOT NULL AND TRIM(number) <> ''
         ORDER BY number ASC;
-    ");
+    ", new { mqId })).ToList();
 
-            var numberList = checklistNumbers.ToList();
-
+            // Build header CSV (tambahkan 3 nomor di belakang)
             var csv = new StringBuilder();
             var headers = new[]
             {
@@ -426,40 +455,39 @@ namespace e_Pas_CMS.Controllers
         "audit_level","audit_next","good_status","excellent_status","Total Score",
         "SSS","EQnQ","RFS","VFC","EPO","wtms","qq","wmef","format_fisik","cpo",
         "kelas_spbu","penalty_good_alerts","penalty_excellent_alerts"
-    };// Tambahkan header number checklist
+    };
             csv.AppendLine(string.Join(",", headers.Concat(numberList).Select(h => $"\"{h}\"")));
 
-            //csv.AppendLine(string.Join(",", headers.Select(h => $"\"{h}\"")));
-
+            // Koneksi utama untuk loop
             await using var conn = _context.Database.GetDbConnection();
             if (conn.State != ConnectionState.Open)
                 await conn.OpenAsync();
 
             foreach (var a in audits)
             {
+                // ========== Hitung Final Score ==========
                 var sql = @"
-        SELECT 
-            mqd.weight, 
-            tac.score_input, 
-            tac.score_x, 
-            mqd.is_relaksasi
-        FROM master_questioner_detail mqd
-        LEFT JOIN trx_audit_checklist tac 
-            ON tac.master_questioner_detail_id = mqd.id 
-            AND tac.trx_audit_id = @id
-        WHERE mqd.master_questioner_id = (
-            SELECT master_questioner_checklist_id 
-            FROM trx_audit 
-            WHERE id = @id
-        )
-        AND mqd.type = 'QUESTION'";
+            SELECT 
+                mqd.weight, 
+                tac.score_input, 
+                tac.score_x, 
+                mqd.is_relaksasi
+            FROM master_questioner_detail mqd
+            LEFT JOIN trx_audit_checklist tac 
+                ON tac.master_questioner_detail_id = mqd.id 
+                AND tac.trx_audit_id = @id
+            WHERE mqd.master_questioner_id = (
+                SELECT master_questioner_checklist_id 
+                FROM trx_audit 
+                WHERE id = @id
+            )
+            AND mqd.type = 'QUESTION'";
 
                 var checklist = (await conn.QueryAsync<(decimal? weight, string score_input, decimal? score_x, bool? is_relaksasi)>(
-    sql,
-    new { id = a.id },
-    commandTimeout: 6000
-)).ToList();
-
+                    sql,
+                    new { id = a.id },
+                    commandTimeout: 6000
+                )).ToList();
 
                 decimal sumAF = 0, sumWeight = 0, sumX = 0;
 
@@ -499,25 +527,18 @@ namespace e_Pas_CMS.Controllers
                     ? (sumAF / (sumWeight - sumX)) * sumWeight
                     : 0m;
 
-                // === Special Node Score Check ===
-                var specialNodeIds = new Guid[]
-                {
-                    Guid.Parse("555fe2e4-b95b-461b-9c92-ad8b5c837119"),
-                    Guid.Parse("bafc206f-ed29-4bbc-8053-38799e186fb0"),
-                    Guid.Parse("d26f4caa-e849-4ab4-9372-298693247272")
-                };
-
+                // ========== Special Node Score Check ==========
                 var specialScoreSql = @"
-                SELECT mqd.id, tac.score_input
-                FROM master_questioner_detail mqd
-                LEFT JOIN trx_audit_checklist tac 
-                    ON tac.master_questioner_detail_id = mqd.id 
-                    AND tac.trx_audit_id = @id
-                WHERE mqd.id IN (
-                    '555fe2e4-b95b-461b-9c92-ad8b5c837119',
-                    'bafc206f-ed29-4bbc-8053-38799e186fb0',
-                    'd26f4caa-e849-4ab4-9372-298693247272'
-                );";
+            SELECT mqd.id, tac.score_input
+            FROM master_questioner_detail mqd
+            LEFT JOIN trx_audit_checklist tac 
+                ON tac.master_questioner_detail_id = mqd.id 
+                AND tac.trx_audit_id = @id
+            WHERE mqd.id IN (
+                '555fe2e4-b95b-461b-9c92-ad8b5c837119',
+                'bafc206f-ed29-4bbc-8053-38799e186fb0',
+                'd26f4caa-e849-4ab4-9372-298693247272'
+            );";
 
                 var specialScores = (await conn.QueryAsync<(string id, string score_input)>(
                     specialScoreSql, new { id = a.id }))
@@ -534,28 +555,30 @@ namespace e_Pas_CMS.Controllers
                         forceNotCertified = true;
                 }
 
-                // === Penalty Check
-                var penaltyExcellentQuery = @"SELECT STRING_AGG(mqd.penalty_alert, ', ') AS penalty_alerts
-FROM trx_audit_checklist tac
-INNER JOIN master_questioner_detail mqd ON mqd.id = tac.master_questioner_detail_id
-WHERE 
-    tac.trx_audit_id = @id
-    AND (
-        (tac.master_questioner_detail_id IN (
-            '555fe2e4-b95b-461b-9c92-ad8b5c837119',
-            'bafc206f-ed29-4bbc-8053-38799e186fb0',
-            'd26f4caa-e849-4ab4-9372-298693247272'
-        ) AND tac.score_input <> 'A')
-        OR
-        (
-            ((mqd.penalty_excellent_criteria = 'LT_1' AND tac.score_input <> 'A') OR
-             (mqd.penalty_excellent_criteria = 'EQ_0' AND tac.score_input = 'F'))
-            AND (mqd.is_relaksasi = false OR mqd.is_relaksasi IS NULL)
-            AND mqd.is_penalty = true
-        )
-);";
+                // ========== Penalties ==========
+                var penaltyExcellentQuery = @"
+            SELECT STRING_AGG(mqd.penalty_alert, ', ') AS penalty_alerts
+            FROM trx_audit_checklist tac
+            INNER JOIN master_questioner_detail mqd ON mqd.id = tac.master_questioner_detail_id
+            WHERE 
+                tac.trx_audit_id = @id
+                AND (
+                    (tac.master_questioner_detail_id IN (
+                        '555fe2e4-b95b-461b-9c92-ad8b5c837119',
+                        'bafc206f-ed29-4bbc-8053-38799e186fb0',
+                        'd26f4caa-e849-4ab4-9372-298693247272'
+                    ) AND tac.score_input <> 'A')
+                    OR
+                    (
+                        ((mqd.penalty_excellent_criteria = 'LT_1' AND tac.score_input <> 'A') OR
+                         (mqd.penalty_excellent_criteria = 'EQ_0' AND tac.score_input = 'F'))
+                        AND (mqd.is_relaksasi = false OR mqd.is_relaksasi IS NULL)
+                        AND mqd.is_penalty = true
+                    )
+                );";
 
-                var penaltyGoodQuery = @"SELECT STRING_AGG(mqd.penalty_alert, ', ') AS penalty_alerts
+                var penaltyGoodQuery = @"
+            SELECT STRING_AGG(mqd.penalty_alert, ', ') AS penalty_alerts
             FROM trx_audit_checklist tac
             INNER JOIN master_questioner_detail mqd ON mqd.id = tac.master_questioner_detail_id
             WHERE tac.trx_audit_id = @id AND
@@ -569,21 +592,13 @@ WHERE
                 bool hasExcellentPenalty = !string.IsNullOrEmpty(penaltyExcellentResult);
                 bool hasGoodPenalty = !string.IsNullOrEmpty(penaltyGoodResult);
 
-                //string goodStatus = (finalScore >= 75 && !hasGoodPenalty) ? "CERTIFIED" : "NOT CERTIFIED";
-
-                //string excellentStatus = (finalScore >= 80 && !hasExcellentPenalty && !forceNotCertified)
-                //    ? (forceGoodOnly ? "GOOD" : "CERTIFIED")
-                //    : "NOT CERTIFIED";
-
-                // === Audit Next
+                // ========== Compliance (pakai helper kamu yang sudah ada) ==========
                 string auditNext = null;
                 string levelspbu = null;
 
                 var auditFlowSql = @"SELECT * FROM master_audit_flow WHERE audit_level = @level LIMIT 1;";
                 var auditFlow = await conn.QueryFirstOrDefaultAsync<dynamic>(auditFlowSql, new { level = a.audit_level });
 
-
-                // === Hitung Compliance
                 var checklistData = await GetChecklistDataAsync(conn, a.id);
                 var mediaList = await GetMediaPerNodeAsync(conn, a.id);
                 var elements = BuildHierarchy(checklistData, mediaList);
@@ -593,12 +608,10 @@ WHERE
                 var compliance = HitungComplianceLevelDariElements(elements);
 
                 var auditDate = a.audit_execution_time ?? a.updated_date ?? DateTime.MinValue;
-
                 var submitDate = a.approval_date == null || a.approval_date == DateTime.MinValue
                     ? a.updated_date
-
                     : a.approval_date;
-                // === Compliance validation
+
                 var sss = Math.Round(compliance.SSS ?? 0, 2);
                 var eqnq = Math.Round(compliance.EQnQ ?? 0, 2);
                 var rfs = Math.Round(compliance.RFS ?? 0, 2);
@@ -608,7 +621,6 @@ WHERE
                 bool failGood = sss < 80 || eqnq < 85 || rfs < 85 || vfc < 15 || epo < 25;
                 bool failExcellent = sss < 85 || eqnq < 85 || rfs < 85 || vfc < 20 || epo < 50;
 
-                // === Update status with compliance logic
                 string goodStatus = (finalScore >= 75 && !hasGoodPenalty && !failGood)
                     ? "CERTIFIED"
                     : "NOT CERTIFIED";
@@ -619,51 +631,52 @@ WHERE
 
                 if (auditFlow != null)
                 {
-                    string passedGood = auditFlow.passed_good;
-                    string passedExcellent = auditFlow.passed_excellent;
                     string passedAuditLevel = auditFlow.passed_audit_level;
                     string failed_audit_level = auditFlow.failed_audit_level;
 
-                    if (passedAuditLevel != null && goodStatus == "CERTIFIED")
-                    {
-                        auditNext = passedAuditLevel;
-                    }
-                    else
-                    {
-                        auditNext = failed_audit_level;
-                    }
+                    auditNext = (passedAuditLevel != null && goodStatus == "CERTIFIED")
+                        ? passedAuditLevel
+                        : failed_audit_level;
 
                     var auditlevelClassSql = @"SELECT audit_level_class FROM master_audit_flow WHERE audit_level = @level LIMIT 1;";
                     var auditlevelClass = await conn.QueryFirstOrDefaultAsync<dynamic>(auditlevelClassSql, new { level = auditNext });
-                    levelspbu = auditlevelClass != null
-                    ? (auditlevelClass.audit_level_class ?? "")
-                    : "";
+                    levelspbu = auditlevelClass != null ? (auditlevelClass.audit_level_class ?? "") : "";
                 }
 
+                // ========== Ambil NILAI checklist per NOMOR (dibatasi mqId BOA) ==========
                 var checklistRaw = await conn.QueryAsync<(string number, decimal? weight, string score_input, decimal? score_x, bool? is_relaksasi)>(@"
-    SELECT DISTINCT ON (mqd.number) 
-    mqd.number, mqd.weight, tac.score_input, tac.score_x, mqd.is_relaksasi
-FROM master_questioner_detail mqd
-LEFT JOIN trx_audit_checklist tac 
-    ON tac.master_questioner_detail_id = mqd.id 
-    AND tac.trx_audit_id = @id
-WHERE mqd.number IS NOT NULL AND TRIM(mqd.number) <> ''
-ORDER BY mqd.number, tac.updated_date DESC NULLS LAST
-", new { id = a.id });
+            SELECT DISTINCT ON (mqd.number) 
+                   mqd.number, mqd.weight, tac.score_input, tac.score_x, mqd.is_relaksasi
+            FROM master_questioner_detail mqd
+            LEFT JOIN trx_audit_checklist tac 
+                   ON tac.master_questioner_detail_id = mqd.id 
+                  AND tac.trx_audit_id = @id
+            WHERE mqd.master_questioner_id = @mqId
+              AND mqd.type = 'QUESTION'
+              AND mqd.number IS NOT NULL AND TRIM(mqd.number) <> ''
+            ORDER BY mqd.number, tac.updated_date DESC NULLS LAST
+        ", new { id = a.id, mqId });
 
                 var checklistMap = checklistRaw
-    .GroupBy(x => x.number)
-    .ToDictionary(
-        g => g.Key,
-        g => g.First().score_input?.Trim().ToUpperInvariant() ?? ""
-    );
+                    .GroupBy(x => x.number)
+                    .ToDictionary(
+                        g => g.Key,
+                        g => g.First().score_input?.Trim().ToUpperInvariant() ?? ""
+                    );
 
-                var checklistValues = numberList.Select(number => $"\"{(checklistMap.TryGetValue(number, out var val) ? val : "")}\"");
+                // Pastikan urutan & jumlahnya mengikuti numberList (3 elemen)
+                var checklistValues = numberList.Select(number =>
+                    $"\"{(checklistMap.TryGetValue(number, out var val) ? val : "")}\""
+                );
 
-                decimal scores = (a.spbu.audit_current_score.HasValue && a.spbu.audit_current_score.Value != 0) ? a.spbu.audit_current_score.Value : finalScore;
+                // Nilai score akhir (pakai current_score kalau ada & != 0)
+                decimal scores = (a.spbu.audit_current_score.HasValue && a.spbu.audit_current_score.Value != 0)
+                    ? a.spbu.audit_current_score.Value
+                    : finalScore;
 
+                // ========== Tulis baris CSV ==========
                 csv.AppendLine(string.Join(",", new[]
-        {
+                {
             $"\"{submitDate:yyyy-MM-dd}\"",
             $"\"{auditDate:yyyy-MM-dd}\"",
             $"\"{a.spbu.spbu_no}\"",
