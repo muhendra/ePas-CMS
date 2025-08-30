@@ -8,7 +8,7 @@
 
     var isSuperadmin = User.IsInRole("Superadmin");
 
-    var isCertified = Model.TotalScore >= Model.MinPassingScore && string.IsNullOrWhiteSpace(Model.PenaltyAlerts);
+    var isCertified = Model.TotalScore >= Model.MinPassingScore && string.IsNullOrWhiteSpace(Model.PenaltyAlerts) && Model.GoodStatus == "CERTIFIED";
     var statusLabel = isCertified ? "PASSED BASIC OPERATIONAL" : "NOT PASSED";
     var boxClass = isCertified ? "bg-passed text-white" : "bg-danger text-white";
 
