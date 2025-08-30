@@ -53,6 +53,8 @@ public partial class trx_audit
 
     public string? report_file_excellent { get; set; }
 
+    public string? report_file_boa { get; set; }
+
     public virtual app_user? app_user { get; set; }
 
     public virtual master_questioner? master_questioner_checklist { get; set; }

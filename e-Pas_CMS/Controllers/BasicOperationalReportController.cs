@@ -1201,7 +1201,7 @@ namespace e_Pas_CMS.Controllers
                     Directory.CreateDirectory(outputDirectory);
 
                 var auditIds = await _context.trx_audits
-                    .Where(a => a.status == "VERIFIED" && a.audit_type == "Basic Operational")
+                    .Where(a => a.status == "VERIFIED" && a.audit_type == "Basic Operational" && a.report_file_boa == null)
                     .OrderByDescending(a => a.audit_execution_time)
                     //.Take(10)
                     .Select(a => a.id)
@@ -1231,7 +1231,7 @@ namespace e_Pas_CMS.Controllers
                     await pdfStream.CopyToAsync(fileStream, token);
 
                     await _context.Database.ExecuteSqlRawAsync(
-                    "UPDATE trx_audit SET report_file_good = {0} WHERE id = {1}",
+                    "UPDATE trx_audit SET report_file_boa = {0} WHERE id = {1}",
                     fileName, id.ToString());
                 }
 
