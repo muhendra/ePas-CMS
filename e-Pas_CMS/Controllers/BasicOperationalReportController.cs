@@ -285,6 +285,13 @@ namespace e_Pas_CMS.Controllers
                     ? (forceGoodOnly ? "GOOD" : "CERTIFIED")
                     : "NOT CERTIFIED";
 
+                var updateSqltrx_audit = @"UPDATE trx_audit SET boa_status = @status WHERE id = @id";
+                await conn.ExecuteAsync(updateSqltrx_audit, new
+                {
+                    status = goodStatus,
+                    id = a.id
+                });
+
                 if (auditFlow != null)
                 {
                     string passedGood = auditFlow.passed_good;
