@@ -273,7 +273,7 @@ namespace e_Pas_CMS.Controllers
                 var vfc = Math.Round(compliance.VFC ?? 0, 2);
                 var epo = Math.Round(compliance.EPO ?? 0, 2);
 
-                bool failGood = sss < 80 || eqnq < 85 || rfs < 85 || vfc < 15 || epo < 25;
+                bool failGood = sss < 80 || eqnq < 85 || rfs < 85;
                 bool failExcellent = sss < 85 || eqnq < 85 || rfs < 85 || vfc < 20 || epo < 50;
 
                 // === Update status with compliance logic
@@ -595,7 +595,7 @@ namespace e_Pas_CMS.Controllers
                 var vfc = Math.Round(compliance.VFC ?? 0, 2);
                 var epo = Math.Round(compliance.EPO ?? 0, 2);
 
-                bool failGood = sss < 80 || eqnq < 85 || rfs < 85 || vfc < 15 || epo < 25;
+                bool failGood = sss < 80 || eqnq < 85 || rfs < 85;
                 bool failExcellent = sss < 85 || eqnq < 85 || rfs < 85 || vfc < 20 || epo < 50;
 
 
@@ -844,7 +844,7 @@ namespace e_Pas_CMS.Controllers
                 var vfc = Math.Round(compliance.VFC ?? 0, 2);
                 var epo = Math.Round(compliance.EPO ?? 0, 2);
 
-                bool failGood = sss < 80 || eqnq < 85 || rfs < 85 || vfc < 15 || epo < 25;
+                bool failGood = sss < 80 || eqnq < 85 || rfs < 85;
                 bool failExcellent = sss < 85 || eqnq < 85 || rfs < 85 || vfc < 20 || epo < 50;
 
                 string goodStatus = (finalScore >= 75 && !hasGoodPenalty && !failGood) ? "CERTIFIED" : "NOT CERTIFIED";
@@ -1295,12 +1295,12 @@ WHERE
     executionTimeSql, new { id = id.ToString() });
 
             // Validasi status berdasarkan compliance + penalty
-            bool failGood = model.SSS < 80 || model.EQnQ < 85 || model.RFS < 85 || model.VFC < 15 || model.EPO < 25;
+            bool failGood = model.SSS < 80 || model.EQnQ < 85 || model.RFS < 85;
             bool failExcellent = model.SSS < 85 || model.EQnQ < 85 || model.RFS < 85 || model.VFC < 20 || model.EPO < 50;
             bool hasExcellentPenalty = !string.IsNullOrEmpty(model.PenaltyAlerts);
             bool hasGoodPenalty = !string.IsNullOrEmpty(model.PenaltyAlertsGood);
 
-            if (finalScore >= 75 && !hasGoodPenalty)
+            if (finalScore >= 75 && !hasGoodPenalty && !failGood)
                 model.GoodStatus = "CERTIFIED";
 
             if (finalScore >= 80 && !hasExcellentPenalty && !failExcellent)
