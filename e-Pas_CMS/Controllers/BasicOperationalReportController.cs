@@ -277,7 +277,7 @@ namespace e_Pas_CMS.Controllers
                 bool failExcellent = sss < 85 || eqnq < 85 || rfs < 85 || vfc < 20 || epo < 50;
 
                 // === Update status with compliance logic
-                string goodStatus = (finalScore >= 75 && !hasGoodPenalty)
+                string goodStatus = (finalScore >= 75 && !hasGoodPenalty && !failGood)
                     ? "CERTIFIED"
                     : "NOT CERTIFIED";
 
@@ -1085,7 +1085,7 @@ namespace e_Pas_CMS.Controllers
             bool hasExcellentPenalty = !string.IsNullOrEmpty(model.PenaltyAlerts);
             bool hasGoodPenalty = !string.IsNullOrEmpty(model.PenaltyAlertsGood);
 
-            model.GoodStatus = (model.TotalScore >= 75 && !hasGoodPenalty) ? "CERTIFIED" : "NOT CERTIFIED";
+            model.GoodStatus = (model.TotalScore >= 75 && !hasGoodPenalty && !failGood) ? "CERTIFIED" : "NOT CERTIFIED";
             model.ExcellentStatus = (model.TotalScore >= 80 && !hasExcellentPenalty) ? "CERTIFIED" : "NOT CERTIFIED";
 
             var auditFlowSql = @"SELECT * FROM master_audit_flow WHERE audit_level = @level LIMIT 1;";
