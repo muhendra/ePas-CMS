@@ -14,5 +14,7 @@
         public string AuditLevel { get; set; }
         public decimal Score { get; set; }
         public DateTime TanggalPengajuan { get; set; }
+        public string StatusCode { get; set; }
+        public string StatusText { get; set; }
     }
 }

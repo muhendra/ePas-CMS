@@ -11,7 +11,7 @@
     string statusText = Model.StatusText ?? "-";
     switch ((Model.StatusCode ?? "").Trim().ToUpperInvariant())
     {
-        case "APPROVE_PPN":
+        case "APPROVED":
         case "APPROVE":
             statusClass = "bg-success";
             break;
@@ -98,6 +98,44 @@
             transform: translateY(-2px);
             box-shadow: 0 6px 16px rgba(0,0,0,0.15);
         }
+
+    .thumb-grid {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-bottom: 1rem;
+    }
+
+    .thumb {
+        position: relative;
+        width: 140px;
+        height: 100px;
+        overflow: hidden;
+        border: 1px solid #ccc;
+        border-radius: 6px;
+        cursor: pointer;
+    }
+
+        .thumb img,
+        .thumb video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .thumb .play {
+            position: absolute;
+            top: 35%;
+            left: 35%;
+            color: white;
+            font-size: 2rem;
+        }
+
+    .thumb-grid .text-muted {
+        padding: 0.5rem 0;
+        font-style: italic;
+        color: #6c757d;
+    }
 
 </style>
 
@@ -253,7 +291,16 @@
                                     <td>@(string.IsNullOrWhiteSpace(p.Element) ? "-" : p.Element)</td>
                                     <td>@(string.IsNullOrWhiteSpace(p.SubElement) ? "-" : p.SubElement)</td>
                                     <td>@(string.IsNullOrWhiteSpace(p.DetailElement) ? "-" : p.DetailElement)</td>
-                                    <td>@(string.IsNullOrWhiteSpace(p.DetailDibantah) ? "-" : p.DetailDibantah)</td>
+                                    <td>
+                                        @if (string.IsNullOrWhiteSpace(p.DetailDibantah))
+                                        {
+                                            @:"-"
+                                        }
+                                        else
+                                        {
+                                            @Html.Raw(p.DetailDibantah.Replace("\n", "<br/>"))
+                                        }
+                                    </td>
                                 </tr>
                             </tbody>
                         </table>
@@ -263,21 +310,17 @@
                     <div class="muted mb-3">
                         @(string.IsNullOrWhiteSpace(p.Description) ? "-" : p.Description)
                     </div>
-                    @* ================== BEGIN: Dokumen Pendukung ================== *@
-                    
-                    <div class="mb-2 fw-semibold mt-4">Dokumen Pendukung</div>
-                        <ul class="list-unstyled">
-                            <li class="mb-2">
-                                <i class="bi bi-file-earmark-image text-primary"></i>
-                                <button type="button"
-                                        class="btn btn-link text-decoration-none p-0"
-                                    onclick='showFinalMediaPopup(@Html.Raw(JsonConvert.SerializeObject(Model.Attachments)))'>
-                                    Lihat Lampiran
-                                </button>
-                            </li>
-                        </ul>
-                    
-                    @* ================== END: Dokumen Pendukung ================== *@
+                    @if (string.IsNullOrWhiteSpace(ViewBag.AttachmentsJson) || ViewBag.AttachmentsJson == "[]")
+                    {
+                        <div class="text-muted">Tidak ada dokumen pendukung.</div>
+                    }
+                    else
+                    {
+                        <div id="thumbs_1" class="thumb-grid" data-items='@Html.Raw(ViewBag.AttachmentsJson)'></div>
+                    }
+
+
+
 
                 </div>
             </div>
@@ -285,19 +328,23 @@
         }
     }
 
-    <div class="card card-soft mb-3">
-        <div class="card-body">
-            <div class="section-title">Klarifikasi (Diisi oleh User Approval)</div>
-            <p class="text-muted mb-2">
-                Masukkan ringkasan klarifikasi untuk <strong>keseluruhan</strong> komplain/banding ini.
-            </p>
-            <textarea id="txtKlarifikasi"
-                      class="form-control"
-                      rows="4"
-                      placeholder="Tulis klarifikasi di sini...">@Model.Klarifikasi</textarea>
-            <small class="text-muted">Klarifikasi ini akan ikut tersimpan saat Anda menekan tombol Approve/Reject.</small>
+    @if (Model.StatusCode == "APPROVE_CBI")
+    {
+        <div class="card card-soft mb-3">
+            <div class="card-body">
+                <div class="section-title">Klarifikasi (Diisi oleh User Approval)</div>
+                <p class="text-muted mb-2">
+                    Masukkan ringkasan klarifikasi untuk <strong>keseluruhan</strong> komplain/banding ini.
+                </p>
+                <textarea id="txtKlarifikasi"
+                          class="form-control"
+                          rows="4"
+                          placeholder="Tulis klarifikasi di sini...">@Model.Klarifikasi</textarea>
+                <small class="text-muted">Klarifikasi ini akan ikut tersimpan saat Anda menekan tombol Approve/Reject.</small>
+            </div>
         </div>
-    </div>
+    }
+
 
     <!-- Tombol aksi -->
     <div class="d-flex flex-wrap gap-2 align-items-center mb-4">
@@ -307,7 +354,7 @@
         </a>
 
         @* STEP 1 (SBM) *@
-        @if (Model.StatusCode == "IN_PROGRESS_SUBMIT" && hasApproveRoleSBM && Model.feedback_type != "COMPLAINT")
+        @if (Model.StatusCode == "UNDER_REVIEW" && hasApproveRoleSBM && Model.feedback_type != "COMPLAINT")
         {
             <form asp-action="Approve" method="post" class="d-inline needs-klarifikasi">
                 @Html.AntiForgeryToken()
@@ -350,14 +397,59 @@
             </form>
         }
 
-        @* STEP 3 (CBI) — Reassign laporan *@
-        @if (Model.StatusCode == "APPROVE_PPN" && hasRoleCBI && Model.feedback_type != "COMPLAINT")
+        @* STEP 3 (CBI) *@
+        @if (Model.StatusCode == "APPROVE_PPN" && hasApproveRolePPN && Model.feedback_type != "COMPLAINT")
+        {
+            <form asp-action="Approve" method="post" class="d-inline needs-klarifikasi">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="id" value="@Model.Id" />
+                <input type="hidden" name="klarifikasi" value="" />
+                <button type="submit" class="btn btn-gradient-green rounded-pill px-4 py-2 shadow-sm hover-scale me-2">
+                    <i class="bi bi-check-circle"></i> Approve
+                </button>
+            </form>
+
+            <form asp-action="Reject" method="post" class="d-inline needs-klarifikasi">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="id" value="@Model.Id" />
+                <input type="hidden" name="klarifikasi" value="" />
+                <button type="submit" class="btn btn-gradient-red rounded-pill px-4 py-2 shadow-sm hover-scale">
+                    <i class="bi bi-x-circle"></i> Reject
+                </button>
+            </form>
+        }
+
+        @* STEP 4 (PERTAMINA) *@
+        @if (Model.StatusCode == "APPROVE_CBI" && hasApproveRolePPN && Model.feedback_type != "COMPLAINT")
+        {
+            <form asp-action="Approve" method="post" class="d-inline needs-klarifikasi">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="id" value="@Model.Id" />
+                <input type="hidden" name="klarifikasi" value="" />
+                <button class="btn btn-gradient-blue rounded-pill px-4 py-2 shadow-sm hover-scale"
+                        data-bs-toggle="modal" data-bs-target="#confirmModal">
+                    <i class="bi bi-arrow-repeat"></i> Direvisi
+                </button>
+            </form>
+
+            <form asp-action="Reject" method="post" class="d-inline needs-klarifikasi">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="id" value="@Model.Id" />
+                <input type="hidden" name="klarifikasi" value="" />
+                <button type="submit" class="btn btn-gradient-red rounded-pill px-4 py-2 shadow-sm hover-scale">
+                    <i class="bi bi-x-circle"></i> Reject
+                </button>
+            </form>
+        }
+
+        @* STEP 5 (CBI) — Reassign laporan *@
+        @* @if (Model.StatusCode == "APPROVE_PERTAMINA" && hasRoleCBI && Model.feedback_type != "COMPLAINT")
         {
             <button class="btn btn-gradient-blue rounded-pill px-4 py-2 shadow-sm hover-scale"
                     data-bs-toggle="modal" data-bs-target="#confirmModal">
                 <i class="bi bi-arrow-repeat"></i> Reassign Laporan Audit
             </button>
-        }
+        } *@
     </div>
 
 
@@ -424,142 +516,148 @@
     </div>
 </div>
 @* ================== END: Modal Preview Lampiran ================== *@
-
 @section Scripts {
     <script>
-        function showFinalMediaPopup(mediaItems) {
-          showMediaPopup(mediaItems);
-        }
-
-        // Ambil properti pertama yang ada + non-empty
-        function pick(obj, ...keys) {
-          for (const k of keys) {
-            if (obj && typeof obj === 'object' && Object.prototype.hasOwnProperty.call(obj, k)) {
-              const v = obj[k];
-              if (v !== null && v !== undefined && v !== '') return v;
+        // ========== Utils ==========
+        function pick(obj, ...keys){
+            for (const k of keys){
+                if (obj && typeof obj === 'object' && Object.prototype.hasOwnProperty.call(obj, k)){
+                    const v = obj[k];
+                    if (v !== null && v !== undefined && v !== '') return v;
+                }
             }
-          }
-          return '';
+            return '';
         }
 
-        function toSrc(item) {
-          // Kalau server kirim string langsung
-          if (typeof item === 'string') return item;
-
-          // Coba semua varian penamaan yang mungkin
-          const raw = pick(
-            item,
-            'MediaPath','mediaPath','media_path',
-            'Url','URL','url',
-            'Path','path',
-            'Href','href'
-          );
-
-          return raw || '';
+        function toSrc(item){
+            if (typeof item === 'string') return item;
+            const raw = pick(item, 'MediaPath', 'mediaPath', 'media_path', 'Url', 'URL', 'url', 'Path', 'path', 'Href', 'href');
+            return raw || '';
         }
 
-        function toType(item) {
-          if (typeof item === 'string') {
-            // Kasih hint dari ekstensi
-            return item.toLowerCase().endsWith('.mp4') ? 'VIDEO' : 'IMAGE';
-          }
-          return (pick(item, 'MediaType','mediaType','media_type','type') || '').toUpperCase();
+        function toType(item){
+            if (typeof item === 'string') return item.toLowerCase().endsWith('.mp4') ? 'VIDEO' : 'IMAGE';
+            return (pick(item, 'MediaType', 'mediaType', 'media_type', 'type') || '').toUpperCase();
         }
 
-        function safeUrl(u) {
-          try { return encodeURI(u); } catch { return u || ''; }
+        function safeUrl(u){ try{ return encodeURI(u); } catch{ return u || ''; } }
+
+        function normalizeItems(items){
+            try {
+                if (items == null) return [];
+                if (typeof items === 'string') {
+                    const parsed = JSON.parse(items);
+                    return Array.isArray(parsed) ? parsed : (parsed ? [parsed] : []);
+                }
+                return Array.isArray(items) ? items : [items];
+            } catch { return []; }
         }
 
-        function showMediaPopup(mediaItems) {
-          const container = document.getElementById('mediaModalBody');
-          container.innerHTML = '';
-
-          console.debug('mediaItems:', mediaItems);
-
-          if (!Array.isArray(mediaItems) || mediaItems.length === 0) {
-            container.innerHTML = '<p class="text-muted">Tidak ada media tersedia.</p>';
-            new bootstrap.Modal(document.getElementById('mediaModal'), { backdrop:'static', keyboard:false, focus:false }).show();
-            return;
-          }
-
-          const items = mediaItems.map((it, i) => {
-            const srcRaw = toSrc(it);
-            const src = safeUrl((srcRaw || '').trim());
-            const t   = toType(it);
-            const isVideo = t === 'VIDEO' || src.toLowerCase().endsWith('.mp4');
-
-            console.debug(`item[${i}] -> src:`, src, 'type:', t);
-
-            if (!src) {
-              return { html: '<div class="p-4 text-center text-muted">Media tidak memiliki URL.</div>', isActive: false };
+        // ========== Fullscreen Modal Viewer ==========
+        function openFullSizeMedia(src, type){
+            const body = document.getElementById('fullSizeMediaModalBody');
+            body.innerHTML = '';
+            if ((type || '').toUpperCase() === 'VIDEO' || src.toLowerCase().endsWith('.mp4')) {
+                body.innerHTML = `<video controls autoplay class="d-block w-100 h-100" style="max-height:100vh;object-fit:contain">
+                    <source src="${src}" type="video/mp4">
+                </video>`;
+            } else {
+                body.innerHTML = `<img src="${src}" class="d-block w-100 h-100" style="object-fit:contain" alt="">`;
             }
 
-            const html = isVideo
-              ? `<video controls class="d-block w-100 rounded"><source src="${src}" type="video/mp4"></video>`
-              : `<img src="${src}" class="d-block w-100 rounded" alt="">`;
+            new bootstrap.Modal(document.getElementById('fullSizeMediaModal'), {
+                backdrop: 'static',
+                keyboard: true,
+                focus: true
+            }).show();
+        }
 
-            return { html, isActive: false };
-          });
+        // ========== Thumbnail Renderer ==========
+                function renderAttachmentThumbs(targetId, mediaItems){
+        const host = document.getElementById(targetId);
+        if (!host) return;
+        host.innerHTML = '';
 
-          if (items.length === 1) {
-            container.innerHTML = items[0].html;
-          } else {
-            const carouselId = 'mediaCarousel_' + Date.now();
-            const indicators = [];
-            const inner = [];
 
-            items.forEach((x, idx) => {
-              const active = idx === 0 ? 'active' : '';
-              indicators.push(
-                `<button type="button" data-bs-target="#${carouselId}" data-bs-slide-to="${idx}" class="${active}" aria-current="${active ? 'true' : ''}" aria-label="Slide ${idx + 1}"></button>`
-              );
-              inner.push(`<div class="carousel-item ${active}">${x.html}</div>`);
+        const list = normalizeItems(mediaItems);
+        if (list.length === 0){
+        host.innerHTML = '<div class="text-muted">Tidak ada dokumen pendukung.</div>';
+        return;
+        }
+
+
+        list.forEach(it => {
+        const srcRaw = toSrc(it);
+        const src = safeUrl((srcRaw || '').trim());
+        if (!src) return;
+
+
+        const t = toType(it);
+        const ext = src.toLowerCase().split('.').pop();
+
+
+        const isImage = ['jpg', 'jpeg', 'png'].includes(ext);
+        const isVideo = t === 'VIDEO' || src.toLowerCase().endsWith('.mp4');
+
+
+        const wrap = document.createElement('div');
+        wrap.className = 'thumb';
+
+
+        if (isImage || isVideo){
+        wrap.title = isVideo ? 'Putar video' : 'Lihat gambar';
+        wrap.onclick = () => openFullSizeMedia(src, t);
+        wrap.innerHTML = isVideo
+        ? `<video muted playsinline preload="metadata"><source src="${src}#t=0.1" type="video/mp4"></video><div class="play"><i class="bi bi-play-fill"></i></div>`
+        : `<img src="${src}" alt="">`;
+        } else {
+        const filename = (it.FileName || src.split('/').pop() || 'dokumen').replace(/"/g, '');
+        wrap.title = 'Klik untuk unduh';
+        wrap.onclick = () => window.open(src, '_blank');
+        wrap.innerHTML = `<div class="d-flex justify-content-center align-items-center h-100 w-100 bg-light text-dark fw-semibold text-center" style="font-size:.85rem;padding:.25rem;">${filename}</div>`;
+        }
+
+
+        host.appendChild(wrap);
+        });
+        }
+        // ========== Auto-render semua grid ==========
+        function renderAllThumbGrids(){
+            document.querySelectorAll('.thumb-grid').forEach(el => {
+                const data = el.getAttribute('data-items'); // JSON string
+                renderAttachmentThumbs(el.id, data);
             });
+        }
 
-            container.innerHTML = `
-              <div id="${carouselId}" class="carousel slide" data-bs-ride="carousel">
-                <div class="carousel-indicators">${indicators.join('')}</div>
-                <div class="carousel-inner">${inner.join('')}</div>
-                <button class="carousel-control-prev" type="button" data-bs-target="#${carouselId}" data-bs-slide="prev">
-                  <span class="carousel-control-prev-icon" aria-hidden="true"></span>
-                  <span class="visually-hidden">Previous</span>
-                </button>
-                <button class="carousel-control-next" type="button" data-bs-target="#${carouselId}" data-bs-slide="next">
-                  <span class="carousel-control-next-icon" aria-hidden="true"></span>
-                  <span class="visually-hidden">Next</span>
-                </button>
-              </div>`;
-          }
+        if (document.readyState === 'loading'){
+            document.addEventListener('DOMContentLoaded', renderAllThumbGrids);
+        } else {
+            renderAllThumbGrids();
+        }
 
-          new bootstrap.Modal(document.getElementById('mediaModal'), { backdrop:'static', keyboard:false, focus:false }).show();
-         // ======= KLARIFIKASI (baru) =======
-        (function () {
-            // Ambil textarea Klarifikasi (satu kali untuk seluruh trx_feedback)
+        // ========== Klarifikasi binder ==========
+        (function(){
             const txtKlarifikasi = document.getElementById('txtKlarifikasi');
-
-            function getKlarifikasi() {
-                return (txtKlarifikasi && typeof txtKlarifikasi.value === 'string')
-                    ? txtKlarifikasi.value.trim()
-                    : '';
-            }
-
-            // Isi hidden 'klarifikasi' untuk semua form dengan class 'needs-klarifikasi'
-            document.addEventListener('submit', function (ev) {
+            function getKlarifikasi(){ return (txtKlarifikasi && typeof txtKlarifikasi.value === 'string') ? txtKlarifikasi.value.trim() : ''; }
+            document.addEventListener('submit', function(ev){
                 const form = ev.target;
                 if (!form || !form.classList || !form.classList.contains('needs-klarifikasi')) return;
-
                 const hidden = form.querySelector('input[name="klarifikasi"]');
-                if (hidden) {
-                    hidden.value = getKlarifikasi();
-                }
-                // Jika ingin mewajibkan klarifikasi untuk Reject, aktifkan blok di bawah:
-                // if (form.action && /\/Reject\b/i.test(form.action) && hidden && !hidden.value) {
-                //     ev.preventDefault();
-                //     alert('Mohon isi klarifikasi sebelum melakukan Reject.');
-                //     return false;
-                // }
+                if (hidden) hidden.value = getKlarifikasi();
             }, true);
         })();
     </script>
+
+    <!-- ========== Modal viewer ========= -->
+    <div class="modal fade" id="fullSizeMediaModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-xl modal-dialog-centered">
+            <div class="modal-content bg-dark">
+                <div class="modal-body p-2 text-center" id="fullSizeMediaModalBody" style="min-height: 60vh;"></div>
+            </div>
+        </div>
+    </div>
 }
+
+
+
 

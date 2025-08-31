@@ -3,6 +3,17 @@
     ViewData["Title"] = "Banding";
     string type = (ViewBag.Type as string) ?? "BANDING";
     string searchTerm = (ViewBag.SearchTerm as string) ?? "";
+    string statusFilter = (ViewBag.StatusFilter as string) ?? "";
+    var statusOptions = ViewBag.StatusOptions as IEnumerable<(string Code, string Text)>
+                        ?? new List<(string Code, string Text)>
+                                {
+                            ("UNDER_REVIEW", "Menunggu Persetujuan SBM"),
+                            ("APPROVE_SBM",  "Menunggu Persetujuan PPN"),
+                            ("APPROVE_PPN",  "Menunggu Persetujuan CBI"),
+                            ("APPROVE_CBI",  "Menunggu Persetujuan Pertamina"),
+                            ("APPROVED",     "Banding Disetujui"),
+                            ("REJECTED",     "Ditolak"),
+                                };
 }
 
 @section Styles {
@@ -134,7 +145,7 @@
                 border-color: #E30613;
             }
 
-        .form-control {
+        .form-control, .form-select {
             border-radius: 8px;
             border: 1px solid #e2e8f0;
             padding: 10px 16px;
@@ -142,20 +153,7 @@
             transition: all 0.2s ease;
         }
 
-            .form-control:focus {
-                border-color: #E30613;
-                box-shadow: 0 0 0 3px rgba(227, 6, 19, 0.1);
-            }
-
-        .form-select {
-            border-radius: 8px;
-            border: 1px solid #e2e8f0;
-            padding: 10px 16px;
-            font-size: 0.95rem;
-            transition: all 0.2s ease;
-        }
-
-            .form-select:focus {
+            .form-control:focus, .form-select:focus {
                 border-color: #E30613;
                 box-shadow: 0 0 0 3px rgba(227, 6, 19, 0.1);
             }
@@ -199,14 +197,6 @@
                     background-color: #e6f7fa;
                     border-color: #21B6D7;
                 }
-
-        .text-success {
-            color: #059669 !important;
-        }
-
-        .text-danger {
-            color: #dc2626 !important;
-        }
 
         .fw-bold {
             font-weight: 600 !important;
@@ -282,17 +272,6 @@
     </style>
 }
 
-@* <div class="d-flex align-items-center gap-3 mb-4">
-    <a asp-controller="Banding" asp-action="Index" asp-route-type="BANDING"
-       class="btn-modern @(type=="BANDING" ? "btn-gradient-green" : "btn-outline-secondary")">
-        Banding
-    </a>
-    <a asp-controller="Banding" asp-action="Index" asp-route-type="COMPLAINT"
-       class="btn-modern @(type=="COMPLAINT" ? "btn-gradient-blue" : "btn-outline-secondary")">
-        Komplain
-    </a>
-</div> *@
-
 <div class="container-fluid px-0">
     <h3 class="mb-4 fw-bold px-3">Banding</h3>
 
@@ -317,10 +296,24 @@
             <input type="hidden" name="type" value="@type" />
             <input type="hidden" name="sortColumn" value="@ViewBag.SortColumn" />
             <input type="hidden" name="sortDirection" value="@ViewBag.SortDirection" />
-            <div class="col-md-8">
+
+            <div class="col-md-6">
                 <input type="text" name="searchTerm" value="@searchTerm" class="form-control" placeholder="🔍 Cari SPBU, Auditor, Status...">
             </div>
-            <div class="col-md-2">
+
+            <div class="col-md-3">
+                <select name="statusFilter" class="form-select">
+                    <option value="">-- Semua Status --</option>
+                    @foreach (var opt in statusOptions)
+                    {
+                        <option value="@opt.Code" selected="@(statusFilter == opt.Code)">
+                            @opt.Text
+                        </option>
+                    }
+                </select>
+            </div>
+
+            <div class="col-md-1">
                 <select name="pageSize" class="form-select">
                     @{
                         var pageSizes = new[] { 10, 25, 50 };
@@ -338,6 +331,7 @@
                     }
                 </select>
             </div>
+
             <div class="col-md-2">
                 <button type="submit" class="btn btn-primary w-100">Cari</button>
             </div>
@@ -353,12 +347,14 @@
                             <tr>
                                 <th>Aksi</th>
                                 <th>No</th>
+
                                 <th>
                                     <a asp-action="Index"
                                        asp-route-type="@type"
                                        asp-route-pageNumber="1"
                                        asp-route-pageSize="@Model.PageSize"
                                        asp-route-searchTerm="@searchTerm"
+                                       asp-route-statusFilter="@statusFilter"
                                        asp-route-sortColumn="TicketNo"
                                        asp-route-sortDirection="@(ViewBag.SortColumn == "TicketNo" && ViewBag.SortDirection == "asc" ? "desc" : "asc")">
                                         No. Tiket
@@ -368,12 +364,14 @@
                                         }
                                     </a>
                                 </th>
+
                                 <th>
                                     <a asp-action="Index"
                                        asp-route-type="@type"
                                        asp-route-pageNumber="1"
                                        asp-route-pageSize="@Model.PageSize"
                                        asp-route-searchTerm="@searchTerm"
+                                       asp-route-statusFilter="@statusFilter"
                                        asp-route-sortColumn="NoSpbu"
                                        asp-route-sortDirection="@(ViewBag.SortColumn == "NoSpbu" && ViewBag.SortDirection == "asc" ? "desc" : "asc")">
                                         No. SPBU
@@ -383,12 +381,14 @@
                                         }
                                     </a>
                                 </th>
+
                                 <th>
                                     <a asp-action="Index"
                                        asp-route-type="@type"
                                        asp-route-pageNumber="1"
                                        asp-route-pageSize="@Model.PageSize"
                                        asp-route-searchTerm="@searchTerm"
+                                       asp-route-statusFilter="@statusFilter"
                                        asp-route-sortColumn="City"
                                        asp-route-sortDirection="@(ViewBag.SortColumn == "City" && ViewBag.SortDirection == "asc" ? "desc" : "asc")">
                                         Kab/Kota
@@ -398,12 +398,14 @@
                                         }
                                     </a>
                                 </th>
+
                                 <th>
                                     <a asp-action="Index"
                                        asp-route-type="@type"
                                        asp-route-pageNumber="1"
                                        asp-route-pageSize="@Model.PageSize"
                                        asp-route-searchTerm="@searchTerm"
+                                       asp-route-statusFilter="@statusFilter"
                                        asp-route-sortColumn="Rayon"
                                        asp-route-sortDirection="@(ViewBag.SortColumn == "Rayon" && ViewBag.SortDirection == "asc" ? "desc" : "asc")">
                                         Region
@@ -413,12 +415,14 @@
                                         }
                                     </a>
                                 </th>
+
                                 <th>
                                     <a asp-action="Index"
                                        asp-route-type="@type"
                                        asp-route-pageNumber="1"
                                        asp-route-pageSize="@Model.PageSize"
                                        asp-route-searchTerm="@searchTerm"
+                                       asp-route-statusFilter="@statusFilter"
                                        asp-route-sortColumn="Auditor"
                                        asp-route-sortDirection="@(ViewBag.SortColumn == "Auditor" && ViewBag.SortDirection == "asc" ? "desc" : "asc")">
                                         Auditor
@@ -428,12 +432,32 @@
                                         }
                                     </a>
                                 </th>
+
+                                <!-- KOLOM STATUS (baru) -->
                                 <th>
                                     <a asp-action="Index"
                                        asp-route-type="@type"
                                        asp-route-pageNumber="1"
                                        asp-route-pageSize="@Model.PageSize"
                                        asp-route-searchTerm="@searchTerm"
+                                       asp-route-statusFilter="@statusFilter"
+                                       asp-route-sortColumn="StatusText"
+                                       asp-route-sortDirection="@(ViewBag.SortColumn == "StatusText" && ViewBag.SortDirection == "asc" ? "desc" : "asc")">
+                                        Status
+                                        @if (ViewBag.SortColumn == "StatusText")
+                                        {
+                                            <i class="bi bi-arrow-@(ViewBag.SortDirection == "asc" ? "up" : "down")"></i>
+                                        }
+                                    </a>
+                                </th>
+
+                                <th>
+                                    <a asp-action="Index"
+                                       asp-route-type="@type"
+                                       asp-route-pageNumber="1"
+                                       asp-route-pageSize="@Model.PageSize"
+                                       asp-route-searchTerm="@searchTerm"
+                                       asp-route-statusFilter="@statusFilter"
                                        asp-route-sortColumn="TanggalPengajuan"
                                        asp-route-sortDirection="@(ViewBag.SortColumn == "TanggalPengajuan" && ViewBag.SortDirection == "asc" ? "desc" : "asc")">
                                         Tanggal Pengajuan
@@ -443,12 +467,14 @@
                                         }
                                     </a>
                                 </th>
+
                                 <th>
                                     <a asp-action="Index"
                                        asp-route-type="@type"
                                        asp-route-pageNumber="1"
                                        asp-route-pageSize="@Model.PageSize"
                                        asp-route-searchTerm="@searchTerm"
+                                       asp-route-statusFilter="@statusFilter"
                                        asp-route-sortColumn="TanggalAudit"
                                        asp-route-sortDirection="@(ViewBag.SortColumn == "TanggalAudit" && ViewBag.SortDirection == "asc" ? "desc" : "asc")">
                                         Tanggal Audit
@@ -458,12 +484,14 @@
                                         }
                                     </a>
                                 </th>
+
                                 <th>
                                     <a asp-action="Index"
                                        asp-route-type="@type"
                                        asp-route-pageNumber="1"
                                        asp-route-pageSize="@Model.PageSize"
                                        asp-route-searchTerm="@searchTerm"
+                                       asp-route-statusFilter="@statusFilter"
                                        asp-route-sortColumn="TipeAudit"
                                        asp-route-sortDirection="@(ViewBag.SortColumn == "TipeAudit" && ViewBag.SortDirection == "asc" ? "desc" : "asc")">
                                         Tipe Audit
@@ -473,12 +501,14 @@
                                         }
                                     </a>
                                 </th>
+
                                 <th>
                                     <a asp-action="Index"
                                        asp-route-type="@type"
                                        asp-route-pageNumber="1"
                                        asp-route-pageSize="@Model.PageSize"
                                        asp-route-searchTerm="@searchTerm"
+                                       asp-route-statusFilter="@statusFilter"
                                        asp-route-sortColumn="AuditLevel"
                                        asp-route-sortDirection="@(ViewBag.SortColumn == "AuditLevel" && ViewBag.SortDirection == "asc" ? "desc" : "asc")">
                                         AuditLevel
@@ -488,12 +518,14 @@
                                         }
                                     </a>
                                 </th>
+
                                 <th>
                                     <a asp-action="Index"
                                        asp-route-type="@type"
                                        asp-route-pageNumber="1"
                                        asp-route-pageSize="@Model.PageSize"
                                        asp-route-searchTerm="@searchTerm"
+                                       asp-route-statusFilter="@statusFilter"
                                        asp-route-sortColumn="Score"
                                        asp-route-sortDirection="@(ViewBag.SortColumn == "Score" && ViewBag.SortDirection == "asc" ? "desc" : "asc")">
                                         Score
@@ -512,6 +544,18 @@
                                 @for (int i = 0; i < Model.Items.Count; i++)
                                 {
                                     var item = Model.Items[i];
+
+                                    string badgeClass = item.StatusCode?.ToUpperInvariant() switch
+                                    {
+                                        "UNDER_REVIEW" => "badge bg-warning text-dark",
+                                        "APPROVE_SBM" => "badge bg-info text-dark",
+                                        "APPROVE_PPN" => "badge bg-primary",
+                                        "APPROVE_CBI" => "badge bg-secondary",
+                                        "APPROVED" => "badge bg-success",
+                                        "REJECTED" => "badge bg-danger",
+                                        _ => "badge bg-light text-dark"
+                                    };
+
                                     <tr>
                                         <td>
                                             <a class="btn btn-sm btn-outline-primary fw-semibold"
@@ -527,6 +571,10 @@
                                         <td>@item.City</td>
                                         <td>@item.Region</td>
                                         <td>@item.Auditor</td>
+
+                                        <!-- STATUS (baru) -->
+                                        <td><span class="@badgeClass">@item.StatusText</span></td>
+
                                         <td>@item.TanggalPengajuan.ToString("dd/MM/yyyy")</td>
                                         <td>@item.TanggalAudit.ToString("dd/MM/yyyy")</td>
                                         <td>@item.TipeAudit</td>
@@ -538,7 +586,7 @@
                             else
                             {
                                 <tr>
-                                    <td colspan="17" class="text-center">Tidak ada data yang ditemukan</td>
+                                    <td colspan="18" class="text-center">Tidak ada data yang ditemukan</td>
                                 </tr>
                             }
                         </tbody>
@@ -567,7 +615,8 @@
                             pageSize = Model.PageSize,
                             searchTerm = searchTerm,
                             sortColumn = ViewBag.SortColumn,
-                            sortDirection = ViewBag.SortDirection
+                            sortDirection = ViewBag.SortDirection,
+                            statusFilter = statusFilter
                         })">First</a>
                     </li>
                     <li class="page-item">
@@ -577,7 +626,8 @@
                             pageSize = Model.PageSize,
                             searchTerm = searchTerm,
                             sortColumn = ViewBag.SortColumn,
-                            sortDirection = ViewBag.SortDirection
+                            sortDirection = ViewBag.SortDirection,
+                            statusFilter = statusFilter
                         })">&laquo;</a>
                     </li>
                 }
@@ -598,7 +648,8 @@
                             pageSize = Model.PageSize,
                             searchTerm = searchTerm,
                             sortColumn = ViewBag.SortColumn,
-                            sortDirection = ViewBag.SortDirection
+                            sortDirection = ViewBag.SortDirection,
+                            statusFilter = statusFilter
                         })">@i</a>
                     </li>
                 }
@@ -612,7 +663,8 @@
                             pageSize = Model.PageSize,
                             searchTerm = searchTerm,
                             sortColumn = ViewBag.SortColumn,
-                            sortDirection = ViewBag.SortDirection
+                            sortDirection = ViewBag.SortDirection,
+                            statusFilter = statusFilter
                         })">&raquo;</a>
                     </li>
                     <li class="page-item">
@@ -622,7 +674,8 @@
                             pageSize = Model.PageSize,
                             searchTerm = searchTerm,
                             sortColumn = ViewBag.SortColumn,
-                            sortDirection = ViewBag.SortDirection
+                            sortDirection = ViewBag.SortDirection,
+                            statusFilter = statusFilter
                         })">Last</a>
                     </li>
                 }

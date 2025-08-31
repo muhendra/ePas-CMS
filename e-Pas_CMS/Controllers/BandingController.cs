@@ -10,6 +10,7 @@ using e_Pas_CMS.ViewModels;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Npgsql;
 
@@ -29,42 +30,57 @@ namespace e_Pas_CMS.Controllers
         // GET: /Complain?type=KOMPLAIN|BANDING
         [HttpGet]
         public async Task<IActionResult> Index(
-            string searchTerm = "",
-            int pageNumber = 1,
-            int pageSize = DefaultPageSize,
-            string sortColumn = "TanggalAudit",
-            string sortDirection = "desc")
+        string type = "BANDING",
+        int pageNumber = 1,
+        int pageSize = 10,
+        string searchTerm = "",
+        string sortColumn = "",
+        string sortDirection = "asc",
+        string statusFilter = ""   // NEW
+        )
         {
-            ViewBag.SearchTerm = searchTerm ?? "";
-            ViewBag.SortColumn = sortColumn;
-            ViewBag.SortDirection = sortDirection;
+        // Opsi status (urut sesuai alur)
+        var statusOptions = new List<(string Code, string Text)>
+        {
+            ("UNDER_REVIEW", "Menunggu Persetujuan SBM"),
+            ("APPROVE_SBM",  "Menunggu Persetujuan PPN"),
+            ("APPROVE_PPN",  "Menunggu Persetujuan CBI"),
+            ("APPROVE_CBI",  "Menunggu Persetujuan Pertamina"),
+            ("APPROVED",     "Banding Disetujui"),
+            ("REJECTED",     "Ditolak"),
+        };
 
+            ViewBag.StatusOptions = statusOptions;
+            ViewBag.StatusFilter = statusFilter ?? "";
+
+            // baseQuery kamu yang sekarang
             var baseQuery =
                 from fb in _context.TrxFeedbacks
                 join ta in _context.trx_audits on fb.TrxAuditId equals ta.id
                 join sp in _context.spbus on ta.spbu_id equals sp.id
                 join au0 in _context.app_users on ta.app_user_id equals au0.id into aud1
                 from au in aud1.DefaultIfEmpty()
-                where fb.FeedbackType == "BANDING"
-                orderby fb.CreatedDate descending
-                select new
-                {
-                    Fb = fb,
-                    Ta = ta,
-                    Sp = sp,
-                    Auditor = au != null ? au.name : null
-                };
+                where fb.FeedbackType == type && fb.Status != "IN_PROGRESS_SUBMIT"
+                select new { Fb = fb, Ta = ta, Sp = sp, Auditor = au != null ? au.name : null };
 
-            // SEARCH
+            // FILTER: status (berdasarkan KODE)
+            if (!string.IsNullOrWhiteSpace(statusFilter))
+            {
+                baseQuery = baseQuery.Where(x => x.Fb.Status == statusFilter);
+            }
+
+            // FILTER: search (contoh sederhana; sesuaikan punyamu)
             if (!string.IsNullOrWhiteSpace(searchTerm))
             {
-                var term = searchTerm.ToLower().Trim();
+                var term = searchTerm.Trim().ToLower();
                 baseQuery = baseQuery.Where(x =>
-                       (x.Fb.TicketNo ?? "").ToLower().Contains(term)
-                    || (x.Sp.spbu_no ?? "").ToLower().Contains(term)
-                    || (x.Sp.city_name ?? "").ToLower().Contains(term)
-                    || (x.Sp.region ?? "").ToLower().Contains(term)
-                    || ((x.Auditor ?? "").ToLower().Contains(term)));
+                    x.Fb.TicketNo.ToLower().Contains(term) ||
+                    x.Sp.spbu_no.ToLower().Contains(term) ||
+                    (x.Sp.city_name ?? "").ToLower().Contains(term) ||
+                    (x.Sp.region ?? "").ToLower().Contains(term) ||
+                    (x.Auditor ?? "").ToLower().Contains(term) ||
+                    (x.Fb.Status ?? "").ToLower().Contains(term)
+                );
             }
 
             var totalItems = await baseQuery.CountAsync();
@@ -170,7 +186,18 @@ namespace e_Pas_CMS.Controllers
                     TipeAudit = it.Ta.audit_type,
                     AuditLevel = it.Ta.audit_level,
                     Score = Math.Round(finalScore, 2),
-                    TanggalPengajuan = it.Fb.CreatedDate
+                    TanggalPengajuan = it.Fb.CreatedDate,
+                    StatusCode = it.Fb.Status,
+                    StatusText = (it.Fb.Status ?? "").ToUpperInvariant() switch
+                    {
+                        "REJECTED" => "Ditolak",
+                        "UNDER_REVIEW" => "Menunggu Persetujuan SBM",
+                        "APPROVE_SBM" => "Menunggu Persetujuan PPN",
+                        "APPROVE_PPN" => "Menunggu Persetujuan CBI",
+                        "APPROVE_CBI" => "Menunggu Persetujuan Pertamina",
+                        "APPROVED" => "Banding Disetujui",
+                        _ => it.Fb.Status ?? "-"
+                    }
                 });
             }
 
@@ -271,11 +298,12 @@ namespace e_Pas_CMS.Controllers
                 COALESCE(se.number || '. ' || se.title, COALESCE(se.title, COALESCE(se.description, '-'))) AS sub_element_label,
                 COALESCE(de.number || '. ' || de.title, COALESCE(de.title, '-')) AS detail_element_label,
                 COALESCE((
-                    SELECT string_agg(me.number, ', ' ORDER BY me.number)
-                    FROM trx_feedback_point_element pe
-                    JOIN master_questioner_detail me ON me.id = pe.master_questioner_detail_id
-                    WHERE pe.trx_feedback_point_id = p.id
-                ), '') AS compared_elements
+                SELECT string_agg(me.number || ' ' || me.title, E'\n' ORDER BY me.number)
+                FROM trx_feedback_point_element pe
+                JOIN master_questioner_detail me 
+                  ON me.id = pe.master_questioner_detail_id
+                WHERE pe.trx_feedback_point_id = p.id
+            ), '') AS compared_elements
             FROM trx_feedback_point p
             LEFT JOIN master_questioner_detail e  ON e.id  = p.element_master_questioner_detail_id
             LEFT JOIN master_questioner_detail se ON se.id = p.sub_element_master_questioner_detail_id
@@ -383,6 +411,8 @@ namespace e_Pas_CMS.Controllers
                 })
                 .ToList();
 
+            // Serialize JSON untuk dikirim ke view
+            ViewBag.AttachmentsJson = JsonConvert.SerializeObject(vm.Attachments);
             return View(vm);
         }
 
@@ -474,10 +504,11 @@ namespace e_Pas_CMS.Controllers
             return s switch
             {
                 "REJECTED" => "Ditolak",
-                "IN_PROGRESS_SUBMIT" => "Menunggu Persetujuan SBM",
+                "UNDER_REVIEW" => "Menunggu Persetujuan SBM",
                 "APPROVE_SBM" => "Menunggu Persetujuan PPN",
-                "APPROVE_PPN" => "Banding Disetujui",
-                "APPROVE" => "Banding Disetujui",
+                "APPROVE_PPN" => "Menunggu Persetujuan CBI",
+                "APPROVE_CBI" => "Menunggu Persetujuan Pertamina",
+                "APPROVED" => "Banding Disetujui",
                 _ => raw
             };
         }
@@ -495,7 +526,7 @@ namespace e_Pas_CMS.Controllers
                 return NotFound();
 
             // Tentukan status baru berdasarkan status saat ini
-            if (entity.Status == "IN_PROGRESS_SUBMIT")
+            if (entity.Status == "UNDER_REVIEW")
             {
                 entity.Status = "APPROVE_SBM";
             }
@@ -503,9 +534,16 @@ namespace e_Pas_CMS.Controllers
             {
                 entity.Status = "APPROVE_PPN";
             }
+            else if (entity.Status == "APPROVE_PPN")
+            {
+                entity.Status = "APPROVE_CBI";
+            }
+            else if (entity.Status == "APPROVE_PPN")
+            {
+                entity.Status = "APPROVE_PERTAMINA";
+            }
             else
             {
-                // Default jika bukan kedua status di atas
                 entity.Status = "APPROVED";
             }
 
