@@ -1969,6 +1969,14 @@ WHERE
                 levelspbu = auditlevelClass != null ? (auditlevelClass.audit_level_class ?? "") : "";
             }
 
+            var createdDate = await _context.TrxFeedbacks
+            .Where(tf => tf.TrxAuditId == id.ToString())
+            .OrderBy(tf => tf.CreatedDate)
+            .Select(tf => tf.CreatedDate)
+            .FirstOrDefaultAsync();
+
+            model.CreatedDateBanding = createdDate;
+
             model.AuditNext = auditNext;
             model.ClassSPBU = levelspbu;
 
@@ -2129,6 +2137,15 @@ AND mqd.type = 'QUESTION'";
 
                 levelspbu = auditLevelClass?.audit_level_class ?? "";
             }
+
+            var createdDate = await _context.TrxFeedbacks
+            .Where(tf => tf.TrxAuditId == id.ToString())
+            .OrderBy(tf => tf.CreatedDate)
+            .Select(tf => tf.CreatedDate)
+            .FirstOrDefaultAsync();
+
+            model.CreatedDateBanding = createdDate;
+
 
             model.AuditNext = auditNext;
             model.ClassSPBU = levelspbu;

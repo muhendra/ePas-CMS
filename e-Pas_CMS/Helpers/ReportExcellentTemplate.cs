@@ -70,7 +70,11 @@ public class ReportExcellentTemplate : IDocument
                     });
 
                 // Kanan kosong
-                row.RelativeItem();
+                row.RelativeItem()
+    .AlignRight()
+    .Text(_model.CreatedDateBanding.HasValue
+        ? $"rev01-{_model.CreatedDateBanding.Value:ddMMyyyy}"
+        : "rev01-");
             });
 
         });

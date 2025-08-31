@@ -96,9 +96,6 @@ namespace e_Pas_CMS.Controllers
                 return View(model);
             }
 
-            // TODO: Simpan data scheduler ke database
-            // contoh simpan:
-            // _context.Schedulers.Add(new Scheduler { ... });
 
             TempData["Success"] = "Scheduler berhasil ditambahkan.";
             return RedirectToAction("Add");

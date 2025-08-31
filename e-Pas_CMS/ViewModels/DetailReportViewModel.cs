@@ -67,6 +67,7 @@ namespace e_Pas_CMS.ViewModels
 
         public List<FotoTemuan> FotoTemuan { get; set; } = new();
 
+        public DateTime? CreatedDateBanding { get; set; }
     }
 
     public class FotoTemuan

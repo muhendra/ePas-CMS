@@ -185,7 +185,7 @@ namespace e_Pas_CMS.Controllers
                     TanggalAudit = auditDate,
                     TipeAudit = it.Ta.audit_type,
                     AuditLevel = it.Ta.audit_level,
-                    Score = Math.Round(finalScore, 2),
+                    Score = it.Ta.score,
                     TanggalPengajuan = it.Fb.CreatedDate,
                     StatusCode = it.Fb.Status,
                     StatusText = (it.Fb.Status ?? "").ToUpperInvariant() switch

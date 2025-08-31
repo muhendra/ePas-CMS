@@ -28,12 +28,15 @@ namespace e_Pas_CMS.ViewModels
         public string SelectedRoleIds { get; set; }
         public string SelectedRegionIds { get; set; }
         public string SelectedSbmIds { get; set; }
+        public string SelectedSpbuId { get; set; }
 
         // Dropdown Data
         public List<SelectListItem> RoleList { get; set; } = new List<SelectListItem>();
         public List<SelectListItem> RegionList { get; set; } = new List<SelectListItem>();
 
         public List<SelectListItem> SbmList { get; set; } = new List<SelectListItem>();
+
+        public List<SelectListItem> SpbuList { get; set; } = new List<SelectListItem>();
     }
 
     public class RoleAuditorEditViewModel

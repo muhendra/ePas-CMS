@@ -118,7 +118,16 @@ namespace e_Pas_CMS.Controllers
             .Distinct()
             .OrderBy(s => s)
             .Select(s => new SelectListItem { Value = s, Text = s })
-            .ToList()
+            .ToList(),
+                SpbuList = _context.spbus
+    .Where(x => x.spbu_no != null)
+    .OrderBy(x => x.spbu_no)
+    .Select(x => new SelectListItem
+    {
+        Value = x.id,
+        Text = x.spbu_no + " - " + x.province_name + " - " + x.city_name + " - " + x.address
+    }).ToList()
+
             };
 
             return View(model);
@@ -164,48 +173,63 @@ namespace e_Pas_CMS.Controllers
             var roleIds = model.SelectedRoleIds?.Split(',', StringSplitOptions.RemoveEmptyEntries) ?? Array.Empty<string>();
             var regionIds = model.SelectedRegionIds?.Split(',', StringSplitOptions.RemoveEmptyEntries) ?? Array.Empty<string>();
             var sbmIds = model.SelectedSbmIds?.Split(',', StringSplitOptions.RemoveEmptyEntries) ?? Array.Empty<string>();
+            var selectedSpbuId = model.SelectedSpbuId;
 
             try
             {
                 foreach (var roleId in roleIds)
                 {
-                    // Jika ada Region dan SBM dipilih
-                    if (regionIds.Length > 0 && sbmIds.Length > 0)
+                    // Cek apakah nama role adalah DEFAULT_SPBU
+                    var roleName = await _context.app_roles
+                        .Where(x => x.id == roleId)
+                        .Select(x => x.name)
+                        .FirstOrDefaultAsync();
+
+                    if ((roleName ?? "").Trim().ToUpper() == "DEFAULT_SPBU" && !string.IsNullOrEmpty(selectedSpbuId))
                     {
-                        foreach (var region in regionIds)
+                        // Khusus DEFAULT_SPBU simpan dengan spbu_id
+                        await AddUserRoleIfNotExist(newUser.id, roleId, null, null, selectedSpbuId);
+                    }
+                    else
+                    {
+                        // Jika ada Region dan SBM dipilih
+                        if (regionIds.Length > 0 && sbmIds.Length > 0)
+                        {
+                            foreach (var region in regionIds)
+                            {
+                                foreach (var sbm in sbmIds)
+                                {
+                                    await AddUserRoleIfNotExist(newUser.id, roleId, region, sbm);
+                                }
+                            }
+                        }
+                        // Hanya Region
+                        else if (regionIds.Length > 0)
+                        {
+                            foreach (var region in regionIds)
+                            {
+                                await AddUserRoleIfNotExist(newUser.id, roleId, region, null);
+                            }
+                        }
+                        // Hanya SBM
+                        else if (sbmIds.Length > 0)
                         {
                             foreach (var sbm in sbmIds)
                             {
-                                await AddUserRoleIfNotExist(newUser.id, roleId, region, sbm);
+                                await AddUserRoleIfNotExist(newUser.id, roleId, null, sbm);
                             }
                         }
-                    }
-                    // Hanya Region
-                    else if (regionIds.Length > 0)
-                    {
-                        foreach (var region in regionIds)
+                        // Tidak ada Region maupun SBM
+                        else
                         {
-                            await AddUserRoleIfNotExist(newUser.id, roleId, region, null);
+                            await AddUserRoleIfNotExist(newUser.id, roleId, null, null);
                         }
-                    }
-                    // Hanya SBM
-                    else if (sbmIds.Length > 0)
-                    {
-                        foreach (var sbm in sbmIds)
-                        {
-                            await AddUserRoleIfNotExist(newUser.id, roleId, null, sbm);
-                        }
-                    }
-                    // Tidak ada Region maupun SBM
-                    else
-                    {
-                        await AddUserRoleIfNotExist(newUser.id, roleId, null, null);
                     }
                 }
             }
             catch (Exception ex)
             {
-                // Optional log
+                // Optional logging
                 Console.WriteLine(ex.Message);
             }
 
@@ -215,13 +239,14 @@ namespace e_Pas_CMS.Controllers
             return RedirectToAction("Index");
         }
 
-        private async Task AddUserRoleIfNotExist(string userId, string roleId, string region, string sbm)
+        private async Task AddUserRoleIfNotExist(string userId, string roleId, string region, string sbm, string spbuId = null)
         {
             var exists = await _context.app_user_roles.AnyAsync(x =>
                 x.app_user_id == userId &&
                 x.app_role_id == roleId &&
                 x.region == region &&
-                x.sbm == sbm);
+                x.sbm == sbm &&
+                x.spbu_id == spbuId);
 
             if (!exists)
             {
@@ -231,12 +256,14 @@ namespace e_Pas_CMS.Controllers
                     app_user_id = userId,
                     app_role_id = roleId,
                     region = region,
-                    sbm = sbm
+                    sbm = sbm,
+                    spbu_id = spbuId
                 };
 
                 _context.app_user_roles.Add(newRole);
             }
         }
+
 
 
         [HttpGet("GetAuditorList")]
