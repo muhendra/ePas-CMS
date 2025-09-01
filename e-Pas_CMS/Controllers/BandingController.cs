@@ -276,7 +276,8 @@ namespace e_Pas_CMS.Controllers
                 CanApprove = string.Equals(header.Tf.Status, "IN_PROGRESS_SUBMIT", StringComparison.OrdinalIgnoreCase),
                 CanReject = string.Equals(header.Tf.Status, "IN_PROGRESS_SUBMIT", StringComparison.OrdinalIgnoreCase),
                 feedback_type = header.Tf.FeedbackType,
-                AuditId = header.Ta.id
+                AuditId = header.Ta.id,
+                Klarifikasi = header.Tf.Klarifikasi
             };
 
             var cs = _context.Database.GetConnectionString();
@@ -469,7 +470,8 @@ namespace e_Pas_CMS.Controllers
         }
 
         [HttpPost("Banding/SubmitFinalApproval/{id}")]
-        public async Task<IActionResult> SubmitFinalApproval(string id)
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> SubmitFinalApproval(string id, [FromForm] string klarifikasi = null)
         {
             var tf = await _context.TrxFeedbacks.FindAsync(id);
             if (tf == null)
@@ -491,10 +493,14 @@ namespace e_Pas_CMS.Controllers
                     tf.Status = "APPROVE_CBI";
                     break;
                 case "APPROVE_CBI":
-                    tf.Status = "APPROVE_PERTAMINA";
+                    tf.Status = "APPROVED";
+                    // simpan klarifikasi dari textarea saat step Pertamina
+                    var text = (klarifikasi ?? "").Trim();
+                    if (!string.IsNullOrEmpty(text))
+                        tf.Klarifikasi = text;   // pastikan kolom/property ini ada pada TrxFeedbacks
                     break;
                 default:
-                    tf.Status = "APPROVED"; // fallback jika sebelumnya status tidak dikenal
+                    tf.Status = "APPROVED";
                     break;
             }
 

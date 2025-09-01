@@ -6,50 +6,93 @@
 @model e_Pas_CMS.ViewModels.ComplainDetailViewModel
 @{
     ViewData["Title"] = Model.IsBanding ? "Detail Banding" : "Detail Komplain";
+
+    var statusNorm = (Model.StatusCode ?? "").Trim().ToUpperInvariant();
+    var feedbackTypeNorm = (Model.feedback_type ?? "").Trim().ToUpperInvariant();
+
     string statusClass = "bg-warning";
     string statusText = Model.StatusText ?? "-";
-    switch ((Model.StatusCode ?? "").Trim().ToUpperInvariant())
+    switch (statusNorm)
     {
-        case "APPROVED": case "APPROVE": statusClass = "bg-success"; break;
+        case "APPROVED":
+        case "APPROVE": statusClass = "bg-success"; break;
         case "REJECTED": statusClass = "bg-danger"; break;
         default: statusClass = "bg-warning"; break;
     }
 
-
     var userIdString = Context.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-
 
     bool hasApproveRoleSBM = false;
     bool hasApproveRolePPN = false;
     bool hasRoleCBI = false;
-
+    bool hasRolePertamina = false;
 
     if (!string.IsNullOrEmpty(userIdString))
     {
-        var wanted = new[] { "SBM", "PPN", "CBI" };
-        var roleSet = new HashSet<string>((from ur in _context.app_user_roles
-                                           join r in _context.app_roles on ur.app_role_id equals r.id
-                                           where ur.app_user_id == userIdString && wanted.Contains(r.name)
-                                           select r.name).ToList(), StringComparer.OrdinalIgnoreCase);
-
+        var wanted = new[] { "SBM", "PPN", "CBI", "PERTAMINA" };
+        var roleSet = new HashSet<string>(
+            (from ur in _context.app_user_roles
+             join r in _context.app_roles on ur.app_role_id equals r.id
+             where ur.app_user_id == userIdString && wanted.Contains(r.name.ToUpper())
+             select r.name.ToUpper()).ToList()
+        );
 
         hasApproveRoleSBM = roleSet.Contains("SBM");
         hasApproveRolePPN = roleSet.Contains("PPN");
         hasRoleCBI = roleSet.Contains("CBI");
+        hasRolePertamina = roleSet.Contains("PERTAMINA");
     }
 }
 
 <style>
-    .card-soft { border: 1px solid #eef2f7; border-radius: .75rem; }
-    .section-title { font-weight: 600; font-size: 1.05rem; margin-bottom: .75rem; }
-    .kv .label { color: #6b7280; font-size: .85rem; }
-    .kv .value { font-weight: 500; }
-    .banner-status { border-radius: .75rem; text-align: center; padding: .95rem 1rem; }
-    .muted { color: #6b7280; }
-    .min-h-row { min-height: 28px; }
-    .table-sm th, .table-sm td { vertical-align: middle; }
-    .point-title { font-weight: 600; margin-bottom: .5rem; }
-    .divider { height: 1px; background: #eef2f7; margin: 1rem 0; }
+    .card-soft {
+        border: 1px solid #eef2f7;
+        border-radius: .75rem;
+    }
+
+    .section-title {
+        font-weight: 600;
+        font-size: 1.05rem;
+        margin-bottom: .75rem;
+    }
+
+    .kv .label {
+        color: #6b7280;
+        font-size: .85rem;
+    }
+
+    .kv .value {
+        font-weight: 500;
+    }
+
+    .banner-status {
+        border-radius: .75rem;
+        text-align: center;
+        padding: .95rem 1rem;
+    }
+
+    .muted {
+        color: #6b7280;
+    }
+
+    .min-h-row {
+        min-height: 28px;
+    }
+
+    .table-sm th, .table-sm td {
+        vertical-align: middle;
+    }
+
+    .point-title {
+        font-weight: 600;
+        margin-bottom: .5rem;
+    }
+
+    .divider {
+        height: 1px;
+        background: #eef2f7;
+        margin: 1rem 0;
+    }
 
     .btn-gradient-green {
         background: linear-gradient(135deg, #10b981, #059669);
@@ -84,7 +127,6 @@
             color: #fff;
         }
 
-    /* Efek hover scale */
     .hover-scale {
         transition: transform 0.2s ease, box-shadow 0.2s ease;
     }
@@ -111,8 +153,7 @@
         cursor: pointer;
     }
 
-        .thumb img,
-        .thumb video {
+        .thumb img, .thumb video {
             width: 100%;
             height: 100%;
             object-fit: cover;
@@ -131,7 +172,6 @@
         font-style: italic;
         color: #6c757d;
     }
-
 </style>
 
 <div class="container-fluid px-0">
@@ -146,8 +186,8 @@
         <h4 class="mb-0">@ViewData["Title"]</h4>
     </div>
 
-    <!-- Status Banner (kuning/merah/hijau sesuai status) -->
-    @if (Model.feedback_type != "COMPLAINT")
+    <!-- Status Banner -->
+    @if (feedbackTypeNorm != "COMPLAINT")
     {
         <div class="mb-3">
             <div class="banner-status @statusClass text-white">
@@ -161,22 +201,10 @@
         <div class="card-body">
             <div class="section-title">Informasi SPBU</div>
             <div class="row row-cols-1 row-cols-md-2 row-cols-lg-4 g-3 kv">
-                <div class="col">
-                    <div class="label">Nomor SPBU</div>
-                    <div class="value min-h-row">@Model.NoSpbu</div>
-                </div>
-                <div class="col">
-                    <div class="label">Region</div>
-                    <div class="value min-h-row">@Model.Region</div>
-                </div>
-                <div class="col">
-                    <div class="label">Kabupaten/Kota</div>
-                    <div class="value min-h-row">@Model.City</div>
-                </div>
-                <div class="col">
-                    <div class="label">Alamat SPBU</div>
-                    <div class="value min-h-row">@Model.Address</div>
-                </div>
+                <div class="col"><div class="label">Nomor SPBU</div><div class="value min-h-row">@Model.NoSpbu</div></div>
+                <div class="col"><div class="label">Region</div><div class="value min-h-row">@Model.Region</div></div>
+                <div class="col"><div class="label">Kabupaten/Kota</div><div class="value min-h-row">@Model.City</div></div>
+                <div class="col"><div class="label">Alamat SPBU</div><div class="value min-h-row">@Model.Address</div></div>
             </div>
         </div>
     </div>
@@ -186,46 +214,15 @@
         <div class="card-body">
             <div class="section-title">Informasi Kegiatan Audit</div>
             <div class="row row-cols-1 row-cols-md-2 row-cols-lg-4 g-3 kv">
-                <div class="col">
-                    <div class="label">No. Report</div>
-                    <div class="value">@Model.ReportNo</div>
-                </div>
-                <div class="col">
-                    <div class="label">Tanggal Audit</div>
-                    <div class="value">
-                        @(Model.TanggalAudit.HasValue ? Model.TanggalAudit.Value.ToString("dd/MM/yyyy, HH:mm") + " WIB" : "-")
-                    </div>
-                </div>
-                <div class="col">
-                    <div class="label">Sent Date</div>
-                    <div class="value">
-                        @(Model.SentDate.HasValue ? Model.SentDate.Value.ToString("dd/MM/yyyy, HH:mm") + " WIB" : "-")
-                    </div>
-                </div>
-                <div class="col">
-                    <div class="label">Verifikator</div>
-                    <div class="value">@(!string.IsNullOrWhiteSpace(Model.Verifikator) ? Model.Verifikator : "-")</div>
-                </div>
-                <div class="col">
-                    <div class="label">Auditor 1</div>
-                    <div class="value">@(!string.IsNullOrWhiteSpace(Model.Auditor1) ? Model.Auditor1 : "-")</div>
-                </div>
-                <div class="col">
-                    <div class="label">Auditor 2</div>
-                    <div class="value">@(!string.IsNullOrWhiteSpace(Model.Auditor2) ? Model.Auditor2 : "-")</div>
-                </div>
-                <div class="col">
-                    <div class="label">Tipe Audit</div>
-                    <div class="value">@Model.TipeAudit</div>
-                </div>
-                <div class="col">
-                    <div class="label">Next Audit</div>
-                    <div class="value">@Model.NextAudit</div>
-                </div>
-                <div class="col">
-                    <div class="label">Ko-ordinator</div>
-                    <div class="value">@(!string.IsNullOrWhiteSpace(Model.Koordinator) ? Model.Koordinator : "-")</div>
-                </div>
+                <div class="col"><div class="label">No. Report</div><div class="value">@Model.ReportNo</div></div>
+                <div class="col"><div class="label">Tanggal Audit</div><div class="value">@(Model.TanggalAudit.HasValue ? Model.TanggalAudit.Value.ToString("dd/MM/yyyy, HH:mm") + " WIB" : "-")</div></div>
+                <div class="col"><div class="label">Sent Date</div><div class="value">@(Model.SentDate.HasValue ? Model.SentDate.Value.ToString("dd/MM/yyyy, HH:mm") + " WIB" : "-")</div></div>
+                <div class="col"><div class="label">Verifikator</div><div class="value">@(!string.IsNullOrWhiteSpace(Model.Verifikator) ? Model.Verifikator : "-")</div></div>
+                <div class="col"><div class="label">Auditor 1</div><div class="value">@(!string.IsNullOrWhiteSpace(Model.Auditor1) ? Model.Auditor1 : "-")</div></div>
+                <div class="col"><div class="label">Auditor 2</div><div class="value">@(!string.IsNullOrWhiteSpace(Model.Auditor2) ? Model.Auditor2 : "-")</div></div>
+                <div class="col"><div class="label">Tipe Audit</div><div class="value">@Model.TipeAudit</div></div>
+                <div class="col"><div class="label">Next Audit</div><div class="value">@Model.NextAudit</div></div>
+                <div class="col"><div class="label">Ko-ordinator</div><div class="value">@(!string.IsNullOrWhiteSpace(Model.Koordinator) ? Model.Koordinator : "-")</div></div>
             </div>
         </div>
     </div>
@@ -235,44 +232,32 @@
         <div class="card-body">
             <div class="section-title">Informasi @(Model.IsBanding ? "Banding" : "Komplain")</div>
             <div class="row row-cols-1 row-cols-md-2 row-cols-lg-4 g-3 kv">
-                @if (Model.feedback_type != "COMPLAINT")
+                @if (feedbackTypeNorm != "COMPLAINT")
                 {
                     <div class="col">
                         <div class="label">Status @(Model.IsBanding ? "Banding" : "Komplain")</div>
                         <div class="value">@statusText</div>
                     </div>
                 }
-                
-                <div class="col">
-                    <div class="label">Nomor Tiket</div>
-                    <div class="value">@Model.TicketNo</div>
-                </div>
-                <div class="col">
-                    <div class="label">Nomor Banding</div>
-                    <div class="value">@(!string.IsNullOrWhiteSpace(Model.NomorBanding) ? Model.NomorBanding : "-")</div>
-                </div>
-                <div class="col">
-                    <div class="label">Tgl Pengajuan</div>
-                    <div class="value">
-                        @(Model.CreatedDate.HasValue ? Model.CreatedDate.Value.ToString("dd/MM/yyyy, HH:mm") + " WIB" : "-")
-                    </div>
-                </div>
+                <div class="col"><div class="label">Nomor Tiket</div><div class="value">@Model.TicketNo</div></div>
+                <div class="col"><div class="label">Nomor Banding</div><div class="value">@(!string.IsNullOrWhiteSpace(Model.NomorBanding) ? Model.NomorBanding : "-")</div></div>
+                <div class="col"><div class="label">Tgl Pengajuan</div><div class="value">@(Model.CreatedDate.HasValue ? Model.CreatedDate.Value.ToString("dd/MM/yyyy, HH:mm") + " WIB" : "-")</div></div>
             </div>
         </div>
     </div>
 
-    <!-- Daftar Poin Banding/Komplain (per poin seperti gambar) -->@if (Model.Points != null && Model.Points.Any())
+    <!-- Daftar Poin -->
+    @if (Model.Points != null && Model.Points.Any())
     {
         var idx = 1;
         foreach (var p in Model.Points)
         {
-            var latestApproval = p.History?.FirstOrDefault(h => h.StatusCode == Model.StatusCode);
-
+            var latestApproval = p.History?.FirstOrDefault(h => (h.StatusCode ?? "").Trim().ToUpperInvariant() == statusNorm);
+            var thumbsId = $"thumbs_{idx}";
 
             <div class="card card-soft mb-3">
                 <div class="card-body">
                     <div class="point-title">Poin @idx</div>
-
 
                     <div class="table-responsive mb-3">
                         <table class="table table-sm align-middle mb-0">
@@ -295,10 +280,9 @@
                         </table>
                     </div>
 
-
-                    @if ((Model.StatusCode == "UNDER_REVIEW" && hasApproveRoleSBM) ||
-                   (Model.StatusCode == "APPROVE_SBM" && hasApproveRolePPN) ||
-                   (Model.StatusCode == "APPROVE_PPN" && hasRoleCBI))
+                    @if ((statusNorm == "UNDER_REVIEW" && hasApproveRoleSBM) ||
+                   (statusNorm == "APPROVE_SBM" && hasApproveRolePPN) ||
+                   (statusNorm == "APPROVE_PPN" && hasRoleCBI))
                     {
                         <div class="mt-3 d-flex gap-2">
                             <form asp-action="ApprovePoint" asp-route-id="@p.PointId" method="post">
@@ -316,14 +300,13 @@
                         </div>
                     }
 
-
                     @if (p.History != null && p.History.Any())
                     {
-                        var filtered = p.History.Where(x => x.StatusCode == Model.StatusCode).ToList();
+                        var filtered = p.History.Where(x => (x.StatusCode ?? "").Trim().ToUpperInvariant() == statusNorm).ToList();
                         if (filtered.Any())
                         {
                             <div class="mt-2 small text-muted">
-                                <strong>Riwayat Approval (Tahap @Model.StatusCode):</strong>
+                                <strong>Riwayat Approval (Tahap @statusNorm):</strong>
                                 <ul class="mb-0 ps-3">
                                     @foreach (var h in filtered)
                                     {
@@ -334,7 +317,6 @@
                         }
                     }
 
-
                     <div class="mb-2 fw-semibold">Isi @(Model.IsBanding ? "Banding" : "Komplain")</div>
                     <div class="muted mb-3">@(string.IsNullOrWhiteSpace(p.Description) ? "-" : p.Description)</div>
                     <div class="label">Dokumen Pendukung</div>
@@ -344,7 +326,7 @@
                     }
                     else
                     {
-                        <div id="thumbs_1" class="thumb-grid" data-items='@Html.Raw(ViewBag.AttachmentsJson)'></div>
+                        <div id="@thumbsId" class="thumb-grid" data-items='@Html.Raw(ViewBag.AttachmentsJson)'></div>
                     }
                 </div>
             </div>
@@ -352,7 +334,7 @@
         }
     }
 
-    @if (Model.StatusCode == "APPROVE_CBI")
+    @if (statusNorm == "APPROVE_CBI")
     {
         <div class="card card-soft mb-3">
             <div class="card-body">
@@ -369,9 +351,20 @@
         </div>
     }
 
+    @if (statusNorm == "APPROVED")
+    {
+        <div class="card card-soft mb-3">
+            <div class="card-body">
+                <div class="section-title">Klarifikasi</div>
+                <div class="border rounded p-3 bg-light">
+                    @Html.Raw(string.IsNullOrWhiteSpace(Model.Klarifikasi) ? "-" : Model.Klarifikasi.Replace("\n", "<br />"))
+                </div>
+            </div>
+        </div>
+    }
 
     <!-- Tombol aksi -->
-    @if (ViewBag.AllPointsApproved == true)
+    @if (ViewBag.AllPointsApproved == true || statusNorm == "APPROVE_CBI" || statusNorm == "APPROVED")
     {
         <div class="d-flex flex-wrap gap-2 align-items-center mb-4">
             <a asp-controller="Banding" asp-action="Index"
@@ -380,12 +373,12 @@
             </a>
 
             @* STEP 1 (SBM) *@
-            @if (Model.StatusCode == "UNDER_REVIEW" && hasApproveRoleSBM && Model.feedback_type != "COMPLAINT")
+            @if (statusNorm == "UNDER_REVIEW" && hasApproveRoleSBM && feedbackTypeNorm != "COMPLAINT")
             {
                 <form asp-action="Approve" method="post" class="d-inline needs-klarifikasi">
                     @Html.AntiForgeryToken()
                     <input type="hidden" name="id" value="@Model.Id" />
-                    <input type="hidden" name="klarifikasi" value="" /> @* diisi via JS *@
+                    <input type="hidden" name="klarifikasi" value="" />
                     <button type="submit" class="btn btn-gradient-green rounded-pill px-4 py-2 shadow-sm hover-scale me-2">
                         <i class="bi bi-check-circle"></i> Submit
                     </button>
@@ -393,7 +386,7 @@
             }
 
             @* STEP 2 (PPN) *@
-            @if (Model.StatusCode == "APPROVE_SBM" && hasApproveRolePPN && Model.feedback_type != "COMPLAINT")
+            @if (statusNorm == "APPROVE_SBM" && hasApproveRolePPN && feedbackTypeNorm != "COMPLAINT")
             {
                 <form asp-action="Approve" method="post" class="d-inline needs-klarifikasi">
                     @Html.AntiForgeryToken()
@@ -406,7 +399,7 @@
             }
 
             @* STEP 3 (CBI) *@
-            @if (Model.StatusCode == "APPROVE_PPN" && hasApproveRolePPN && Model.feedback_type != "COMPLAINT")
+            @if (statusNorm == "APPROVE_PPN" && hasRoleCBI && feedbackTypeNorm != "COMPLAINT")
             {
                 <form asp-action="Approve" method="post" class="d-inline needs-klarifikasi">
                     @Html.AntiForgeryToken()
@@ -419,13 +412,14 @@
             }
 
             @* STEP 4 (PERTAMINA) *@
-            @if (Model.StatusCode == "APPROVE_CBI" && hasApproveRolePPN && Model.feedback_type != "COMPLAINT")
+            @if (statusNorm == "APPROVE_CBI" && hasRolePertamina)
             {
                 <form asp-action="Approve" method="post" class="d-inline needs-klarifikasi">
                     @Html.AntiForgeryToken()
                     <input type="hidden" name="id" value="@Model.Id" />
                     <input type="hidden" name="klarifikasi" value="" />
-                    <button class="btn btn-gradient-blue rounded-pill px-4 py-2 shadow-sm hover-scale"
+                    <button type="button"
+                            class="btn btn-gradient-blue rounded-pill px-4 py-2 shadow-sm hover-scale"
                             data-bs-toggle="modal" data-bs-target="#confirmModal">
                         <i class="bi bi-arrow-repeat"></i> Direvisi
                     </button>
@@ -440,12 +434,19 @@
                     </button>
                 </form>
             }
+
+            @* REASSIGN saat APPROVED (tanpa syarat role) *@
+            @if (statusNorm == "APPROVED" && hasRoleCBI)
+            {
+                <button type="button"
+                        class="btn btn-warning rounded-pill px-4 py-2 shadow-sm hover-scale"
+                        data-bs-toggle="modal" data-bs-target="#reassignApprovedModal">
+                    <i class="bi bi-arrow-counterclockwise"></i> Reassign
+                </button>
+            }
         </div>
     }
-
-
 </div>
-
 @* ================== BEGIN: Modal Preview Lampiran ================== *@
 <!-- Modal Konfirmasi -->
 <div class="modal fade" id="confirmModal" tabindex="-1" aria-labelledby="confirmModalLabel" aria-hidden="true">
@@ -460,8 +461,8 @@
             </div>
             <div class="modal-footer">
                 <form method="post"
-                      asp-controller="Complain"
-                      asp-action="Reassign"
+                      asp-controller="Banding"
+                      asp-action="SubmitFinalApproval"
                       asp-route-id="@Model.Id"
                       class="needs-klarifikasi">
                     @Html.AntiForgeryToken()
@@ -473,6 +474,7 @@
         </div>
     </div>
 </div>
+
 <!-- Modal Media -->
 <div class="modal fade" id="mediaModal" tabindex="-1" aria-labelledby="mediaModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-xl modal-dialog-centered">
@@ -506,6 +508,34 @@
         </div>
     </div>
 </div>
+
+<!-- Modal Reassign (khusus status APPROVED) -->
+<div class="modal fade" id="reassignApprovedModal" tabindex="-1" aria-labelledby="reassignApprovedModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="reassignApprovedModalLabel">Konfirmasi Reassign</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Tutup"></button>
+            </div>
+            <div class="modal-body">
+                Apakah Anda yakin ingin melakukan <strong>Reassign</strong> tiket ini?
+            </div>
+            <div class="modal-footer">
+                <form method="post"
+                      asp-controller="Banding"
+                      asp-action="Reassign"
+                      asp-route-id="@Model.Id"
+                      class="needs-klarifikasi-approved">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="klarifikasi" value="" /> @* diisi via JS *@
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Batal</button>
+                    <button type="submit" class="btn btn-warning">Ya, Reassign</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
 @* ================== END: Modal Preview Lampiran ================== *@
 @section Scripts {
     <script>
