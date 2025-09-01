@@ -472,7 +472,7 @@
                 }
 
                 @* --- Content Menu (contoh screenshot) --- *@
-                @if (true)
+                @* @if (true)
                 {
                     <li class="nav-item menu-group">
                         <a class="nav-link menu-trigger" data-target="#menu-content" role="button" aria-expanded="false" aria-controls="menu-content">
@@ -508,7 +508,7 @@
                             </ul>
                         </div>
                     </li>
-                }
+                } *@
 
             </ul>
         </div>
@@ -536,6 +536,33 @@
                     <a class="navbar-brand text-dark fw-bold">
                         E-PAS PERTAMINA / @ViewContext.RouteData.Values["controller"]
                     </a>
+
+                    <div class="d-flex align-items-center ms-auto">
+                        @{
+                            // Ambil user login
+                            var currentUser = _context.app_users.FirstOrDefault(u => u.id == userIdString);
+                            var username = currentUser?.username ?? "-";
+                            var fullname = currentUser?.name ?? "-";
+
+                            // Ambil role (distinct → biar tidak dobel)
+                            var roleNames = userRoles
+                            .Join(_context.app_roles,
+                            aur => aur.app_role_id,
+                            ar => ar.id,
+                            (aur, ar) => ar.name)
+                            .Distinct()
+                            .ToList();
+
+                            string roleDisplay = roleNames.Any() ? string.Join(", ", roleNames) : "-";
+                        }
+
+                        <div class="text-end me-3">
+                            <div class="fw-bold">@fullname</div>
+                            <small class="text-muted">@username | @roleDisplay</small>
+                        </div>
+
+                        <i class="bi bi-person-circle fs-4 text-dark"></i>
+                    </div>
                 </div>
             </nav>
         </header>
