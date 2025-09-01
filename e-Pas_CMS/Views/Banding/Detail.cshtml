@@ -42,6 +42,17 @@
         hasRoleCBI = roleSet.Contains("CBI");
         hasRolePertamina = roleSet.Contains("PERTAMINA");
     }
+
+    // ===== STRICT per-stage AllPointsApproved (tidak cascade) =====
+    bool AllPointsApprovedCurrentStage =
+        Model?.Points != null && Model.Points.Any() &&
+        Model.Points.All(p =>
+            p?.History != null && p.History.Any(h =>
+                (h.StatusCode ?? "").Trim().ToUpperInvariant() == statusNorm &&
+                ((h.Status ?? "").Trim().ToUpperInvariant() == "APPROVED"
+                 || (h.Status ?? "").Trim().ToUpperInvariant() == "APPROVE")
+            )
+        );
 }
 
 <style>
@@ -95,45 +106,45 @@
     }
 
     .btn-gradient-green {
-        background: linear-gradient(135deg, #10b981, #059669);
+        background: linear-gradient(135deg,#10b981,#059669);
         color: #fff;
         border: none;
     }
 
         .btn-gradient-green:hover {
-            background: linear-gradient(135deg, #059669, #047857);
+            background: linear-gradient(135deg,#059669,#047857);
             color: #fff;
         }
 
     .btn-gradient-red {
-        background: linear-gradient(135deg, #ef4444, #dc2626);
+        background: linear-gradient(135deg,#ef4444,#dc2626);
         color: #fff;
         border: none;
     }
 
         .btn-gradient-red:hover {
-            background: linear-gradient(135deg, #dc2626, #b91c1c);
+            background: linear-gradient(135deg,#dc2626,#b91c1c);
             color: #fff;
         }
 
     .btn-gradient-blue {
-        background: linear-gradient(135deg, #3b82f6, #2563eb);
+        background: linear-gradient(135deg,#3b82f6,#2563eb);
         color: #fff;
         border: none;
     }
 
         .btn-gradient-blue:hover {
-            background: linear-gradient(135deg, #2563eb, #1d4ed8);
+            background: linear-gradient(135deg,#2563eb,#1d4ed8);
             color: #fff;
         }
 
     .hover-scale {
-        transition: transform 0.2s ease, box-shadow 0.2s ease;
+        transition: transform .2s, box-shadow .2s;
     }
 
         .hover-scale:hover {
             transform: translateY(-2px);
-            box-shadow: 0 6px 16px rgba(0,0,0,0.15);
+            box-shadow: 0 6px 16px rgba(0,0,0,.15);
         }
 
     .thumb-grid {
@@ -163,12 +174,12 @@
             position: absolute;
             top: 35%;
             left: 35%;
-            color: white;
+            color: #fff;
             font-size: 2rem;
         }
 
     .thumb-grid .text-muted {
-        padding: 0.5rem 0;
+        padding: .5rem 0;
         font-style: italic;
         color: #6c757d;
     }
@@ -252,8 +263,15 @@
         var idx = 1;
         foreach (var p in Model.Points)
         {
-            var latestApproval = p.History?.FirstOrDefault(h => (h.StatusCode ?? "").Trim().ToUpperInvariant() == statusNorm);
             var thumbsId = $"thumbs_{idx}";
+
+            // per-poin approved di tahap SAAT INI (strict)
+            bool pointApprovedThisStage = p?.History != null && p.History.Any(h =>
+            {
+                var sc = (h.StatusCode ?? "").Trim().ToUpperInvariant();
+                var st = (h.Status ?? "").Trim().ToUpperInvariant();
+                return sc == statusNorm && (st == "APPROVED" || st == "APPROVE");
+            });
 
             <div class="card card-soft mb-3">
                 <div class="card-body">
@@ -280,9 +298,11 @@
                         </table>
                     </div>
 
-                    @if ((statusNorm == "UNDER_REVIEW" && hasApproveRoleSBM) ||
+                    @* Tombol Approve/Reject hanya muncul bila POIN ini BELUM approved di tahap SAAT INI *@
+                    @if (!pointApprovedThisStage && (
+                   (statusNorm == "UNDER_REVIEW" && hasApproveRoleSBM) ||
                    (statusNorm == "APPROVE_SBM" && hasApproveRolePPN) ||
-                   (statusNorm == "APPROVE_PPN" && hasRoleCBI))
+                   (statusNorm == "APPROVE_PPN" && hasRoleCBI)))
                     {
                         <div class="mt-3 d-flex gap-2">
                             <form asp-action="ApprovePoint" asp-route-id="@p.PointId" method="post">
@@ -300,6 +320,7 @@
                         </div>
                     }
 
+                    @* Riwayat approval hanya untuk tahap saat ini *@
                     @if (p.History != null && p.History.Any())
                     {
                         var filtered = p.History.Where(x => (x.StatusCode ?? "").Trim().ToUpperInvariant() == statusNorm).ToList();
@@ -364,7 +385,7 @@
     }
 
     <!-- Tombol aksi -->
-    @if (ViewBag.AllPointsApproved == true || statusNorm == "APPROVE_CBI" || statusNorm == "APPROVED")
+    @if (AllPointsApprovedCurrentStage || statusNorm == "APPROVE_CBI" || statusNorm == "APPROVED")
     {
         <div class="d-flex flex-wrap gap-2 align-items-center mb-4">
             <a asp-controller="Banding" asp-action="Index"
@@ -379,7 +400,7 @@
                     @Html.AntiForgeryToken()
                     <input type="hidden" name="id" value="@Model.Id" />
                     <input type="hidden" name="klarifikasi" value="" />
-                    <button type="submit" class="btn btn-gradient-green rounded-pill px-4 py-2 shadow-sm hover-scale me-2">
+                    <button type="submit" class="btn btn-gradient-green rounded-pill px-4 py-2 shadow-sm hover-scale me-2" @(AllPointsApprovedCurrentStage ? "" : "disabled")>
                         <i class="bi bi-check-circle"></i> Submit
                     </button>
                 </form>
@@ -392,7 +413,7 @@
                     @Html.AntiForgeryToken()
                     <input type="hidden" name="id" value="@Model.Id" />
                     <input type="hidden" name="klarifikasi" value="" />
-                    <button type="submit" class="btn btn-gradient-green rounded-pill px-4 py-2 shadow-sm hover-scale me-2">
+                    <button type="submit" class="btn btn-gradient-green rounded-pill px-4 py-2 shadow-sm hover-scale me-2" @(AllPointsApprovedCurrentStage ? "" : "disabled")>
                         <i class="bi bi-check-circle"></i> Submit
                     </button>
                 </form>
@@ -405,7 +426,7 @@
                     @Html.AntiForgeryToken()
                     <input type="hidden" name="id" value="@Model.Id" />
                     <input type="hidden" name="klarifikasi" value="" />
-                    <button type="submit" class="btn btn-gradient-green rounded-pill px-4 py-2 shadow-sm hover-scale me-2">
+                    <button type="submit" class="btn btn-gradient-green rounded-pill px-4 py-2 shadow-sm hover-scale me-2" @(AllPointsApprovedCurrentStage ? "" : "disabled")>
                         <i class="bi bi-check-circle"></i> Submit
                     </button>
                 </form>
@@ -447,6 +468,7 @@
         </div>
     }
 </div>
+
 @* ================== BEGIN: Modal Preview Lampiran ================== *@
 <!-- Modal Konfirmasi -->
 <div class="modal fade" id="confirmModal" tabindex="-1" aria-labelledby="confirmModalLabel" aria-hidden="true">
@@ -677,7 +699,3 @@
         </div>
     </div>
 }
-
-
-
-

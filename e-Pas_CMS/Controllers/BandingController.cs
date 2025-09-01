@@ -670,9 +670,9 @@ namespace e_Pas_CMS.Controllers
             {
                 entity.Status = "APPROVE_CBI";
             }
-            else if (entity.Status == "APPROVE_PPN")
+            else if (entity.Status == "APPROVE_CBI")
             {
-                entity.Status = "APPROVE_PERTAMINA";
+                entity.Status = "APPROVED";
             }
             else
             {
