@@ -6,37 +6,32 @@
 @model e_Pas_CMS.ViewModels.ComplainDetailViewModel
 @{
     ViewData["Title"] = Model.IsBanding ? "Detail Banding" : "Detail Komplain";
-
     string statusClass = "bg-warning";
     string statusText = Model.StatusText ?? "-";
     switch ((Model.StatusCode ?? "").Trim().ToUpperInvariant())
     {
-        case "APPROVED":
-        case "APPROVE":
-            statusClass = "bg-success";
-            break;
+        case "APPROVED": case "APPROVE": statusClass = "bg-success"; break;
         case "REJECTED": statusClass = "bg-danger"; break;
         default: statusClass = "bg-warning"; break;
     }
 
+
     var userIdString = Context.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+
 
     bool hasApproveRoleSBM = false;
     bool hasApproveRolePPN = false;
     bool hasRoleCBI = false;
 
+
     if (!string.IsNullOrEmpty(userIdString))
     {
-        // 1x roundtrip ke DB: ambil role yang relevan saja
         var wanted = new[] { "SBM", "PPN", "CBI" };
+        var roleSet = new HashSet<string>((from ur in _context.app_user_roles
+                                           join r in _context.app_roles on ur.app_role_id equals r.id
+                                           where ur.app_user_id == userIdString && wanted.Contains(r.name)
+                                           select r.name).ToList(), StringComparer.OrdinalIgnoreCase);
 
-        var roleSet = new HashSet<string>(
-            (from ur in _context.app_user_roles
-             join r in _context.app_roles on ur.app_role_id equals r.id
-             where ur.app_user_id == userIdString && wanted.Contains(r.name)
-             select r.name).ToList(),
-            StringComparer.OrdinalIgnoreCase // aman untuk case-insensitive
-        );
 
         hasApproveRoleSBM = roleSet.Contains("SBM");
         hasApproveRolePPN = roleSet.Contains("PPN");
@@ -266,15 +261,18 @@
         </div>
     </div>
 
-    <!-- Daftar Poin Banding/Komplain (per poin seperti gambar) -->
-    @if (Model.Points != null && Model.Points.Any())
+    <!-- Daftar Poin Banding/Komplain (per poin seperti gambar) -->@if (Model.Points != null && Model.Points.Any())
     {
         var idx = 1;
         foreach (var p in Model.Points)
         {
+            var latestApproval = p.History?.FirstOrDefault(h => h.StatusCode == Model.StatusCode);
+
+
             <div class="card card-soft mb-3">
                 <div class="card-body">
                     <div class="point-title">Poin @idx</div>
+
 
                     <div class="table-responsive mb-3">
                         <table class="table table-sm align-middle mb-0">
@@ -291,25 +289,55 @@
                                     <td>@(string.IsNullOrWhiteSpace(p.Element) ? "-" : p.Element)</td>
                                     <td>@(string.IsNullOrWhiteSpace(p.SubElement) ? "-" : p.SubElement)</td>
                                     <td>@(string.IsNullOrWhiteSpace(p.DetailElement) ? "-" : p.DetailElement)</td>
-                                    <td>
-                                        @if (string.IsNullOrWhiteSpace(p.DetailDibantah))
-                                        {
-                                            @:"-"
-                                        }
-                                        else
-                                        {
-                                            @Html.Raw(p.DetailDibantah.Replace("\n", "<br/>"))
-                                        }
-                                    </td>
+                                    <td>@Html.Raw(string.IsNullOrWhiteSpace(p.DetailDibantah) ? "-" : p.DetailDibantah.Replace("\n", "<br />"))</td>
                                 </tr>
                             </tbody>
                         </table>
                     </div>
 
+
+                    @if ((Model.StatusCode == "UNDER_REVIEW" && hasApproveRoleSBM) ||
+                   (Model.StatusCode == "APPROVE_SBM" && hasApproveRolePPN) ||
+                   (Model.StatusCode == "APPROVE_PPN" && hasRoleCBI))
+                    {
+                        <div class="mt-3 d-flex gap-2">
+                            <form asp-action="ApprovePoint" asp-route-id="@p.PointId" method="post">
+                                @Html.AntiForgeryToken()
+                                <button type="submit" class="btn btn-sm btn-success">
+                                    <i class="bi bi-check-circle"></i> Approve
+                                </button>
+                            </form>
+                            <form asp-action="RejectPoint" asp-route-id="@p.PointId" method="post">
+                                @Html.AntiForgeryToken()
+                                <button type="submit" class="btn btn-sm btn-danger">
+                                    <i class="bi bi-x-circle"></i> Reject
+                                </button>
+                            </form>
+                        </div>
+                    }
+
+
+                    @if (p.History != null && p.History.Any())
+                    {
+                        var filtered = p.History.Where(x => x.StatusCode == Model.StatusCode).ToList();
+                        if (filtered.Any())
+                        {
+                            <div class="mt-2 small text-muted">
+                                <strong>Riwayat Approval (Tahap @Model.StatusCode):</strong>
+                                <ul class="mb-0 ps-3">
+                                    @foreach (var h in filtered)
+                                    {
+                                        <li>@h.ApprovedDate.ToString("dd/MM/yyyy HH:mm") - <strong>@h.Status</strong> oleh @h.ApprovedBy</li>
+                                    }
+                                </ul>
+                            </div>
+                        }
+                    }
+
+
                     <div class="mb-2 fw-semibold">Isi @(Model.IsBanding ? "Banding" : "Komplain")</div>
-                    <div class="muted mb-3">
-                        @(string.IsNullOrWhiteSpace(p.Description) ? "-" : p.Description)
-                    </div>
+                    <div class="muted mb-3">@(string.IsNullOrWhiteSpace(p.Description) ? "-" : p.Description)</div>
+                    <div class="label">Dokumen Pendukung</div>
                     @if (string.IsNullOrWhiteSpace(ViewBag.AttachmentsJson) || ViewBag.AttachmentsJson == "[]")
                     {
                         <div class="text-muted">Tidak ada dokumen pendukung.</div>
@@ -318,10 +346,6 @@
                     {
                         <div id="thumbs_1" class="thumb-grid" data-items='@Html.Raw(ViewBag.AttachmentsJson)'></div>
                     }
-
-
-
-
                 </div>
             </div>
             idx++;
@@ -347,110 +371,77 @@
 
 
     <!-- Tombol aksi -->
-    <div class="d-flex flex-wrap gap-2 align-items-center mb-4">
-        <a asp-controller="Banding" asp-action="Index"
-           class="btn btn-outline-secondary rounded-pill px-4 py-2 shadow-sm hover-scale">
-            <i class="bi bi-arrow-left-circle"></i> Kembali
-        </a>
+    @if (ViewBag.AllPointsApproved == true)
+    {
+        <div class="d-flex flex-wrap gap-2 align-items-center mb-4">
+            <a asp-controller="Banding" asp-action="Index"
+               class="btn btn-outline-secondary rounded-pill px-4 py-2 shadow-sm hover-scale">
+                <i class="bi bi-arrow-left-circle"></i> Kembali
+            </a>
 
-        @* STEP 1 (SBM) *@
-        @if (Model.StatusCode == "UNDER_REVIEW" && hasApproveRoleSBM && Model.feedback_type != "COMPLAINT")
-        {
-            <form asp-action="Approve" method="post" class="d-inline needs-klarifikasi">
-                @Html.AntiForgeryToken()
-                <input type="hidden" name="id" value="@Model.Id" />
-                <input type="hidden" name="klarifikasi" value="" /> @* diisi via JS *@
-                <button type="submit" class="btn btn-gradient-green rounded-pill px-4 py-2 shadow-sm hover-scale me-2">
-                    <i class="bi bi-check-circle"></i> Approve
-                </button>
-            </form>
+            @* STEP 1 (SBM) *@
+            @if (Model.StatusCode == "UNDER_REVIEW" && hasApproveRoleSBM && Model.feedback_type != "COMPLAINT")
+            {
+                <form asp-action="Approve" method="post" class="d-inline needs-klarifikasi">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="id" value="@Model.Id" />
+                    <input type="hidden" name="klarifikasi" value="" /> @* diisi via JS *@
+                    <button type="submit" class="btn btn-gradient-green rounded-pill px-4 py-2 shadow-sm hover-scale me-2">
+                        <i class="bi bi-check-circle"></i> Submit
+                    </button>
+                </form>
+            }
 
-            <form asp-action="Reject" method="post" class="d-inline needs-klarifikasi">
-                @Html.AntiForgeryToken()
-                <input type="hidden" name="id" value="@Model.Id" />
-                <input type="hidden" name="klarifikasi" value="" /> @* diisi via JS *@
-                <button type="submit" class="btn btn-gradient-red rounded-pill px-4 py-2 shadow-sm hover-scale">
-                    <i class="bi bi-x-circle"></i> Reject
-                </button>
-            </form>
-        }
+            @* STEP 2 (PPN) *@
+            @if (Model.StatusCode == "APPROVE_SBM" && hasApproveRolePPN && Model.feedback_type != "COMPLAINT")
+            {
+                <form asp-action="Approve" method="post" class="d-inline needs-klarifikasi">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="id" value="@Model.Id" />
+                    <input type="hidden" name="klarifikasi" value="" />
+                    <button type="submit" class="btn btn-gradient-green rounded-pill px-4 py-2 shadow-sm hover-scale me-2">
+                        <i class="bi bi-check-circle"></i> Submit
+                    </button>
+                </form>
+            }
 
-        @* STEP 2 (PPN) *@
-        @if (Model.StatusCode == "APPROVE_SBM" && hasApproveRolePPN && Model.feedback_type != "COMPLAINT")
-        {
-            <form asp-action="Approve" method="post" class="d-inline needs-klarifikasi">
-                @Html.AntiForgeryToken()
-                <input type="hidden" name="id" value="@Model.Id" />
-                <input type="hidden" name="klarifikasi" value="" />
-                <button type="submit" class="btn btn-gradient-green rounded-pill px-4 py-2 shadow-sm hover-scale me-2">
-                    <i class="bi bi-check-circle"></i> Approve
-                </button>
-            </form>
+            @* STEP 3 (CBI) *@
+            @if (Model.StatusCode == "APPROVE_PPN" && hasApproveRolePPN && Model.feedback_type != "COMPLAINT")
+            {
+                <form asp-action="Approve" method="post" class="d-inline needs-klarifikasi">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="id" value="@Model.Id" />
+                    <input type="hidden" name="klarifikasi" value="" />
+                    <button type="submit" class="btn btn-gradient-green rounded-pill px-4 py-2 shadow-sm hover-scale me-2">
+                        <i class="bi bi-check-circle"></i> Submit
+                    </button>
+                </form>
+            }
 
-            <form asp-action="Reject" method="post" class="d-inline needs-klarifikasi">
-                @Html.AntiForgeryToken()
-                <input type="hidden" name="id" value="@Model.Id" />
-                <input type="hidden" name="klarifikasi" value="" />
-                <button type="submit" class="btn btn-gradient-red rounded-pill px-4 py-2 shadow-sm hover-scale">
-                    <i class="bi bi-x-circle"></i> Reject
-                </button>
-            </form>
-        }
+            @* STEP 4 (PERTAMINA) *@
+            @if (Model.StatusCode == "APPROVE_CBI" && hasApproveRolePPN && Model.feedback_type != "COMPLAINT")
+            {
+                <form asp-action="Approve" method="post" class="d-inline needs-klarifikasi">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="id" value="@Model.Id" />
+                    <input type="hidden" name="klarifikasi" value="" />
+                    <button class="btn btn-gradient-blue rounded-pill px-4 py-2 shadow-sm hover-scale"
+                            data-bs-toggle="modal" data-bs-target="#confirmModal">
+                        <i class="bi bi-arrow-repeat"></i> Direvisi
+                    </button>
+                </form>
 
-        @* STEP 3 (CBI) *@
-        @if (Model.StatusCode == "APPROVE_PPN" && hasApproveRolePPN && Model.feedback_type != "COMPLAINT")
-        {
-            <form asp-action="Approve" method="post" class="d-inline needs-klarifikasi">
-                @Html.AntiForgeryToken()
-                <input type="hidden" name="id" value="@Model.Id" />
-                <input type="hidden" name="klarifikasi" value="" />
-                <button type="submit" class="btn btn-gradient-green rounded-pill px-4 py-2 shadow-sm hover-scale me-2">
-                    <i class="bi bi-check-circle"></i> Approve
-                </button>
-            </form>
-
-            <form asp-action="Reject" method="post" class="d-inline needs-klarifikasi">
-                @Html.AntiForgeryToken()
-                <input type="hidden" name="id" value="@Model.Id" />
-                <input type="hidden" name="klarifikasi" value="" />
-                <button type="submit" class="btn btn-gradient-red rounded-pill px-4 py-2 shadow-sm hover-scale">
-                    <i class="bi bi-x-circle"></i> Reject
-                </button>
-            </form>
-        }
-
-        @* STEP 4 (PERTAMINA) *@
-        @if (Model.StatusCode == "APPROVE_CBI" && hasApproveRolePPN && Model.feedback_type != "COMPLAINT")
-        {
-            <form asp-action="Approve" method="post" class="d-inline needs-klarifikasi">
-                @Html.AntiForgeryToken()
-                <input type="hidden" name="id" value="@Model.Id" />
-                <input type="hidden" name="klarifikasi" value="" />
-                <button class="btn btn-gradient-blue rounded-pill px-4 py-2 shadow-sm hover-scale"
-                        data-bs-toggle="modal" data-bs-target="#confirmModal">
-                    <i class="bi bi-arrow-repeat"></i> Direvisi
-                </button>
-            </form>
-
-            <form asp-action="Reject" method="post" class="d-inline needs-klarifikasi">
-                @Html.AntiForgeryToken()
-                <input type="hidden" name="id" value="@Model.Id" />
-                <input type="hidden" name="klarifikasi" value="" />
-                <button type="submit" class="btn btn-gradient-red rounded-pill px-4 py-2 shadow-sm hover-scale">
-                    <i class="bi bi-x-circle"></i> Reject
-                </button>
-            </form>
-        }
-
-        @* STEP 5 (CBI) — Reassign laporan *@
-        @* @if (Model.StatusCode == "APPROVE_PERTAMINA" && hasRoleCBI && Model.feedback_type != "COMPLAINT")
-        {
-            <button class="btn btn-gradient-blue rounded-pill px-4 py-2 shadow-sm hover-scale"
-                    data-bs-toggle="modal" data-bs-target="#confirmModal">
-                <i class="bi bi-arrow-repeat"></i> Reassign Laporan Audit
-            </button>
-        } *@
-    </div>
+                <form asp-action="Reject" method="post" class="d-inline needs-klarifikasi">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="id" value="@Model.Id" />
+                    <input type="hidden" name="klarifikasi" value="" />
+                    <button type="submit" class="btn btn-gradient-red rounded-pill px-4 py-2 shadow-sm hover-scale">
+                        <i class="bi bi-x-circle"></i> Reject
+                    </button>
+                </form>
+            }
+        </div>
+    }
 
 
 </div>
@@ -616,7 +607,6 @@
         wrap.onclick = () => window.open(src, '_blank');
         wrap.innerHTML = `<div class="d-flex justify-content-center align-items-center h-100 w-100 bg-light text-dark fw-semibold text-center" style="font-size:.85rem;padding:.25rem;">${filename}</div>`;
         }
-
 
         host.appendChild(wrap);
         });

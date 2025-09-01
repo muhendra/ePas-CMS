@@ -269,19 +269,13 @@ namespace e_Pas_CMS.Controllers
                 NomorBanding = header.Tf.TicketNo,
                 CreatedDate = header.Tf.CreatedDate,
 
-                // Body global (jika kosong akan diisi dari poin pertama)
                 BodyText = null,
-
                 Points = new List<PointItem>(),
                 Attachments = new List<AttachmentItem>(),
 
-                // Aksi
                 CanApprove = string.Equals(header.Tf.Status, "IN_PROGRESS_SUBMIT", StringComparison.OrdinalIgnoreCase),
                 CanReject = string.Equals(header.Tf.Status, "IN_PROGRESS_SUBMIT", StringComparison.OrdinalIgnoreCase),
-
                 feedback_type = header.Tf.FeedbackType,
-
-                // Tambahan utk galeri FINAL
                 AuditId = header.Ta.id
             };
 
@@ -289,62 +283,63 @@ namespace e_Pas_CMS.Controllers
             await using var conn = new NpgsqlConnection(cs);
             await conn.OpenAsync();
 
-            // 1) Ambil poin + label + elemen yang dibanding (string_agg)
             var pointRows = await conn.QueryAsync<PointRow>(@"
-            SELECT 
-                p.id AS point_id,
-                p.description AS description,
-                COALESCE(e.number || '. ' || e.title, COALESCE(e.title, COALESCE(e.description, '-'))) AS element_label,
-                COALESCE(se.number || '. ' || se.title, COALESCE(se.title, COALESCE(se.description, '-'))) AS sub_element_label,
-                COALESCE(de.number || '. ' || de.title, COALESCE(de.title, '-')) AS detail_element_label,
-                COALESCE((
-                SELECT string_agg(me.number || ' ' || me.title, E'\n' ORDER BY me.number)
-                FROM trx_feedback_point_element pe
-                JOIN master_questioner_detail me 
-                  ON me.id = pe.master_questioner_detail_id
-                WHERE pe.trx_feedback_point_id = p.id
-            ), '') AS compared_elements
-            FROM trx_feedback_point p
-            LEFT JOIN master_questioner_detail e  ON e.id  = p.element_master_questioner_detail_id
-            LEFT JOIN master_questioner_detail se ON se.id = p.sub_element_master_questioner_detail_id
-            LEFT JOIN master_questioner_detail de ON de.id = p.detail_element_master_questioner_detail_id
-            WHERE p.trx_feedback_id = @fid
-            ORDER BY p.created_date ASC;", new { fid = id });
+    SELECT 
+        p.id AS point_id,
+        p.description AS description,
+        COALESCE(e.number || '. ' || e.title, COALESCE(e.title, COALESCE(e.description, '-'))) AS element_label,
+        COALESCE(se.number || '. ' || se.title, COALESCE(se.title, COALESCE(se.description, '-'))) AS sub_element_label,
+        COALESCE(de.number || '. ' || de.title, COALESCE(de.title, '-')) AS detail_element_label,
+        COALESCE((
+            SELECT string_agg(me.number || ' ' || me.title, E'\n' ORDER BY me.number)
+            FROM trx_feedback_point_element pe
+            JOIN master_questioner_detail me ON me.id = pe.master_questioner_detail_id
+            WHERE pe.trx_feedback_point_id = p.id
+        ), '') AS compared_elements
+    FROM trx_feedback_point p
+    LEFT JOIN master_questioner_detail e  ON e.id  = p.element_master_questioner_detail_id
+    LEFT JOIN master_questioner_detail se ON se.id = p.sub_element_master_questioner_detail_id
+    LEFT JOIN master_questioner_detail de ON de.id = p.detail_element_master_questioner_detail_id
+    WHERE p.trx_feedback_id = @fid
+    ORDER BY p.created_date ASC;", new { fid = id });
 
             var pointList = pointRows.ToList();
+            bool allApproved = true;
             int idx = 1;
 
             foreach (var pr in pointList)
             {
+                var pointId = pr.point_id;
+
+                pid = pr.point_id;
+
                 var pointVm = new PointItem
                 {
+                    PointId = pointId,
                     Element = pr.element_label,
                     SubElement = pr.sub_element_label,
                     DetailElement = pr.detail_element_label,
                     DetailDibantah = string.IsNullOrWhiteSpace(pr.compared_elements) ? "-" : pr.compared_elements,
                     Description = pr.description,
-                    Attachments = new List<AttachmentItem>()
+                    Attachments = new List<AttachmentItem>(),
+                    History = new List<PointApprovalHistory>()
                 };
 
                 if (idx == 1 && string.IsNullOrWhiteSpace(vm.BodyText))
                     vm.BodyText = pr.description;
 
-                // 2) Media per poin (untuk preview & unduh)
+                // 1. Get media
                 var medias = await conn.QueryAsync<MediaRow>(@"
             SELECT id, trx_feedback_point_id, media_type, media_path
             FROM trx_feedback_point_media
             WHERE trx_feedback_point_id = @pid
               AND media_path IS NOT NULL
               AND btrim(media_path) <> ''
-            ORDER BY created_date ASC;",
-                    new { pid = pr.point_id });
-
-                pid = pr.point_id;
+            ORDER BY created_date ASC;", new { pid = pointId });
 
                 int fileIdx = 1;
                 foreach (var m in medias)
                 {
-                    // Tentukan ekstensi/type
                     var extName = NormalizeType(m.media_type);
                     if (string.IsNullOrWhiteSpace(extName))
                     {
@@ -352,68 +347,199 @@ namespace e_Pas_CMS.Controllers
                         if (!string.IsNullOrWhiteSpace(ext))
                             extName = ext.Trim('.').ToLowerInvariant();
                     }
-                    if (string.IsNullOrWhiteSpace(extName))
-                        continue;
 
-                    // Nama file
-                    var fileName = Path.GetFileName(m.media_path);
-                    if (string.IsNullOrWhiteSpace(fileName))
-                        fileName = $"Dokumen Pendukung {fileIdx}.{extName}";
-
-                    // Skema baru: uploads/feedback/{trx_feedback_point_id},{media_id}/{filename}
+                    var fileName = Path.GetFileName(m.media_path) ?? $"Dokumen Pendukung {fileIdx}.{extName}";
                     var relativeNew = $"uploads/feedback/{m.trx_feedback_point_id},{m.id}/{fileName}";
-
-                    // Fallback: pakai path lama dari media_path jika ada
-                    var relativeOld = (m.media_path ?? string.Empty)
-                                        .TrimStart('/', '\\')
-                                        .Replace("\\", "/");
+                    var relativeOld = (m.media_path ?? string.Empty).TrimStart('/', '\\').Replace("\\", "/");
 
                     var physicalRoot = Path.Combine("/var/www/epas-asset", "wwwroot");
-                    string? chosenRelative = null;
+                    string? chosenRelative = FileExists(physicalRoot, relativeNew) ? relativeNew :
+                                             FileExists(physicalRoot, relativeOld) ? relativeOld : null;
 
-                    if (FileExists(physicalRoot, relativeNew))
-                        chosenRelative = relativeNew;
-                    else if (FileExists(physicalRoot, relativeOld))
-                        chosenRelative = relativeOld;
-
-                    // Jika dua2nya tidak ada, skip entry agar tidak menampilkan attachment “kosong”
-                    if (string.IsNullOrWhiteSpace(chosenRelative))
-                        continue;
-
-                    pointVm.Attachments.Add(new AttachmentItem
+                    if (!string.IsNullOrWhiteSpace(chosenRelative))
                     {
-                        Id = m.id,
-                        FileName = fileName,
-                        Url = "/" + chosenRelative,
-                        MediaType = extName,
-                        SizeReadable = null
-                    });
+                        pointVm.Attachments.Add(new AttachmentItem
+                        {
+                            Id = m.id,
+                            FileName = fileName,
+                            Url = "/" + chosenRelative,
+                            MediaType = extName,
+                            SizeReadable = null
+                        });
+                    }
 
-                    
                     fileIdx++;
                 }
+
+                // 2. Get approval history
+                var approvals = await conn.QueryAsync<(string status, string approved_by, DateTime approved_date, string feedback_status)>(
+    @"SELECT status, approved_by, approved_date, feedback_status 
+      FROM trx_feedback_point_approval 
+      WHERE trx_feedback_point_id = @pid 
+      ORDER BY approved_date ASC", new { pid = pointId });
+
+                pointVm.History = approvals.Select(a => new PointApprovalHistory
+                {
+                    Status = a.status,
+                    ApprovedBy = a.approved_by,
+                    ApprovedDate = a.approved_date,
+                    StatusCode = a.feedback_status
+                }).ToList();
+
+                // 3. Check if current point is approved
+                if (!approvals.Any(h => h.status == "APPROVED"))
+                    allApproved = false;
 
                 vm.Points.Add(pointVm);
                 idx++;
             }
 
-            // 3) Isi vm.Attachments (GLOBAL) mengikuti pola GetMediaNotesAsync (tabel trx_audit_media)
+            // Global media note (optional)
             var notes = await GetMediaNotesAsync(conn, pid);
             vm.Attachments = notes
                 .Where(n => !string.IsNullOrWhiteSpace(n.MediaPath))
                 .Select(n => new AttachmentItem
                 {
-                    Id = null, // tidak ada id media per baris di trx_audit_media untuk keperluan ini
+                    Id = null,
                     FileName = SafeGetFileName(n.MediaPath),
-                    Url = n.MediaPath, // sudah full URL dari GetMediaNotesAsync
+                    Url = n.MediaPath,
                     MediaType = NormalizeType(n.MediaType) ?? GetExtFromUrl(n.MediaPath),
                     SizeReadable = null
-                })
-                .ToList();
+                }).ToList();
 
-            // Serialize JSON untuk dikirim ke view
+            // Serialize for gallery
             ViewBag.AttachmentsJson = JsonConvert.SerializeObject(vm.Attachments);
+
+            // Flag ke View
+            ViewBag.AllPointsApproved = allApproved;
+
             return View(vm);
+        }
+
+        [HttpPost("Banding/ApprovePoint/{id}")]
+        public async Task<IActionResult> ApprovePoint(string id)
+        {
+            var username = User.Identity?.Name ?? "SYSTEM";
+            var cs = _context.Database.GetConnectionString();
+
+            await using var conn = new NpgsqlConnection(cs);
+            await conn.OpenAsync();
+
+            // Ambil status aktif dari trx_feedback
+            var status = await conn.ExecuteScalarAsync<string>(@"
+        SELECT tf.status 
+        FROM trx_feedback_point p
+        JOIN trx_feedback tf ON tf.id = p.trx_feedback_id
+        WHERE p.id = @id", new { id });
+
+            // Simpan approval
+            await conn.ExecuteAsync(@"
+        INSERT INTO trx_feedback_point_approval 
+        (id, trx_feedback_point_id, status, approved_by, approved_date, feedback_status)
+        VALUES (uuid_generate_v4(), @id, 'APPROVED', @user, NOW(), @feedback_status)",
+                new { id, user = username, feedback_status = status });
+
+            return RedirectToAction("Detail", new { id = await GetFeedbackIdByPointId(id) });
+        }
+
+        [HttpPost("Banding/RejectPoint/{id}")]
+        public async Task<IActionResult> RejectPoint(string id)
+        {
+            var username = User.Identity?.Name ?? "SYSTEM";
+            var cs = _context.Database.GetConnectionString();
+
+            await using var conn = new NpgsqlConnection(cs);
+            await conn.OpenAsync();
+
+            // Ambil status aktif dari trx_feedback
+            var status = await conn.ExecuteScalarAsync<string>(@"
+        SELECT tf.status 
+        FROM trx_feedback_point p
+        JOIN trx_feedback tf ON tf.id = p.trx_feedback_id
+        WHERE p.id = @id", new { id });
+
+            // Simpan rejection
+            await conn.ExecuteAsync(@"
+        INSERT INTO trx_feedback_point_approval 
+        (id, trx_feedback_point_id, status, approved_by, approved_date, feedback_status)
+        VALUES (uuid_generate_v4(), @id, 'REJECTED', @user, NOW(), @feedback_status)",
+                new { id, user = username, feedback_status = status });
+
+            return RedirectToAction("Detail", new { id = await GetFeedbackIdByPointId(id) });
+        }
+
+        [HttpPost("Banding/SubmitFinalApproval/{id}")]
+        public async Task<IActionResult> SubmitFinalApproval(string id)
+        {
+            var tf = await _context.TrxFeedbacks.FindAsync(id);
+            if (tf == null)
+                return NotFound();
+
+            var username = User.Identity?.Name ?? "SYSTEM";
+            var status = (tf.Status ?? "").Trim().ToUpperInvariant();
+
+            // Naikkan status sesuai current step
+            switch (status)
+            {
+                case "UNDER_REVIEW":
+                    tf.Status = "APPROVE_SBM";
+                    break;
+                case "APPROVE_SBM":
+                    tf.Status = "APPROVE_PPN";
+                    break;
+                case "APPROVE_PPN":
+                    tf.Status = "APPROVE_CBI";
+                    break;
+                case "APPROVE_CBI":
+                    tf.Status = "APPROVE_PERTAMINA";
+                    break;
+                default:
+                    tf.Status = "APPROVED"; // fallback jika sebelumnya status tidak dikenal
+                    break;
+            }
+
+            tf.UpdatedBy = username;
+            tf.UpdatedDate = DateTime.Now;
+            await _context.SaveChangesAsync();
+
+            TempData["Success"] = "Status berhasil diperbarui.";
+            return RedirectToAction("Index");
+        }
+
+        public async Task<bool> CheckAllPointsApprovedAsync(string feedbackId, string statusCode)
+        {
+            var cs = _context.Database.GetConnectionString();
+            await using var conn = new NpgsqlConnection(cs);
+            await conn.OpenAsync();
+
+            var query = @"
+        SELECT COUNT(*) FILTER (WHERE latest.status != 'APPROVED') AS not_approved
+        FROM trx_feedback_point p
+        LEFT JOIN LATERAL (
+            SELECT status
+            FROM trx_feedback_point_approval a
+            WHERE a.trx_feedback_point_id = p.id AND a.status_code = @statusCode
+            ORDER BY approved_date DESC
+            LIMIT 1
+        ) latest ON true
+        WHERE p.trx_feedback_id = @feedbackId";
+
+            var notApproved = await conn.ExecuteScalarAsync<int>(query, new { feedbackId, statusCode });
+            return notApproved == 0;
+        }
+
+
+        // Helper
+        private async Task<string> GetFeedbackIdByPointId(string pointId)
+        {
+            var cs = _context.Database.GetConnectionString();
+            await using var conn = new NpgsqlConnection(cs);
+            await conn.OpenAsync();
+
+            return await conn.ExecuteScalarAsync<string>(@"
+        SELECT trx_feedback_id 
+        FROM trx_feedback_point 
+        WHERE id = @id", new { id = pointId });
         }
 
         private async Task<List<MediaItem>> GetMediaNotesAsync(IDbConnection conn, string id)

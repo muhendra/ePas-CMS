@@ -57,7 +57,20 @@
         // Tambahan untuk Detail
         public string Description { get; set; }
         public List<AttachmentItem> Attachments { get; set; } = new();
+
+        public string PointId { get; set; } // ← wajib, untuk form approve/reject
+
+        public List<PointApprovalHistory> History { get; set; } = new(); // ← riwayat approval
     }
+
+    public class PointApprovalHistory
+    {
+        public string Status { get; set; }         // APPROVED / REJECTED
+        public string ApprovedBy { get; set; }     // nama user
+        public DateTime ApprovedDate { get; set; } // timestamp
+        public string StatusCode { get; set; }
+    }
+
 
     public class AttachmentItem
     {
