@@ -44,6 +44,8 @@ public partial class EpasDbContext : DbContext
 
     public virtual DbSet<TrxFeedbackPointMedium> TrxFeedbackPointMedia { get; set; }
 
+    public virtual DbSet<TrxFeedbackPointApproval> TrxFeedbackPointApprovals { get; set; }
+
     public virtual DbSet<TrxSurvey> TrxSurveys { get; set; }
 
     public virtual DbSet<TrxSurveyElement> TrxSurveyElements { get; set; }
@@ -83,6 +85,42 @@ public partial class EpasDbContext : DbContext
             entity.ToTable("app_user");
 
             entity.HasIndex(e => e.username, "ux_app_user_username").IsUnique();
+
+            modelBuilder.Entity<TrxFeedbackPointApproval>(entity =>
+            {
+                entity.HasKey(e => e.Id).HasName("trx_feedback_point_approval_pkey");
+
+                entity.ToTable("trx_feedback_point_approval");
+
+                entity.Property(e => e.Id)
+                    .HasMaxLength(50)
+                    .HasColumnName("id")
+                    .HasDefaultValueSql("uuid_generate_v4()");
+
+                entity.Property(e => e.TrxFeedbackPointId)
+                    .HasMaxLength(50)
+                    .HasColumnName("trx_feedback_point_id")
+                    .IsRequired();
+
+                entity.Property(e => e.Status)
+                    .HasMaxLength(100)
+                    .HasColumnName("status")
+                    .IsRequired();
+
+                entity.Property(e => e.Notes)
+                    .HasColumnName("notes")
+                    .HasColumnType("text");
+
+                entity.Property(e => e.ApprovedBy)
+                    .HasMaxLength(50)
+                    .HasColumnName("approved_by")
+                    .IsRequired();
+
+                entity.Property(e => e.ApprovedDate)
+                    .HasColumnName("approved_date")
+                    .HasColumnType("timestamp without time zone")
+                    .HasDefaultValueSql("CURRENT_TIMESTAMP");
+            });
 
             entity.Property(e => e.id)
                 .HasMaxLength(50)

@@ -16,11 +16,14 @@
     {
         case "APPROVED":
         case "APPROVE": statusClass = "bg-success"; break;
-        case "REJECTED": statusClass = "bg-danger"; break;
+        case "REJECTED":
+        case "REJECT_CBI":
+            statusClass = "bg-danger";
+            break;
         default: statusClass = "bg-warning"; break;
     }
 
-    var userIdString = Context.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+    var userIdString = Context.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
 
     bool hasApproveRoleSBM = false;
     bool hasApproveRolePPN = false;
@@ -43,16 +46,50 @@
         hasRolePertamina = roleSet.Contains("PERTAMINA");
     }
 
-    // ===== STRICT per-stage AllPointsApproved (tidak cascade) =====
+    // helper normalisasi string
+    Func<string, string> norm = s => (s ?? "").Trim().ToUpperInvariant();
+
+    // ===== STRICT per-stage AllPointsApproved (tidak cascade) + override REJECTED utk Pertamina =====
     bool AllPointsApprovedCurrentStage =
-        Model?.Points != null && Model.Points.Any() &&
-        Model.Points.All(p =>
-            p?.History != null && p.History.Any(h =>
-                (h.StatusCode ?? "").Trim().ToUpperInvariant() == statusNorm &&
-                ((h.Status ?? "").Trim().ToUpperInvariant() == "APPROVED"
-                 || (h.Status ?? "").Trim().ToUpperInvariant() == "APPROVE")
+        (norm(statusNorm) == "REJECT_CBI" && hasRolePertamina)
+        ||
+        (
+            Model?.Points != null && Model.Points.Any() &&
+            Model.Points.All(p =>
+                p?.History != null && p.History.Any(h =>
+                    norm(h.StatusCode) == norm(statusNorm) &&
+                    (norm(h.Status) == "APPROVED" || norm(h.Status) == "APPROVE")
+                )
             )
         );
+
+    // Pembungkus container aksi
+    var canShowActionsContainer =
+        AllPointsApprovedCurrentStage
+        || norm(statusNorm) == "APPROVE_PPN"
+        || norm(statusNorm) == "APPROVE_CBI"
+        || norm(statusNorm) == "APPROVED"
+        || (hasRolePertamina && norm(statusNorm) == "REJECT_CBI"); // safety ekstra
+
+    // Ambil history dari ViewBag (cast sesuai namespace entity kamu)
+    var approvalHistory = ViewBag.ApprovalHistory as IEnumerable<e_Pas_CMS.Models.TrxFeedbackPointApproval>;
+
+    // mapper "case when" -> label Indonesia untuk feedback_status
+    Func<string, string> stageText = s =>
+    {
+        var v = (s ?? "").Trim().ToUpperInvariant();
+        return v switch
+        {
+            "UNDER_REVIEW" => "Menunggu Persetujuan SBM",
+            "APPROVE_SBM" => "Menunggu Persetujuan PPN",
+            "APPROVE_PPN" => "Menunggu Persetujuan CBI",
+            "APPROVE_CBI" => "Menunggu Persetujuan Pertamina",
+            "APPROVED" => "Banding Disetujui",
+            "REJECTED" => "Ditolak",
+            "REJECT_CBI" => "Ditolak",
+            _ => s ?? "-"
+        };
+    };
 }
 
 <style>
@@ -111,10 +148,10 @@
         border: none;
     }
 
-        .btn-gradient-green:hover {
-            background: linear-gradient(135deg,#059669,#047857);
-            color: #fff;
-        }
+    .btn-gradient-green:hover {
+        background: linear-gradient(135deg,#059669,#047857);
+        color: #fff;
+    }
 
     .btn-gradient-red {
         background: linear-gradient(135deg,#ef4444,#dc2626);
@@ -122,10 +159,10 @@
         border: none;
     }
 
-        .btn-gradient-red:hover {
-            background: linear-gradient(135deg,#dc2626,#b91c1c);
-            color: #fff;
-        }
+    .btn-gradient-red:hover {
+        background: linear-gradient(135deg,#dc2626,#b91c1c);
+        color: #fff;
+    }
 
     .btn-gradient-blue {
         background: linear-gradient(135deg,#3b82f6,#2563eb);
@@ -133,19 +170,19 @@
         border: none;
     }
 
-        .btn-gradient-blue:hover {
-            background: linear-gradient(135deg,#2563eb,#1d4ed8);
-            color: #fff;
-        }
+    .btn-gradient-blue:hover {
+        background: linear-gradient(135deg,#2563eb,#1d4ed8);
+        color: #fff;
+    }
 
     .hover-scale {
         transition: transform .2s, box-shadow .2s;
     }
 
-        .hover-scale:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 6px 16px rgba(0,0,0,.15);
-        }
+    .hover-scale:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 16px rgba(0,0,0,.15);
+    }
 
     .thumb-grid {
         display: flex;
@@ -164,19 +201,19 @@
         cursor: pointer;
     }
 
-        .thumb img, .thumb video {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-        }
+    .thumb img, .thumb video {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
 
-        .thumb .play {
-            position: absolute;
-            top: 35%;
-            left: 35%;
-            color: #fff;
-            font-size: 2rem;
-        }
+    .thumb .play {
+        position: absolute;
+        top: 35%;
+        left: 35%;
+        color: #fff;
+        font-size: 2rem;
+    }
 
     .thumb-grid .text-muted {
         padding: .5rem 0;
@@ -257,6 +294,7 @@
         </div>
     </div>
 
+
     <!-- Daftar Poin -->
     @if (Model.Points != null && Model.Points.Any())
     {
@@ -301,8 +339,9 @@
                     @* Tombol Approve/Reject hanya muncul bila POIN ini BELUM approved di tahap SAAT INI *@
                     @if (!pointApprovedThisStage && (
                    (statusNorm == "UNDER_REVIEW" && hasApproveRoleSBM) ||
-                   (statusNorm == "APPROVE_SBM" && hasApproveRolePPN) ||
-                   (statusNorm == "APPROVE_PPN" && hasRoleCBI)))
+                   (statusNorm == "APPROVE_SBM" && hasApproveRolePPN)
+                   @* || (statusNorm == "APPROVE_PPN" && hasRoleCBI) *@
+                    ))
                     {
                         <div class="mt-3 d-flex gap-2">
                             <form asp-action="ApprovePoint" asp-route-id="@p.PointId" method="post">
@@ -355,11 +394,11 @@
         }
     }
 
-    @if (statusNorm == "APPROVE_CBI" && hasRolePertamina)
+    @if (statusNorm == "APPROVE_PPN" && hasRoleCBI)
     {
         <div class="card card-soft mb-3">
             <div class="card-body">
-                <div class="section-title">Klarifikasi (Diisi oleh User Approval)</div>
+                <div class="section-title">Klarifikasi (Diisi oleh User CBI)</div>
                 <p class="text-muted mb-2">
                     Masukkan ringkasan klarifikasi untuk <strong>keseluruhan</strong> komplain/banding ini.
                 </p>
@@ -372,7 +411,60 @@
         </div>
     }
 
-    @if (statusNorm == "APPROVED")
+    <!-- History Approval -->
+    <div class="card card-soft mb-3">
+        <div class="card-body">
+            <div class="section-title">History Approval</div>
+
+            @if (approvalHistory == null || !approvalHistory.Any())
+            {
+                <div class="text-muted">Belum ada riwayat approval.</div>
+            }
+            else
+            {
+                <div class="table-responsive">
+                    <table class="table table-sm align-middle mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th style="width: 180px;">Tanggal</th>
+                                <th style="width: 240px;">Stage</th>
+                                <th style="width: 130px;">Status</th>
+                                @* <th>Notes</th> *@
+                                <th style="width: 220px;">Approved By</th>
+                                @* <th style="width: 260px;">Point ID</th> *@
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var h in approvalHistory.OrderByDescending(x => x.ApprovedDate))
+                            {
+                                var st = ((h.Status ?? "").Trim().ToUpperInvariant());
+                                var badge = "secondary";
+                                if (st == "APPROVED" || st == "APPROVE") badge = "success";
+                                else if (st == "REJECTED") badge = "danger";
+
+                                // ambil feedback_status
+                                var fs = (h is dynamic) ? (string)h.feedback_status : h.feedback_status;
+
+                                <tr>
+                                    <td>@(h.ApprovedDate.ToString("dd/MM/yyyy HH:mm") ?? "-")</td>
+                                    <td>
+                                        <span class="fw-semibold">@stageText(fs)</span>
+                                    </td>
+                                    <td><span class="badge bg-@badge">@h.Status</span></td>
+                                    @* <td>@(string.IsNullOrWhiteSpace(h.Notes) ? "-" : h.Notes)</td> *@
+                                    <td>@(string.IsNullOrWhiteSpace(h.ApprovedBy) ? "-" : h.ApprovedBy)</td>
+                                    @* <td class="text-monospace">@h.TrxFeedbackPointId</td> *@
+                                </tr>
+                            }
+                        </tbody>
+
+                    </table>
+                </div>
+            }
+        </div>
+    </div>
+
+    @if (statusNorm == "APPROVE_CBI" || statusNorm == "REJECT_CBI")
     {
         <div class="card card-soft mb-3">
             <div class="card-body">
@@ -385,7 +477,7 @@
     }
 
     <!-- Tombol aksi -->
-    @if (AllPointsApprovedCurrentStage || statusNorm == "APPROVE_CBI" || statusNorm == "APPROVED")
+    @if (canShowActionsContainer)
     {
         <div class="d-flex flex-wrap gap-2 align-items-center mb-4">
             <a asp-controller="Banding" asp-action="Index"
@@ -426,14 +518,26 @@
                     @Html.AntiForgeryToken()
                     <input type="hidden" name="id" value="@Model.Id" />
                     <input type="hidden" name="klarifikasi" value="" />
-                    <button type="submit" class="btn btn-gradient-green rounded-pill px-4 py-2 shadow-sm hover-scale me-2" @(AllPointsApprovedCurrentStage ? "" : "disabled")>
+                    <button type="submit"
+                            class="btn btn-gradient-green rounded-pill px-4 py-2 shadow-sm hover-scale me-2"
+                    @(statusNorm == "APPROVE_PPN" ? "" : (AllPointsApprovedCurrentStage ? "" : "disabled"))>
                         <i class="bi bi-check-circle"></i> Submit
+                    </button>
+                </form>
+
+                <form asp-action="Reject" method="post" class="d-inline needs-klarifikasi">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="id" value="@Model.Id" />
+                    <input type="hidden" name="klarifikasi" value="" />
+                    <button type="submit" class="btn btn-gradient-red rounded-pill px-4 py-2 shadow-sm hover-scale">
+                        <i class="bi bi-x-circle"></i> Reject
                     </button>
                 </form>
             }
 
-            @* STEP 4 (PERTAMINA) *@
-            @if (statusNorm == "APPROVE_CBI" && hasRolePertamina)
+
+            @* STEP 4 (PERTAMINA) — tampil saat APPROVE_CBI **atau** REJECTED *@
+            @if ((statusNorm == "APPROVE_CBI" || statusNorm == "REJECT_CBI") && hasRolePertamina)
             {
                 <form asp-action="Approve" method="post" class="d-inline needs-klarifikasi">
                     @Html.AntiForgeryToken()

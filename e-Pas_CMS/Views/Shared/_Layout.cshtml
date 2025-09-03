@@ -259,6 +259,30 @@
 
             <ul class="nav flex-column">
 
+                @* --- Dashboard Menu --- *@
+                @if (userMenuFunctions.Contains("DASH"))
+                {
+                    <li class="nav-item menu-group">
+                        <a class="nav-link menu-trigger" data-target="#menu-dashboard" role="button" aria-expanded="false" aria-controls="menu-dashboard">
+                            <span class="d-flex align-items-center gap-2">
+                                <i class="bi bi-speedometer2"></i>
+                                <strong>Dashboard</strong>
+                            </span>
+                            <i class="bi bi-caret-down-fill chev"></i>
+                        </a>
+
+                        <div class="collapse submenu-panel" id="menu-dashboard">
+                            <ul class="nav flex-column mt-1">
+                                <li class="nav-item">
+                                    <a class="nav-link @(IsActive("Dashboard","Index") ? "active" : "")" asp-controller="Dashboard" asp-action="Index">
+                                        <span class="dot"></span> SPBU
+                                    </a>
+                                </li>
+                            </ul>
+                        </div>
+                    </li>
+                }
+
                 @* --- Audit Menu --- *@
                 @if (userMenuFunctions.Contains("ARA") || userMenuFunctions.Contains("ARP"))
                 {
@@ -359,30 +383,6 @@
                                         </a>
                                     </li>
                                 }
-                            </ul>
-                        </div>
-                    </li>
-                }
-
-                @* --- Dashboard Menu --- *@
-                @if (userMenuFunctions.Contains("DASH"))
-                {
-                    <li class="nav-item menu-group">
-                        <a class="nav-link menu-trigger" data-target="#menu-dashboard" role="button" aria-expanded="false" aria-controls="menu-dashboard">
-                            <span class="d-flex align-items-center gap-2">
-                                <i class="bi bi-speedometer2"></i>
-                                <strong>Dashboard</strong>
-                            </span>
-                            <i class="bi bi-caret-down-fill chev"></i>
-                        </a>
-
-                        <div class="collapse submenu-panel" id="menu-dashboard">
-                            <ul class="nav flex-column mt-1">
-                                <li class="nav-item">
-                                    <a class="nav-link @(IsActive("Dashboard","Index") ? "active" : "")" asp-controller="Dashboard" asp-action="Index">
-                                        <span class="dot"></span> SPBU
-                                    </a>
-                                </li>
                             </ul>
                         </div>
                     </li>

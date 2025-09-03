@@ -6,6 +6,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Dapper;
 using e_Pas_CMS.Data;
+using e_Pas_CMS.Models;
 using e_Pas_CMS.ViewModels;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -48,6 +49,7 @@ namespace e_Pas_CMS.Controllers
             ("APPROVE_CBI",  "Menunggu Persetujuan Pertamina"),
             ("APPROVED",     "Banding Disetujui"),
             ("REJECTED",     "Ditolak"),
+            ("REJECT_CBI",     "Ditolak"),
         };
 
             ViewBag.StatusOptions = statusOptions;
@@ -191,6 +193,7 @@ namespace e_Pas_CMS.Controllers
                     StatusText = (it.Fb.Status ?? "").ToUpperInvariant() switch
                     {
                         "REJECTED" => "Ditolak",
+                        "REJECT_CBI" => "Ditolak",
                         "UNDER_REVIEW" => "Menunggu Persetujuan SBM",
                         "APPROVE_SBM" => "Menunggu Persetujuan PPN",
                         "APPROVE_PPN" => "Menunggu Persetujuan CBI",
@@ -285,24 +288,24 @@ namespace e_Pas_CMS.Controllers
             await conn.OpenAsync();
 
             var pointRows = await conn.QueryAsync<PointRow>(@"
-    SELECT 
-        p.id AS point_id,
-        p.description AS description,
-        COALESCE(e.number || '. ' || e.title, COALESCE(e.title, COALESCE(e.description, '-'))) AS element_label,
-        COALESCE(se.number || '. ' || se.title, COALESCE(se.title, COALESCE(se.description, '-'))) AS sub_element_label,
-        COALESCE(de.number || '. ' || de.title, COALESCE(de.title, '-')) AS detail_element_label,
-        COALESCE((
-            SELECT string_agg(me.number || ' ' || me.title, E'\n' ORDER BY me.number)
-            FROM trx_feedback_point_element pe
-            JOIN master_questioner_detail me ON me.id = pe.master_questioner_detail_id
-            WHERE pe.trx_feedback_point_id = p.id
-        ), '') AS compared_elements
-    FROM trx_feedback_point p
-    LEFT JOIN master_questioner_detail e  ON e.id  = p.element_master_questioner_detail_id
-    LEFT JOIN master_questioner_detail se ON se.id = p.sub_element_master_questioner_detail_id
-    LEFT JOIN master_questioner_detail de ON de.id = p.detail_element_master_questioner_detail_id
-    WHERE p.trx_feedback_id = @fid
-    ORDER BY p.created_date ASC;", new { fid = id });
+            SELECT 
+                p.id AS point_id,
+                p.description AS description,
+                COALESCE(e.number || '. ' || e.title, COALESCE(e.title, COALESCE(e.description, '-'))) AS element_label,
+                COALESCE(se.number || '. ' || se.title, COALESCE(se.title, COALESCE(se.description, '-'))) AS sub_element_label,
+                COALESCE(de.number || '. ' || de.title, COALESCE(de.title, '-')) AS detail_element_label,
+                COALESCE((
+                    SELECT string_agg(me.number || ' ' || me.title, E'\n' ORDER BY me.number)
+                    FROM trx_feedback_point_element pe
+                    JOIN master_questioner_detail me ON me.id = pe.master_questioner_detail_id
+                    WHERE pe.trx_feedback_point_id = p.id
+                ), '') AS compared_elements
+            FROM trx_feedback_point p
+            LEFT JOIN master_questioner_detail e  ON e.id  = p.element_master_questioner_detail_id
+            LEFT JOIN master_questioner_detail se ON se.id = p.sub_element_master_questioner_detail_id
+            LEFT JOIN master_questioner_detail de ON de.id = p.detail_element_master_questioner_detail_id
+            WHERE p.trx_feedback_id = @fid
+            ORDER BY p.created_date ASC;", new { fid = id });
 
             var pointList = pointRows.ToList();
             bool allApproved = true;
@@ -374,10 +377,10 @@ namespace e_Pas_CMS.Controllers
 
                 // 2. Get approval history
                 var approvals = await conn.QueryAsync<(string status, string approved_by, DateTime approved_date, string feedback_status)>(
-    @"SELECT status, approved_by, approved_date, feedback_status 
-      FROM trx_feedback_point_approval 
-      WHERE trx_feedback_point_id = @pid 
-      ORDER BY approved_date ASC", new { pid = pointId });
+                @"SELECT status, approved_by, approved_date, feedback_status 
+                  FROM trx_feedback_point_approval 
+                  WHERE trx_feedback_point_id = @pid 
+                  ORDER BY approved_date ASC", new { pid = pointId });
 
                 pointVm.History = approvals.Select(a => new PointApprovalHistory
                 {
@@ -413,6 +416,18 @@ namespace e_Pas_CMS.Controllers
 
             // Flag ke View
             ViewBag.AllPointsApproved = allApproved;
+
+            var history = await _context.TrxFeedbackPointApprovals
+            .FromSqlInterpolated($@"
+                select tfpa.* from trx_feedback_point_approval tfpa 
+                join trx_feedback_point tfp on tfp.id = tfpa.trx_feedback_point_id 
+                join trx_feedback tf on tfp.trx_feedback_id = tf.id
+                where tf.id = {id}
+            ")
+            .OrderByDescending(x => x.ApprovedDate)
+            .ToListAsync();
+
+            ViewBag.ApprovalHistory = history;
 
             return View(vm);
         }
@@ -452,26 +467,44 @@ namespace e_Pas_CMS.Controllers
             await using var conn = new NpgsqlConnection(cs);
             await conn.OpenAsync();
 
-            // Ambil status aktif dari trx_feedback
-            var status = await conn.ExecuteScalarAsync<string>(@"
-        SELECT tf.status 
-        FROM trx_feedback_point p
-        JOIN trx_feedback tf ON tf.id = p.trx_feedback_id
-        WHERE p.id = @id", new { id });
+            // Ambil id feedback + status aktif dari trx_feedback
+            var feedback = await conn.QueryFirstOrDefaultAsync<(string FeedbackId, string Status)>(@"
+            SELECT tf.id AS FeedbackId, tf.status 
+            FROM trx_feedback_point p
+            JOIN trx_feedback tf ON tf.id = p.trx_feedback_id
+            WHERE p.id = @id", new { id });
 
-            // Simpan rejection
+            if (feedback.FeedbackId == null)
+                return NotFound();
+
+            var now = DateTime.Now;
+
+            // Tentukan status reject header
+            var rejectStatus = feedback.Status == "APPROVE_PPN" ? "REJECT_CBI" : "REJECTED";
+
+            // Simpan rejection point
             await conn.ExecuteAsync(@"
-        INSERT INTO trx_feedback_point_approval 
-        (id, trx_feedback_point_id, status, approved_by, approved_date, feedback_status)
-        VALUES (uuid_generate_v4(), @id, 'REJECTED', @user, NOW(), @feedback_status)",
-                new { id, user = username, feedback_status = status });
+            INSERT INTO trx_feedback_point_approval 
+            (id, trx_feedback_point_id, status, approved_by, approved_date, feedback_status)
+            VALUES (uuid_generate_v4(), @id, @status, @user, @now, @feedback_status)",
+            new { id, status = rejectStatus, user = username, now, feedback_status = feedback.Status });
+            
+            // Update status header trx_feedback
+            await conn.ExecuteAsync(@"
+            UPDATE trx_feedback 
+            SET status = @status, 
+                updated_by = @user,
+                updated_date = @now
+            WHERE id = @fid",
+                new { fid = feedback.FeedbackId, status = rejectStatus, user = username, now });
 
-            return RedirectToAction("Detail", new { id = await GetFeedbackIdByPointId(id) });
+            return RedirectToAction("Detail", new { id = feedback.FeedbackId });
         }
+
 
         [HttpPost("Banding/SubmitFinalApproval/{id}")]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> SubmitFinalApproval(string id, [FromForm] string klarifikasi = null)
+        public async Task<IActionResult> SubmitFinalApproval(string id)
         {
             var tf = await _context.TrxFeedbacks.FindAsync(id);
             if (tf == null)
@@ -479,6 +512,46 @@ namespace e_Pas_CMS.Controllers
 
             var username = User.Identity?.Name ?? "SYSTEM";
             var status = (tf.Status ?? "").Trim().ToUpperInvariant();
+
+            // Hanya ketika naik dari APPROVE_PPN atau APPROVE_CBI → insert ke trx_feedback_point_approval
+            if (tf.Status == "APPROVE_PPN" || tf.Status == "APPROVE_CBI")
+            {
+                username = tf.ApprovalBy;
+                var now = DateTime.Now;
+
+                var pointIdFromApproval = await (
+                    from tfpa in _context.TrxFeedbackPointApprovals
+                    join tfp in _context.TrxFeedbackPoints on tfpa.TrxFeedbackPointId equals tfp.Id
+                    where tfp.TrxFeedbackId == id
+                    select tfpa.TrxFeedbackPointId
+                ).FirstOrDefaultAsync();
+
+                // Fallback: kalau belum ada satupun approval terdahulu, ambil 1 point dari feedback ini
+                if (string.IsNullOrEmpty(pointIdFromApproval))
+                {
+                    pointIdFromApproval = await _context.TrxFeedbackPoints
+                        .Where(p => p.TrxFeedbackId == id)
+                        .Select(p => p.Id)
+                        .FirstOrDefaultAsync();
+                }
+
+                // Jika tetap tidak ada point, lewati insert agar tidak error (opsional: bisa kamu buat NotFound/BadRequest)
+                if (!string.IsNullOrEmpty(pointIdFromApproval))
+                {
+                    var approval = new TrxFeedbackPointApproval
+                    {
+                        Id = Guid.NewGuid().ToString(),
+                        TrxFeedbackPointId = pointIdFromApproval,
+                        Status = "APPROVED",
+                        Notes = "",
+                        ApprovedBy = username,
+                        ApprovedDate = now,
+                        feedback_status = tf.Status
+                    };
+
+                    _context.TrxFeedbackPointApprovals.Add(approval);
+                }
+            }
 
             // Naikkan status sesuai current step
             switch (status)
@@ -494,10 +567,6 @@ namespace e_Pas_CMS.Controllers
                     break;
                 case "APPROVE_CBI":
                     tf.Status = "APPROVED";
-                    // simpan klarifikasi dari textarea saat step Pertamina
-                    var text = (klarifikasi ?? "").Trim();
-                    if (!string.IsNullOrEmpty(text))
-                        tf.Klarifikasi = text;   // pastikan kolom/property ini ada pada TrxFeedbacks
                     break;
                 default:
                     tf.Status = "APPROVED";
@@ -636,6 +705,7 @@ namespace e_Pas_CMS.Controllers
             return s switch
             {
                 "REJECTED" => "Ditolak",
+                "REJECT_CBI" => "Ditolak",
                 "UNDER_REVIEW" => "Menunggu Persetujuan SBM",
                 "APPROVE_SBM" => "Menunggu Persetujuan PPN",
                 "APPROVE_PPN" => "Menunggu Persetujuan CBI",
@@ -645,10 +715,33 @@ namespace e_Pas_CMS.Controllers
             };
         }
 
+        // ===== Helper: ambil role user (SBM/PPN/CBI/PERTAMINA) =====
+        private async Task<HashSet<string>> GetUserRoleSetAsync(string userId)
+        {
+            var wanted = new[] { "SBM", "PPN", "CBI", "PERTAMINA" };
+            var set = new HashSet<string>(
+                await (from ur in _context.app_user_roles
+                       join r in _context.app_roles on ur.app_role_id equals r.id
+                       where ur.app_user_id == userId && wanted.Contains(r.name.ToUpper())
+                       select r.name.ToUpper()).ToListAsync()
+            );
+            return set;
+        }
+
+        // ===== Helper: cek otorisasi sesuai tahap/status =====
+        private static bool IsAuthorizedForCurrentStage(string currentStatus, HashSet<string> roleSet)
+        {
+            var s = (currentStatus ?? "").Trim().ToUpperInvariant();
+            return (s == "UNDER_REVIEW" && roleSet.Contains("SBM"))
+                || (s == "APPROVE_SBM" && roleSet.Contains("PPN"))
+                || (s == "APPROVE_PPN" && roleSet.Contains("CBI"))
+                || (s == "APPROVE_CBI" && roleSet.Contains("PERTAMINA"));
+        }
+
         // POST: /Complain/Approve
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Approve(string id)
+        public async Task<IActionResult> Approve(string id, [FromForm] string klarifikasi = null)
         {
             if (string.IsNullOrWhiteSpace(id))
                 return NotFound();
@@ -656,6 +749,46 @@ namespace e_Pas_CMS.Controllers
             var entity = await _context.TrxFeedbacks.FirstOrDefaultAsync(x => x.Id == id);
             if (entity == null)
                 return NotFound();
+
+            // Hanya ketika naik dari APPROVE_PPN atau APPROVE_CBI → insert ke trx_feedback_point_approval
+            if (entity.Status == "APPROVE_PPN" || entity.Status == "APPROVE_CBI")
+            {
+                var username = entity.ApprovalBy;
+                var now = DateTime.Now;
+
+                var pointIdFromApproval = await (
+                    from tfpa in _context.TrxFeedbackPointApprovals
+                    join tfp in _context.TrxFeedbackPoints on tfpa.TrxFeedbackPointId equals tfp.Id
+                    where tfp.TrxFeedbackId == id
+                    select tfpa.TrxFeedbackPointId
+                ).FirstOrDefaultAsync();
+
+                // Fallback: kalau belum ada satupun approval terdahulu, ambil 1 point dari feedback ini
+                if (string.IsNullOrEmpty(pointIdFromApproval))
+                {
+                    pointIdFromApproval = await _context.TrxFeedbackPoints
+                        .Where(p => p.TrxFeedbackId == id)
+                        .Select(p => p.Id)
+                        .FirstOrDefaultAsync();
+                }
+
+                // Jika tetap tidak ada point, lewati insert agar tidak error (opsional: bisa kamu buat NotFound/BadRequest)
+                if (!string.IsNullOrEmpty(pointIdFromApproval))
+                {
+                    var approval = new TrxFeedbackPointApproval
+                    {
+                        Id = Guid.NewGuid().ToString(),
+                        TrxFeedbackPointId = pointIdFromApproval,
+                        Status = "APPROVED",
+                        Notes = "",
+                        ApprovedBy = username,
+                        ApprovedDate = now,
+                        feedback_status = entity.Status
+                    };
+
+                    _context.TrxFeedbackPointApprovals.Add(approval);
+                }
+            }
 
             // Tentukan status baru berdasarkan status saat ini
             if (entity.Status == "UNDER_REVIEW")
@@ -683,6 +816,7 @@ namespace e_Pas_CMS.Controllers
             entity.ApprovalDate = DateTime.Now;
             entity.UpdatedBy = entity.ApprovalBy;
             entity.UpdatedDate = DateTime.Now;
+            entity.Klarifikasi = klarifikasi;
 
             await _context.SaveChangesAsync();
 
@@ -690,9 +824,10 @@ namespace e_Pas_CMS.Controllers
             return RedirectToAction(nameof(Detail), new { id });
         }
 
-
-        [HttpGet]
-        public async Task<IActionResult> Reject(string id, string reason = "")
+        // POST: /Complain/Reject
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> Reject(string id, string reason = "", [FromForm] string klarifikasi = null)
         {
             if (string.IsNullOrWhiteSpace(id))
                 return NotFound();
@@ -700,11 +835,53 @@ namespace e_Pas_CMS.Controllers
             var entity = await _context.TrxFeedbacks.FirstOrDefaultAsync(x => x.Id == id);
             if (entity == null) return NotFound();
 
-            entity.Status = "REJECTED";
+            // Hanya ketika naik dari APPROVE_PPN atau APPROVE_CBI → insert ke trx_feedback_point_approval
+            if (entity.Status == "APPROVE_PPN" || entity.Status == "APPROVE_CBI")
+            {
+                var username = entity.ApprovalBy;
+                var now = DateTime.Now;
+
+                var pointIdFromApproval = await (
+                    from tfpa in _context.TrxFeedbackPointApprovals
+                    join tfp in _context.TrxFeedbackPoints on tfpa.TrxFeedbackPointId equals tfp.Id
+                    where tfp.TrxFeedbackId == id
+                    select tfpa.TrxFeedbackPointId
+                ).FirstOrDefaultAsync();
+
+                // Fallback: kalau belum ada satupun approval terdahulu, ambil 1 point dari feedback ini
+                if (string.IsNullOrEmpty(pointIdFromApproval))
+                {
+                    pointIdFromApproval = await _context.TrxFeedbackPoints
+                        .Where(p => p.TrxFeedbackId == id)
+                        .Select(p => p.Id)
+                        .FirstOrDefaultAsync();
+                }
+
+                // Jika tetap tidak ada point, lewati insert agar tidak error (opsional: bisa kamu buat NotFound/BadRequest)
+                if (!string.IsNullOrEmpty(pointIdFromApproval))
+                {
+                    var approval = new TrxFeedbackPointApproval
+                    {
+                        Id = Guid.NewGuid().ToString(),
+                        TrxFeedbackPointId = pointIdFromApproval,
+                        Status = "REJECTED",
+                        Notes = "",
+                        ApprovedBy = username,
+                        ApprovedDate = now,
+                        feedback_status = entity.Status
+                    };
+
+                    _context.TrxFeedbackPointApprovals.Add(approval);
+                }
+            }
+
+            var rejectStatus = entity.Status == "APPROVE_PPN" ? "REJECT_CBI" : "REJECTED";
+            entity.Status = rejectStatus;
             entity.ApprovalBy = User?.Identity?.Name ?? "system";
             entity.ApprovalDate = DateTime.Now;
             entity.UpdatedBy = entity.ApprovalBy;
             entity.UpdatedDate = DateTime.Now;
+            entity.Klarifikasi = klarifikasi;
 
             await _context.SaveChangesAsync();
             TempData["AlertSuccess"] = "Pengajuan telah ditolak.";

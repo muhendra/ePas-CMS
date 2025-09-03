@@ -8,6 +8,7 @@
         public string? Notes { get; set; }
         public string ApprovedBy { get; set; }
         public DateTime ApprovedDate { get; set; } = DateTime.Now;
+        public string feedback_status { get; set; }
     }
 
 }

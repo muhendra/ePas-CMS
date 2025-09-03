@@ -1130,12 +1130,13 @@ AND mqd.type = 'QUESTION'";
 
             var updateSql = @"
             UPDATE spbu
-            SET audit_next = @auditnext
+            SET audit_next = @auditnext, ""level"" = @level
             WHERE spbu_no = @spbuNo";
 
             await conn.ExecuteAsync(updateSql, new
             {
                 auditnext = model.AuditNext,
+                level = levelspbu,
                 spbuNo = model.SpbuNo
             });
 

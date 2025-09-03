@@ -609,14 +609,13 @@ namespace e_Pas_CMS.Controllers
 
 
                 // === Update status with compliance logic
-                string goodStatus = (finalScore >= 75 && !hasGoodPenalty)
+                string goodStatus = (finalScore >= 75 && !hasGoodPenalty && !failGood)
                     ? "CERTIFIED"
                     : "NOT CERTIFIED";
 
                 string excellentStatus = (finalScore >= 80 && !hasExcellentPenalty)
                     ? "CERTIFIED"
                     : "NOT CERTIFIED";
-
 
                 if (auditFlow != null)
                 {
@@ -681,30 +680,30 @@ namespace e_Pas_CMS.Controllers
                 // ========== Tulis baris CSV ==========
                 csv.AppendLine(string.Join(",", new[]
                 {
-            $"\"{submitDate:yyyy-MM-dd}\"",
-            $"\"{auditDate:yyyy-MM-dd}\"",
-            $"\"{a.spbu.spbu_no}\"",
-            $"\"{a.spbu.region}\"",
-            $"\"{a.spbu.year ?? DateTime.Now.Year}\"",
-            $"\"{a.spbu.address}\"",
-            $"\"{a.spbu.city_name}\"",
-            $"\"{a.spbu.owner_type}\"",
-            $"\"{a.spbu.sbm}\"",
-            $"\"{a.audit_level}\"",
-            $"\"{auditNext}\"",
-            $"\"{goodStatus}\"",
-            $"\"{totalScore:0.##}\"",
-            $"\"{sss}\"",
-            $"\"{eqnq}\"",
-            $"\"{rfs}\"",
-            $"\"{a.spbu.wtms}\"",
-            $"\"{a.spbu.qq}\"",
-            $"\"{a.spbu.wmef}\"",
-            $"\"{a.spbu.format_fisik}\"",
-            $"\"{a.spbu.cpo}\"",
-            $"\"{levelspbu}\"",
-            $"\"{penaltyGoodResult}\"",
-        }.Concat(checklistValues)));
+                    $"\"{submitDate:yyyy-MM-dd}\"",
+                    $"\"{auditDate:yyyy-MM-dd}\"",
+                    $"\"{a.spbu.spbu_no}\"",
+                    $"\"{a.spbu.region}\"",
+                    $"\"{a.spbu.year ?? DateTime.Now.Year}\"",
+                    $"\"{a.spbu.address}\"",
+                    $"\"{a.spbu.city_name}\"",
+                    $"\"{a.spbu.owner_type}\"",
+                    $"\"{a.spbu.sbm}\"",
+                    $"\"{a.audit_level}\"",
+                    $"\"{auditNext}\"",
+                    $"\"{goodStatus}\"",
+                    $"\"{totalScore:0.##}\"",
+                    $"\"{sss}\"",
+                    $"\"{eqnq}\"",
+                    $"\"{rfs}\"",
+                    $"\"{a.spbu.wtms}\"",
+                    $"\"{a.spbu.qq}\"",
+                    $"\"{a.spbu.wmef}\"",
+                    $"\"{a.spbu.format_fisik}\"",
+                    $"\"{a.spbu.cpo}\"",
+                    $"\"{levelspbu}\"",
+                    $"\"{penaltyGoodResult}\"",
+                }.Concat(checklistValues)));
             }
 
             var fileName = $"Audit_Summary_{DateTime.Now:yyyyMMddHHmmss}.csv";
@@ -723,21 +722,21 @@ namespace e_Pas_CMS.Controllers
             foreach (var a in audits)
             {
                 var sql = @"
-        SELECT 
-            mqd.weight, 
-            tac.score_input, 
-            tac.score_x, 
-            mqd.is_relaksasi
-        FROM master_questioner_detail mqd
-        LEFT JOIN trx_audit_checklist tac 
-            ON tac.master_questioner_detail_id = mqd.id 
-            AND tac.trx_audit_id = @id
-        WHERE mqd.master_questioner_id = (
-            SELECT master_questioner_checklist_id 
-            FROM trx_audit 
-            WHERE id = @id
-        )
-        AND mqd.type = 'QUESTION'";
+                    SELECT 
+                        mqd.weight, 
+                        tac.score_input, 
+                        tac.score_x, 
+                        mqd.is_relaksasi
+                    FROM master_questioner_detail mqd
+                    LEFT JOIN trx_audit_checklist tac 
+                        ON tac.master_questioner_detail_id = mqd.id 
+                        AND tac.trx_audit_id = @id
+                    WHERE mqd.master_questioner_id = (
+                        SELECT master_questioner_checklist_id 
+                        FROM trx_audit 
+                        WHERE id = @id
+                    )
+                    AND mqd.type = 'QUESTION'";
 
                 var checklist = (await conn.QueryAsync<(decimal? weight, string score_input, decimal? score_x, bool? is_relaksasi)>(sql, new { id = a.id })).ToList();
 

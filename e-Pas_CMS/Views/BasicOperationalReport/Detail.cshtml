@@ -215,7 +215,7 @@
                     // Nilai minimum dinamis berdasarkan index
                     decimal minValue = i switch
                     {
-                        0 => 85.00m,
+                        0 => 80.00m,
                         1 => 85.00m,
                         2 => 85.00m,
                         3 => 20.00m,
@@ -652,7 +652,7 @@
         const failedElements = [];
         const elements = ['SSS', 'EQnQ', 'RVE'];
         const scores = [sss, eqnq, rfs];
-        const minScores = [85, 85, 85]; // mode: Basic Operational
+        const minScores = [80, 85, 85]; // mode: Basic Operational
 
         for (let i = 0; i < scores.length; i++) {
             if (scores[i] < minScores[i]) {
