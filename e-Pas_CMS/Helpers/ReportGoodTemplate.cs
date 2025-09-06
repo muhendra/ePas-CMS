@@ -7,6 +7,7 @@ using System.Linq;
 using SkiaSharp;
 using QuestPDF.Drawing;   // Wajib agar ImageData dikenali
 using QuestPDF.Helpers;   // Untuk ImageScaling
+using System.Text.RegularExpressions;
 
 public class ReportGoodTemplate : IDocument
 {
@@ -15,6 +16,27 @@ public class ReportGoodTemplate : IDocument
     public ReportGoodTemplate(DetailReportViewModel model)
     {
         _model = model;
+    }
+
+    private static (string CleanText, bool IsPenalty) ProcessPenaltyForPdfGood(string? raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw))
+            return ("-", false);
+
+        // pola ketat: strip, spasi, "penalty", spasi, "good"
+        var rxGood = new Regex(@"(^|\s)-\s+penalty\s+good(\s|$)", RegexOptions.IgnoreCase);
+
+        bool hit = rxGood.IsMatch(raw);
+
+        // hanya HAPUS yang "penalty good" (biarkan "penalty excellent" tetap tampil & tidak memicu merah)
+        var cleaned = rxGood.Replace(raw, " ");
+
+        // rapikan baris & spasi
+        cleaned = Regex.Replace(cleaned, @"(\r?\n\s*){2,}", "\n").Trim();
+        if (string.IsNullOrWhiteSpace(cleaned))
+            cleaned = "-";
+
+        return (cleaned, hit);
     }
 
     public DocumentMetadata GetMetadata() => DocumentMetadata.Default;
@@ -235,10 +257,27 @@ public class ReportGoodTemplate : IDocument
 
             // Komentar Auditor
             col.Item().PaddingTop(20).Text("KOMENTAR AUDITOR").Bold().FontSize(12);
-            void KomentarItem(string label, string value)
+            void KomentarItem(string label, string? value)
             {
+                var (clean, isPenalty) = ProcessPenaltyForPdfGood(value);
+
                 col.Item().Text(label).Bold().FontSize(10);
-                col.Item().PaddingBottom(10).Text(value ?? "-").FontSize(9);
+
+                col.Item().PaddingBottom(10).Element(block =>
+                {
+                    var box = block.Container();
+
+                    if (isPenalty)
+                    {
+                        // sama seperti web: merah + teks putih
+                        box = box.Background("#dc3545").Padding(6);
+                        box.Text(clean).FontSize(9).FontColor(Colors.White);
+                    }
+                    else
+                    {
+                        box.Text(clean).FontSize(9);
+                    }
+                });
             }
             KomentarItem("Staf Terlatih dan Termotivasi", _model.KomentarStaf);
             KomentarItem("Jaminan Kualitas dan Kuantitas", _model.KomentarQuality);

@@ -7,6 +7,7 @@ using System.Linq;
 using SkiaSharp;
 using QuestPDF.Drawing;   // Wajib agar ImageData dikenali
 using QuestPDF.Helpers;   // Untuk ImageScaling
+using System.Text.RegularExpressions;
 
 public class ReportExcellentTemplate : IDocument
 {
@@ -18,6 +19,27 @@ public class ReportExcellentTemplate : IDocument
     }
 
     public DocumentMetadata GetMetadata() => DocumentMetadata.Default;
+
+    private static (string CleanText, bool IsPenalty) ProcessPenaltyForPdfExcellent(string? raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw))
+            return ("-", false);
+
+        // pattern ketat: strip, spasi, "penalty", spasi, "excellent"
+        var rxExcellent = new Regex(@"(^|\s)-\s+penalty\s+excellent(\s|$)", RegexOptions.IgnoreCase);
+
+        bool hit = rxExcellent.IsMatch(raw);
+
+        // hanya HAPUS yang "excellent" (biarkan "- penalty good" tetap tertulis & tidak memicu merah)
+        var cleaned = rxExcellent.Replace(raw, " ");
+
+        // rapikan spasi & baris kosong beruntun
+        cleaned = Regex.Replace(cleaned, @"(\r?\n\s*){2,}", "\n").Trim();
+        if (string.IsNullOrWhiteSpace(cleaned))
+            cleaned = "-";
+
+        return (cleaned, hit);
+    }
 
     public void Compose(IDocumentContainer container)
     {
@@ -262,11 +284,29 @@ public class ReportExcellentTemplate : IDocument
 
             // ==== Komentar Auditor ====
             col.Item().PaddingTop(20).Text("KOMENTAR AUDITOR").Bold().FontSize(12);
-            void KomentarItem(string label, string value)
+            void KomentarItem(string label, string? value)
             {
+                var (clean, isPenalty) = ProcessPenaltyForPdfExcellent(value);
+
                 col.Item().Text(label).Bold().FontSize(10);
-                col.Item().PaddingBottom(10).Text(value ?? "-").FontSize(9);
+
+                col.Item().PaddingBottom(10).Element(block =>
+                {
+                    var box = block.Container();
+
+                    if (isPenalty)
+                    {
+                        // background merah + teks putih, mirip di web
+                        box = box.Background("#dc3545").Padding(6);
+                        box.Text(clean).FontSize(9).FontColor(Colors.White);
+                    }
+                    else
+                    {
+                        box.Text(clean).FontSize(9); // normal
+                    }
+                });
             }
+
             KomentarItem("Staf Terlatih dan Termotivasi", _model.KomentarStaf);
             KomentarItem("Jaminan Kualitas dan Kuantitas", _model.KomentarQuality);
             KomentarItem("Peralatan Terpelihara dan HSSE", _model.KomentarHSSE);

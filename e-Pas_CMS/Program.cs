@@ -52,6 +52,7 @@ builder.Services.AddCors(options =>
 });
 
 builder.Services.AddHostedService<ReminderNotificationService>();
+builder.Services.AddHostedService<AuditAutoSchedulerService>();
 
 var app = builder.Build();
 

@@ -49,24 +49,51 @@
     // helper normalisasi string
     Func<string, string> norm = s => (s ?? "").Trim().ToUpperInvariant();
 
-    // ===== STRICT per-stage AllPointsApproved (tidak cascade) + override REJECTED utk Pertamina =====
-    bool AllPointsApprovedCurrentStage =
+    // ===== NEW: AllPointsProcessedCurrentStage (APPROVED/APPROVE/REJECTED) + override REJECT_CBI utk Pertamina =====
+    Func<string, string> PrevStageOf = s =>
+        {
+    var v = (s ?? "").Trim().ToUpperInvariant();
+    return v switch
+    {
+        "APPROVE_SBM" => "UNDER_REVIEW", // SBM memproses sebelum masuk APPROVE_SBM
+        "APPROVE_PPN" => "APPROVE_SBM",  // PPN memproses sebelum masuk APPROVE_PPN
+        "APPROVE_CBI" => "APPROVE_PPN",  // CBI memproses sebelum masuk APPROVE_CBI
+        "APPROVED" => "APPROVE_CBI",  // Pertamina memproses sebelum final
+        "REJECT_CBI" => "APPROVE_CBI",
+        _ => v               // UNDER_REVIEW tetap cek dirinya sendiri
+    };
+        };
+
+    var stageToValidate = PrevStageOf(statusNorm);
+
+    bool AllPointsProcessedCurrentStage =
         (norm(statusNorm) == "REJECT_CBI" && hasRolePertamina)
         ||
         (
             Model?.Points != null && Model.Points.Any() &&
             Model.Points.All(p =>
-                p?.History != null && p.History.Any(h =>
-                    norm(h.StatusCode) == norm(statusNorm) &&
-                    (norm(h.Status) == "APPROVED" || norm(h.Status) == "APPROVE")
-                )
-            )
+            {
+                // Element bertag (REJECT) juga dianggap sudah diproses
+                var elementText = (p?.Element ?? "").Trim();
+                bool rejectTagged = elementText.ToUpperInvariant().Contains("REJECT");
+
+                // Sudah ada riwayat APPROVED / APPROVE / REJECTED di STAGE YANG DIVALIDASI
+                bool hasHist = p?.History != null && p.History.Any(h =>
+                {
+                    var sc = (h.StatusCode ?? "").Trim().ToUpperInvariant();
+                    var st = (h.Status ?? "").Trim().ToUpperInvariant();
+                    return sc == stageToValidate && (st == "APPROVED" || st == "APPROVE" || st == "REJECTED");
+                });
+
+                return rejectTagged || hasHist;
+            })
         );
 
     // Pembungkus container aksi
     var canShowActionsContainer =
-        AllPointsApprovedCurrentStage
-        || norm(statusNorm) == "APPROVE_PPN"
+        (statusNorm == "APPROVE_PPN" && hasRoleCBI) // <-- pastikan tampil di tahap ini untuk CBI
+        || AllPointsProcessedCurrentStage
+        || norm(statusNorm) == "APPROVE_SBM"
         || norm(statusNorm) == "APPROVE_CBI"
         || norm(statusNorm) == "APPROVED"
         || (hasRolePertamina && norm(statusNorm) == "REJECT_CBI"); // safety ekstra
@@ -148,10 +175,10 @@
         border: none;
     }
 
-    .btn-gradient-green:hover {
-        background: linear-gradient(135deg,#059669,#047857);
-        color: #fff;
-    }
+        .btn-gradient-green:hover {
+            background: linear-gradient(135deg,#059669,#047857);
+            color: #fff;
+        }
 
     .btn-gradient-red {
         background: linear-gradient(135deg,#ef4444,#dc2626);
@@ -159,10 +186,10 @@
         border: none;
     }
 
-    .btn-gradient-red:hover {
-        background: linear-gradient(135deg,#dc2626,#b91c1c);
-        color: #fff;
-    }
+        .btn-gradient-red:hover {
+            background: linear-gradient(135deg,#dc2626,#b91c1c);
+            color: #fff;
+        }
 
     .btn-gradient-blue {
         background: linear-gradient(135deg,#3b82f6,#2563eb);
@@ -170,19 +197,19 @@
         border: none;
     }
 
-    .btn-gradient-blue:hover {
-        background: linear-gradient(135deg,#2563eb,#1d4ed8);
-        color: #fff;
-    }
+        .btn-gradient-blue:hover {
+            background: linear-gradient(135deg,#2563eb,#1d4ed8);
+            color: #fff;
+        }
 
     .hover-scale {
         transition: transform .2s, box-shadow .2s;
     }
 
-    .hover-scale:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 6px 16px rgba(0,0,0,.15);
-    }
+        .hover-scale:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(0,0,0,.15);
+        }
 
     .thumb-grid {
         display: flex;
@@ -201,19 +228,19 @@
         cursor: pointer;
     }
 
-    .thumb img, .thumb video {
-        width: 100%;
-        height: 100%;
-        object-fit: cover;
-    }
+        .thumb img, .thumb video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
 
-    .thumb .play {
-        position: absolute;
-        top: 35%;
-        left: 35%;
-        color: #fff;
-        font-size: 2rem;
-    }
+        .thumb .play {
+            position: absolute;
+            top: 35%;
+            left: 35%;
+            color: #fff;
+            font-size: 2rem;
+        }
 
     .thumb-grid .text-muted {
         padding: .5rem 0;
@@ -294,7 +321,6 @@
         </div>
     </div>
 
-
     <!-- Daftar Poin -->
     @if (Model.Points != null && Model.Points.Any())
     {
@@ -303,13 +329,17 @@
         {
             var thumbsId = $"thumbs_{idx}";
 
-            // per-poin approved di tahap SAAT INI (strict)
-            bool pointApprovedThisStage = p?.History != null && p.History.Any(h =>
+            // NEW: processed (APPROVED/APPROVE/REJECTED) di tahap saat ini
+            bool pointProcessedThisStage = p?.History != null && p.History.Any(h =>
             {
                 var sc = (h.StatusCode ?? "").Trim().ToUpperInvariant();
                 var st = (h.Status ?? "").Trim().ToUpperInvariant();
-                return sc == statusNorm && (st == "APPROVED" || st == "APPROVE");
+                return sc == statusNorm && (st == "APPROVED" || st == "APPROVE" || st == "REJECTED");
             });
+
+            // deteksi tag REJECT pada Element (akomodir "(REJECT)" maupun "( REJECT )")
+            var elementText = string.IsNullOrWhiteSpace(p.Element) ? "-" : p.Element;
+            bool rejectTagged = elementText.ToUpperInvariant().Contains("REJECT");
 
             <div class="card card-soft mb-3">
                 <div class="card-body">
@@ -327,7 +357,8 @@
                             </thead>
                             <tbody>
                                 <tr>
-                                    <td>@(string.IsNullOrWhiteSpace(p.Element) ? "-" : p.Element)</td>
+                                    @* bila REJECT, tampilkan merah tebal *@
+                                    <td class="@(rejectTagged ? "text-danger fw-bold" : "")">@elementText</td>
                                     <td>@(string.IsNullOrWhiteSpace(p.SubElement) ? "-" : p.SubElement)</td>
                                     <td>@(string.IsNullOrWhiteSpace(p.DetailElement) ? "-" : p.DetailElement)</td>
                                     <td>@Html.Raw(string.IsNullOrWhiteSpace(p.DetailDibantah) ? "-" : p.DetailDibantah.Replace("\n", "<br />"))</td>
@@ -336,12 +367,12 @@
                         </table>
                     </div>
 
-                    @* Tombol Approve/Reject hanya muncul bila POIN ini BELUM approved di tahap SAAT INI *@
-                    @if (!pointApprovedThisStage && (
+                    @* Sembunyikan tombol kalau SUDAH DIPROSES di stage ini ATAU element bertag REJECT *@
+                    @if (!rejectTagged && !pointProcessedThisStage && (
                    (statusNorm == "UNDER_REVIEW" && hasApproveRoleSBM) ||
                    (statusNorm == "APPROVE_SBM" && hasApproveRolePPN)
-                   @* || (statusNorm == "APPROVE_PPN" && hasRoleCBI) *@
-                    ))
+                   /* || (statusNorm == "APPROVE_PPN" && hasRoleCBI) */
+                   ))
                     {
                         <div class="mt-3 d-flex gap-2">
                             <form asp-action="ApprovePoint" asp-route-id="@p.PointId" method="post">
@@ -362,7 +393,10 @@
                     @* Riwayat approval hanya untuk tahap saat ini *@
                     @if (p.History != null && p.History.Any())
                     {
-                        var filtered = p.History.Where(x => (x.StatusCode ?? "").Trim().ToUpperInvariant() == statusNorm).ToList();
+                        var filtered = p.History
+                        .Where(x => (x.StatusCode ?? "").Trim().ToUpperInvariant() == statusNorm)
+                        .ToList();
+
                         if (filtered.Any())
                         {
                             <div class="mt-2 small text-muted">
@@ -390,6 +424,7 @@
                     }
                 </div>
             </div>
+
             idx++;
         }
     }
@@ -429,9 +464,7 @@
                                 <th style="width: 180px;">Tanggal</th>
                                 <th style="width: 240px;">Stage</th>
                                 <th style="width: 130px;">Status</th>
-                                @* <th>Notes</th> *@
                                 <th style="width: 220px;">Approved By</th>
-                                @* <th style="width: 260px;">Point ID</th> *@
                             </tr>
                         </thead>
                         <tbody>
@@ -442,18 +475,13 @@
                                 if (st == "APPROVED" || st == "APPROVE") badge = "success";
                                 else if (st == "REJECTED") badge = "danger";
 
-                                // ambil feedback_status
                                 var fs = (h is dynamic) ? (string)h.feedback_status : h.feedback_status;
 
                                 <tr>
                                     <td>@(h.ApprovedDate.ToString("dd/MM/yyyy HH:mm") ?? "-")</td>
-                                    <td>
-                                        <span class="fw-semibold">@stageText(fs)</span>
-                                    </td>
+                                    <td><span class="fw-semibold">@stageText(fs)</span></td>
                                     <td><span class="badge bg-@badge">@h.Status</span></td>
-                                    @* <td>@(string.IsNullOrWhiteSpace(h.Notes) ? "-" : h.Notes)</td> *@
                                     <td>@(string.IsNullOrWhiteSpace(h.ApprovedBy) ? "-" : h.ApprovedBy)</td>
-                                    @* <td class="text-monospace">@h.TrxFeedbackPointId</td> *@
                                 </tr>
                             }
                         </tbody>
@@ -492,35 +520,7 @@
                     @Html.AntiForgeryToken()
                     <input type="hidden" name="id" value="@Model.Id" />
                     <input type="hidden" name="klarifikasi" value="" />
-                    <button type="submit" class="btn btn-gradient-green rounded-pill px-4 py-2 shadow-sm hover-scale me-2" @(AllPointsApprovedCurrentStage ? "" : "disabled")>
-                        <i class="bi bi-check-circle"></i> Submit
-                    </button>
-                </form>
-            }
-
-            @* STEP 2 (PPN) *@
-            @if (statusNorm == "APPROVE_SBM" && hasApproveRolePPN && feedbackTypeNorm != "COMPLAINT")
-            {
-                <form asp-action="Approve" method="post" class="d-inline needs-klarifikasi">
-                    @Html.AntiForgeryToken()
-                    <input type="hidden" name="id" value="@Model.Id" />
-                    <input type="hidden" name="klarifikasi" value="" />
-                    <button type="submit" class="btn btn-gradient-green rounded-pill px-4 py-2 shadow-sm hover-scale me-2" @(AllPointsApprovedCurrentStage ? "" : "disabled")>
-                        <i class="bi bi-check-circle"></i> Submit
-                    </button>
-                </form>
-            }
-
-            @* STEP 3 (CBI) *@
-            @if (statusNorm == "APPROVE_PPN" && hasRoleCBI && feedbackTypeNorm != "COMPLAINT")
-            {
-                <form asp-action="Approve" method="post" class="d-inline needs-klarifikasi">
-                    @Html.AntiForgeryToken()
-                    <input type="hidden" name="id" value="@Model.Id" />
-                    <input type="hidden" name="klarifikasi" value="" />
-                    <button type="submit"
-                            class="btn btn-gradient-green rounded-pill px-4 py-2 shadow-sm hover-scale me-2"
-                    @(statusNorm == "APPROVE_PPN" ? "" : (AllPointsApprovedCurrentStage ? "" : "disabled"))>
+                    <button type="submit" class="btn btn-gradient-green rounded-pill px-4 py-2 shadow-sm hover-scale me-2" @(AllPointsProcessedCurrentStage ? "" : "disabled")>
                         <i class="bi bi-check-circle"></i> Submit
                     </button>
                 </form>
@@ -535,6 +535,51 @@
                 </form>
             }
 
+            @* STEP 2 (PPN) *@
+            @if (statusNorm == "APPROVE_SBM" && hasApproveRolePPN && feedbackTypeNorm != "COMPLAINT")
+            {
+                <form asp-action="Approve" method="post" class="d-inline needs-klarifikasi">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="id" value="@Model.Id" />
+                    <input type="hidden" name="klarifikasi" value="" />
+                    <button type="submit" class="btn btn-gradient-green rounded-pill px-4 py-2 shadow-sm hover-scale me-2" @(AllPointsProcessedCurrentStage ? "" : "disabled")>
+                        <i class="bi bi-check-circle"></i> Submit
+                    </button>
+                </form>
+
+                <form asp-action="Reject" method="post" class="d-inline needs-klarifikasi">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="id" value="@Model.Id" />
+                    <input type="hidden" name="klarifikasi" value="" />
+                    <button type="submit" class="btn btn-gradient-red rounded-pill px-4 py-2 shadow-sm hover-scale">
+                        <i class="bi bi-x-circle"></i> Reject
+                    </button>
+                </form>
+            }
+
+            @* STEP 3 (CBI) *@
+            @if (statusNorm == "APPROVE_PPN" && hasRoleCBI && feedbackTypeNorm != "COMPLAINT")
+            {
+                <form asp-action="Approve" method="post" class="d-inline needs-klarifikasi">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="id" value="@Model.Id" />
+                    <input type="hidden" name="klarifikasi" value="" />
+                    <button type="submit"
+                            class="btn btn-gradient-green rounded-pill px-4 py-2 shadow-sm hover-scale me-2"
+                    @(AllPointsProcessedCurrentStage ? "" : "disabled")>
+                        <i class="bi bi-check-circle"></i> Submit
+                    </button>
+                </form>
+
+                <form asp-action="Reject" method="post" class="d-inline needs-klarifikasi">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="id" value="@Model.Id" />
+                    <input type="hidden" name="klarifikasi" value="" />
+                    <button type="submit" class="btn btn-gradient-red rounded-pill px-4 py-2 shadow-sm hover-scale">
+                        <i class="bi bi-x-circle"></i> Reject
+                    </button>
+                </form>
+            }
 
             @* STEP 4 (PERTAMINA) — tampil saat APPROVE_CBI **atau** REJECTED *@
             @if ((statusNorm == "APPROVE_CBI" || statusNorm == "REJECT_CBI") && hasRolePertamina)
@@ -720,53 +765,48 @@
         }
 
         // ========== Thumbnail Renderer ==========
-                function renderAttachmentThumbs(targetId, mediaItems){
-        const host = document.getElementById(targetId);
-        if (!host) return;
-        host.innerHTML = '';
+        function renderAttachmentThumbs(targetId, mediaItems){
+            const host = document.getElementById(targetId);
+            if (!host) return;
+            host.innerHTML = '';
 
+            const list = normalizeItems(mediaItems);
+            if (list.length === 0){
+                host.innerHTML = '<div class="text-muted">Tidak ada dokumen pendukung.</div>';
+                return;
+            }
 
-        const list = normalizeItems(mediaItems);
-        if (list.length === 0){
-        host.innerHTML = '<div class="text-muted">Tidak ada dokumen pendukung.</div>';
-        return;
+            list.forEach(it => {
+                const srcRaw = toSrc(it);
+                const src = safeUrl((srcRaw || '').trim());
+                if (!src) return;
+
+                const t = toType(it);
+                const ext = src.toLowerCase().split('.').pop();
+
+                const isImage = ['jpg', 'jpeg', 'png'].includes(ext);
+                const isVideo = t === 'VIDEO' || src.toLowerCase().endsWith('.mp4');
+
+                const wrap = document.createElement('div');
+                wrap.className = 'thumb';
+
+                if (isImage || isVideo){
+                    wrap.title = isVideo ? 'Putar video' : 'Lihat gambar';
+                    wrap.onclick = () => openFullSizeMedia(src, t);
+                    wrap.innerHTML = isVideo
+                      ? `<video muted playsinline preload="metadata"><source src="${src}#t=0.1" type="video/mp4"></video><div class="play"><i class="bi bi-play-fill"></i></div>`
+                      : `<img src="${src}" alt="">`;
+                } else {
+                    const filename = (it.FileName || src.split('/').pop() || 'dokumen').replace(/"/g, '');
+                    wrap.title = 'Klik untuk unduh';
+                    wrap.onclick = () => window.open(src, '_blank');
+                    wrap.innerHTML = `<div class="d-flex justify-content-center align-items-center h-100 w-100 bg-light text-dark fw-semibold text-center" style="font-size:.85rem;padding:.25rem;">${filename}</div>`;
+                }
+
+                host.appendChild(wrap);
+            });
         }
 
-
-        list.forEach(it => {
-        const srcRaw = toSrc(it);
-        const src = safeUrl((srcRaw || '').trim());
-        if (!src) return;
-
-
-        const t = toType(it);
-        const ext = src.toLowerCase().split('.').pop();
-
-
-        const isImage = ['jpg', 'jpeg', 'png'].includes(ext);
-        const isVideo = t === 'VIDEO' || src.toLowerCase().endsWith('.mp4');
-
-
-        const wrap = document.createElement('div');
-        wrap.className = 'thumb';
-
-
-        if (isImage || isVideo){
-        wrap.title = isVideo ? 'Putar video' : 'Lihat gambar';
-        wrap.onclick = () => openFullSizeMedia(src, t);
-        wrap.innerHTML = isVideo
-        ? `<video muted playsinline preload="metadata"><source src="${src}#t=0.1" type="video/mp4"></video><div class="play"><i class="bi bi-play-fill"></i></div>`
-        : `<img src="${src}" alt="">`;
-        } else {
-        const filename = (it.FileName || src.split('/').pop() || 'dokumen').replace(/"/g, '');
-        wrap.title = 'Klik untuk unduh';
-        wrap.onclick = () => window.open(src, '_blank');
-        wrap.innerHTML = `<div class="d-flex justify-content-center align-items-center h-100 w-100 bg-light text-dark fw-semibold text-center" style="font-size:.85rem;padding:.25rem;">${filename}</div>`;
-        }
-
-        host.appendChild(wrap);
-        });
-        }
         // ========== Auto-render semua grid ==========
         function renderAllThumbGrids(){
             document.querySelectorAll('.thumb-grid').forEach(el => {

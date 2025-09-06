@@ -353,42 +353,33 @@
                     </li>
                 }
 
-                @* --- Feedback Menu --- *@
-                @if (userMenuFunctions.Contains("FKOM") || userMenuFunctions.Contains("FBAN"))
+                @* BANDlNG - top level *@
+                @if (userMenuFunctions.Contains("FBAN"))
                 {
-                    <li class="nav-item menu-group">
-                        <a class="nav-link menu-trigger" data-target="#menu-feedback" role="button" aria-expanded="false" aria-controls="menu-feedback">
+                    <li class="nav-item">
+                        <a class="nav-link @(IsActive("Banding","Index") ? "active" : "")"
+                           asp-controller="Banding" asp-action="Index">
+                            <span class="d-flex align-items-center gap-2">
+                                <i class="bi bi-flag"></i>
+                                <strong>Banding</strong>
+                            </span>
+                        </a>
+                    </li>
+                }
+
+                @* FEEDBACK (rename dari Complain) - top level *@
+                @if (userMenuFunctions.Contains("FKOM"))
+                {
+                    <li class="nav-item">
+                        <a class="nav-link @(IsActive("Complain","Index") ? "active" : "")"
+                           asp-controller="Complain" asp-action="Index">
                             <span class="d-flex align-items-center gap-2">
                                 <i class="bi bi-chat-dots"></i>
                                 <strong>Feedback</strong>
                             </span>
-                            <i class="bi bi-caret-down-fill chev"></i>
                         </a>
-
-                        <div class="collapse submenu-panel" id="menu-feedback">
-                            <ul class="nav flex-column mt-1">
-                                @if (userMenuFunctions.Contains("FBAN"))
-                                {
-                                    <li class="nav-item">
-                                        <a class="nav-link @(IsActive("Banding","Index") ? "active" : "")" asp-controller="Banding" asp-action="Index">
-                                            <span class="dot"></span> Banding
-                                        </a>
-                                    </li>
-                                }
-                                @if (userMenuFunctions.Contains("FKOM"))
-                                {
-                                    <li class="nav-item">
-                                        <a class="nav-link @(IsActive("Complain","Index") ? "active" : "")" asp-controller="Complain" asp-action="Index">
-                                            <span class="dot"></span> Complain
-                                        </a>
-                                    </li>
-                                }
-                            </ul>
-                        </div>
                     </li>
                 }
-
-                @* --- Master Menu --- *@
                 @if (userMenuFunctions.Contains("MSPBU"))
                 {
                     <li class="nav-item menu-group">

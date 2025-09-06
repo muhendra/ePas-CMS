@@ -291,7 +291,16 @@ namespace e_Pas_CMS.Controllers
             SELECT 
                 p.id AS point_id,
                 p.description AS description,
-                COALESCE(e.number || '. ' || e.title, COALESCE(e.title, COALESCE(e.description, '-'))) AS element_label,
+                CASE 
+                    WHEN EXISTS (
+                        SELECT 1
+                        FROM trx_feedback_point_approval tfpa
+                        WHERE tfpa.trx_feedback_point_id = p.id
+                          AND tfpa.status = 'REJECTED'
+                    ) 
+                    THEN COALESCE(e.number || '. ' || e.title, COALESCE(e.title, COALESCE(e.description, '-'))) || ' (REJECT)'
+                    ELSE COALESCE(e.number || '. ' || e.title, COALESCE(e.title, COALESCE(e.description, '-')))
+                END AS element_label,
                 COALESCE(se.number || '. ' || se.title, COALESCE(se.title, COALESCE(se.description, '-'))) AS sub_element_label,
                 COALESCE(de.number || '. ' || de.title, COALESCE(de.title, '-')) AS detail_element_label,
                 COALESCE((
@@ -467,40 +476,66 @@ namespace e_Pas_CMS.Controllers
             await using var conn = new NpgsqlConnection(cs);
             await conn.OpenAsync();
 
-            // Ambil id feedback + status aktif dari trx_feedback
+            // --- Mulai transaksi ---
+            await using var tx = await conn.BeginTransactionAsync();
+
+            // 1) Ambil id feedback + status aktif
             var feedback = await conn.QueryFirstOrDefaultAsync<(string FeedbackId, string Status)>(@"
-            SELECT tf.id AS FeedbackId, tf.status 
-            FROM trx_feedback_point p
-            JOIN trx_feedback tf ON tf.id = p.trx_feedback_id
-            WHERE p.id = @id", new { id });
+        SELECT tf.id AS FeedbackId, tf.status 
+        FROM trx_feedback_point p
+        JOIN trx_feedback tf ON tf.id = p.trx_feedback_id
+        WHERE p.id = @id",
+                new { id }, tx);
 
             if (feedback.FeedbackId == null)
+            {
+                await tx.RollbackAsync();
                 return NotFound();
+            }
 
             var now = DateTime.Now;
 
-            // Tentukan status reject header
+            // 2) Tentukan status header reject (berdasarkan stage saat ini)
             var rejectStatus = feedback.Status == "APPROVE_PPN" ? "REJECT_CBI" : "REJECTED";
 
-            // Simpan rejection point
+            // 3) Simpan rejection point
+            //    Penting: tfpa.status = 'REJECTED' supaya cocok dengan query cek kamu.
             await conn.ExecuteAsync(@"
-            INSERT INTO trx_feedback_point_approval 
-            (id, trx_feedback_point_id, status, approved_by, approved_date, feedback_status)
-            VALUES (uuid_generate_v4(), @id, @status, @user, @now, @feedback_status)",
-            new { id, status = rejectStatus, user = username, now, feedback_status = feedback.Status });
-            
-            // Update status header trx_feedback
-            await conn.ExecuteAsync(@"
+        INSERT INTO trx_feedback_point_approval 
+        (id, trx_feedback_point_id, status, approved_by, approved_date, feedback_status)
+        VALUES (uuid_generate_v4(), @id, 'REJECTED', @user, @now, @feedback_status)",
+                new { id, user = username, now, feedback_status = feedback.Status }, tx);
+
+            // 4) Cek apakah masih ada point yang BELUM punya approval 'REJECTED'
+            //    Jika count == 0 => semua point sudah di-reject => update header
+            var remainingCount = await conn.ExecuteScalarAsync<int>(@"
+        SELECT COUNT(*)
+        FROM trx_feedback_point tfp
+        WHERE tfp.trx_feedback_id = @fid
+          AND NOT EXISTS (
+              SELECT 1
+              FROM trx_feedback_point_approval tfpa
+              WHERE tfpa.trx_feedback_point_id = tfp.id
+                AND tfpa.status = 'REJECTED'
+          )",
+                new { fid = feedback.FeedbackId }, tx);
+
+            if (remainingCount == 0)
+            {
+                await conn.ExecuteAsync(@"
             UPDATE trx_feedback 
             SET status = @status, 
                 updated_by = @user,
                 updated_date = @now
             WHERE id = @fid",
-                new { fid = feedback.FeedbackId, status = rejectStatus, user = username, now });
+                    new { fid = feedback.FeedbackId, status = rejectStatus, user = username, now }, tx);
+            }
+
+            // 5) Commit transaksi
+            await tx.CommitAsync();
 
             return RedirectToAction("Detail", new { id = feedback.FeedbackId });
         }
-
 
         [HttpPost("Banding/SubmitFinalApproval/{id}")]
         [ValidateAntiForgeryToken]

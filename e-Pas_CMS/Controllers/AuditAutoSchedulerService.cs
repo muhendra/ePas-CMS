@@ -1,0 +1,244 @@
+﻿using System;
+using System.Data;
+using System.Data.Common;
+using System.Threading;
+using System.Threading.Tasks;
+using Dapper;
+using e_Pas_CMS.Data;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
+
+public class AuditAutoSchedulerService : BackgroundService
+{
+    private readonly IServiceProvider _services;
+    private readonly ILogger<AuditAutoSchedulerService> _logger;
+
+    public AuditAutoSchedulerService(IServiceProvider services,
+                                     ILogger<AuditAutoSchedulerService> logger)
+    {
+        _services = services;
+        _logger = logger;
+    }
+
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    {
+        try
+        {
+            while (!stoppingToken.IsCancellationRequested)
+            {
+                DateTime now = JakartaNow();
+                DateTime nextRun = NextRunMonthlyAt0100(now);
+
+                var delay = nextRun - now;
+                if (delay > TimeSpan.Zero)
+                    await Task.Delay(delay, stoppingToken);
+                if (stoppingToken.IsCancellationRequested) break;
+
+                using var scope = _services.CreateScope();
+                var db = scope.ServiceProvider.GetRequiredService<EpasDbContext>();
+                await CreateSchedulerAsync(db, stoppingToken);
+
+                _logger.LogInformation("CreateScheduler dieksekusi pada {Time}", JakartaNow());
+
+                // hitung jadwal 1 bulan berikutnya jam 01:00 WIB
+                var wait = NextRunMonthlyAt0100(JakartaNow()) - JakartaNow();
+                if (wait > TimeSpan.Zero)
+                    await Task.Delay(wait, stoppingToken);
+            }
+        }
+        catch (TaskCanceledException)
+        {
+            // normal saat shutdown
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error pada AuditAutoSchedulerService.");
+        }
+    }
+
+    private static DateTime JakartaNow()
+    {
+        try
+        {
+            // Windows
+            var tz = TimeZoneInfo.FindSystemTimeZoneById("SE Asia Standard Time");
+            return TimeZoneInfo.ConvertTime(DateTime.Now, tz);
+        }
+        catch
+        {
+            // Linux
+            var tz = TimeZoneInfo.FindSystemTimeZoneById("Asia/Jakarta");
+            return TimeZoneInfo.ConvertTime(DateTime.Now, tz);
+        }
+    }
+
+    private static DateTime NextRunMonthlyAt0100(DateTime from)
+    {
+        var firstThisMonth0100 = new DateTime(from.Year, from.Month, 1, 1, 0, 0);
+        return (from <= firstThisMonth0100)
+            ? firstThisMonth0100
+            : new DateTime(from.Year, from.Month, 1, 1, 0, 0).AddMonths(1);
+    }
+
+    private static readonly string CreateSchedulerSql = @"
+INSERT INTO trx_audit (
+    id,
+    report_prefix,
+    report_no,
+    spbu_id,
+    app_user_id,
+    master_questioner_intro_id,
+    master_questioner_checklist_id,
+    audit_level,
+    audit_type,
+    audit_schedule_date,
+    audit_execution_time,
+    audit_media_upload,
+    audit_media_total,
+    audit_mom_intro,
+    audit_mom_final,
+    status,
+    created_by,
+    created_date,
+    updated_by,
+    updated_date,
+    approval_by,
+    approval_date,
+    good_status,
+    excellent_status,
+    score,
+    report_file_good,
+    report_file_excellent,
+    report_file_boa,
+    boa_status
+)
+WITH 
+latest_verified AS (
+    SELECT DISTINCT ON (ta.spbu_id)
+        ta.spbu_id,
+        ta.app_user_id,
+        COALESCE(ta.audit_execution_time, ta.audit_schedule_date) AS last_verified_date
+    FROM trx_audit ta
+    WHERE ta.status IN ('UNDER_REVIEW','VERIFIED')
+    ORDER BY ta.spbu_id, ta.audit_execution_time DESC, ta.audit_schedule_date DESC
+),
+latest_progress AS (
+    SELECT DISTINCT ON (ta.spbu_id)
+        ta.spbu_id,
+        ta.audit_schedule_date AS last_progress_date
+    FROM trx_audit ta
+    WHERE ta.status IN ('DRAFT','NOT_STARTED','IN_PROGRESS_INPUT')
+    ORDER BY ta.spbu_id, ta.audit_execution_time DESC, ta.audit_schedule_date DESC
+),
+latest_master_questioner as (
+	SELECT DISTINCT ON (mq.type, mq.category)
+	       mq.id,
+	       mq.type,
+	       mq.category,
+	       mq.version
+	FROM master_questioner mq
+	ORDER BY mq.type, mq.category, mq.version DESC
+),
+days_in_month AS (
+    SELECT generate_series(
+        date_trunc('month', current_date),
+        date_trunc('month', current_date) + interval '1 month - 1 day',
+        interval '1 day'
+    )::date AS schedule_day
+),
+data AS (
+    SELECT 
+        s.spbu_no,
+        s.id as spbu_id,
+        lv.app_user_id,
+        s.audit_next,
+        lv.last_verified_date,
+        lp.last_progress_date,
+        maf.range_audit_month, 
+        maf.audit_type,
+        lmqi.id as master_questioner_intro_id,
+        lmqc.id as master_questioner_checklist_id
+    FROM spbu s
+    INNER JOIN master_audit_flow maf
+        ON maf.audit_level = s.audit_next 
+       AND maf.range_audit_month IS NOT null
+    LEFT JOIN latest_master_questioner lmqi 
+        ON lmqi.type = maf.audit_type and lmqi.category = 'INTRO'
+    LEFT JOIN latest_master_questioner lmqc 
+        ON lmqc.type = maf.audit_type and lmqc.category = 'CHECKLIST'
+    LEFT JOIN latest_verified lv 
+        ON lv.spbu_id = s.id
+    LEFT JOIN latest_progress lp 
+        ON lp.spbu_id = s.id
+    WHERE lp.last_progress_date IS NULL
+      AND lv.last_verified_date IS NOT NULL
+      AND (
+            date_trunc('month', lv.last_verified_date) 
+            + (maf.range_audit_month || ' month')::interval
+          ) <= date_trunc('month', CURRENT_DATE)
+),
+distributed AS (
+    SELECT d.*,
+           ROW_NUMBER() OVER (PARTITION BY d.app_user_id ORDER BY d.spbu_no) AS rn,
+           (SELECT count(*) FROM days_in_month) AS total_days
+    FROM data d
+)
+SELECT uuid_generate_v4() as id,
+       'CB/AI/' as report_prefix,
+       '' as report_no,
+       spbu_id,
+       app_user_id,
+       master_questioner_intro_id,
+       master_questioner_checklist_id, 
+       audit_next as audit_level,
+       audit_type,
+       (
+         date_trunc('month', current_date)::date
+         + ((rn - 1) % total_days) * interval '1 day'
+       )::date as audit_schedule_date,
+       null as audit_execution_time,
+       0 as audit_media_upload,
+       0 as audit_media_total,
+       '' as audit_mom_intro,
+       '' as audit_mom_final,
+       'DRAFT' as status,
+       'SYSTEM-AUTO-SCHEDULE' as created_by,
+       current_timestamp as created_date,
+       'SYSTEM-AUTO-SCHEDULE' as updated_by,
+       current_timestamp as updated_date,
+       null as approval_by,
+       null as approval_date,
+       null as good_status,
+       null as excellent_status,
+       null as score,
+       null as report_file_good,
+       null as report_file_excellent,
+       null as report_file_boa,
+       null as boa_status
+FROM distributed
+WHERE spbu_id IN (
+    SELECT id FROM spbu WHERE spbu_no ILIKE '%test%'
+)
+ORDER BY spbu_no ASC;";
+
+    private static async Task CreateSchedulerAsync(EpasDbContext db, CancellationToken ct = default)
+    {
+        DbConnection conn = db.Database.GetDbConnection();
+        if (conn.State != ConnectionState.Open)
+            await conn.OpenAsync(ct);
+
+        await using var tx = await conn.BeginTransactionAsync(ct);
+        try
+        {
+            await conn.ExecuteAsync(CreateSchedulerSql, transaction: tx);
+            await tx.CommitAsync(ct);
+        }
+        catch
+        {
+            await tx.RollbackAsync(ct);
+            throw;
+        }
+    }
+}
