@@ -1,6 +1,8 @@
-﻿﻿@using e_Pas_CMS.ViewModels
+﻿﻿﻿@using e_Pas_CMS.ViewModels
 @using Newtonsoft.Json
 @model DetailReportViewModel
+@using System.Text.RegularExpressions
+
 
 @{
     ViewData["Title"] = "Detail Laporan Audit Regular";
@@ -36,11 +38,11 @@
         margin-right: .25rem;
         white-space: nowrap;
     }
+
     .comment-red {
-        background-color: #dc3545 !important; 
-        color: #fff !important;
-        border-color: #dc3545 !important;
+        color: red !important;
     }
+
     .option-group .option-btn {
         display: none !important;
     }
@@ -50,8 +52,8 @@
         display: inline-block;
         min-width: 90px;
         color: black !important;
-        font-weight: bold; 
-        font-size: 0.95rem; 
+        font-weight: bold;
+        font-size: 0.95rem;
         font-weight: 600;
         border-radius: 0.5rem;
         padding: 0.25rem 0.5rem;
@@ -82,45 +84,45 @@
 </style>
 
 <div class="container-fluid">
-<!-- HEADER ATAS -->
-<div class="d-flex align-items-center justify-content-between mb-4">
-    <div>
-        <h2 class="fw-bold mb-1">
-            Detail Laporan Audit Regular Performa SPBU
-            <small class="text-muted">(Regular Audit)</small>
-        </h2>
+    <!-- HEADER ATAS -->
+    <div class="d-flex align-items-center justify-content-between mb-4">
         <div>
-            <a class="text-primary text-decoration-none"
+            <h2 class="fw-bold mb-1">
+                Detail Laporan Audit Regular Performa SPBU
+                <small class="text-muted">(Regular Audit)</small>
+            </h2>
+            <div>
+                <a class="text-primary text-decoration-none"
                    href="@Url.Action("Index", "AuditReport")">
-                <small>Daftar Report / </small>
+                    <small>Daftar Report / </small>
+                </a>
+
+                @Model.ReportNo <i class="bi bi-caret-down-fill"></i>
+
+            </div>
+        </div>
+        <div class="d-flex gap-2">
+            <a class="btn btn-outline-success"
+               href="@Url.Action("DownloadPdfQuestGood", "AuditReport", new { id = Context.Request.RouteValues["id"], type = "good" })">
+                <i class="bi bi-check-circle-fill"></i> Report Good
             </a>
+            <a class="btn btn-outline-warning"
+               href="@Url.Action("DownloadPdfQuest", "AuditReport", new { id = Context.Request.RouteValues["id"], type = "excellent" })">
+                <i class="bi bi-star-fill"></i> Report Excellent
+            </a>
+        </div>
 
-            @Model.ReportNo <i class="bi bi-caret-down-fill"></i>
+    </div>
 
+    <!-- Toggle Switch Report Mode -->
+    <div class="d-flex justify-content-end mb-3">
+        <div class="form-check form-switch d-flex align-items-center">
+            <input class="form-check-input" type="checkbox" id="toggleReportMode" style="transform: scale(1.5); margin-right: 20px;">
+            <label class="form-check-label fw-bold" for="toggleReportMode">Report Excellent</label>
         </div>
     </div>
-    <div class="d-flex gap-2">
-        <a class="btn btn-outline-success"
-               href="@Url.Action("DownloadPdfQuestGood", "AuditReport", new { id = Context.Request.RouteValues["id"], type = "good" })">
-            <i class="bi bi-check-circle-fill"></i> Report Good
-        </a>
-        <a class="btn btn-outline-warning"
-               href="@Url.Action("DownloadPdfQuest", "AuditReport", new { id = Context.Request.RouteValues["id"], type = "excellent" })">
-            <i class="bi bi-star-fill"></i> Report Excellent
-        </a>
-    </div>
 
-</div>
-
-<!-- Toggle Switch Report Mode -->
-<div class="d-flex justify-content-end mb-3">
-    <div class="form-check form-switch d-flex align-items-center">
-        <input class="form-check-input" type="checkbox" id="toggleReportMode" style="transform: scale(1.5); margin-right: 20px;">
-        <label class="form-check-label fw-bold" for="toggleReportMode">Report Excellent</label>
-    </div>
-</div>
-
-<!-- STATUS -->
+    <!-- STATUS -->
     <div id="certStatusBox" class="alert text-center py-2 mb-4 @boxClass" style="@boxStyle">
         <strong id="certStatusLabel" class="score-label">
             Total Score (TS): @Model.TotalScore.ToString("0.00")% &mdash; @statusLabel
@@ -128,65 +130,65 @@
     </div>
 
 
-<!-- INFORMASI SPBU --><div class="card mb-5 shadow-sm">
-    <div class="card-body">
-        <!-- Informasi SPBU -->
-        <h5 class="card-title mb-4">Informasi SPBU</h5>
-        <div class="row gy-3">
-            <div class="col-md-3"><strong>Nomor SPBU</strong><br />@Model.SpbuNo</div>
-            <div class="col-md-3"><strong>Region</strong><br />@Model.Region</div>
-            <div class="col-md-3"><strong>Kabupaten/Kota</strong><br />@Model.Kota</div>
-            <div class="col-md-3"><strong>Alamat SPBU</strong><br />@Model.Alamat</div>
+    <!-- INFORMASI SPBU --><div class="card mb-5 shadow-sm">
+        <div class="card-body">
+            <!-- Informasi SPBU -->
+            <h5 class="card-title mb-4">Informasi SPBU</h5>
+            <div class="row gy-3">
+                <div class="col-md-3"><strong>Nomor SPBU</strong><br />@Model.SpbuNo</div>
+                <div class="col-md-3"><strong>Region</strong><br />@Model.Region</div>
+                <div class="col-md-3"><strong>Kabupaten/Kota</strong><br />@Model.Kota</div>
+                <div class="col-md-3"><strong>Alamat SPBU</strong><br />@Model.Alamat</div>
 
-            <div class="col-md-3"><strong>Nama Pemilik SPBU</strong><br />@Model.OwnerName</div>
-            <div class="col-md-3"><strong>Nama Manajer</strong><br />@Model.ManagerName</div>
-            <div class="col-md-3"><strong>Tipe Kepemilikan</strong><br />@Model.OwnershipType</div>
-            <div class="col-md-3"><strong>Quarter</strong><br />@Model.Quarter</div>
+                <div class="col-md-3"><strong>Nama Pemilik SPBU</strong><br />@Model.OwnerName</div>
+                <div class="col-md-3"><strong>Nama Manajer</strong><br />@Model.ManagerName</div>
+                <div class="col-md-3"><strong>Tipe Kepemilikan</strong><br />@Model.OwnershipType</div>
+                <div class="col-md-3"><strong>Quarter</strong><br />@Model.Quarter</div>
 
-            <div class="col-md-3"><strong>Tahun</strong><br />@Model.Year</div>
-            <div class="col-md-3"><strong>MOR</strong><br />@Model.MOR</div>
-            <div class="col-md-3"><strong>Sales Area</strong><br />@Model.SalesArea</div>
-            <div class="col-md-3"><strong>SBM</strong><br />@Model.SBM</div>
+                <div class="col-md-3"><strong>Tahun</strong><br />@Model.Year</div>
+                <div class="col-md-3"><strong>MOR</strong><br />@Model.MOR</div>
+                <div class="col-md-3"><strong>Sales Area</strong><br />@Model.SalesArea</div>
+                <div class="col-md-3"><strong>SBM</strong><br />@Model.SBM</div>
 
-            <div class="col-md-3"><strong>Kelas SPBU</strong><br />@Model.ClassSPBU</div>
-            <div class="col-md-3"><strong>Telepon</strong><br />@Model.Phone</div>
-        </div>
+                <div class="col-md-3"><strong>Kelas SPBU</strong><br />@Model.ClassSPBU</div>
+                <div class="col-md-3"><strong>Telepon</strong><br />@Model.Phone</div>
+            </div>
 
-        <!-- Informasi Kegiatan Audit -->
-        <h5 class="card-title mb-4 mt-5">Informasi Kegiatan Audit</h5>
-        <div class="row gy-3">
-            <div class="col-md-3"><strong>No. Report</strong><br />@Model.ReportNo</div>
-            <div class="col-md-3"><strong>Tanggal Audit</strong><br />@Model.TanggalAudit?.ToString("dd/MM/yyyy")</div>
-            <div class="col-md-3"><strong>Verifikator</strong><br />@Model.ApproveBy</div>
+            <!-- Informasi Kegiatan Audit -->
+            <h5 class="card-title mb-4 mt-5">Informasi Kegiatan Audit</h5>
+            <div class="row gy-3">
+                <div class="col-md-3"><strong>No. Report</strong><br />@Model.ReportNo</div>
+                <div class="col-md-3"><strong>Tanggal Audit</strong><br />@Model.TanggalAudit?.ToString("dd/MM/yyyy")</div>
+                <div class="col-md-3"><strong>Verifikator</strong><br />@Model.ApproveBy</div>
 
-            <div class="col-md-3"><strong>Auditor 1</strong><br />@Model.NamaAuditor</div>
-            <div class="col-md-3"><strong>Auditor 2</strong><br />-</div>
-            <div class="col-md-3"><strong>Tipe Audit</strong><br />@Model.AuditCurrent</div>
-            <div class="col-md-3"><strong>Next Audit</strong><br />@Model.AuditNext</div>
+                <div class="col-md-3"><strong>Auditor 1</strong><br />@Model.NamaAuditor</div>
+                <div class="col-md-3"><strong>Auditor 2</strong><br />-</div>
+                <div class="col-md-3"><strong>Tipe Audit</strong><br />@Model.AuditCurrent</div>
+                <div class="col-md-3"><strong>Next Audit</strong><br />@Model.AuditNext</div>
 
-            <div class="col-md-3"><strong>Ko-ordinator</strong><br />Sabar Kembaren</div>
-            <div class="col-md-3"><strong>Sent Date</strong><br />@Model.TanggalSubmit?.ToString("dd/MM/yyyy")</div>
+                <div class="col-md-3"><strong>Ko-ordinator</strong><br />Sabar Kembaren</div>
+                <div class="col-md-3"><strong>Sent Date</strong><br />@Model.TanggalSubmit?.ToString("dd/MM/yyyy")</div>
+            </div>
         </div>
     </div>
-</div>
 
-<!-- LAPORAN PENILAIAN (Skor dan Level) -->
-<div class="mb-5">
-    <h4 class="fw-bold">Laporan Penilaian</h4>
+    <!-- LAPORAN PENILAIAN (Skor dan Level) -->
+    <div class="mb-5">
+        <h4 class="fw-bold">Laporan Penilaian</h4>
 
-    <!-- Total Score -->
-    <div class="box-total-score rounded-3 text-center py-2 mb-1 bg-danger text-white">
+        <!-- Total Score -->
+        <div class="box-total-score rounded-3 text-center py-2 mb-1 bg-danger text-white">
             <strong class="score-label">
                 Total Score (TS): @Model.TotalScore.ToString("0.00")% &mdash;
                 @Model.ExcellentStatus
             </strong>
-        <div class="box-penalty mt-1 small text-white" style="display:none">
-            <strong>Penalty:</strong> <span class="penalty-text">-</span><br />
-            <span class="fail-elements" style="display:none;">
-                <strong>Gagal di Elemen:</strong> <span class="fail-list"></span>
-            </span>
+            <div class="box-penalty mt-1 small text-white" style="display:none">
+                <strong>Penalty:</strong> <span class="penalty-text">-</span><br />
+                <span class="fail-elements" style="display:none;">
+                    <strong>Gagal di Elemen:</strong> <span class="fail-list"></span>
+                </span>
+            </div>
         </div>
-</div>
     </div>
 
     <div class="text-center text-muted mb-3">
@@ -350,45 +352,52 @@
 <!-- KOMENTAR AUDITOR -->
 <div class="mb-4">
     <strong>Staf Terlatih dan Termotivasi:</strong>
-    <div class="border rounded p-3 bg-light mt-2 js-comment">
-        @Html.Raw(Model.KomentarStaf?.Replace("\n", "<br>"))
+    <div class="border rounded p-3 bg-light mt-2 js-comment"
+         data-penalty="@GetPenaltyType(Model.KomentarStaf)">
+        @Html.Raw(StripPenaltyTag(Model.KomentarStaf)?.Replace("\n", "<br>"))
     </div>
 </div>
 
 <div class="mb-4">
     <strong>Jaminan Kualitas dan Kuantitas:</strong>
-    <div class="border rounded p-3 bg-light mt-2 js-comment">
-        @Html.Raw(Model.KomentarQuality?.Replace("\n", "<br>"))
+    <div class="border rounded p-3 bg-light mt-2 js-comment"
+         data-penalty="@GetPenaltyType(Model.KomentarQuality)">
+        @Html.Raw(StripPenaltyTag(Model.KomentarQuality)?.Replace("\n", "<br>"))
     </div>
 </div>
 
 <div class="mb-4">
     <strong>Peralatan Terpelihara dan HSSE:</strong>
-    <div class="border rounded p-3 bg-light mt-2 js-comment">
-        @Html.Raw(Model.KomentarHSSE?.Replace("\n", "<br>"))
+    <div class="border rounded p-3 bg-light mt-2 js-comment"
+         data-penalty="@GetPenaltyType(Model.KomentarHSSE)">
+        @Html.Raw(StripPenaltyTag(Model.KomentarHSSE)?.Replace("\n", "<br>"))
     </div>
 </div>
 
 <div class="mb-4">
     <strong>Tampilan Fisik Seragam:</strong>
-    <div class="border rounded p-3 bg-light mt-2 js-comment">
-        @Html.Raw(Model.KomentarVisual?.Replace("\n", "<br>"))
+    <div class="border rounded p-3 bg-light mt-2 js-comment"
+         data-penalty="@GetPenaltyType(Model.KomentarVisual)">
+        @Html.Raw(StripPenaltyTag(Model.KomentarVisual)?.Replace("\n", "<br>"))
     </div>
 </div>
 
 <div class="mb-4">
     <strong>Penawaran Produk Komperhensif:</strong>
-    <div class="border rounded p-3 bg-light mt-2 js-comment">
-        @Html.Raw(Model.PenawaranKomperhensif?.Replace("\n", "<br>"))
+    <div class="border rounded p-3 bg-light mt-2 js-comment"
+         data-penalty="@GetPenaltyType(Model.PenawaranKomperhensif)">
+        @Html.Raw(StripPenaltyTag(Model.PenawaranKomperhensif)?.Replace("\n", "<br>"))
     </div>
 </div>
 
 <div>
     <strong>Komentar Manajer SPBU:</strong>
-    <div class="border rounded p-3 bg-light mt-2 js-comment">
-        @Html.Raw(Model.KomentarManager?.Replace("\n", "<br>"))
+    <div class="border rounded p-3 bg-light mt-2 js-comment"
+         data-penalty="@GetPenaltyType(Model.KomentarManager)">
+        @Html.Raw(StripPenaltyTag(Model.KomentarManager)?.Replace("\n", "<br>"))
     </div>
 </div>
+
 
 <!-- CHECKLIST AUDIT -->
 @if (Model.AuditType == "Mystery Audit" || Model.AuditType == "Regular Audit" || Model.AuditType == "Basic Operational")
@@ -607,42 +616,28 @@
             '.card .card-body .bg-light.mt-2,' +
             '.card .card-body .border.rounded.p-2.bg-light.small';
 
-          const reExactExcellent = /(^|[\s>])-\s+penalty\s+excellent(?=([\s<]|$))/gi;
-          const reExactGood      = /(^|[\s>])-\s+penalty\s+good(?=([\s<]|$))/gi;
-
           document.querySelectorAll(selectors).forEach(el => {
-            // reset dulu (biar kalau pindah mode, yang lama tidak tetap merah)
+            // reset
             el.classList.remove('comment-red');
             el.style.removeProperty('background-color');
             el.style.removeProperty('color');
             el.style.removeProperty('border-color');
 
-            let html = el.innerHTML;
-            const plain = el.textContent || '';
+            // PRIORITAS: baca flag dari server
+            const flag = (el.dataset.penalty || '').toLowerCase(); // "", "good", "excellent"
 
-            const hasExcellent = /(^|\s)-\s+penalty\s+excellent(\s|$)/i.test(plain);
-            const hasGood      = /(^|\s)-\s+penalty\s+good(\s|$)/i.test(plain);
+            // fallback terakhir: kalau masih ada sisa teksnya (misal belum dibersihkan)
+            const plain = (el.textContent || '').replace(/\u00A0/g,' ');
+            const hasGood = flag === 'good' || /(^|\s)-\s*pena[lI]ty\s+good(\s|$)/i.test(plain);
+            const hasExcellent = flag === 'excellent' || /(^|\s)-\s*pena[lI]ty\s+excellent(\s|$)/i.test(plain);
 
-            // hanya aktifkan yang sesuai mode
-            let shouldRed = false;
-            if (mode === 'excellent' && hasExcellent) {
-              html = html.replace(reExactExcellent, '$1'); // hapus teksnya (opsional)
-              shouldRed = true;
-            } else if (mode === 'good' && hasGood) {
-              html = html.replace(reExactGood, '$1'); // hapus teksnya (opsional)
-              shouldRed = true;
-            }
+            const shouldRed =
+              (mode === 'good' && hasGood) ||
+              (mode === 'excellent' && hasExcellent);
 
             if (shouldRed) {
-              // rapikan <br> ganda
-              html = html.replace(/(\s*<br\s*\/?>\s*){2,}/gi, '<br/>').trim() || '<span></span>';
-              el.innerHTML = html;
-
-              // set merah
               el.classList.add('comment-red');
-              el.style.setProperty('background-color', '#dc3545', 'important');
-              el.style.setProperty('color', '#fff', 'important');
-              el.style.setProperty('border-color', '#dc3545', 'important');
+              el.style.color = 'red';
             }
           });
 
@@ -1234,4 +1229,22 @@
             </div>
         </li>
     }
+
+    string GetPenaltyType(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return "";
+        var m = Regex.Match(text, @"(^|\s)-\s*pena[lI]ty\s+(good|excellent)(\s|$)", RegexOptions.IgnoreCase);
+        return m.Success ? m.Groups[2].Value.ToLowerInvariant() : "";
+    }
+
+    string StripPenaltyTag(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return "";
+        var cleaned = Regex.Replace(text,
+            @"(^|\s)-\s*pena[lI]ty\s+(good|excellent)(\s|$)",
+            "$1",
+            RegexOptions.IgnoreCase);
+        return cleaned.Trim();
+    }
+
 }

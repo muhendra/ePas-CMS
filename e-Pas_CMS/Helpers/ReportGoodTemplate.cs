@@ -269,13 +269,14 @@ public class ReportGoodTemplate : IDocument
 
                     if (isPenalty)
                     {
-                        // sama seperti web: merah + teks putih
-                        box = box.Background("#dc3545").Padding(6);
-                        box.Text(clean).FontSize(9).FontColor(Colors.White);
+                        box.Padding(6).Text(clean)
+                            .FontSize(9)
+                            .FontColor(Colors.Red.Medium)
+                            .SemiBold();
                     }
                     else
                     {
-                        box.Text(clean).FontSize(9);
+                        box.Padding(6).Text(clean).FontSize(9); // normal
                     }
                 });
             }

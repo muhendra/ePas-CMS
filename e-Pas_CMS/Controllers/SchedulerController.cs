@@ -7,6 +7,8 @@ using e_Pas_CMS.Models;
 using System.Data;
 using Dapper;
 using Microsoft.AspNetCore.Mvc.Rendering;
+using Microsoft.Extensions.Logging;
+using Npgsql;
 
 namespace e_Pas_CMS.Controllers
 {
@@ -15,12 +17,15 @@ namespace e_Pas_CMS.Controllers
     public class SchedulerController : Controller
     {
         private readonly EpasDbContext _context;
+        private readonly ILogger<SchedulerController> _logger;
 
-        public SchedulerController(EpasDbContext context)
+        public SchedulerController(EpasDbContext context, ILogger<SchedulerController> logger)
         {
             _context = context;
+            _logger = logger;
         }
 
+        [HttpGet("")]
         public async Task<IActionResult> Index(int pageNumber = 1, int pageSize = 10, string searchTerm = "")
         {
             var query = _context.trx_audits
@@ -30,10 +35,10 @@ namespace e_Pas_CMS.Controllers
 
             if (!string.IsNullOrWhiteSpace(searchTerm))
             {
-                searchTerm = searchTerm.ToLower();
+                var st = searchTerm.ToLower();
                 query = query.Where(a =>
-                    a.app_user.name.ToLower().Contains(searchTerm) ||
-                    a.spbu.spbu_no.ToLower().Contains(searchTerm));
+                    (a.app_user.name ?? "").ToLower().Contains(st) ||
+                    (a.spbu.spbu_no ?? "").ToLower().Contains(st));
             }
 
             query = query.OrderByDescending(a => a.created_date);
@@ -50,11 +55,13 @@ namespace e_Pas_CMS.Controllers
             {
                 Id = a.id,
                 Status = MapStatus(a.status),
-                AppUserName = a.app_user.name,
-                AuditDate = (a.audit_execution_time == null || a.audit_execution_time.Value == DateTime.MinValue) ? a.audit_schedule_date.HasValue ? a.audit_schedule_date.Value.ToDateTime(new TimeOnly()) : DateTime.MinValue : a.audit_execution_time.Value,
+                AppUserName = a.app_user?.name,
+                AuditDate = (a.audit_execution_time == null || a.audit_execution_time.Value == DateTime.MinValue)
+                            ? (a.audit_schedule_date.HasValue ? a.audit_schedule_date.Value.ToDateTime(new TimeOnly()) : DateTime.MinValue)
+                            : a.audit_execution_time.Value,
                 AuditType = a.audit_type,
                 AuditLevel = a.audit_level,
-                SpbuNo = a.spbu.spbu_no,
+                SpbuNo = a.spbu?.spbu_no,
                 ReportNo = a.report_no
             }).ToList();
 
@@ -74,8 +81,8 @@ namespace e_Pas_CMS.Controllers
         private string MapStatus(string status) => status switch
         {
             "NOT_STARTED" => "Belum Dimulai",
-            "IN_PROGRESS_INPUT" => "Sedang Berlangsung",
-            "IN_PROGRESS_SUBMIT" => "Sedang Berlangsung",
+            "IN_PROGRESS_INPUT" => "Sedang Berlangsung (Input)",
+            "IN_PROGRESS_SUBMIT" => "Sedang Berlangsung (Submit)",
             "UNDER_REVIEW" => "Sedang Ditinjau",
             "VERIFIED" => "Terverifikasi",
             _ => status
@@ -96,7 +103,6 @@ namespace e_Pas_CMS.Controllers
                 return View(model);
             }
 
-
             TempData["Success"] = "Scheduler berhasil ditambahkan.";
             return RedirectToAction("Add");
         }
@@ -108,8 +114,8 @@ namespace e_Pas_CMS.Controllers
 
             if (!string.IsNullOrWhiteSpace(search))
             {
-                search = search.ToLower();
-                query = query.Where(x => x.name.ToLower().Contains(search));
+                var st = search.ToLower();
+                query = query.Where(x => (x.name ?? "").ToLower().Contains(st));
             }
 
             var totalItems = await query.CountAsync();
@@ -129,7 +135,7 @@ namespace e_Pas_CMS.Controllers
             return Json(new
             {
                 currentPage = page,
-                totalPages = totalPages,
+                totalPages,
                 items
             });
         }
@@ -137,8 +143,12 @@ namespace e_Pas_CMS.Controllers
         [HttpGet("Edit/{id}")]
         public ActionResult Edit(string id)
         {
-            var audit = _context.trx_audits.Find(id);
-            if (audit == null) return HttpNotFound();
+            var audit = _context.trx_audits
+                .Include(a => a.spbu)
+                .Include(a => a.app_user)
+                .FirstOrDefault(a => a.id == id);
+
+            if (audit == null) return NotFound();
 
             // Ambil audit_level unik dari master_audit_flow
             var auditLevels = _context.master_audit_flows
@@ -156,6 +166,8 @@ namespace e_Pas_CMS.Controllers
                 AuditType = audit.audit_type,
                 AuditScheduleDate = audit.audit_schedule_date,
                 Status = MapStatus(audit.status),
+                AuditMomIntro = audit.audit_mom_intro,
+                AuditMomFinal = audit.audit_mom_final,
                 SpbuList = _context.spbus
                     .Select(s => new SelectListItem { Value = s.id, Text = s.spbu_no })
                     .ToList(),
@@ -175,6 +187,7 @@ namespace e_Pas_CMS.Controllers
         }
 
         [HttpPost("Edit/{id}")]
+        [ValidateAntiForgeryToken]
         public ActionResult Edit(AuditEditViewModel model)
         {
             var audit = _context.trx_audits.FirstOrDefault(a => a.id == model.Id);
@@ -189,23 +202,42 @@ namespace e_Pas_CMS.Controllers
             audit.audit_schedule_date = model.AuditScheduleDate;
             audit.audit_mom_intro = model.AuditMomIntro;
             audit.audit_mom_final = model.AuditMomFinal;
-            audit.status = audit.status;
+            audit.status = audit.status; // tidak mengubah status
 
-            // Validasi berdasarkan tipe audit
+            // Validasi berdasarkan tipe audit (ambil latest by version)
             if (model.AuditType == "Basic Operational")
             {
                 audit.master_questioner_intro_id = null;
-                audit.master_questioner_checklist_id = "4b295bf0-9d29-4a56-9004-4b96ab656257";
+
+                var latestChecklist = _context.master_questioners
+                    .Where(m => m.type == "Basic Operational" && m.category == "CHECKLIST")
+                    .OrderByDescending(m => m.version)
+                    .Select(m => m.id)
+                    .FirstOrDefault();
+
+                audit.master_questioner_checklist_id = latestChecklist ?? "4b295bf0-9d29-4a56-9004-4b96ab656257";
             }
             else
             {
-                audit.master_questioner_intro_id = "7e3dca2d-2d99-4a8d-9fc0-9b80cb4c3a79";
-                audit.master_questioner_checklist_id = "16d4f8e1-360a-47b0-86b7-8ac55a1a6f75";
+                var latestIntro = _context.master_questioners
+                    .Where(m => m.type == "Mystery Audit" && m.category == "INTRO")
+                    .OrderByDescending(m => m.version)
+                    .Select(m => m.id)
+                    .FirstOrDefault();
+
+                var latestChecklist = _context.master_questioners
+                    .Where(m => m.type == "Mystery Audit" && m.category == "CHECKLIST")
+                    .OrderByDescending(m => m.version)
+                    .Select(m => m.id)
+                    .FirstOrDefault();
+
+                audit.master_questioner_intro_id = latestIntro ?? "7e3dca2d-2d99-4a8d-9fc0-9b80cb4c3a79";
+                audit.master_questioner_checklist_id = latestChecklist ?? "16d4f8e1-360a-47b0-86b7-8ac55a1a6f75";
             }
 
             // Metadata update
             audit.updated_date = DateTime.Now;
-            audit.updated_by = User.Identity.Name;
+            audit.updated_by = User.Identity?.Name ?? "SYSTEM";
 
             _context.SaveChanges();
 
@@ -214,19 +246,13 @@ namespace e_Pas_CMS.Controllers
             if (spbu != null)
             {
                 spbu.audit_next = model.AuditLevel;
-                spbu.updated_by = User.Identity.Name;
+                spbu.updated_by = User.Identity?.Name ?? "SYSTEM";
                 spbu.updated_date = DateTime.Now;
+                _context.SaveChanges();
             }
-
-            _context.SaveChanges();
 
             TempData["Success"] = "Data berhasil diperbarui.";
             return RedirectToAction("Index");
-        }
-
-        private ActionResult HttpNotFound()
-        {
-            throw new NotImplementedException();
         }
 
         [HttpGet("Detail/{id}")]
@@ -243,8 +269,8 @@ namespace e_Pas_CMS.Controllers
             var vm = new SchedulerDetailViewModel
             {
                 Id = data.id,
-                SpbuNo = data.spbu.spbu_no,
-                SpbuAddress = data.spbu.address,
+                SpbuNo = data.spbu?.spbu_no,
+                SpbuAddress = data.spbu?.address,
                 AppUserName = data.app_user?.name,
                 AuditScheduleDate = data.audit_schedule_date?.ToDateTime(new TimeOnly()),
                 AuditType = data.audit_type,
@@ -257,7 +283,6 @@ namespace e_Pas_CMS.Controllers
             return View(vm);
         }
 
-
         [HttpGet("GetSpbuList")]
         public async Task<IActionResult> GetSpbuList(int page = 1, int pageSize = 10, string search = "")
         {
@@ -266,13 +291,13 @@ namespace e_Pas_CMS.Controllers
 
             if (!string.IsNullOrWhiteSpace(search))
             {
-                search = search.ToLower();
+                var st = search.ToLower();
 
                 query = query.Where(x =>
-                    x.spbu_no.ToLower().Contains(search) ||
-                    (x.address ?? "").ToLower().Contains(search) ||
-                    (x.city_name ?? "").ToLower().Contains(search) ||
-                    (x.province_name ?? "").ToLower().Contains(search)
+                    (x.spbu_no ?? "").ToLower().Contains(st) ||
+                    ((x.address ?? "").ToLower().Contains(st)) ||
+                    ((x.city_name ?? "").ToLower().Contains(st)) ||
+                    ((x.province_name ?? "").ToLower().Contains(st))
                 );
             }
 
@@ -297,19 +322,20 @@ namespace e_Pas_CMS.Controllers
             return Json(new
             {
                 currentPage = page,
-                totalPages = totalPages,
-                items = items
+                totalPages,
+                items
             });
         }
 
         [HttpPost("AddScheduler")]
+        [ValidateAntiForgeryToken]
         public async Task<IActionResult> AddScheduler(string AuditorId, string selectedSpbuIds, string TipeAudit, DateTime TanggalAudit)
         {
             if (string.IsNullOrEmpty(AuditorId) || string.IsNullOrEmpty(selectedSpbuIds) || string.IsNullOrEmpty(TipeAudit))
             {
                 return BadRequest("Data tidak lengkap.");
             }
-            
+
             string nextauditsspbu = "";
             var spbuIdList = selectedSpbuIds.Split(',', StringSplitOptions.RemoveEmptyEntries);
             var userId = AuditorId;
@@ -321,7 +347,6 @@ namespace e_Pas_CMS.Controllers
                 string tid = "";
                 string audit_level = "";
 
-                // Tambahkan LINQ query ke database
                 var existingAudit = await _context.trx_audits
                     .Where(x => x.spbu_id == spbuId)
                     .OrderByDescending(x => x.created_date)
@@ -444,50 +469,13 @@ namespace e_Pas_CMS.Controllers
                 var auditNextSql = @"SELECT * FROM spbu WHERE id = @id LIMIT 1;";
                 var auditNextRes = await conn.QueryFirstOrDefaultAsync<dynamic>(auditNextSql, new { id = spbuId });
 
-                //if (auditFlow != null)
-                //{
-                //    string passedGood = auditFlow.passed_good;
-                //    string passedExcellent = auditFlow.passed_excellent;
-                //    string passedAuditLevel = auditFlow.passed_audit_level;
-                //    string failed_audit_level = auditFlow.failed_audit_level;
-
-                //    if (string.IsNullOrWhiteSpace(passedGood) && string.IsNullOrWhiteSpace(passedExcellent) && goodStatus == "CERTIFIED" && excellentStatus == "CERTIFIED")
-                //    {
-                //        auditNext = passedAuditLevel;
-                //    }
-                //    else if (string.IsNullOrWhiteSpace(passedGood) && string.IsNullOrWhiteSpace(passedExcellent) && goodStatus == "CERTIFIED" && excellentStatus == "NOT CERTIFIED")
-                //    {
-                //        auditNext = passedAuditLevel;
-                //    }
-                //    else if (string.IsNullOrWhiteSpace(passedGood) && string.IsNullOrWhiteSpace(passedExcellent) && goodStatus == "NOT CERTIFIED" && excellentStatus == "NOT CERTIFIED")
-                //    {
-                //        auditNext = failed_audit_level;
-                //    }
-                //    else if (goodStatus == "CERTIFIED" && excellentStatus == "NOT CERTIFIED")
-                //    {
-                //        auditNext = passedGood;
-                //    }
-                //    else if (goodStatus == "CERTIFIED" && excellentStatus == "CERTIFIED")
-                //    {
-                //        auditNext = passedExcellent;
-                //    }
-                //    else if (string.IsNullOrWhiteSpace(passedGood) && string.IsNullOrWhiteSpace(passedExcellent) && finalScore >= 75)
-                //    {
-                //        auditNext = passedAuditLevel;
-                //    }
-                //    else
-                //    {
-                //        auditNext = failed_audit_level;
-                //    }
-                //}
-
-                auditNext = auditNextRes.audit_next;
+                auditNext = auditNextRes?.audit_next;
 
                 var auditlevelClassSql = @"SELECT audit_level_class FROM master_audit_flow WHERE audit_level = @level LIMIT 1;";
                 var auditlevelClass = await conn.QueryFirstOrDefaultAsync<dynamic>(auditlevelClassSql, new { level = auditNext });
                 levelspbu = auditlevelClass != null
-                ? (auditlevelClass.audit_level_class ?? "")
-                : "";
+                    ? (auditlevelClass.audit_level_class ?? "")
+                    : "";
 
                 bool isBasicOperational = TipeAudit == "Basic Operational";
 
@@ -516,7 +504,7 @@ namespace e_Pas_CMS.Controllers
                 {
                     id = Guid.NewGuid().ToString(),
                     report_prefix = "",
-                    report_no = "",                          
+                    report_no = "",
                     spbu_id = spbuId,
                     app_user_id = userId,
                     master_questioner_intro_id = introId,
@@ -547,8 +535,7 @@ namespace e_Pas_CMS.Controllers
             }
             catch (Exception ex)
             {
-                // Logging jika perlu
-                Console.WriteLine($"Error saat menyimpan data audit: {ex.Message}");
+                _logger.LogError(ex, "Error saat menyimpan data audit (AddScheduler)");
                 return StatusCode(500, "Terjadi kesalahan saat menyimpan data.");
             }
 
@@ -556,7 +543,178 @@ namespace e_Pas_CMS.Controllers
             return RedirectToAction("Add");
         }
 
-        [HttpPost]
+        // === NEW: Jalankan Auto-Scheduler (sesuai query yang kamu kirim) ===
+        [HttpPost("RunAutoSchedule")]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> RunAutoSchedule()
+        {
+            const string sql = @"
+INSERT INTO trx_audit (
+    id,
+    report_prefix,
+    report_no,
+    spbu_id,
+    app_user_id,
+    master_questioner_intro_id,
+    master_questioner_checklist_id,
+    audit_level,
+    audit_type,
+    audit_schedule_date,
+    audit_execution_time,
+    audit_media_upload,
+    audit_media_total,
+    audit_mom_intro,
+    audit_mom_final,
+    status,
+    created_by,
+    created_date,
+    updated_by,
+    updated_date,
+    approval_by,
+    approval_date,
+    good_status,
+    excellent_status,
+    score,
+    report_file_good,
+    report_file_excellent,
+    report_file_boa,
+    boa_status
+)
+WITH 
+latest_verified AS (
+    SELECT DISTINCT ON (ta.spbu_id)
+        ta.spbu_id,
+        ta.app_user_id,
+        COALESCE(ta.audit_execution_time, ta.audit_schedule_date) AS last_verified_date
+    FROM trx_audit ta
+    WHERE ta.status IN ('UNDER_REVIEW','VERIFIED')
+    ORDER BY ta.spbu_id, ta.audit_execution_time DESC, ta.audit_schedule_date DESC
+),
+latest_progress AS (
+    SELECT DISTINCT ON (ta.spbu_id)
+        ta.spbu_id,
+        ta.audit_schedule_date AS last_progress_date
+    FROM trx_audit ta
+    WHERE ta.status IN ('DRAFT','NOT_STARTED','IN_PROGRESS_INPUT')
+    ORDER BY ta.spbu_id, ta.audit_execution_time DESC, ta.audit_schedule_date DESC
+),
+latest_master_questioner as (
+	SELECT DISTINCT ON (mq.type, mq.category)
+	       mq.id,
+	       mq.type,
+	       mq.category,
+	       mq.version
+	FROM master_questioner mq
+	ORDER BY mq.type, mq.category, mq.version DESC
+),
+days_in_month AS (
+    SELECT generate_series(
+        date_trunc('month', current_date),
+        date_trunc('month', current_date) + interval '1 month - 1 day',
+        interval '1 day'
+    )::date AS schedule_day
+),
+data AS (
+    SELECT 
+        s.spbu_no,
+        s.id as spbu_id,
+        lv.app_user_id,
+        s.audit_next,
+        lv.last_verified_date,
+        lp.last_progress_date,
+        maf.range_audit_month, 
+        maf.audit_type,
+        lmqi.id as master_questioner_intro_id,
+        lmqc.id as master_questioner_checklist_id
+    FROM spbu s
+    INNER JOIN master_audit_flow maf
+        ON maf.audit_level = s.audit_next 
+       AND maf.range_audit_month IS NOT null
+    LEFT JOIN latest_master_questioner lmqi 
+        ON lmqi.type = maf.audit_type and lmqi.category = 'INTRO'
+    LEFT JOIN latest_master_questioner lmqc 
+        ON lmqc.type = maf.audit_type and lmqc.category = 'CHECKLIST'
+    LEFT JOIN latest_verified lv 
+        ON lv.spbu_id = s.id
+    LEFT JOIN latest_progress lp 
+        ON lp.spbu_id = s.id
+    WHERE lp.last_progress_date IS NULL
+      AND lv.last_verified_date IS NOT NULL
+      AND (
+            date_trunc('month', lv.last_verified_date) 
+            + (maf.range_audit_month || ' month')::interval
+          ) <= date_trunc('month', CURRENT_DATE)
+),
+distributed AS (
+    SELECT d.*,
+           ROW_NUMBER() OVER (PARTITION BY d.app_user_id ORDER BY d.spbu_no) AS rn,
+           (SELECT count(*) FROM days_in_month) AS total_days
+    FROM data d
+)
+SELECT uuid_generate_v4() as id,
+       'CB/AI/' as report_prefix,
+       '' as report_no,
+       spbu_id,
+       app_user_id,
+       master_questioner_intro_id,
+       master_questioner_checklist_id, 
+       audit_next as audit_level,
+       audit_type,
+       (
+         date_trunc('month', current_date)::date
+         + ((rn - 1) % total_days) * interval '1 day'
+       )::date as audit_schedule_date,
+       null as audit_execution_time,
+       0 as audit_media_upload,
+       0 as audit_media_total,
+       '' as audit_mom_intro,
+       '' as audit_mom_final,
+       'DRAFT' as status,
+       'SYSTEM-AUTO-SCHEDULE' as created_by,
+       current_timestamp as created_date,
+       'SYSTEM-AUTO-SCHEDULE' as updated_by,
+       current_timestamp as updated_date,
+       null as approval_by,
+       null as approval_date,
+       null as good_status,
+       null as excellent_status,
+       null as score,
+       null as report_file_good,
+       null as report_file_excellent,
+       null as report_file_boa,
+       null as boa_status
+FROM distributed
+WHERE spbu_id IN (
+    SELECT id FROM spbu WHERE spbu_no ILIKE '%test%'
+)
+ORDER BY spbu_no ASC;";
+
+            try
+            {
+                var cs = _context.Database.GetConnectionString();
+                await using var conn = new NpgsqlConnection(cs);
+                await conn.OpenAsync();
+                await using var tx = await conn.BeginTransactionAsync();
+
+                // Pastikan ekstensi uuid tersedia
+                await conn.ExecuteAsync("CREATE EXTENSION IF NOT EXISTS \"uuid-ossp\";", transaction: tx);
+
+                var affected = await conn.ExecuteAsync(sql, transaction: tx, commandTimeout: 600);
+
+                await tx.CommitAsync();
+
+                TempData["Success"] = $"Run Scheduler selesai. {affected} jadwal baru dibuat.";
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Gagal menjalankan RunAutoSchedule");
+                TempData["Error"] = $"Gagal menjalankan scheduler: {ex.Message}";
+            }
+
+            return RedirectToAction(nameof(Index));
+        }
+
+        [HttpPost("Delete/{id}")]
         [ValidateAntiForgeryToken]
         public ActionResult Delete(string id)
         {
@@ -565,11 +723,11 @@ namespace e_Pas_CMS.Controllers
             {
                 audit.status = "DELETED";
                 audit.updated_date = DateTime.Now;
+                audit.updated_by = User.Identity?.Name ?? "SYSTEM";
                 _context.SaveChanges();
                 TempData["Success"] = "Jadwal audit berhasil dihapus.";
             }
             return RedirectToAction("Index");
         }
-
     }
 }

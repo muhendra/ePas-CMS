@@ -296,14 +296,16 @@ public class ReportExcellentTemplate : IDocument
 
                     if (isPenalty)
                     {
-                        // background merah + teks putih, mirip di web
-                        box = box.Background("#dc3545").Padding(6);
-                        box.Text(clean).FontSize(9).FontColor(Colors.White);
+                        box.Padding(6).Text(clean)
+                            .FontSize(9)
+                            .FontColor(Colors.Red.Medium) 
+                            .SemiBold();                  
                     }
                     else
                     {
-                        box.Text(clean).FontSize(9); // normal
+                        box.Padding(6).Text(clean).FontSize(9); // normal
                     }
+
                 });
             }
 
