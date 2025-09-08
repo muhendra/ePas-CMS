@@ -12,8 +12,9 @@
                             ("APPROVE_PPN",  "Menunggu Persetujuan CBI"),
                             ("APPROVE_CBI",  "Menunggu Persetujuan Pertamina"),
                             ("APPROVED",     "Banding Disetujui"),
+                            ("BYPASS_APPROVE_PPN", "Bypass Approve PPN"),
                             ("REJECTED",     "Ditolak"),
-                            ("REJECT_CBI",     "Ditolak"),
+                            ("REJECT_CBI",   "Ditolak"),
                                 };
 }
 
@@ -125,7 +126,7 @@
         .table-responsive {
             border-radius: 12px;
             overflow: hidden;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
             margin-bottom: 0.5rem;
             background: white;
             height: 100%;
@@ -367,13 +368,9 @@
                                 </th>
 
                                 <th>
-                                    <a asp-action="Index"
-                                       asp-route-type="@type"
-                                       asp-route-pageNumber="1"
-                                       asp-route-pageSize="@Model.PageSize"
-                                       asp-route-searchTerm="@searchTerm"
-                                       asp-route-statusFilter="@statusFilter"
-                                       asp-route-sortColumn="NoSpbu"
+                                    <a asp-action="Index" asp-route-type="@type" asp-route-pageNumber="1"
+                                       asp-route-pageSize="@Model.PageSize" asp-route-searchTerm="@searchTerm"
+                                       asp-route-statusFilter="@statusFilter" asp-route-sortColumn="NoSpbu"
                                        asp-route-sortDirection="@(ViewBag.SortColumn == "NoSpbu" && ViewBag.SortDirection == "asc" ? "desc" : "asc")">
                                         No. SPBU
                                         @if (ViewBag.SortColumn == "NoSpbu")
@@ -384,13 +381,9 @@
                                 </th>
 
                                 <th>
-                                    <a asp-action="Index"
-                                       asp-route-type="@type"
-                                       asp-route-pageNumber="1"
-                                       asp-route-pageSize="@Model.PageSize"
-                                       asp-route-searchTerm="@searchTerm"
-                                       asp-route-statusFilter="@statusFilter"
-                                       asp-route-sortColumn="City"
+                                    <a asp-action="Index" asp-route-type="@type" asp-route-pageNumber="1"
+                                       asp-route-pageSize="@Model.PageSize" asp-route-searchTerm="@searchTerm"
+                                       asp-route-statusFilter="@statusFilter" asp-route-sortColumn="City"
                                        asp-route-sortDirection="@(ViewBag.SortColumn == "City" && ViewBag.SortDirection == "asc" ? "desc" : "asc")">
                                         Kab/Kota
                                         @if (ViewBag.SortColumn == "City")
@@ -401,13 +394,9 @@
                                 </th>
 
                                 <th>
-                                    <a asp-action="Index"
-                                       asp-route-type="@type"
-                                       asp-route-pageNumber="1"
-                                       asp-route-pageSize="@Model.PageSize"
-                                       asp-route-searchTerm="@searchTerm"
-                                       asp-route-statusFilter="@statusFilter"
-                                       asp-route-sortColumn="Rayon"
+                                    <a asp-action="Index" asp-route-type="@type" asp-route-pageNumber="1"
+                                       asp-route-pageSize="@Model.PageSize" asp-route-searchTerm="@searchTerm"
+                                       asp-route-statusFilter="@statusFilter" asp-route-sortColumn="Rayon"
                                        asp-route-sortDirection="@(ViewBag.SortColumn == "Rayon" && ViewBag.SortDirection == "asc" ? "desc" : "asc")">
                                         Region
                                         @if (ViewBag.SortColumn == "Rayon")
@@ -418,13 +407,9 @@
                                 </th>
 
                                 <th>
-                                    <a asp-action="Index"
-                                       asp-route-type="@type"
-                                       asp-route-pageNumber="1"
-                                       asp-route-pageSize="@Model.PageSize"
-                                       asp-route-searchTerm="@searchTerm"
-                                       asp-route-statusFilter="@statusFilter"
-                                       asp-route-sortColumn="Auditor"
+                                    <a asp-action="Index" asp-route-type="@type" asp-route-pageNumber="1"
+                                       asp-route-pageSize="@Model.PageSize" asp-route-searchTerm="@searchTerm"
+                                       asp-route-statusFilter="@statusFilter" asp-route-sortColumn="Auditor"
                                        asp-route-sortDirection="@(ViewBag.SortColumn == "Auditor" && ViewBag.SortDirection == "asc" ? "desc" : "asc")">
                                         Auditor
                                         @if (ViewBag.SortColumn == "Auditor")
@@ -434,15 +419,11 @@
                                     </a>
                                 </th>
 
-                                <!-- KOLOM STATUS (baru) -->
+                                <!-- STATUS -->
                                 <th>
-                                    <a asp-action="Index"
-                                       asp-route-type="@type"
-                                       asp-route-pageNumber="1"
-                                       asp-route-pageSize="@Model.PageSize"
-                                       asp-route-searchTerm="@searchTerm"
-                                       asp-route-statusFilter="@statusFilter"
-                                       asp-route-sortColumn="StatusText"
+                                    <a asp-action="Index" asp-route-type="@type" asp-route-pageNumber="1"
+                                       asp-route-pageSize="@Model.PageSize" asp-route-searchTerm="@searchTerm"
+                                       asp-route-statusFilter="@statusFilter" asp-route-sortColumn="StatusText"
                                        asp-route-sortDirection="@(ViewBag.SortColumn == "StatusText" && ViewBag.SortDirection == "asc" ? "desc" : "asc")">
                                         Status
                                         @if (ViewBag.SortColumn == "StatusText")
@@ -453,13 +434,9 @@
                                 </th>
 
                                 <th>
-                                    <a asp-action="Index"
-                                       asp-route-type="@type"
-                                       asp-route-pageNumber="1"
-                                       asp-route-pageSize="@Model.PageSize"
-                                       asp-route-searchTerm="@searchTerm"
-                                       asp-route-statusFilter="@statusFilter"
-                                       asp-route-sortColumn="TanggalPengajuan"
+                                    <a asp-action="Index" asp-route-type="@type" asp-route-pageNumber="1"
+                                       asp-route-pageSize="@Model.PageSize" asp-route-searchTerm="@searchTerm"
+                                       asp-route-statusFilter="@statusFilter" asp-route-sortColumn="TanggalPengajuan"
                                        asp-route-sortDirection="@(ViewBag.SortColumn == "TanggalPengajuan" && ViewBag.SortDirection == "asc" ? "desc" : "asc")">
                                         Tanggal Pengajuan
                                         @if (ViewBag.SortColumn == "TanggalPengajuan")
@@ -470,13 +447,9 @@
                                 </th>
 
                                 <th>
-                                    <a asp-action="Index"
-                                       asp-route-type="@type"
-                                       asp-route-pageNumber="1"
-                                       asp-route-pageSize="@Model.PageSize"
-                                       asp-route-searchTerm="@searchTerm"
-                                       asp-route-statusFilter="@statusFilter"
-                                       asp-route-sortColumn="TanggalAudit"
+                                    <a asp-action="Index" asp-route-type="@type" asp-route-pageNumber="1"
+                                       asp-route-pageSize="@Model.PageSize" asp-route-searchTerm="@searchTerm"
+                                       asp-route-statusFilter="@statusFilter" asp-route-sortColumn="TanggalAudit"
                                        asp-route-sortDirection="@(ViewBag.SortColumn == "TanggalAudit" && ViewBag.SortDirection == "asc" ? "desc" : "asc")">
                                         Tanggal Audit
                                         @if (ViewBag.SortColumn == "TanggalAudit")
@@ -487,13 +460,9 @@
                                 </th>
 
                                 <th>
-                                    <a asp-action="Index"
-                                       asp-route-type="@type"
-                                       asp-route-pageNumber="1"
-                                       asp-route-pageSize="@Model.PageSize"
-                                       asp-route-searchTerm="@searchTerm"
-                                       asp-route-statusFilter="@statusFilter"
-                                       asp-route-sortColumn="TipeAudit"
+                                    <a asp-action="Index" asp-route-type="@type" asp-route-pageNumber="1"
+                                       asp-route-pageSize="@Model.PageSize" asp-route-searchTerm="@searchTerm"
+                                       asp-route-statusFilter="@statusFilter" asp-route-sortColumn="TipeAudit"
                                        asp-route-sortDirection="@(ViewBag.SortColumn == "TipeAudit" && ViewBag.SortDirection == "asc" ? "desc" : "asc")">
                                         Tipe Audit
                                         @if (ViewBag.SortColumn == "TipeAudit")
@@ -504,13 +473,9 @@
                                 </th>
 
                                 <th>
-                                    <a asp-action="Index"
-                                       asp-route-type="@type"
-                                       asp-route-pageNumber="1"
-                                       asp-route-pageSize="@Model.PageSize"
-                                       asp-route-searchTerm="@searchTerm"
-                                       asp-route-statusFilter="@statusFilter"
-                                       asp-route-sortColumn="AuditLevel"
+                                    <a asp-action="Index" asp-route-type="@type" asp-route-pageNumber="1"
+                                       asp-route-pageSize="@Model.PageSize" asp-route-searchTerm="@searchTerm"
+                                       asp-route-statusFilter="@statusFilter" asp-route-sortColumn="AuditLevel"
                                        asp-route-sortDirection="@(ViewBag.SortColumn == "AuditLevel" && ViewBag.SortDirection == "asc" ? "desc" : "asc")">
                                         AuditLevel
                                         @if (ViewBag.SortColumn == "AuditLevel")
@@ -521,13 +486,9 @@
                                 </th>
 
                                 <th>
-                                    <a asp-action="Index"
-                                       asp-route-type="@type"
-                                       asp-route-pageNumber="1"
-                                       asp-route-pageSize="@Model.PageSize"
-                                       asp-route-searchTerm="@searchTerm"
-                                       asp-route-statusFilter="@statusFilter"
-                                       asp-route-sortColumn="Score"
+                                    <a asp-action="Index" asp-route-type="@type" asp-route-pageNumber="1"
+                                       asp-route-pageSize="@Model.PageSize" asp-route-searchTerm="@searchTerm"
+                                       asp-route-statusFilter="@statusFilter" asp-route-sortColumn="Score"
                                        asp-route-sortDirection="@(ViewBag.SortColumn == "Score" && ViewBag.SortDirection == "asc" ? "desc" : "asc")">
                                         Score
                                         @if (ViewBag.SortColumn == "Score")
@@ -553,6 +514,7 @@
                                         "APPROVE_PPN" => "badge bg-primary",
                                         "APPROVE_CBI" => "badge bg-secondary",
                                         "APPROVED" => "badge bg-success",
+                                        "BYPASS_APPROVE_PPN" => "badge bg-success",
                                         "REJECTED" => "badge bg-danger",
                                         "REJECT_CBI" => "badge bg-danger",
                                         _ => "badge bg-light text-dark"
@@ -574,7 +536,7 @@
                                         <td>@item.Region</td>
                                         <td>@item.Auditor</td>
 
-                                        <!-- STATUS (baru) -->
+                                        <!-- STATUS -->
                                         <td><span class="@badgeClass">@item.StatusText</span></td>
 
                                         <td>@item.TanggalPengajuan.ToString("dd/MM/yyyy")</td>

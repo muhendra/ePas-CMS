@@ -15,7 +15,10 @@
     switch (statusNorm)
     {
         case "APPROVED":
-        case "APPROVE": statusClass = "bg-success"; break;
+        case "APPROVE":
+        case "BYPASS_APPROVE_PPN":
+            statusClass = "bg-success";
+            break;
         case "REJECTED":
         case "REJECT_CBI":
             statusClass = "bg-danger";
@@ -52,19 +55,20 @@
     // ===== NEW: AllPointsProcessedCurrentStage (APPROVED/APPROVE/REJECTED) + override REJECT_CBI utk Pertamina =====
     Func<string, string> PrevStageOf = s =>
         {
-    var v = (s ?? "").Trim().ToUpperInvariant();
-    return v switch
-    {
-        "APPROVE_SBM" => "UNDER_REVIEW", // SBM memproses sebelum masuk APPROVE_SBM
-        "APPROVE_PPN" => "APPROVE_SBM",  // PPN memproses sebelum masuk APPROVE_PPN
-        "APPROVE_CBI" => "APPROVE_PPN",  // CBI memproses sebelum masuk APPROVE_CBI
-        "APPROVED" => "APPROVE_CBI",  // Pertamina memproses sebelum final
-        "REJECT_CBI" => "APPROVE_CBI",
-        _ => v               // UNDER_REVIEW tetap cek dirinya sendiri
-    };
+            var v = (s ?? "").Trim().ToUpperInvariant();
+            return v switch
+            {
+                "APPROVE_SBM" => "UNDER_REVIEW", // SBM memproses sebelum masuk APPROVE_SBM
+                "APPROVE_PPN" => "APPROVE_SBM",  // PPN memproses sebelum masuk APPROVE_PPN
+                "APPROVE_CBI" => "APPROVE_PPN",  // CBI memproses sebelum masuk APPROVE_CBI
+                "APPROVED" => "APPROVE_CBI",  // Pertamina memproses sebelum final
+                "REJECT_CBI" => "APPROVE_CBI",
+                _ => v               // UNDER_REVIEW tetap cek dirinya sendiri
+            };
         };
 
-    var stageToValidate = PrevStageOf(statusNorm);
+    // Validasi SEMUA poin sudah diproses (APPROVED/APPROVE/REJECTED) DI TAHAP SAAT INI
+    var stageToValidate = statusNorm; // <- kuncinya: cek stage sekarang, bukan stage sebelumnya
 
     bool AllPointsProcessedCurrentStage =
         (norm(statusNorm) == "REJECT_CBI" && hasRolePertamina)
@@ -73,11 +77,9 @@
             Model?.Points != null && Model.Points.Any() &&
             Model.Points.All(p =>
             {
-                // Element bertag (REJECT) juga dianggap sudah diproses
                 var elementText = (p?.Element ?? "").Trim();
                 bool rejectTagged = elementText.ToUpperInvariant().Contains("REJECT");
 
-                // Sudah ada riwayat APPROVED / APPROVE / REJECTED di STAGE YANG DIVALIDASI
                 bool hasHist = p?.History != null && p.History.Any(h =>
                 {
                     var sc = (h.StatusCode ?? "").Trim().ToUpperInvariant();
@@ -88,6 +90,7 @@
                 return rejectTagged || hasHist;
             })
         );
+
 
     // Pembungkus container aksi
     var canShowActionsContainer =
@@ -112,6 +115,7 @@
             "APPROVE_PPN" => "Menunggu Persetujuan CBI",
             "APPROVE_CBI" => "Menunggu Persetujuan Pertamina",
             "APPROVED" => "Banding Disetujui",
+            "BYPASS_APPROVE_PPN" => "Bypass Approve PPN",
             "REJECTED" => "Ditolak",
             "REJECT_CBI" => "Ditolak",
             _ => s ?? "-"
@@ -534,30 +538,43 @@
                     </button>
                 </form>
             }
-
             @* STEP 2 (PPN) *@
             @if (statusNorm == "APPROVE_SBM" && hasApproveRolePPN && feedbackTypeNorm != "COMPLAINT")
             {
-                <form asp-action="Approve" method="post" class="d-inline needs-klarifikasi">
-                    @Html.AntiForgeryToken()
-                    <input type="hidden" name="id" value="@Model.Id" />
-                    <input type="hidden" name="klarifikasi" value="" />
-                    <button type="submit" class="btn btn-gradient-green rounded-pill px-4 py-2 shadow-sm hover-scale me-2" @(AllPointsProcessedCurrentStage ? "" : "disabled")>
-                        <i class="bi bi-check-circle"></i> Submit
-                    </button>
-                </form>
+                @* Submit/Reject HANYA muncul jika semua poin sudah diproses di stage ini *@
+                @if (AllPointsProcessedCurrentStage)
+                {
+                    <form asp-action="Approve" method="post" class="d-inline needs-klarifikasi">
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" name="id" value="@Model.Id" />
+                        <input type="hidden" name="klarifikasi" value="" />
+                        <button type="submit" class="btn btn-gradient-green rounded-pill px-4 py-2 shadow-sm hover-scale me-2">
+                            <i class="bi bi-check-circle"></i> Submit
+                        </button>
+                    </form>
 
-                <form asp-action="Reject" method="post" class="d-inline needs-klarifikasi">
+                    <form asp-action="Reject" method="post" class="d-inline needs-klarifikasi">
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" name="id" value="@Model.Id" />
+                        <input type="hidden" name="klarifikasi" value="" />
+                        <button type="submit" class="btn btn-gradient-red rounded-pill px-4 py-2 shadow-sm hover-scale">
+                            <i class="bi bi-x-circle"></i> Reject
+                        </button>
+                    </form>
+                }
+
+                @* BYPASS SELALU TAMPIL tanpa menunggu poin diproses *@
+                <form asp-action="BypassApprovePpn" method="post" class="d-inline"
+                      onsubmit="return confirm('Yakin melakukan BYPASS? Tiket akan langsung APPROVE.');">
                     @Html.AntiForgeryToken()
                     <input type="hidden" name="id" value="@Model.Id" />
-                    <input type="hidden" name="klarifikasi" value="" />
-                    <button type="submit" class="btn btn-gradient-red rounded-pill px-4 py-2 shadow-sm hover-scale">
-                        <i class="bi bi-x-circle"></i> Reject
+                    <input type="hidden" name="notes" value="Bypass oleh PPN" />
+                    <button type="submit" class="btn btn-warning rounded-pill px-4 py-2 shadow-sm hover-scale">
+                        <i class="bi bi-fast-forward-circle"></i> Bypass Approve (PPN)
                     </button>
                 </form>
             }
 
-            @* STEP 3 (CBI) *@
             @if (statusNorm == "APPROVE_PPN" && hasRoleCBI && feedbackTypeNorm != "COMPLAINT")
             {
                 <form asp-action="Approve" method="post" class="d-inline needs-klarifikasi">
@@ -565,8 +582,7 @@
                     <input type="hidden" name="id" value="@Model.Id" />
                     <input type="hidden" name="klarifikasi" value="" />
                     <button type="submit"
-                            class="btn btn-gradient-green rounded-pill px-4 py-2 shadow-sm hover-scale me-2"
-                    @(AllPointsProcessedCurrentStage ? "" : "disabled")>
+                            class="btn btn-gradient-green rounded-pill px-4 py-2 shadow-sm hover-scale me-2">
                         <i class="bi bi-check-circle"></i> Submit
                     </button>
                 </form>
@@ -580,6 +596,7 @@
                     </button>
                 </form>
             }
+
 
             @* STEP 4 (PERTAMINA) — tampil saat APPROVE_CBI **atau** REJECTED *@
             @if ((statusNorm == "APPROVE_CBI" || statusNorm == "REJECT_CBI") && hasRolePertamina)
@@ -605,8 +622,8 @@
                 </form>
             }
 
-            @* REASSIGN saat APPROVED (tanpa syarat role) *@
-            @if (statusNorm == "APPROVED" && hasRoleCBI)
+            @* REASSIGN saat APPROVED *@
+            @if ((statusNorm == "APPROVED" || statusNorm == "BYPASS_APPROVE_PPN") && hasRoleCBI)
             {
                 <button type="button"
                         class="btn btn-warning rounded-pill px-4 py-2 shadow-sm hover-scale"
@@ -614,6 +631,7 @@
                     <i class="bi bi-arrow-counterclockwise"></i> Reassign
                 </button>
             }
+
         </div>
     }
 </div>

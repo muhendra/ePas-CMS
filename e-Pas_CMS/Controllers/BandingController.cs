@@ -31,31 +31,35 @@ namespace e_Pas_CMS.Controllers
         // GET: /Complain?type=KOMPLAIN|BANDING
         [HttpGet]
         public async Task<IActionResult> Index(
-        string type = "BANDING",
-        int pageNumber = 1,
-        int pageSize = 10,
-        string searchTerm = "",
-        string sortColumn = "",
-        string sortDirection = "asc",
-        string statusFilter = ""   // NEW
-        )
+    string type = "BANDING",
+    int pageNumber = 1,
+    int pageSize = 10,
+    string searchTerm = "",
+    string sortColumn = "",
+    string sortDirection = "asc",
+    string statusFilter = ""   // NEW
+)
         {
-        // Opsi status (urut sesuai alur)
-        var statusOptions = new List<(string Code, string Text)>
-        {
-            ("UNDER_REVIEW", "Menunggu Persetujuan SBM"),
-            ("APPROVE_SBM",  "Menunggu Persetujuan PPN"),
-            ("APPROVE_PPN",  "Menunggu Persetujuan CBI"),
-            ("APPROVE_CBI",  "Menunggu Persetujuan Pertamina"),
-            ("APPROVED",     "Banding Disetujui"),
-            ("REJECTED",     "Ditolak"),
-            ("REJECT_CBI",     "Ditolak"),
-        };
+            // Opsi status (urut sesuai alur)
+            var statusOptions = new List<(string Code, string Text)>
+    {
+        ("UNDER_REVIEW", "Menunggu Persetujuan SBM"),
+        ("APPROVE_SBM",  "Menunggu Persetujuan PPN"),
+        ("APPROVE_PPN",  "Menunggu Persetujuan CBI"),
+        ("APPROVE_CBI",  "Menunggu Persetujuan Pertamina"),
+        ("APPROVED",     "Banding Disetujui"),
+        ("BYPASS_APPROVE_PPN", "Bypass Approve PPN"),
+        ("REJECTED",     "Ditolak"),
+        ("REJECT_CBI",   "Ditolak"),
+    };
 
             ViewBag.StatusOptions = statusOptions;
             ViewBag.StatusFilter = statusFilter ?? "";
+            ViewBag.Type = type;
+            ViewBag.SortColumn = sortColumn;
+            ViewBag.SortDirection = sortDirection;
 
-            // baseQuery kamu yang sekarang
+            // baseQuery
             var baseQuery =
                 from fb in _context.TrxFeedbacks
                 join ta in _context.trx_audits on fb.TrxAuditId equals ta.id
@@ -65,13 +69,11 @@ namespace e_Pas_CMS.Controllers
                 where fb.FeedbackType == type && fb.Status != "IN_PROGRESS_SUBMIT"
                 select new { Fb = fb, Ta = ta, Sp = sp, Auditor = au != null ? au.name : null };
 
-            // FILTER: status (berdasarkan KODE)
+            // FILTER: status
             if (!string.IsNullOrWhiteSpace(statusFilter))
-            {
                 baseQuery = baseQuery.Where(x => x.Fb.Status == statusFilter);
-            }
 
-            // FILTER: search (contoh sederhana; sesuaikan punyamu)
+            // FILTER: search
             if (!string.IsNullOrWhiteSpace(searchTerm))
             {
                 var term = searchTerm.Trim().ToLower();
@@ -88,7 +90,7 @@ namespace e_Pas_CMS.Controllers
             var totalItems = await baseQuery.CountAsync();
             bool asc = string.Equals(sortDirection, "asc", StringComparison.OrdinalIgnoreCase);
 
-            // ===== Sorting non-Score di DB
+            // ===== Sorting di DB (tambahkan StatusText → pakai Fb.Status)
             IOrderedQueryable<dynamic> ordered = sortColumn switch
             {
                 "TicketNo" => asc ? baseQuery.OrderBy(x => x.Fb.TicketNo) : baseQuery.OrderByDescending(x => x.Fb.TicketNo),
@@ -96,12 +98,12 @@ namespace e_Pas_CMS.Controllers
                 "City" => asc ? baseQuery.OrderBy(x => x.Sp.city_name) : baseQuery.OrderByDescending(x => x.Sp.city_name),
                 "Rayon" => asc ? baseQuery.OrderBy(x => x.Sp.region) : baseQuery.OrderByDescending(x => x.Sp.region),
                 "Auditor" => asc ? baseQuery.OrderBy(x => x.Auditor) : baseQuery.OrderByDescending(x => x.Auditor),
-                "TanggalAudit" => asc ? baseQuery.OrderBy(x => x.Ta.audit_execution_time)
-                                       : baseQuery.OrderByDescending(x => x.Ta.audit_execution_time),
+                "TanggalAudit" => asc ? baseQuery.OrderBy(x => x.Ta.audit_execution_time) : baseQuery.OrderByDescending(x => x.Ta.audit_execution_time),
                 "TipeAudit" => asc ? baseQuery.OrderBy(x => x.Ta.audit_type) : baseQuery.OrderByDescending(x => x.Ta.audit_type),
                 "AuditLevel" => asc ? baseQuery.OrderBy(x => x.Ta.audit_level) : baseQuery.OrderByDescending(x => x.Ta.audit_level),
-                _ => asc ? baseQuery.OrderBy(x => x.Ta.audit_execution_time)
-                                       : baseQuery.OrderByDescending(x => x.Ta.audit_execution_time),
+                "StatusText" => asc ? baseQuery.OrderBy(x => x.Fb.Status) : baseQuery.OrderByDescending(x => x.Fb.Status), // NEW
+                                                                                                                           // "Score" dihitung di bawah; default pakai tanggal audit
+                _ => asc ? baseQuery.OrderBy(x => x.Ta.audit_execution_time) : baseQuery.OrderByDescending(x => x.Ta.audit_execution_time),
             };
 
             var pageItems = await ordered
@@ -109,29 +111,29 @@ namespace e_Pas_CMS.Controllers
                 .Take(pageSize)
                 .ToListAsync();
 
-            // Hitung score per baris (tetap seperti logic kamu)
+            // Hitung score per baris (Dapper + Npgsql)
             var connectionString = _context.Database.GetConnectionString();
-            await using var conn = new NpgsqlConnection(connectionString);
+            await using var conn = new Npgsql.NpgsqlConnection(connectionString);
             await conn.OpenAsync();
 
             const string sql = @"
-                SELECT 
-                    mqd.weight, 
-                    tac.score_input, 
-                    tac.score_x,
-                    mqd.is_relaksasi
-                FROM master_questioner_detail mqd
-                LEFT JOIN trx_audit_checklist tac 
-                  ON tac.master_questioner_detail_id = mqd.id
-                 AND tac.trx_audit_id = @id
-                WHERE mqd.master_questioner_id = (
-                    SELECT master_questioner_checklist_id 
-                    FROM trx_audit 
-                    WHERE id = @id
-                )
-                AND mqd.type = 'QUESTION';";
+        SELECT 
+            mqd.weight, 
+            tac.score_input, 
+            tac.score_x,
+            mqd.is_relaksasi
+        FROM master_questioner_detail mqd
+        LEFT JOIN trx_audit_checklist tac 
+          ON tac.master_questioner_detail_id = mqd.id
+         AND tac.trx_audit_id = @id
+        WHERE mqd.master_questioner_id = (
+            SELECT master_questioner_checklist_id 
+            FROM trx_audit 
+            WHERE id = @id
+        )
+        AND mqd.type = 'QUESTION';";
 
-            var result = new List<BandingListItemViewModel>(pageItems.Count);
+            var result = new List<e_Pas_CMS.ViewModels.BandingListItemViewModel>(pageItems.Count);
             foreach (var it in pageItems)
             {
                 var rows = (await conn.QueryAsync<(decimal? weight, string score_input, decimal? score_x, bool? is_relaksasi)>(
@@ -175,7 +177,7 @@ namespace e_Pas_CMS.Controllers
                 if (auditDate == default || auditDate == DateTime.MinValue)
                     auditDate = it.Ta.updated_date ?? DateTime.Now;
 
-                result.Add(new BandingListItemViewModel
+                result.Add(new e_Pas_CMS.ViewModels.BandingListItemViewModel
                 {
                     FeedbackId = it.Fb.Id,
                     TicketNo = it.Fb.TicketNo,
@@ -187,7 +189,7 @@ namespace e_Pas_CMS.Controllers
                     TanggalAudit = auditDate,
                     TipeAudit = it.Ta.audit_type,
                     AuditLevel = it.Ta.audit_level,
-                    Score = it.Ta.score,
+                    Score = it.Ta.score, // atau finalScore bila mau pakai hitungan di atas
                     TanggalPengajuan = it.Fb.CreatedDate,
                     StatusCode = it.Fb.Status,
                     StatusText = (it.Fb.Status ?? "").ToUpperInvariant() switch
@@ -199,12 +201,13 @@ namespace e_Pas_CMS.Controllers
                         "APPROVE_PPN" => "Menunggu Persetujuan CBI",
                         "APPROVE_CBI" => "Menunggu Persetujuan Pertamina",
                         "APPROVED" => "Banding Disetujui",
+                        "BYPASS_APPROVE_PPN" => "Bypass Approve PPN",
                         _ => it.Fb.Status ?? "-"
                     }
                 });
             }
 
-            var vm = new PaginationModel<BandingListItemViewModel>
+            var vm = new e_Pas_CMS.ViewModels.PaginationModel<e_Pas_CMS.ViewModels.BandingListItemViewModel>
             {
                 Items = result,
                 PageNumber = pageNumber,
@@ -440,6 +443,95 @@ namespace e_Pas_CMS.Controllers
 
             return View(vm);
         }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> BypassApprovePpn(string id, string? notes = null)
+        {
+            // id = trx_feedback.id
+            var username = User?.Identity?.Name ?? "SYSTEM";
+            var cs = _context.Database.GetConnectionString();
+
+            await using var conn = new Npgsql.NpgsqlConnection(cs);
+            await conn.OpenAsync();
+
+            await using var tx = await conn.BeginTransactionAsync();
+
+            try
+            {
+                // Pastikan header ada & statusnya APPROVE_SBM
+                var header = await conn.QueryFirstOrDefaultAsync<(string Id, string Status)>(@"
+            SELECT id, status
+            FROM trx_feedback
+            WHERE id = @id
+            FOR UPDATE
+        ", new { id }, tx);
+
+                if (header.Id == null)
+                {
+                    TempData["Error"] = "Data tidak ditemukan.";
+                    await tx.RollbackAsync();
+                    return RedirectToAction(nameof(Detail), new { id });
+                }
+
+                var currentStatus = (header.Status ?? "").Trim().ToUpperInvariant();
+                if (currentStatus != "APPROVE_SBM")
+                {
+                    TempData["Error"] = "Bypass hanya dapat dilakukan saat status APPROVE_SBM.";
+                    await tx.RollbackAsync();
+                    return RedirectToAction(nameof(Detail), new { id });
+                }
+
+                // Ambil semua point id di tiket ini
+                var pointIds = (await conn.QueryAsync<string>(@"
+            SELECT p.id
+            FROM trx_feedback_point p
+            WHERE p.trx_feedback_id = @id
+        ", new { id }, tx)).ToList();
+
+                // Update header langsung ke APPROVE
+                await conn.ExecuteAsync(@"
+            UPDATE trx_feedback
+            SET status = 'APPROVED', updated_by = @user, updated_date = NOW()
+            WHERE id = @id
+        ", new { id, user = username }, tx);
+
+                // Insert riwayat BYPASS_APPROVE_PPN untuk setiap point
+                if (pointIds.Count > 0)
+                {
+                    // gunakan COPY atau multi VALUES. Di sini multi VALUES sederhana:
+                    var sql = @"
+                INSERT INTO trx_feedback_point_approval
+                    (id, trx_feedback_point_id, status, notes, approved_by, approved_date, feedback_status)
+                VALUES
+                    (@newid, @pid, 'BYPASS_APPROVE_PPN', @notes, @user, NOW(), 'APPROVED')
+            ";
+
+                    foreach (var pid in pointIds)
+                    {
+                        await conn.ExecuteAsync(sql, new
+                        {
+                            newid = Guid.NewGuid().ToString(),
+                            pid,
+                            notes,
+                            user = username
+                        }, tx);
+                    }
+                }
+
+                await tx.CommitAsync();
+                TempData["Success"] = "Bypass Approve (PPN) berhasil. Status tiket menjadi APPROVE.";
+                return RedirectToAction(nameof(Detail), new { id });
+            }
+            catch (Exception ex)
+            {
+                await tx.RollbackAsync();
+                _ = ex; // optionally log
+                TempData["Error"] = "Terjadi kesalahan saat bypass approve.";
+                return RedirectToAction(nameof(Detail), new { id });
+            }
+        }
+
 
         [HttpPost("Banding/ApprovePoint/{id}")]
         public async Task<IActionResult> ApprovePoint(string id)
@@ -746,6 +838,7 @@ namespace e_Pas_CMS.Controllers
                 "APPROVE_PPN" => "Menunggu Persetujuan CBI",
                 "APPROVE_CBI" => "Menunggu Persetujuan Pertamina",
                 "APPROVED" => "Banding Disetujui",
+                "BYPASS_APPROVE_PPN" => "Bypass Approve PPN",
                 _ => raw
             };
         }
