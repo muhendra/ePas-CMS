@@ -969,6 +969,9 @@ AND mqd.type = 'QUESTION'";
         {
             var currentUser = User.Identity?.Name;
 
+            string goodStatus = "";
+            string excellentStatus = "";
+
             using var conn = _context.Database.GetDbConnection();
             if (conn.State != ConnectionState.Open)
                 await conn.OpenAsync();
@@ -1055,8 +1058,8 @@ AND mqd.type = 'QUESTION'";
             bool hasExcellentPenalty = !string.IsNullOrEmpty(penaltyExcellentResult);
             bool hasGoodPenalty = !string.IsNullOrEmpty(penaltyGoodResult);
 
-            string goodStatus = (model.TotalScore >= 75 && !hasGoodPenalty) ? "CERTIFIED" : "NOT CERTIFIED";
-            string excellentStatus = (model.TotalScore >= 80 && !hasExcellentPenalty) ? "CERTIFIED" : "NOT CERTIFIED";
+            goodStatus = (model.TotalScore >= 75 && !hasGoodPenalty) ? "CERTIFIED" : "NOT CERTIFIED";
+            excellentStatus = (model.TotalScore >= 80 && !hasExcellentPenalty) ? "CERTIFIED" : "NOT CERTIFIED";
 
             string auditNext = nextauditsspbu;
             string levelspbu = null;
@@ -1120,10 +1123,12 @@ AND mqd.type = 'QUESTION'";
                 approval_by = @p1,
                 updated_date = now(),
                 updated_by = @p1,
-                status = 'VERIFIED'
-            WHERE id = @p2";
+                status = 'VERIFIED',
+                good_status = @p2,
+                excellent_status = @p3
+            WHERE id = @p4";
 
-            int affected = await _context.Database.ExecuteSqlRawAsync(sql, score, currentUser, id);
+            int affected = await _context.Database.ExecuteSqlRawAsync(sql, score, currentUser, goodStatus, excellentStatus, id);
 
             if (affected == 0)
                 return NotFound();
