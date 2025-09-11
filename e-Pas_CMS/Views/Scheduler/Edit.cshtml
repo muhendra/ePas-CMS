@@ -10,7 +10,16 @@
         @Html.HiddenFor(m => m.Id)
         @Html.HiddenFor(m => m.SpbuId, new { id = "SpbuId" })
         @Html.HiddenFor(m => m.AppUserId, new { id = "AppUserId" })
-        @Html.HiddenFor(m => m.Status)
+        <div class="form-floating mb-3">
+            @Html.DropDownListFor(m => m.Status,
+                     new SelectList(new[]
+                     {
+            new { Value = "DRAFT",         Text = "Draft" },
+            new { Value = "NOT_STARTED", Text = "Belum Dimulai" }
+            }, "Value", "Text", Model.Status),
+                     new { @class = "form-select", id = "Status" })
+            <label for="Status">Status</label>
+        </div>
 
         <div class="card shadow-sm rounded-4 p-4 mb-4">
             <h5 class="fw-semibold mb-3 text-primary">Informasi SPBU & Auditor</h5>

@@ -1,80 +1,328 @@
 ﻿@model e_Pas_CMS.Models.spbu
-
 @{
     ViewData["Title"] = "Tambah SPBU Baru";
 }
 
+<style>
+    /* gaya ringan agar mirip mockup */
+    .card-soft {
+        border: 1px solid #e9ecef;
+        border-radius: 14px;
+    }
+
+        .card-soft .card-header {
+            background: #fff;
+            border-bottom: 1px solid #f1f3f5;
+        }
+
+    .form-control, .form-select {
+        height: 44px;
+        border-radius: 10px;
+        background: #f8f9fa;
+    }
+
+    .input-note {
+        font-size: .8rem;
+        color: #98a2b3;
+    }
+
+    .icon-end {
+        position: absolute;
+        right: 12px;
+        top: 50%;
+        transform: translateY(-50%);
+        pointer-events: none;
+        opacity: .6;
+    }
+
+    .btn-primary-soft {
+        background: #0ea5e9;
+        border: none;
+    }
+
+    .btn-round-xl {
+        border-radius: 999px;
+        padding: 12px 18px;
+    }
+
+    .sticky-action {
+        position: sticky;
+        bottom: 12px;
+        display: flex;
+        justify-content: end;
+    }
+</style>
+
 <h2 class="fw-bold mb-4">@ViewData["Title"]</h2>
 
-<form asp-action="Create" method="post" class="mb-5 needs-validation" novalidate style="max-width: 900px;">
+<form asp-action="Create" method="post" enctype="multipart/form-data" class="needs-validation" novalidate>
+    @Html.AntiForgeryToken()
+
     <div asp-validation-summary="ModelOnly" class="alert alert-danger"></div>
-    <div class="vstack gap-3">
 
-        <!-- Semua field SPBU -->
-        @* Required fields *@
-        <div>
-            <label asp-for="spbu_no" class="form-label fw-bold">SPBU No</label>
-            <input asp-for="spbu_no" class="form-control" />
-            <span asp-validation-for="spbu_no" class="text-danger small"></span>
-        </div>
-        <div>
-            <label asp-for="region" class="form-label fw-bold">Rayon</label>
-            <input asp-for="region" class="form-control" />
-            <span asp-validation-for="region" class="text-danger small"></span>
-        </div>
-        <div>
-            <label asp-for="province_name" class="form-label fw-bold">Provinsi</label>
-            <input asp-for="province_name" class="form-control" />
-            <span asp-validation-for="province_name" class="text-danger small"></span>
-        </div>
-        <div>
-            <label asp-for="city_name" class="form-label fw-bold">Kota</label>
-            <input asp-for="city_name" class="form-control" />
-            <span asp-validation-for="city_name" class="text-danger small"></span>
+    <div class="card card-soft mb-4">
+        <div class="card-header px-4 py-3">
+            <div class="fw-semibold">Informasi SPBU</div>
+            <div class="input-note">Lengkapi detail SPBU sesuai data terbaru.</div>
         </div>
 
-        @* Optional fields *@
-        <div><label asp-for="address" class="form-label fw-bold">Alamat</label><input asp-for="address" class="form-control" /></div>
-        <div><label asp-for="owner_name" class="form-label fw-bold">Pemilik</label><input asp-for="owner_name" class="form-control" /></div>
-        <div><label asp-for="manager_name" class="form-label fw-bold">Manager</label><input asp-for="manager_name" class="form-control" /></div>
-        <div><label asp-for="owner_type" class="form-label fw-bold">Tipe Pemilik</label><input asp-for="owner_type" class="form-control" /></div>
-        <div><label asp-for="quater" class="form-label fw-bold">Kuartal</label><input asp-for="quater" class="form-control" type="number" /></div>
-        <div><label asp-for="year" class="form-label fw-bold">Tahun</label><input asp-for="year" class="form-control" type="number" /></div>
-        <div><label asp-for="mor" class="form-label fw-bold">MOR</label><input asp-for="mor" class="form-control" /></div>
-        <div><label asp-for="sales_area" class="form-label fw-bold">Sales Area</label><input asp-for="sales_area" class="form-control" /></div>
-        <div><label asp-for="sbm" class="form-label fw-bold">SBM</label><input asp-for="sbm" class="form-control" /></div>
-        <div><label asp-for="sam" class="form-label fw-bold">SAM</label><input asp-for="sam" class="form-control" /></div>
-        <div><label asp-for="type" class="form-label fw-bold">Jenis</label><input asp-for="type" class="form-control" /></div>
-        <div><label asp-for="phone_number_1" class="form-label fw-bold">No Telepon 1</label><input asp-for="phone_number_1" class="form-control" /></div>
-        <div><label asp-for="phone_number_2" class="form-label fw-bold">No Telepon 2</label><input asp-for="phone_number_2" class="form-control" /></div>
-        <div><label asp-for="level" class="form-label fw-bold">Level</label><input asp-for="level" class="form-control" /></div>
-        <div><label asp-for="latitude" class="form-label fw-bold">Latitude</label><input asp-for="latitude" class="form-control" type="number" step="any" /></div>
-        <div><label asp-for="longitude" class="form-label fw-bold">Longitude</label><input asp-for="longitude" class="form-control" type="number" step="any" /></div>
-        <div><label asp-for="audit_current" class="form-label fw-bold">Audit Saat Ini</label><input asp-for="audit_current" class="form-control" /></div>
-        <div>
-            <label asp-for="audit_next" class="form-label fw-bold">Audit Berikutnya</label>
-            <select asp-for="audit_next" class="form-select" asp-items="ViewBag.AuditLevels">
-                <option value="">-- Pilih Audit Level --</option>
-            </select>
-            <span asp-validation-for="audit_next" class="text-danger small"></span>
-        </div>
-        <div><label asp-for="status_good" class="form-label fw-bold">Status Good</label><input asp-for="status_good" class="form-control" /></div>
-        <div><label asp-for="status_excellent" class="form-label fw-bold">Status Excellent</label><input asp-for="status_excellent" class="form-control" /></div>
-        <div><label asp-for="audit_current_score" class="form-label fw-bold">Skor Saat Ini</label><input asp-for="audit_current_score" class="form-control" type="number" step="0.01" /></div>
-        <div><label asp-for="audit_current_time" class="form-label fw-bold">Audit Time</label><input asp-for="audit_current_time" class="form-control" type="datetime-local" /></div>
-        <div><label asp-for="status" class="form-label fw-bold">Status</label><input asp-for="status" class="form-control" /></div>
-        <div><label asp-for="wtms" class="form-label fw-bold">WTMS</label><input asp-for="wtms" class="form-control" type="number" step="0.01" /></div>
-        <div><label asp-for="qq" class="form-label fw-bold">QQ</label><input asp-for="qq" class="form-control" type="number" step="0.01" /></div>
-        <div><label asp-for="wmef" class="form-label fw-bold">WMEF</label><input asp-for="wmef" class="form-control" type="number" step="0.01" /></div>
-        <div><label asp-for="format_fisik" class="form-label fw-bold">Format Fisik</label><input asp-for="format_fisik" class="form-control" type="number" step="0.01" /></div>
-        <div><label asp-for="cpo" class="form-label fw-bold">CPO</label><input asp-for="cpo" class="form-control" type="number" step="0.01" /></div>
+        <div class="card-body p-4">
+            <div class="row g-3">
+                <!-- kiri -->
+                <div class="col-lg-6">
+                    <label class="form-label">Nomor SPBU</label>
+                    <input asp-for="spbu_no" class="form-control" placeholder="Nomor SPBU" />
+                    <span asp-validation-for="spbu_no" class="text-danger small"></span>
+                </div>
 
-        <div class="mt-3">
-            <button type="submit" class="btn btn-success">
-                <i class="bi bi-save me-1"></i> Simpan
-            </button>
-            <a asp-action="Index" class="btn btn-secondary ms-2">Kembali</a>
+                <div class="col-lg-6">
+                    <label class="form-label">Rayon</label>
+                    <div class="position-relative">
+                        <select asp-for="region" class="form-select">
+                            <option value="">Pilih Rayon</option>
+                            @* <option value="R1">R1</option> *@
+                        </select>
+                        <i class="bi bi-chevron-down icon-end"></i>
+                    </div>
+                    <span asp-validation-for="region" class="text-danger small"></span>
+                </div>
+
+                <div class="col-lg-6">
+                    <label class="form-label">Provinsi</label>
+                    <div class="position-relative">
+                        <select asp-for="province_name" class="form-select">
+                            <option value="">Pilih [Title]</option>
+                        </select>
+                        <i class="bi bi-chevron-down icon-end"></i>
+                    </div>
+                    <span asp-validation-for="province_name" class="text-danger small"></span>
+                </div>
+
+                <div class="col-lg-6">
+                    <label class="form-label">Kota</label>
+                    <div class="position-relative">
+                        <select asp-for="city_name" class="form-select">
+                            <option value="">Pilih [Title]</option>
+                        </select>
+                        <i class="bi bi-chevron-down icon-end"></i>
+                    </div>
+                    <span asp-validation-for="city_name" class="text-danger small"></span>
+                </div>
+
+                <div class="col-lg-6">
+                    <label class="form-label">Alamat</label>
+                    <input asp-for="address" class="form-control" placeholder="Masukkan [Title]" />
+                </div>
+
+                <div class="col-lg-6">
+                    <label class="form-label d-block">Foto SPBU</label>
+                    <div class="input-group">
+                        <input type="file" name="spbu_photo" class="form-control" />
+                        <button type="button" class="btn btn-outline-secondary">
+                            <i class="bi bi-upload"></i> Upload Foto
+                        </button>
+                    </div>
+                </div>
+
+                <div class="col-lg-6">
+                    <label class="form-label">Pemilik</label>
+                    <input asp-for="owner_name" class="form-control" placeholder="Masukkan nama [Title]" />
+                </div>
+
+                <div class="col-lg-6">
+                    <label class="form-label">Manager</label>
+                    <input asp-for="manager_name" class="form-control" placeholder="Masukkan nama [Title]" />
+                </div>
+
+                <div class="col-lg-6">
+                    <label class="form-label">Tipe Pemilik</label>
+                    <div class="position-relative">
+                        <select asp-for="owner_type" class="form-select">
+                            <option value="">Pilih tipe pemilik</option>
+                        </select>
+                        <i class="bi bi-chevron-down icon-end"></i>
+                    </div>
+                </div>
+
+                <div class="col-lg-6">
+                    <label class="form-label">Kuartal</label>
+                    <div class="position-relative">
+                        <select asp-for="quater" class="form-select">
+                            <option value="">Pilih [Title]</option>
+                            <option>1</option>
+                            <option>2</option>
+                            <option>3</option>
+                            <option>4</option>
+                        </select>
+                        <i class="bi bi-chevron-down icon-end"></i>
+                    </div>
+                </div>
+
+                <div class="col-lg-6">
+                    <label class="form-label">Tahun</label>
+                    <div class="position-relative">
+                        <select asp-for="year" class="form-select">
+                            <option value="">Pilih [Title]</option>
+                            @for (int y = DateTime.Now.Year - 2; y <= DateTime.Now.Year + 1; y++)
+                            {
+                                <option value="@y">@y</option>
+                            }
+                        </select>
+                        <i class="bi bi-chevron-down icon-end"></i>
+                    </div>
+                </div>
+
+                <div class="col-lg-6">
+                    <label class="form-label">MOR</label>
+                    <input asp-for="mor" class="form-control" placeholder="Masukkan [Title]" />
+                </div>
+
+                <div class="col-lg-6">
+                    <label class="form-label">Sales Area</label>
+                    <div class="position-relative">
+                        <select asp-for="sales_area" class="form-select">
+                            <option value="">Pilih [Title]</option>
+                        </select>
+                        <i class="bi bi-chevron-down icon-end"></i>
+                    </div>
+                </div>
+
+                <div class="col-lg-6">
+                    <label class="form-label">SBM</label>
+                    <input asp-for="sbm" class="form-control" placeholder="Masukkan [Title]" />
+                </div>
+
+                <div class="col-lg-6">
+                    <label class="form-label">SAM</label>
+                    <input asp-for="sam" class="form-control" placeholder="Masukkan [Title]" />
+                </div>
+
+                <div class="col-lg-6">
+                    <label class="form-label">Jenis</label>
+                    <div class="position-relative">
+                        <select asp-for="type" class="form-select">
+                            <option value="">Pilih [Title]</option>
+                        </select>
+                        <i class="bi bi-chevron-down icon-end"></i>
+                    </div>
+                </div>
+
+                <div class="col-lg-6">
+                    <label class="form-label">Nomor Telepon 1</label>
+                    <input asp-for="phone_number_1" class="form-control" placeholder="Masukkan [Title]" />
+                </div>
+
+                <div class="col-lg-6">
+                    <label class="form-label">Nomor Telepon 2</label>
+                    <input asp-for="phone_number_2" class="form-control" placeholder="Masukkan [Title]" />
+                </div>
+
+                <div class="col-lg-6">
+                    <label class="form-label">Level</label>
+                    <div class="position-relative">
+                        <select asp-for="level" class="form-select">
+                            <option value="">Pilih [Title]</option>
+                        </select>
+                        <i class="bi bi-chevron-down icon-end"></i>
+                    </div>
+                </div>
+
+                <div class="col-lg-6">
+                    <label class="form-label">Longitude</label>
+                    <input asp-for="longitude" class="form-control" type="number" step="any" placeholder="Masukkan [Title]" />
+                </div>
+
+                <div class="col-lg-6">
+                    <label class="form-label">Latitude</label>
+                    <input asp-for="latitude" class="form-control" type="number" step="any" placeholder="Masukkan [Title]" />
+                </div>
+
+                <div class="col-lg-6">
+                    <label class="form-label">Audit Saat Ini</label>
+                    <input asp-for="audit_current" class="form-control" placeholder="Masukkan [Title]" />
+                </div>
+
+                <div class="col-lg-6">
+                    <label class="form-label">Audit Berikutnya</label>
+                    <div class="position-relative">
+                        <select asp-for="audit_next" class="form-select" asp-items="ViewBag.AuditLevels">
+                            <option value="">Pilih [Title]</option>
+                        </select>
+                        <i class="bi bi-chevron-down icon-end"></i>
+                    </div>
+                </div>
+
+                <div class="col-lg-6">
+                    <label class="form-label">Skor Saat Ini</label>
+                    <input asp-for="audit_current_score" class="form-control" type="number" step="0.01" placeholder="0.00" />
+                </div>
+
+                <div class="col-lg-6">
+                    <label class="form-label">Status</label>
+                    <input asp-for="status" class="form-control" placeholder="Masukkan [Title]" />
+                </div>
+
+                <div class="col-lg-6">
+                    <label class="form-label">Audit Time</label>
+                    <div class="position-relative">
+                        <input asp-for="audit_current_time" class="form-control" type="datetime-local" />
+                        <i class="bi bi-calendar3 icon-end"></i>
+                    </div>
+                </div>
+
+                <div class="col-lg-6">
+                    <label class="form-label">WTMS</label>
+                    <input asp-for="wtms" class="form-control" type="number" step="0.01" placeholder="0.00" />
+                </div>
+
+                <div class="col-lg-6">
+                    <label class="form-label">QQ</label>
+                    <input asp-for="qq" class="form-control" type="number" step="0.01" placeholder="0.00" />
+                </div>
+
+                <div class="col-lg-6">
+                    <label class="form-label">WMEF</label>
+                    <input asp-for="wmef" class="form-control" type="number" step="0.01" placeholder="0.00" />
+                </div>
+
+                <div class="col-lg-6">
+                    <label class="form-label">Format Fisik</label>
+                    <input asp-for="format_fisik" class="form-control" type="number" step="0.01" placeholder="0.00" />
+                </div>
+
+                <div class="col-lg-6">
+                    <label class="form-label">CPO</label>
+                    <input asp-for="cpo" class="form-control" type="number" step="0.01" placeholder="0.00" />
+                </div>
+            </div>
         </div>
+    </div>
+
+    <div class="card card-soft mb-4">
+        <div class="card-header px-4 py-3">
+            <div class="fw-semibold">Informasi User Aplikasi SPBU</div>
+        </div>
+        <div class="card-body p-4">
+            <div class="row g-3">
+                <div class="col-lg-6">
+                    <label class="form-label">Pilih User SPBU</label>
+                    <div class="position-relative">
+                        <select class="form-select" name="user_spbu_id">
+                            <option value="">Pilih [Title]</option>
+                            @* ganti dengan asp-items bila tersedia *@
+                        </select>
+                        <i class="bi bi-chevron-down icon-end"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- actions -->
+    <div class="sticky-action my-3">
+        <button type="submit" class="btn btn-primary-soft btn-round-xl">
+            <i class="bi bi-plus-lg me-2"></i> Tambah SPBU Baru
+        </button>
     </div>
 </form>
 

@@ -17,13 +17,12 @@
         case "APPROVED":
         case "APPROVE":
         case "BYPASS_APPROVE_PPN":
-            statusClass = "bg-success";
-            break;
+            statusClass = "bg-success"; break;
         case "REJECTED":
         case "REJECT_CBI":
-            statusClass = "bg-danger";
-            break;
-        default: statusClass = "bg-warning"; break;
+            statusClass = "bg-danger"; break;
+        default:
+            statusClass = "bg-warning"; break;
     }
 
     var userIdString = Context.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
@@ -49,26 +48,9 @@
         hasRolePertamina = roleSet.Contains("PERTAMINA");
     }
 
-    // helper normalisasi string
     Func<string, string> norm = s => (s ?? "").Trim().ToUpperInvariant();
 
-    // ===== NEW: AllPointsProcessedCurrentStage (APPROVED/APPROVE/REJECTED) + override REJECT_CBI utk Pertamina =====
-    Func<string, string> PrevStageOf = s =>
-        {
-            var v = (s ?? "").Trim().ToUpperInvariant();
-            return v switch
-            {
-                "APPROVE_SBM" => "UNDER_REVIEW", // SBM memproses sebelum masuk APPROVE_SBM
-                "APPROVE_PPN" => "APPROVE_SBM",  // PPN memproses sebelum masuk APPROVE_PPN
-                "APPROVE_CBI" => "APPROVE_PPN",  // CBI memproses sebelum masuk APPROVE_CBI
-                "APPROVED" => "APPROVE_CBI",  // Pertamina memproses sebelum final
-                "REJECT_CBI" => "APPROVE_CBI",
-                _ => v               // UNDER_REVIEW tetap cek dirinya sendiri
-            };
-        };
-
-    // Validasi SEMUA poin sudah diproses (APPROVED/APPROVE/REJECTED) DI TAHAP SAAT INI
-    var stageToValidate = statusNorm; // <- kuncinya: cek stage sekarang, bukan stage sebelumnya
+    var stageToValidate = statusNorm;
 
     bool AllPointsProcessedCurrentStage =
         (norm(statusNorm) == "REJECT_CBI" && hasRolePertamina)
@@ -91,20 +73,16 @@
             })
         );
 
-
-    // Pembungkus container aksi
     var canShowActionsContainer =
-        (statusNorm == "APPROVE_PPN" && hasRoleCBI) // <-- pastikan tampil di tahap ini untuk CBI
+        (statusNorm == "APPROVE_PPN" && hasRoleCBI)
         || AllPointsProcessedCurrentStage
         || norm(statusNorm) == "APPROVE_SBM"
         || norm(statusNorm) == "APPROVE_CBI"
         || norm(statusNorm) == "APPROVED"
-        || (hasRolePertamina && norm(statusNorm) == "REJECT_CBI"); // safety ekstra
+        || (hasRolePertamina && norm(statusNorm) == "REJECT_CBI");
 
-    // Ambil history dari ViewBag (cast sesuai namespace entity kamu)
     var approvalHistory = ViewBag.ApprovalHistory as IEnumerable<e_Pas_CMS.Models.TrxFeedbackPointApproval>;
 
-    // mapper "case when" -> label Indonesia untuk feedback_status
     Func<string, string> stageText = s =>
     {
         var v = (s ?? "").Trim().ToUpperInvariant();
@@ -159,7 +137,7 @@
     }
 
     .table-sm th, .table-sm td {
-        vertical-align: middle;
+        vertical-align: top;
     }
 
     .point-title {
@@ -219,7 +197,7 @@
         display: flex;
         flex-wrap: wrap;
         gap: 10px;
-        margin-bottom: 1rem;
+        margin-bottom: 0;
     }
 
     .thumb {
@@ -246,10 +224,10 @@
             font-size: 2rem;
         }
 
-    .thumb-grid .text-muted {
-        padding: .5rem 0;
-        font-style: italic;
+    .thumb-note {
+        font-size: .8rem;
         color: #6c757d;
+        margin-top: .25rem;
     }
 </style>
 
@@ -333,7 +311,6 @@
         {
             var thumbsId = $"thumbs_{idx}";
 
-            // NEW: processed (APPROVED/APPROVE/REJECTED) di tahap saat ini
             bool pointProcessedThisStage = p?.History != null && p.History.Any(h =>
             {
                 var sc = (h.StatusCode ?? "").Trim().ToUpperInvariant();
@@ -341,15 +318,20 @@
                 return sc == statusNorm && (st == "APPROVED" || st == "APPROVE" || st == "REJECTED");
             });
 
-            // deteksi tag REJECT pada Element (akomodir "(REJECT)" maupun "( REJECT )")
             var elementText = string.IsNullOrWhiteSpace(p.Element) ? "-" : p.Element;
             bool rejectTagged = elementText.ToUpperInvariant().Contains("REJECT");
+
+            // media per poin -> serialize untuk grid kanan
+            var photoGridId = $"photo_point_{idx}";
+            var mediaJson = (p?.mediaElement != null && p.mediaElement.Any())
+            ? JsonConvert.SerializeObject(p.mediaElement)
+            : ((string)ViewBag.mediaElement ?? "[]");
 
             <div class="card card-soft mb-3">
                 <div class="card-body">
                     <div class="point-title">Poin @idx</div>
 
-                    <div class="table-responsive mb-3">
+                    <div class="table-responsive">
                         <table class="table table-sm align-middle mb-0">
                             <thead class="table-light">
                                 <tr>
@@ -357,25 +339,29 @@
                                     <th style="width:160px">Sub Element</th>
                                     <th style="width:180px">Detail Element</th>
                                     <th>Element yang @(Model.IsBanding ? "dibanding" : "dikomplain")</th>
+                                    <th style="width:280px">Foto Elemen yang dibanding</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 <tr>
-                                    @* bila REJECT, tampilkan merah tebal *@
                                     <td class="@(rejectTagged ? "text-danger fw-bold" : "")">@elementText</td>
                                     <td>@(string.IsNullOrWhiteSpace(p.SubElement) ? "-" : p.SubElement)</td>
                                     <td>@(string.IsNullOrWhiteSpace(p.DetailElement) ? "-" : p.DetailElement)</td>
                                     <td>@Html.Raw(string.IsNullOrWhiteSpace(p.DetailDibantah) ? "-" : p.DetailDibantah.Replace("\n", "<br />"))</td>
+                                    <td>
+                                        <div id="@photoGridId" class="thumb-grid"
+                                             data-items='@Html.Raw(mediaJson)'></div>
+                                        <div class="thumb-note">Klik gambar/video untuk melihat ukuran penuh.</div>
+                                    </td>
                                 </tr>
                             </tbody>
                         </table>
                     </div>
 
-                    @* Sembunyikan tombol kalau SUDAH DIPROSES di stage ini ATAU element bertag REJECT *@
+                    @* Tombol approve/reject per poin *@
                     @if (!rejectTagged && !pointProcessedThisStage && (
                    (statusNorm == "UNDER_REVIEW" && hasApproveRoleSBM) ||
                    (statusNorm == "APPROVE_SBM" && hasApproveRolePPN)
-                   /* || (statusNorm == "APPROVE_PPN" && hasRoleCBI) */
                    ))
                     {
                         <div class="mt-3 d-flex gap-2">
@@ -394,7 +380,7 @@
                         </div>
                     }
 
-                    @* Riwayat approval hanya untuk tahap saat ini *@
+                    @* Riwayat approval tahap saat ini *@
                     @if (p.History != null && p.History.Any())
                     {
                         var filtered = p.History
@@ -415,8 +401,8 @@
                         }
                     }
 
-                    <div class="mb-2 fw-semibold">Isi @(Model.IsBanding ? "Banding" : "Komplain")</div>
-                    <div class="muted mb-3">@(string.IsNullOrWhiteSpace(p.Description) ? "-" : p.Description)</div>
+                    <div class="mb-2 fw-semibold mt-3">Isi @(Model.IsBanding ? "Banding" : "Komplain")</div>
+                    <div class="muted">@(string.IsNullOrWhiteSpace(p.Description) ? "-" : p.Description)</div>
                     <div class="label">Dokumen Pendukung</div>
                     @if (string.IsNullOrWhiteSpace(ViewBag.AttachmentsJson) || ViewBag.AttachmentsJson == "[]")
                     {
@@ -441,9 +427,7 @@
                 <p class="text-muted mb-2">
                     Masukkan ringkasan klarifikasi untuk <strong>keseluruhan</strong> komplain/banding ini.
                 </p>
-                <textarea id="txtKlarifikasi"
-                          class="form-control"
-                          rows="4"
+                <textarea id="txtKlarifikasi" class="form-control" rows="4"
                           placeholder="Tulis klarifikasi di sini...">@Model.Klarifikasi</textarea>
                 <small class="text-muted">Klarifikasi ini akan ikut tersimpan saat Anda menekan tombol Approve/Reject.</small>
             </div>
@@ -541,7 +525,6 @@
             @* STEP 2 (PPN) *@
             @if (statusNorm == "APPROVE_SBM" && hasApproveRolePPN && feedbackTypeNorm != "COMPLAINT")
             {
-                @* Submit/Reject HANYA muncul jika semua poin sudah diproses di stage ini *@
                 @if (AllPointsProcessedCurrentStage)
                 {
                     <form asp-action="Approve" method="post" class="d-inline needs-klarifikasi">
@@ -563,9 +546,8 @@
                     </form>
                 }
 
-                @* BYPASS SELALU TAMPIL tanpa menunggu poin diproses *@
                 <form asp-action="BypassApprovePpn" method="post" class="d-inline"
-                      onsubmit="return confirm('Yakin melakukan BYPASS? Item BANDING akan langsung di revisi oleh PT Citrabuana Indoloka');">
+                      onsubmit="return confirm('Yakin melakukan BYPASS? Tiket akan langsung APPROVE.');">
                     @Html.AntiForgeryToken()
                     <input type="hidden" name="id" value="@Model.Id" />
                     <input type="hidden" name="notes" value="Bypass oleh PPN" />
@@ -597,8 +579,7 @@
                 </form>
             }
 
-
-            @* STEP 4 (PERTAMINA) — tampil saat APPROVE_CBI **atau** REJECTED *@
+            @* STEP 4 (PERTAMINA) *@
             @if ((statusNorm == "APPROVE_CBI" || statusNorm == "REJECT_CBI") && hasRolePertamina)
             {
                 <form asp-action="Approve" method="post" class="d-inline needs-klarifikasi">
@@ -622,7 +603,6 @@
                 </form>
             }
 
-            @* REASSIGN saat APPROVED *@
             @if ((statusNorm == "APPROVED" || statusNorm == "BYPASS_APPROVE_PPN") && hasRoleCBI)
             {
                 <button type="button"
@@ -646,7 +626,7 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Tutup"></button>
             </div>
             <div class="modal-body">
-                Apakah Anda yakin ingin mengembalikan laporan audit ini?
+                Apakah anda yakin ingin merevisi laporan audit ini oleh PT Citrabuana Indoloka ?
             </div>
             <div class="modal-footer">
                 <form method="post"
@@ -655,7 +635,7 @@
                       asp-route-id="@Model.Id"
                       class="needs-klarifikasi">
                     @Html.AntiForgeryToken()
-                    <input type="hidden" name="klarifikasi" value="" /> @* diisi via JS *@
+                    <input type="hidden" name="klarifikasi" value="" />
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Batal</button>
                     <button type="submit" class="btn btn-primary">Ya, Setujui</button>
                 </form>
@@ -664,22 +644,7 @@
     </div>
 </div>
 
-<!-- Modal Media -->
-<div class="modal fade" id="mediaModal" tabindex="-1" aria-labelledby="mediaModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-xl modal-dialog-centered">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="mediaModalLabel">Dokumentasi Foto / Video</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Tutup"></button>
-            </div>
-            <div class="modal-body" id="mediaModalBody">
-                <!-- Media will be inserted here -->
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Modal Full Size Media -->
+<!-- Modal Full Size Media (SATU KALI SAJA) -->
 <div class="modal fade" id="fullSizeMediaModal" tabindex="-1" aria-labelledby="fullSizeMediaModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-fullscreen">
         <div class="modal-content">
@@ -716,7 +681,7 @@
                       asp-route-id="@Model.Id"
                       class="needs-klarifikasi-approved">
                     @Html.AntiForgeryToken()
-                    <input type="hidden" name="klarifikasi" value="" /> @* diisi via JS *@
+                    <input type="hidden" name="klarifikasi" value="" />
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Batal</button>
                     <button type="submit" class="btn btn-warning">Ya, Reassign</button>
                 </form>
@@ -724,8 +689,8 @@
         </div>
     </div>
 </div>
-
 @* ================== END: Modal Preview Lampiran ================== *@
+
 @section Scripts {
     <script>
         // ========== Utils ==========
@@ -851,13 +816,4 @@
             }, true);
         })();
     </script>
-
-    <!-- ========== Modal viewer ========= -->
-    <div class="modal fade" id="fullSizeMediaModal" tabindex="-1" aria-hidden="true">
-        <div class="modal-dialog modal-xl modal-dialog-centered">
-            <div class="modal-content bg-dark">
-                <div class="modal-body p-2 text-center" id="fullSizeMediaModalBody" style="min-height: 60vh;"></div>
-            </div>
-        </div>
-    </div>
 }

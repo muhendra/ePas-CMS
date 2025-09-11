@@ -292,27 +292,43 @@ namespace e_Pas_CMS.Controllers
 
             var pointRows = await conn.QueryAsync<PointRow>(@"
             SELECT 
-                p.id AS point_id,
-                p.description AS description,
-                CASE 
-                    WHEN EXISTS (
-                        SELECT 1
-                        FROM trx_feedback_point_approval tfpa
-                        WHERE tfpa.trx_feedback_point_id = p.id
-                          AND tfpa.status = 'REJECTED'
-                    ) 
-                    THEN COALESCE(e.number || '. ' || e.title, COALESCE(e.title, COALESCE(e.description, '-'))) || ' (REJECT)'
-                    ELSE COALESCE(e.number || '. ' || e.title, COALESCE(e.title, COALESCE(e.description, '-')))
-                END AS element_label,
-                COALESCE(se.number || '. ' || se.title, COALESCE(se.title, COALESCE(se.description, '-'))) AS sub_element_label,
-                COALESCE(de.number || '. ' || de.title, COALESCE(de.title, '-')) AS detail_element_label,
-                COALESCE((
-                    SELECT string_agg(me.number || ' ' || me.title, E'\n' ORDER BY me.number)
-                    FROM trx_feedback_point_element pe
-                    JOIN master_questioner_detail me ON me.id = pe.master_questioner_detail_id
-                    WHERE pe.trx_feedback_point_id = p.id
-                ), '') AS compared_elements
+            p.id AS point_id,
+            fe.trx_audit_id,
+            p.description AS description,
+            CASE 
+                WHEN EXISTS (
+                    SELECT 1
+                    FROM trx_feedback_point_approval tfpa
+                    WHERE tfpa.trx_feedback_point_id = p.id
+                      AND tfpa.status IN ('REJECTED','REJECT_CBI')
+                ) 
+                THEN COALESCE(e.number || '. ' || e.title, e.title, e.description, '-') || ' (REJECT)'
+                ELSE COALESCE(e.number || '. ' || e.title, e.title, e.description, '-')
+            END AS element_label,
+            COALESCE(se.number || '. ' || se.title, se.title, se.description, '-') AS sub_element_label,
+            COALESCE(de.number || '. ' || de.title, de.title, '-')                 AS detail_element_label,
+            COALESCE((
+                SELECT string_agg(me.number || ' ' || me.title, E'\n' ORDER BY me.number)
+                FROM trx_feedback_point_element pe
+                JOIN master_questioner_detail me ON me.id = pe.master_questioner_detail_id
+                WHERE pe.trx_feedback_point_id = p.id
+            ), '') AS compared_elements,
+            COALESCE((SELECT string_agg('https://epas-assets.zarata.co.id' || t.media_path, ',' ORDER BY t.created_date, t.media_path)
+            FROM (
+                SELECT DISTINCT tam.media_path, tam.created_date
+                FROM trx_feedback_point_element pe
+                JOIN master_questioner_detail me 
+                  ON me.id = pe.master_questioner_detail_id
+                JOIN trx_audit_media tam 
+                  ON tam.master_questioner_detail_id = me.id
+                WHERE pe.trx_feedback_point_id = p.id 
+                  AND tam.trx_audit_id = fe.trx_audit_id
+                  AND tam.media_path IS NOT NULL 
+                  AND tam.media_type = 'IMAGE'
+            ) t
+            ), '') AS media_elements
             FROM trx_feedback_point p
+            LEFT join trx_feedback fe on p.trx_feedback_id = fe.id
             LEFT JOIN master_questioner_detail e  ON e.id  = p.element_master_questioner_detail_id
             LEFT JOIN master_questioner_detail se ON se.id = p.sub_element_master_questioner_detail_id
             LEFT JOIN master_questioner_detail de ON de.id = p.detail_element_master_questioner_detail_id
@@ -336,6 +352,13 @@ namespace e_Pas_CMS.Controllers
                     SubElement = pr.sub_element_label,
                     DetailElement = pr.detail_element_label,
                     DetailDibantah = string.IsNullOrWhiteSpace(pr.compared_elements) ? "-" : pr.compared_elements,
+                    mediaElement = string.IsNullOrWhiteSpace(pr.media_elements)
+                    ? new List<string>()
+                    : pr.media_elements
+                        .Split(',', StringSplitOptions.RemoveEmptyEntries)
+                        .Select(s => s.Trim())
+                        .Where(s => !string.IsNullOrWhiteSpace(s))
+                        .ToList(),
                     Description = pr.description,
                     Attachments = new List<AttachmentItem>(),
                     History = new List<PointApprovalHistory>()
@@ -346,12 +369,12 @@ namespace e_Pas_CMS.Controllers
 
                 // 1. Get media
                 var medias = await conn.QueryAsync<MediaRow>(@"
-            SELECT id, trx_feedback_point_id, media_type, media_path
-            FROM trx_feedback_point_media
-            WHERE trx_feedback_point_id = @pid
-              AND media_path IS NOT NULL
-              AND btrim(media_path) <> ''
-            ORDER BY created_date ASC;", new { pid = pointId });
+                SELECT id, trx_feedback_point_id, media_type, media_path
+                FROM trx_feedback_point_media
+                WHERE trx_feedback_point_id = @pid
+                  AND media_path IS NOT NULL
+                  AND btrim(media_path) <> ''
+                ORDER BY created_date ASC;", new { pid = pointId });
 
                 int fileIdx = 1;
                 foreach (var m in medias)
@@ -745,6 +768,23 @@ namespace e_Pas_CMS.Controllers
         }
 
         private async Task<List<MediaItem>> GetMediaNotesAsync(IDbConnection conn, string id)
+        {
+            const string sql = @"
+            SELECT id, media_type, media_path
+            FROM trx_feedback_point_media
+            WHERE trx_feedback_point_id = @id
+            ORDER BY created_date ASC;";
+
+            var rows = await conn.QueryAsync<MediaRow>(sql, new { id });
+
+            return rows.Select(x => new MediaItem
+            {
+                MediaType = x.media_type,
+                MediaPath = "https://epas-assets.zarata.co.id" + x.media_path
+            }).ToList();
+        }
+
+        private async Task<List<MediaItem>> GetMediaNotesAuditAsync(IDbConnection conn, string id)
         {
             const string sql = @"
             SELECT id, media_type, media_path

@@ -60,6 +60,8 @@
 
         public string PointId { get; set; } // ← wajib, untuk form approve/reject
 
+        public List<string> mediaElement { get; set; } = new();
+
         public List<PointApprovalHistory> History { get; set; } = new(); // ← riwayat approval
     }
 
@@ -71,6 +73,11 @@
         public string StatusCode { get; set; }
     }
 
+
+    public class mediaElement
+    {
+        public string FileName { get; set; }
+    }
 
     public class AttachmentItem
     {
@@ -91,6 +98,7 @@
         public string sub_element_label { get; set; } = default!;
         public string detail_element_label { get; set; } = default!;
         public string compared_elements { get; set; } = default!;
+        public string media_elements { get; set; } = default!;
     }
 
     public class MediaRow
