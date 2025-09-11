@@ -1,4 +1,5 @@
 ﻿@using e_Pas_CMS.ViewModels
+@using System.Globalization
 @model SchedulerIndexViewModel
 @{
     Layout = "~/Views/Shared/_Layout.cshtml";
@@ -10,6 +11,11 @@
     int currentWindow = (int)Math.Ceiling((double)currentPage / windowSize);
     int startPage = (currentWindow - 1) * windowSize + 1;
     int endPage = Math.Min(startPage + windowSize - 1, totalPages);
+
+    var selectedStatus = ViewBag.FilterStatus as string;
+    var selectedMonth = ViewBag.FilterMonth as int?;
+    var selectedYear = ViewBag.FilterYear as int?;
+    var currentYear = DateTime.Now.Year;
 }
 
 <div class="mt-4 px-4">
@@ -42,6 +48,53 @@
         <div class="col-md-4">
             <input type="text" name="searchTerm" value="@Model.SearchTerm" class="form-control" placeholder="Cari no. SPBU atau auditor..." />
         </div>
+
+        <div class="col-auto" style="min-width: 200px;">
+            <select name="filterStatus" class="form-select w-100">
+                <option value="">📌 Status</option>
+                @{
+                    var statuses = new Dictionary<string, string>
+                    {
+                        { "DRAFT", "Draft" },
+                        { "NOT_STARTED", "Belum Dimulai" },
+                        { "IN_PROGRESS_INPUT", "Sedang Berlangsung (Input)" },
+                        { "IN_PROGRESS_SUBMIT", "Sedang Berlangsung (Submit)" },
+                        { "UNDER_REVIEW", "Sedang Ditinjau" },
+                        { "VERIFIED", "Terverifikasi" }
+                    };
+
+                    foreach (var status in statuses)
+                    {
+                        var isSelected = selectedStatus == status.Key ? "selected" : "";
+                        @Html.Raw($"<option value='{status.Key}' {isSelected}>{status.Value}</option>")
+                    }
+                }
+            </select>
+        </div>
+
+        <div class="col-auto" style="min-width: 180px;">
+            <select name="filterMonth" class="form-select w-100">
+                <option value="">📅 Bulan</option>
+                @for (int m = 1; m <= 12; m++)
+                {
+                    var monthName = CultureInfo.CurrentCulture.DateTimeFormat.GetMonthName(m);
+                    var isSelected = selectedMonth == m ? "selected" : "";
+                    @Html.Raw($"<option value='{m}' {isSelected}>{monthName}</option>")
+                }
+            </select>
+        </div>
+
+        <div class="col-auto" style="min-width: 140px;">
+            <select name="filterYear" class="form-select w-100">
+                <option value="">📆 Tahun</option>
+                @for (int y = currentYear; y >= currentYear - 5; y--)
+                {
+                    var isSelected = selectedYear == y ? "selected" : "";
+                    @Html.Raw($"<option value='{y}' {isSelected}>{y}</option>")
+                }
+            </select>
+        </div>
+
         <div class="col-auto">
             <button type="submit" class="btn btn-outline-primary"><i class="bi bi-search"></i> Cari</button>
             <a href="@Url.Action("Index")" class="btn btn-outline-secondary ms-1">Reset</a>
