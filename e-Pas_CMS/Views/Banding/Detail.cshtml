@@ -565,7 +565,7 @@
 
                 @* BYPASS SELALU TAMPIL tanpa menunggu poin diproses *@
                 <form asp-action="BypassApprovePpn" method="post" class="d-inline"
-                      onsubmit="return confirm('Yakin melakukan BYPASS? Tiket akan langsung APPROVE.');">
+                      onsubmit="return confirm('Yakin melakukan BYPASS? Item BANDING akan langsung di revisi oleh PT Citrabuana Indoloka');">
                     @Html.AntiForgeryToken()
                     <input type="hidden" name="id" value="@Model.Id" />
                     <input type="hidden" name="notes" value="Bypass oleh PPN" />
