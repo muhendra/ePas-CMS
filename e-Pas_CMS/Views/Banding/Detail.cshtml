@@ -229,6 +229,16 @@
         color: #6c757d;
         margin-top: .25rem;
     }
+
+    .dz {
+        transition: border-color .2s, background-color .2s;
+        border-style: dashed !important;
+    }
+
+        .dz.dragover {
+            border-color: #2563eb !important;
+            background: #e9f1ff;
+        }
 </style>
 
 <div class="container-fluid px-0">
@@ -423,27 +433,113 @@
     {
         <div class="card card-soft mb-3">
             <div class="card-body">
-                <div class="section-title">Klarifikasi (Diisi oleh User CBI)</div>
-                <p class="text-muted mb-2">
-                    Masukkan ringkasan klarifikasi untuk <strong>keseluruhan</strong> komplain/banding ini.
-                </p>
-                <textarea id="txtKlarifikasi" class="form-control" rows="4"
-                          placeholder="Tulis klarifikasi di sini...">@Model.Klarifikasi</textarea>
-                <small class="text-muted">Klarifikasi ini akan ikut tersimpan saat Anda menekan tombol Approve/Reject.</small>
+                <div class="section-title">Klarifikasi (CBI)</div>
+                <div class="row g-3">
+                    <!-- Kolom kiri: ringkasan klarifikasi -->
+                    <div class="col-12 col-lg-6">
+                        <label class="form-label fw-semibold">Ringkasan Klarifikasi</label>
+                        <textarea id="txtKlarifikasi"
+                                  class="form-control"
+                                  rows="6"
+                                  placeholder="Tulis klarifikasi keseluruhan di sini...">@Model.Klarifikasi</textarea>
+                        <small class="text-muted d-block mt-1">
+                            Catatan ini akan ikut tersimpan ketika Anda menekan tombol <em>Submit</em> atau <em>Reject</em>.
+                        </small>
+                    </div>
+
+                    <!-- Kolom kanan: upload dokumen -->
+                    <div class="col-12 col-lg-6">
+                        <label class="form-label fw-semibold">Upload Dokumen Klarifikasi</label>
+
+                        <form method="post"
+                              asp-action="UploadKlarifikasiMedia"
+                              asp-controller="Banding"
+                              asp-route-bandingId="@ViewBag.BandingId"
+                              enctype="multipart/form-data"
+                              id="formUploadKlarifikasi">
+                            @Html.AntiForgeryToken()
+
+                            <!-- Dropzone -->
+                            <div id="dropzoneKlarifikasi" class="dz border rounded-3 p-3 bg-light text-center">
+                                <input type="file"
+                                       class="d-none"
+                                       id="KlarifikasiFile"
+                                       name="file"
+                                       accept=".jpg,.jpeg,.png,.pdf,.doc,.docx,.xls,.xlsx,.mp4,.zip"
+                                       required />
+
+                                <div class="dz-icon mb-2">
+                                    <i class="bi bi-cloud-arrow-up" style="font-size:2rem;"></i>
+                                </div>
+                                <div class="dz-text">
+                                    <div class="fw-semibold">Tarik & lepas file ke sini</div>
+                                    <div class="text-muted small">atau</div>
+                                    <button type="button" class="btn btn-sm btn-outline-secondary mt-2" id="btnPilihFile">
+                                        Pilih File
+                                    </button>
+                                </div>
+
+                                <div class="dz-meta small text-muted mt-2">
+                                    Format yang didukung: JPG, JPEG, PNG, PDF, DOC, DOCX, XLS, XLSX, MP4, ZIP.
+                                    Maks. ukuran per file 20 MB.
+                                </div>
+                            </div>
+
+                            <!-- Preview nama file -->
+                            <div id="filePreview" class="mt-2 d-none">
+                                <div class="small text-muted mb-1">File dipilih:</div>
+                                <div class="border rounded p-2 bg-white d-flex align-items-center justify-content-between">
+                                    <span id="fileName" class="text-truncate me-3"></span>
+                                    <button type="button" class="btn btn-sm btn-outline-danger" id="btnHapusFile">
+                                        <i class="bi bi-x-circle"></i> Hapus
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Progress (opsional, aktif saat upload) -->
+                            <div class="progress mt-3 d-none" id="uploadProgressWrap" style="height:8px;">
+                                <div class="progress-bar" id="uploadProgressBar" role="progressbar" style="width: 0%;"></div>
+                            </div>
+
+                            <div class="d-flex gap-2 mt-3">
+                                <button type="submit" class="btn btn-secondary rounded-pill px-4" id="btnUpload" disabled>
+                                    Upload
+                                </button>
+                                <button type="button" class="btn btn-outline-secondary rounded-pill px-4" id="btnResetUpload" disabled>
+                                    Reset
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
             </div>
         </div>
+    }
 
-        <form method="post"
-              asp-action="UploadKlarifikasiMedia"
-              asp-controller="Banding"
-              asp-route-bandingId="@ViewBag.BandingId"
-              enctype="multipart/form-data">
-            <div class="mb-3">
-                <label for="KlarifikasiFile" class="form-label fw-semibold">Upload Dokumen Tambahan Klarifikasi</label>
-                <input type="file" class="form-control" id="KlarifikasiFile" name="file" required />
+    @if (statusNorm == "APPROVE_PPN" || statusNorm == "APPROVE_CBI" || statusNorm == "REJECT_CBI" || statusNorm == "APPROVED" || statusNorm == "APPROVE")
+    {
+        <div class="card card-soft mb-3">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <div class="section-title mb-0">Dokumen Klarifikasi</div>
+                    <span class="badge rounded-pill bg-light text-dark">
+                        @(string.IsNullOrWhiteSpace(ViewBag.KlfAttachmentsJson) || ViewBag.KlfAttachmentsJson == "[]"
+                            ? "0 file"
+                            : "Lampiran tersedia")
+                    </span>
+                </div>
+
+                @if (string.IsNullOrWhiteSpace(ViewBag.KlfAttachmentsJson) || ViewBag.KlfAttachmentsJson == "[]")
+                {
+                    <div class="text-muted">Belum ada dokumen klarifikasi yang diunggah.</div>
+                }
+                else
+                {
+                    <div id="klarifikasiMedia" class="thumb-grid" data-items='@Html.Raw(ViewBag.KlfAttachmentsJson)'></div>
+                    <div class="thumb-note">Klik gambar/video untuk melihat ukuran penuh. File non-media akan dibuka di tab baru.</div>
+                }
             </div>
-            <button type="submit" class="btn btn-secondary rounded-pill px-4">Upload Klarifikasi</button>
-        </form>
+        </div>
     }
 
     @if (Model.IsBanding)
@@ -468,7 +564,6 @@
             </div>
         </div>
     }
-
 
     <!-- History Approval -->
     <div class="card card-soft mb-3">
@@ -515,19 +610,6 @@
             }
         </div>
     </div>
-
-    @if (statusNorm == "APPROVE_PPN" || statusNorm == "APPROVE_CBI" || statusNorm == "REJECT_CBI" || statusNorm == "APPROVED" || statusNorm == "APPROVE")
-    {
-        <div class="label">Dokumen Klarifikasi</div>
-        @if (string.IsNullOrWhiteSpace(ViewBag.KlfAttachmentsJson) || ViewBag.KlfAttachmentsJson == "[]")
-        {
-            <div class="text-muted">Tidak ada dokumen pendukung.</div>
-        }
-        else
-        {
-            <div id="klarifikasiMedia" class="thumb-grid" data-items='@Html.Raw(ViewBag.KlfAttachmentsJson)'></div>
-        }
-    }
 
     @if (statusNorm == "APPROVE_CBI" || statusNorm == "REJECT_CBI" || statusNorm == "APPROVED" || statusNorm == "APPROVE")
     {
@@ -863,6 +945,99 @@
                 const hidden = form.querySelector('input[name="klarifikasi"]');
                 if (hidden) hidden.value = getKlarifikasi();
             }, true);
+        })();
+
+              (function(){
+          const dz = document.getElementById('dropzoneKlarifikasi');
+          const input = document.getElementById('KlarifikasiFile');
+          const btnPick = document.getElementById('btnPilihFile');
+          const btnDel = document.getElementById('btnHapusFile');
+          const btnUpload = document.getElementById('btnUpload');
+          const btnReset = document.getElementById('btnResetUpload');
+          const filePrevWrap = document.getElementById('filePreview');
+          const fileNameEl = document.getElementById('fileName');
+          const form = document.getElementById('formUploadKlarifikasi');
+          const progWrap = document.getElementById('uploadProgressWrap');
+          const progBar = document.getElementById('uploadProgressBar');
+
+          if (!dz) return;
+
+          const MAX_SIZE = 20 * 1024 * 1024; // 20 MB
+          const ACCEPT = ['jpg','jpeg','png','pdf','doc','docx','xls','xlsx','mp4','zip'];
+
+          function extOf(name){
+            const p = (name || '').toLowerCase().split('.');
+            return p.length > 1 ? p.pop() : '';
+          }
+
+          function setFile(file){
+            if (!file){ clearFile(); return; }
+            // Validasi
+            const ext = extOf(file.name);
+            if (!ACCEPT.includes(ext)){
+              alert('Format file tidak didukung.');
+              clearFile();
+              return;
+            }
+            if (file.size > MAX_SIZE){
+              alert('Ukuran file melebihi 20 MB.');
+              clearFile();
+              return;
+            }
+
+            fileNameEl.textContent = file.name + ' (' + (file.size/1024/1024).toFixed(2) + ' MB)';
+            filePrevWrap.classList.remove('d-none');
+            btnUpload.disabled = false;
+            btnReset.disabled = false;
+          }
+
+          function clearFile(){
+            input.value = '';
+            filePrevWrap.classList.add('d-none');
+            fileNameEl.textContent = '';
+            btnUpload.disabled = true;
+            btnReset.disabled = true;
+            progWrap.classList.add('d-none');
+            progBar.style.width = '0%';
+          }
+
+          // klik pilih file
+          btnPick?.addEventListener('click', () => input.click());
+          // hapus file
+          btnDel?.addEventListener('click', clearFile);
+          btnReset?.addEventListener('click', clearFile);
+
+          // perubahan dari input
+          input?.addEventListener('change', (e) => {
+            const f = e.target.files && e.target.files[0];
+            setFile(f);
+          });
+
+          // drag & drop
+          ;['dragenter','dragover'].forEach(ev => {
+            dz.addEventListener(ev, (e)=>{ e.preventDefault(); e.stopPropagation(); dz.classList.add('dragover'); });
+          });
+          ;['dragleave','drop'].forEach(ev => {
+            dz.addEventListener(ev, (e)=>{ e.preventDefault(); e.stopPropagation(); dz.classList.remove('dragover'); });
+          });
+          dz.addEventListener('drop', (e)=>{
+            const f = e.dataTransfer?.files && e.dataTransfer.files[0];
+            if (f){
+              // set ke input file
+              const dt = new DataTransfer();
+              dt.items.add(f);
+              input.files = dt.files;
+              setFile(f);
+            }
+          });
+
+          // Progress (tanpa AJAX khusus, tampilkan dummy progres agar ada feedback)
+          form?.addEventListener('submit', ()=>{
+            // jika ingin real progress, perlu upload via XHR/fetch
+            progWrap.classList.remove('d-none');
+            progBar.style.width = '60%';
+            setTimeout(()=> progBar.style.width = '90%', 700);
+          });
         })();
     </script>
 }

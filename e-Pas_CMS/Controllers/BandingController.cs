@@ -260,7 +260,7 @@ namespace e_Pas_CMS.Controllers
             passedAuditLevel     = auditFlow.passed_audit_level;
             failed_audit_level   = auditFlow.failed_audit_level;
 
-            var klarifnotes = await GetMediaKlarifikasiAsync(connect, pid);
+            var klarifnotes = await GetMediaKlarifikasiAsync(connect, id);
             
             var vm = new ComplainDetailViewModel
             {
