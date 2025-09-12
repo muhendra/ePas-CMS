@@ -2184,16 +2184,17 @@ AND mqd.type = 'QUESTION'";
         private async Task<AuditHeaderDto> GetAuditHeaderAsync(IDbConnection conn, string id)
         {
             string sql = @"
-    WITH RECURSIVE question_hierarchy AS (
-    SELECT 
+    WITH RECURSIVE
+question_hierarchy AS (
+    SELECT
         mqd.id,
         mqd.title,
         mqd.parent_id,
         mqd.title AS root_title
     FROM master_questioner_detail mqd
-    WHERE mqd.title IN ('Elemen 1', 'Elemen 2', 'Elemen 3', 'Elemen 4', 'Elemen 5')
+    WHERE mqd.title IN ('Elemen 1','Elemen 2','Elemen 3','Elemen 4','Elemen 5')
     UNION ALL
-    SELECT 
+    SELECT
         mqd.id,
         mqd.title,
         mqd.parent_id,
@@ -2203,9 +2204,9 @@ AND mqd.type = 'QUESTION'";
 ),
 penalty_flags AS (
     SELECT
-        tac.id                              AS tac_id,
+        tac.id                          AS tac_id,
         tac.trx_audit_id,
-        tac.master_questioner_detail_id     AS mqd_id,
+        tac.master_questioner_detail_id AS mqd_id,
         tac.score_input,
         tac.comment,
         ta.created_date,
@@ -2230,16 +2231,16 @@ penalty_flags AS (
             OR
             (
                 (
-                    (mqd.penalty_excellent_criteria = 'LT_1' AND tac.score_input <> 'A') OR
-                    (mqd.penalty_excellent_criteria = 'EQ_0' AND tac.score_input = 'F')
+                    (mqd.penalty_excellent_criteria = 'LT_1' AND tac.score_input <> 'A')
+                    OR (mqd.penalty_excellent_criteria = 'EQ_0' AND tac.score_input = 'F')
                 )
                 AND COALESCE(mqd.is_relaksasi, false) = false
                 AND mqd.is_penalty = true
-                -- Relaksasi khusus setelah 2025-06-01 jika ada comment untuk ID khusus
                 AND NOT (
                     mqd.id = '5e9ffc47-de99-4d7d-b8bc-0fb9b7acc81b'
                     AND ta.created_date >= DATE '2025-06-01'
-                    AND tac.comment IS NOT NULL AND btrim(tac.comment) <> ''
+                    AND tac.comment IS NOT NULL
+                    AND btrim(tac.comment) <> ''
                 )
             )
         ) AS is_penalty_excellent,
@@ -2248,7 +2249,44 @@ penalty_flags AS (
             AND mqd.is_penalty = true
             AND COALESCE(mqd.is_relaksasi, false) = false
             AND mqd.id <> '5e9ffc47-de99-4d7d-b8bc-0fb9b7acc81b'
-        ) AS is_penalty_good
+        ) AS is_penalty_good,
+        (
+            (
+                tac.master_questioner_detail_id IN (
+                    '555fe2e4-b95b-461b-9c92-ad8b5c837119',
+                    'bafc206f-ed29-4bbc-8053-38799e186fb0',
+                    'd26f4caa-e849-4ab4-9372-298693247272'
+                )
+                AND tac.score_input <> 'A'
+            )
+            OR
+            (
+                tac.master_questioner_detail_id = '5e9ffc47-de99-4d7d-b8bc-0fb9b7acc81b'
+                AND ta.created_date < DATE '2025-06-01'
+                AND tac.score_input <> 'A'
+            )
+            OR
+            (
+                (
+                    (mqd.penalty_excellent_criteria = 'LT_1' AND tac.score_input <> 'A')
+                    OR (mqd.penalty_excellent_criteria = 'EQ_0' AND tac.score_input = 'F')
+                )
+                AND COALESCE(mqd.is_relaksasi, true) = true
+                AND mqd.is_penalty = true
+                AND NOT (
+                    mqd.id = '5e9ffc47-de99-4d7d-b8bc-0fb9b7acc81b'
+                    AND ta.created_date >= DATE '2025-06-01'
+                    AND tac.comment IS NOT NULL
+                    AND btrim(tac.comment) <> ''
+                )
+            )
+        ) AS is_penalty_excellent_relaksasi,
+        (
+            tac.score_input = 'F'
+            AND mqd.is_penalty = true
+            AND COALESCE(mqd.is_relaksasi, true) = true
+            AND mqd.id <> '5e9ffc47-de99-4d7d-b8bc-0fb9b7acc81b'
+        ) AS is_penalty_good_relaksasi
     FROM trx_audit_checklist tac
     JOIN master_questioner_detail mqd ON mqd.id = tac.master_questioner_detail_id
     JOIN trx_audit ta ON ta.id = tac.trx_audit_id
@@ -2259,70 +2297,76 @@ comment_per_elemen AS (
         qh.root_title,
         string_agg(
             (
-                pf.comment
+                regexp_replace(pf.comment, E'[\\n\\r]+', ' ', 'g')
                 ||
                 CASE
-                    WHEN (pf.is_penalty_excellent OR pf.is_penalty_good)
+                    WHEN (
+                        pf.is_penalty_excellent
+                        OR pf.is_penalty_good
+                        OR pf.is_penalty_excellent_relaksasi
+                        OR pf.is_penalty_good_relaksasi
+                    )
                     THEN
-                        ' - ' || trim(both ' / ' FROM concat_ws(
-                            ' / ',
-                            CASE WHEN pf.is_penalty_excellent THEN 'penalty excellent' END,
-                            CASE WHEN pf.is_penalty_good      THEN 'penalty good' END
-                        ))
+                        ' - ' ||
+                        trim(
+                            both ' / ' FROM concat_ws(
+                                ' / ',
+                                CASE WHEN pf.is_penalty_excellent THEN 'penalty excellent' END,
+                                CASE WHEN pf.is_penalty_good THEN 'penalty good' END,
+                                CASE
+                                    WHEN (pf.is_penalty_excellent_relaksasi OR pf.is_penalty_good_relaksasi)
+                                    THEN '*relaksasi*'
+                                END
+                            )
+                        )
                     ELSE ''
                 END
             ),
-            E'\n'
-            ORDER BY pf.tac_id
+            E'\n' ORDER BY pf.tac_id
         ) AS all_comments
     FROM question_hierarchy qh
-    JOIN penalty_flags pf
-      ON pf.mqd_id = qh.id
-    WHERE pf.comment IS NOT NULL
-      AND btrim(pf.comment) <> ''
+    JOIN penalty_flags pf ON pf.mqd_id = qh.id
+    WHERE pf.comment IS NOT NULL AND btrim(pf.comment) <> ''
     GROUP BY qh.root_title
 )
-SELECT 
+SELECT
     ta.id,
-    ta.report_no                          AS ReportNo,
-    ta.audit_type                         AS AuditType,
-    ta.audit_execution_time               AS SubmitDate,
+    ta.report_no            AS ReportNo,
+    ta.audit_type           AS AuditType,
+    ta.audit_execution_time AS SubmitDate,
     ta.status,
-    ta.audit_mom_final                    AS Notes,
+    ta.audit_mom_final      AS Notes,
     ta.audit_level,
-    s.spbu_no                             AS SpbuNo,
+    s.spbu_no               AS SpbuNo,
     s.region,
-    s.city_name                           AS Kota,
-    s.address                             AS Alamat,
-    s.owner_name                          AS OwnerName,
-    s.manager_name                        AS ManagerName,
-    s.owner_type                          AS OwnershipType,
-    s.quater                              AS Quarter,
-    s.""year""                              AS Year,
-    s.mor                                 AS Mor,
-    s.sales_area                          AS SalesArea,
-    s.sbm                                 AS Sbm,
-    s.""level""                             AS ClassSpbu,
-    s.phone_number_1                      AS Phone,
+    s.city_name             AS Kota,
+    s.address               AS Alamat,
+    s.owner_name            AS OwnerName,
+    s.manager_name          AS ManagerName,
+    s.owner_type            AS OwnershipType,
+    s.quater                AS Quarter,
+    s.""year""                AS Year,
+    s.mor                   AS Mor,
+    s.sales_area            AS SalesArea,
+    s.sbm                   AS Sbm,
+    s.""level""               AS ClassSpbu,
+    s.phone_number_1        AS Phone,
     (SELECT all_comments FROM comment_per_elemen WHERE root_title = 'Elemen 1') AS KomentarStaf,
     (SELECT all_comments FROM comment_per_elemen WHERE root_title = 'Elemen 2') AS KomentarQuality,
     (SELECT all_comments FROM comment_per_elemen WHERE root_title = 'Elemen 3') AS KomentarHSSE,
     (SELECT all_comments FROM comment_per_elemen WHERE root_title = 'Elemen 4') AS KomentarVisual,
     (SELECT all_comments FROM comment_per_elemen WHERE root_title = 'Elemen 5') AS PenawaranKomperhensif,
-    CASE 
-        WHEN audit_mom_final IS NOT NULL AND audit_mom_final <> '' THEN audit_mom_final
-        ELSE audit_mom_intro
-    END AS KomentarManager,
-    approval_date as ApproveDate,
-    (select name from app_user where username = ta.approval_by) as ApproveBy,
-    ta.updated_date as UpdateDate,
-    ta.audit_level as AuditCurrent,
-    s.audit_next as AuditNext,
-    au.name as NamaAuditor
+    CASE WHEN audit_mom_final IS NOT NULL AND audit_mom_final <> '' THEN audit_mom_final ELSE audit_mom_intro END AS KomentarManager,
+    approval_date           AS ApproveDate,
+    (SELECT name FROM app_user WHERE username = ta.approval_by) AS ApproveBy,
+    ta.updated_date         AS UpdateDate,
+    ta.audit_level          AS AuditCurrent,
+    s.audit_next            AS AuditNext,
+    au.name                 AS NamaAuditor
 FROM trx_audit ta
-JOIN spbu s   ON ta.spbu_id    = s.id
-JOIN app_user au ON au.id      = ta.app_user_id
-WHERE ta.id = @id";
+JOIN spbu s   ON ta.spbu_id = s.id
+JOIN app_user au ON au.id   = ta.app_user_id
+WHERE ta.id = @id;";
 
             var a = await conn.QueryFirstOrDefaultAsync<AuditHeaderDto>(sql, new { id });
             if (a == null)

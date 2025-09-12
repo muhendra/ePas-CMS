@@ -27,6 +27,8 @@
 }
 
 <style>
+    .comment-line.comment-red { color: red !important; }
+
     .penalty-badge {
         display: inline-block;
         padding: .15rem .5rem;
@@ -349,55 +351,47 @@
     }
 </div>
 
-<!-- KOMENTAR AUDITOR -->
 <div class="mb-4">
     <strong>Staf Terlatih dan Termotivasi:</strong>
-    <div class="border rounded p-3 bg-light mt-2 js-comment"
-         data-penalty="@GetPenaltyType(Model.KomentarStaf)">
-        @Html.Raw(StripPenaltyTag(Model.KomentarStaf)?.Replace("\n", "<br>"))
+    <div class="border rounded p-3 bg-light mt-2 js-comment">
+        @Html.Raw(RenderPenaltyLines(Model.KomentarStaf))
     </div>
 </div>
 
 <div class="mb-4">
     <strong>Jaminan Kualitas dan Kuantitas:</strong>
-    <div class="border rounded p-3 bg-light mt-2 js-comment"
-         data-penalty="@GetPenaltyType(Model.KomentarQuality)">
-        @Html.Raw(StripPenaltyTag(Model.KomentarQuality)?.Replace("\n", "<br>"))
+    <div class="border rounded p-3 bg-light mt-2 js-comment">
+        @Html.Raw(RenderPenaltyLines(Model.KomentarQuality))
     </div>
 </div>
 
 <div class="mb-4">
     <strong>Peralatan Terpelihara dan HSSE:</strong>
-    <div class="border rounded p-3 bg-light mt-2 js-comment"
-         data-penalty="@GetPenaltyType(Model.KomentarHSSE)">
-        @Html.Raw(StripPenaltyTag(Model.KomentarHSSE)?.Replace("\n", "<br>"))
+    <div class="border rounded p-3 bg-light mt-2 js-comment">
+        @Html.Raw(RenderPenaltyLines(Model.KomentarHSSE))
     </div>
 </div>
 
 <div class="mb-4">
     <strong>Tampilan Fisik Seragam:</strong>
-    <div class="border rounded p-3 bg-light mt-2 js-comment"
-         data-penalty="@GetPenaltyType(Model.KomentarVisual)">
-        @Html.Raw(StripPenaltyTag(Model.KomentarVisual)?.Replace("\n", "<br>"))
+    <div class="border rounded p-3 bg-light mt-2 js-comment">
+        @Html.Raw(RenderPenaltyLines(Model.KomentarVisual))
     </div>
 </div>
 
 <div class="mb-4">
     <strong>Penawaran Produk Komperhensif:</strong>
-    <div class="border rounded p-3 bg-light mt-2 js-comment"
-         data-penalty="@GetPenaltyType(Model.PenawaranKomperhensif)">
-        @Html.Raw(StripPenaltyTag(Model.PenawaranKomperhensif)?.Replace("\n", "<br>"))
+    <div class="border rounded p-3 bg-light mt-2 js-comment">
+        @Html.Raw(RenderPenaltyLines(Model.PenawaranKomperhensif))
     </div>
 </div>
 
 <div>
     <strong>Komentar Manajer SPBU:</strong>
-    <div class="border rounded p-3 bg-light mt-2 js-comment"
-         data-penalty="@GetPenaltyType(Model.KomentarManager)">
-        @Html.Raw(StripPenaltyTag(Model.KomentarManager)?.Replace("\n", "<br>"))
+    <div class="border rounded p-3 bg-light mt-2 js-comment">
+        @Html.Raw(RenderPenaltyLines(Model.KomentarManager))
     </div>
 </div>
-
 
 <!-- CHECKLIST AUDIT -->
 @if (Model.AuditType == "Mystery Audit" || Model.AuditType == "Regular Audit" || Model.AuditType == "Basic Operational")
@@ -611,33 +605,27 @@
 @section Scripts {
     <script>
                 function processPenaltyHighlights(mode) {
-          const selectors =
-            '.js-comment,' +
-            '.card .card-body .bg-light.mt-2,' +
-            '.card .card-body .border.rounded.p-2.bg-light.small';
+          // reset semua baris komentar
+          document.querySelectorAll('.comment-line').forEach(line => {
+            line.classList.remove('comment-red');
+            line.style.removeProperty('color');
+          });
 
-          document.querySelectorAll(selectors).forEach(el => {
-            // reset
-            el.classList.remove('comment-red');
-            el.style.removeProperty('background-color');
-            el.style.removeProperty('color');
-            el.style.removeProperty('border-color');
+          // tandai hanya baris yang relevan
+          document.querySelectorAll('.comment-line').forEach(line => {
+            const hasGood = (line.dataset.hasGood || '').toLowerCase() === 'true';
+            const hasExcellent = (line.dataset.hasExcellent || '').toLowerCase() === 'true';
+            const hasRelax = (line.dataset.hasRelax || '').toLowerCase() === 'true';
 
-            // PRIORITAS: baca flag dari server
-            const flag = (el.dataset.penalty || '').toLowerCase(); // "", "good", "excellent"
-
-            // fallback terakhir: kalau masih ada sisa teksnya (misal belum dibersihkan)
-            const plain = (el.textContent || '').replace(/\u00A0/g,' ');
-            const hasGood = flag === 'good' || /(^|\s)-\s*pena[lI]ty\s+good(\s|$)/i.test(plain);
-            const hasExcellent = flag === 'excellent' || /(^|\s)-\s*pena[lI]ty\s+excellent(\s|$)/i.test(plain);
-
+            // relaksasi = selalu merah (independen dari mode)
             const shouldRed =
+              hasRelax ||
               (mode === 'good' && hasGood) ||
               (mode === 'excellent' && hasExcellent);
 
             if (shouldRed) {
-              el.classList.add('comment-red');
-              el.style.color = 'red';
+              line.classList.add('comment-red');
+              line.style.color = 'red';
             }
           });
 
@@ -1246,5 +1234,64 @@
             RegexOptions.IgnoreCase);
         return cleaned.Trim();
     }
+
+    string RenderPenaltyLines(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return "";
+        var lines = text.Replace("\r\n", "\n").Split('\n');
+        var sb = new System.Text.StringBuilder();
+
+        foreach (var raw0 in lines)
+        {
+            var raw = raw0 ?? "";
+
+            // Deteksi tag per-baris
+            bool hasGood = Regex.IsMatch(raw, @"\bpena[lI]ty\s+good\b", RegexOptions.IgnoreCase);
+            bool hasExcellent = Regex.IsMatch(raw, @"\bpena[lI]ty\s+excellent\b", RegexOptions.IgnoreCase);
+            bool hasRelax = Regex.IsMatch(raw, @"-\s*\*?relaksasi\*?\b", RegexOptions.IgnoreCase);
+
+            // Bersihkan tampilan: buang semua tag penalty (bisa multiple & mixed order)
+            var cleaned = Regex.Replace(
+                raw,
+                @"\s*-\s*pena[lI]ty\s+(good|excellent)(\s*/\s*pena[lI]ty\s+(good|excellent))*",
+                "",
+                RegexOptions.IgnoreCase
+            );
+
+            // Bersihkan tampilan: buang tag relaksasi (variasi dengan/ tanpa * )
+            cleaned = Regex.Replace(
+                cleaned,
+                @"\s*-\s*\*?relaksasi\*?\b",
+                "",
+                RegexOptions.IgnoreCase
+            ).TrimEnd();
+
+            // Kalau kosong setelah dibersihkan, skip
+            if (string.IsNullOrWhiteSpace(cleaned)) continue;
+
+            // Encode aman HTML
+            var encoded = System.Net.WebUtility.HtmlEncode(cleaned);
+
+            // Build line + atribut data
+            sb.Append("<div class=\"comment-line\"")
+              .Append(" data-has-good=\"").Append(hasGood ? "true" : "false").Append("\"")
+              .Append(" data-has-excellent=\"").Append(hasExcellent ? "true" : "false").Append("\"")
+              .Append(" data-has-relax=\"").Append(hasRelax ? "true" : "false").Append("\"")
+              .Append(">");
+
+            // Teks utama
+            sb.Append(encoded);
+
+            // Tambahkan tail terformat jika relaksasi
+            if (hasRelax)
+            {
+                sb.Append(" - Relaksasi");
+            }
+
+            sb.Append("</div>");
+        }
+        return sb.ToString();
+    }
+
 
 }
