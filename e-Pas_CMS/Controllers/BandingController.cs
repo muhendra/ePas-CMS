@@ -260,6 +260,8 @@ namespace e_Pas_CMS.Controllers
             passedAuditLevel     = auditFlow.passed_audit_level;
             failed_audit_level   = auditFlow.failed_audit_level;
 
+            var klarifnotes = await GetMediaKlarifikasiAsync(connect, pid);
+            
             var vm = new ComplainDetailViewModel
             {
                 // Status & jenis
@@ -305,6 +307,19 @@ namespace e_Pas_CMS.Controllers
                 SesudahRevisi = failed_audit_level
 
             };
+
+            vm.MediaKlarifikasi = klarifnotes
+                .Where(n => !string.IsNullOrWhiteSpace(n.MediaPath))
+                .Select(n => new KlfAttachmentItem
+                {
+                    Id = null,
+                    FileName = SafeGetFileName(n.MediaPath),
+                    Url = n.MediaPath,
+                    MediaType = NormalizeType(n.MediaType) ?? GetExtFromUrl(n.MediaPath),
+                    SizeReadable = null
+                }).ToList();
+
+            ViewBag.KlfAttachmentsJson = JsonConvert.SerializeObject(vm.MediaKlarifikasi);
 
             var cs = _context.Database.GetConnectionString();
             await using var conn = new NpgsqlConnection(cs);
@@ -483,6 +498,7 @@ namespace e_Pas_CMS.Controllers
             .ToListAsync();
 
             ViewBag.ApprovalHistory = history;
+            ViewBag.BandingId = id;
 
             return View(vm);
         }
@@ -793,6 +809,23 @@ namespace e_Pas_CMS.Controllers
             SELECT id, media_type, media_path
             FROM trx_feedback_point_media
             WHERE trx_feedback_point_id = @id
+            ORDER BY created_date ASC;";
+
+            var rows = await conn.QueryAsync<MediaRow>(sql, new { id });
+
+            return rows.Select(x => new MediaItem
+            {
+                MediaType = x.media_type,
+                MediaPath = "https://epas-assets.zarata.co.id" + x.media_path
+            }).ToList();
+        }
+
+        private async Task<List<MediaItem>> GetMediaKlarifikasiAsync(IDbConnection conn, string id)
+        {
+            const string sql = @"
+            SELECT id, media_type, media_path
+            FROM trx_feedback_clarification_media
+            WHERE trx_feedback_id = @id
             ORDER BY created_date ASC;";
 
             var rows = await conn.QueryAsync<MediaRow>(sql, new { id });
@@ -1135,6 +1168,48 @@ namespace e_Pas_CMS.Controllers
                 return AssetsBase + path;
 
             return $"{AssetsBase}/{path}";
+        }
+
+        [HttpPost("Banding/UploadKlarifikasiMedia")]
+        public async Task<IActionResult> UploadKlarifikasiMedia(IFormFile file, string bandingId)
+        {
+            if (file == null || file.Length == 0)
+                return BadRequest("File tidak ditemukan atau kosong.");
+
+            var generatedNodeId = Guid.NewGuid().ToString();
+            var uploadsPath = Path.Combine("/var/www/epas-asset", "wwwroot", "uploads", bandingId);
+
+            Directory.CreateDirectory(uploadsPath);
+
+            var fileName = Path.GetFileName(file.FileName);
+            var filePath = Path.Combine(uploadsPath, fileName);
+
+            // Simpan file fisik
+            using (var stream = new FileStream(filePath, FileMode.Create))
+            {
+                await file.CopyToAsync(stream);
+            }
+
+            // Simpan informasi file ke database
+            using var conn = _context.Database.GetDbConnection();
+            if (conn.State != ConnectionState.Open)
+                await conn.OpenAsync();
+
+            var insertSql = @"
+INSERT INTO trx_feedback_clarification_media 
+    (id, trx_feedback_id, media_type, media_path, status, created_date, created_by, updated_date, updated_by)
+VALUES 
+    (uuid_generate_v4(), @bandingId, @mediaType, @mediaPath, 'ACTIVE', NOW(), @createdBy, NOW(), @createdBy)";
+
+            await conn.ExecuteAsync(insertSql, new
+            {
+                bandingId,
+                mediaType = Path.GetExtension(fileName).Trim('.').ToLower(),
+                mediaPath = $"/uploads/{bandingId}/{fileName}",
+                createdBy = User.Identity?.Name ?? "anonymous"
+            });
+
+            return RedirectToAction("Detail", new { id = bandingId });
         }
 
         // GET: /Complain/Download/{idMedia}

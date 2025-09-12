@@ -432,6 +432,18 @@
                 <small class="text-muted">Klarifikasi ini akan ikut tersimpan saat Anda menekan tombol Approve/Reject.</small>
             </div>
         </div>
+
+        <form method="post"
+              asp-action="UploadKlarifikasiMedia"
+              asp-controller="Banding"
+              asp-route-bandingId="@ViewBag.BandingId"
+              enctype="multipart/form-data">
+            <div class="mb-3">
+                <label for="KlarifikasiFile" class="form-label fw-semibold">Upload Dokumen Tambahan Klarifikasi</label>
+                <input type="file" class="form-control" id="KlarifikasiFile" name="file" required />
+            </div>
+            <button type="submit" class="btn btn-secondary rounded-pill px-4">Upload Klarifikasi</button>
+        </form>
     }
 
     @if (Model.IsBanding)
@@ -503,6 +515,19 @@
             }
         </div>
     </div>
+
+    @if (statusNorm == "APPROVE_PPN" || statusNorm == "APPROVE_CBI" || statusNorm == "REJECT_CBI" || statusNorm == "APPROVED" || statusNorm == "APPROVE")
+    {
+        <div class="label">Dokumen Klarifikasi</div>
+        @if (string.IsNullOrWhiteSpace(ViewBag.KlfAttachmentsJson) || ViewBag.KlfAttachmentsJson == "[]")
+        {
+            <div class="text-muted">Tidak ada dokumen pendukung.</div>
+        }
+        else
+        {
+            <div id="klarifikasiMedia" class="thumb-grid" data-items='@Html.Raw(ViewBag.KlfAttachmentsJson)'></div>
+        }
+    }
 
     @if (statusNorm == "APPROVE_CBI" || statusNorm == "REJECT_CBI" || statusNorm == "APPROVED" || statusNorm == "APPROVE")
     {
@@ -580,7 +605,7 @@
                     </button>
                 </form>
             }
-
+            @* STEP 3 (CBI) *@
             @if (statusNorm == "APPROVE_PPN" && hasRoleCBI && feedbackTypeNorm != "COMPLAINT")
             {
                 <form asp-action="Approve" method="post" class="d-inline needs-klarifikasi">

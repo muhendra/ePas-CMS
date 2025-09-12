@@ -47,7 +47,7 @@
         public string Description { get; set; }
         public string SebelumRevisi { get; set; }
         public string SesudahRevisi { get; set; }
-
+        public List<KlfAttachmentItem> MediaKlarifikasi { get; set; } = new();
     }
 
     public class PointItem
@@ -83,6 +83,17 @@
     }
 
     public class AttachmentItem
+    {
+        public string Id { get; set; }
+        public string FileName { get; set; }
+        public string SizeReadable { get; set; } // opsional
+
+        // Opsional (kalau ingin preview juga untuk attachment per-poin)
+        public string Url { get; set; }       // absolute/relative file url
+        public string MediaType { get; set; } // "jpg","png","pdf","mp4", dll
+    }
+
+    public class KlfAttachmentItem
     {
         public string Id { get; set; }
         public string FileName { get; set; }
