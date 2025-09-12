@@ -774,11 +774,11 @@
 
                     // Cari elemen yang gagal berdasarkan skor elemen
                     const failedElements = [];
-                    const elements = ['SSS', 'EQnQ', 'RFS'];
-                    const scores = [sss, eqnq, rfs];
+                    const elements = ['SSS', 'EQnQ', 'RFS', 'VFC', 'EPO'];
+                    const scores = [sss, eqnq, rfs, vfc, epo];
                     const minScoresLocal = mode === 'excellent'
-                        ? [80, 85, 85]
-                        : [85, 85, 85, 15, 25];
+                        ? [85, 85, 85, 20, 50]
+                        : [80, 85, 85, 15, 25];
 
                     for (let i = 0; i < scores.length; i++) {
                         if (scores[i] < minScoresLocal[i]) {
