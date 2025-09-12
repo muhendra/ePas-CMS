@@ -224,6 +224,10 @@ namespace e_Pas_CMS.Controllers
             if (string.IsNullOrWhiteSpace(id))
                 return NotFound();
 
+            var connect = _context.Database.GetDbConnection();
+            if (connect.State != ConnectionState.Open)
+                await connect.OpenAsync();
+
             string pid = "";
 
             var header =
@@ -242,6 +246,19 @@ namespace e_Pas_CMS.Controllers
                        }).FirstOrDefaultAsync();
 
             if (header == null) return NotFound();
+
+            string passedGood = "";
+            string passedExcellent = "";
+            string passedAuditLevel = "";
+            string failed_audit_level = "";
+
+            var auditFlowSql = @"SELECT * FROM master_audit_flow WHERE audit_level = @level LIMIT 1;";
+            var auditFlow = await connect.QueryFirstOrDefaultAsync<dynamic>(auditFlowSql, new { level = header.S.audit_next });
+
+            passedGood           = auditFlow.passed_good;
+            passedExcellent      = auditFlow.passed_excellent;
+            passedAuditLevel     = auditFlow.passed_audit_level;
+            failed_audit_level   = auditFlow.failed_audit_level;
 
             var vm = new ComplainDetailViewModel
             {
@@ -283,7 +300,10 @@ namespace e_Pas_CMS.Controllers
                 CanReject = string.Equals(header.Tf.Status, "IN_PROGRESS_SUBMIT", StringComparison.OrdinalIgnoreCase),
                 feedback_type = header.Tf.FeedbackType,
                 AuditId = header.Ta.id,
-                Klarifikasi = header.Tf.Klarifikasi
+                Klarifikasi = header.Tf.Klarifikasi,
+                SebelumRevisi = header.S.audit_next,
+                SesudahRevisi = failed_audit_level
+
             };
 
             var cs = _context.Database.GetConnectionString();

@@ -35,6 +35,63 @@
             background-color: #fee2e2;
             color: #dc2626;
         }
+
+        /* Tombol kuning elegan dengan outline hitam */
+        .btn-gold-elegant {
+            background-color: #ffc107; /* kuning Bootstrap (warning) */
+            border: 1.5px solid #000; /* outline hitam */
+            color: #111; /* teks gelap biar kontras */
+            border-radius: 10px;
+            padding: 6px 16px;
+            font-weight: 600;
+            letter-spacing: .2px;
+            transition: transform .15s ease, box-shadow .15s ease, background-color .2s ease, color .2s ease, border-color .2s ease;
+            box-shadow: 0 2px 0 rgba(0,0,0,.08);
+        }
+
+            .btn-gold-elegant i {
+                margin-right: 6px;
+            }
+
+            .btn-gold-elegant:hover {
+                background-color: #ffca2c; /* sedikit lebih terang saat hover */
+                transform: translateY(-1px);
+                box-shadow: 0 6px 16px rgba(0,0,0,.12);
+                border-color: #000;
+                color: #111;
+            }
+
+            .btn-gold-elegant:active {
+                transform: translateY(0);
+                box-shadow: 0 2px 0 rgba(0,0,0,.10);
+            }
+
+            .btn-gold-elegant:focus {
+                outline: 0;
+                box-shadow: 0 0 0 .2rem rgba(0,0,0,.15); /* ring fokus hitam transparan */
+            }
+
+            .btn-gold-elegant.btn-sm {
+                padding: 4px 12px;
+                font-size: .85rem;
+            }
+
+        /* Opsi kedua: outline hitam + teks kuning (tetap terlihat minimalis) */
+        .btn-outline-gold-black {
+            background: transparent;
+            border: 1.5px solid #000;
+            color: #ffc107;
+            border-radius: 10px;
+            font-weight: 600;
+            padding: 6px 16px;
+            transition: all .2s ease;
+        }
+
+            .btn-outline-gold-black:hover {
+                background-color: #ffc107;
+                color: #111;
+                box-shadow: 0 4px 12px rgba(0,0,0,.12);
+            }
     </style>
 }
 
@@ -127,7 +184,7 @@
                             <td>@item.StatusGood</td>
                             <td>@item.StatusExcellent</td>
                             <td class="text-nowrap">
-                                <a asp-action="Edit" asp-route-id="@item.Id" class="btn btn-outline-warning btn-sm btn-modern me-1">
+                                <a asp-action="Edit" asp-route-id="@item.Id" class="btn btn-gold-elegant btn-sm btn-modern me-1">
                                     <i class="bi bi-pencil-square"></i> Edit
                                 </a>
                             </td>

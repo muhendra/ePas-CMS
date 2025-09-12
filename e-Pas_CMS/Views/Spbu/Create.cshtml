@@ -77,36 +77,17 @@
 
                 <div class="col-lg-6">
                     <label class="form-label">Rayon</label>
-                    <div class="position-relative">
-                        <select asp-for="region" class="form-select">
-                            <option value="">Pilih Rayon</option>
-                            @* <option value="R1">R1</option> *@
-                        </select>
-                        <i class="bi bi-chevron-down icon-end"></i>
-                    </div>
-                    <span asp-validation-for="region" class="text-danger small"></span>
+                    <input asp-for="region" class="form-control" placeholder="Masukkan Rayon" />
                 </div>
 
                 <div class="col-lg-6">
                     <label class="form-label">Provinsi</label>
-                    <div class="position-relative">
-                        <select asp-for="province_name" class="form-select">
-                            <option value="">Pilih [Title]</option>
-                        </select>
-                        <i class="bi bi-chevron-down icon-end"></i>
-                    </div>
-                    <span asp-validation-for="province_name" class="text-danger small"></span>
+                    <input asp-for="province_name" class="form-control" placeholder="Masukkan Provinsi" />
                 </div>
 
                 <div class="col-lg-6">
                     <label class="form-label">Kota</label>
-                    <div class="position-relative">
-                        <select asp-for="city_name" class="form-select">
-                            <option value="">Pilih [Title]</option>
-                        </select>
-                        <i class="bi bi-chevron-down icon-end"></i>
-                    </div>
-                    <span asp-validation-for="city_name" class="text-danger small"></span>
+                    <input asp-for="city_name" class="form-control" placeholder="Masukkan Kota" />
                 </div>
 
                 <div class="col-lg-6">
@@ -114,7 +95,7 @@
                     <input asp-for="address" class="form-control" placeholder="Masukkan [Title]" />
                 </div>
 
-                <div class="col-lg-6">
+                @* <div class="col-lg-6">
                     <label class="form-label d-block">Foto SPBU</label>
                     <div class="input-group">
                         <input type="file" name="spbu_photo" class="form-control" />
@@ -122,7 +103,7 @@
                             <i class="bi bi-upload"></i> Upload Foto
                         </button>
                     </div>
-                </div>
+                </div> *@
 
                 <div class="col-lg-6">
                     <label class="form-label">Pemilik</label>
@@ -136,12 +117,7 @@
 
                 <div class="col-lg-6">
                     <label class="form-label">Tipe Pemilik</label>
-                    <div class="position-relative">
-                        <select asp-for="owner_type" class="form-select">
-                            <option value="">Pilih tipe pemilik</option>
-                        </select>
-                        <i class="bi bi-chevron-down icon-end"></i>
-                    </div>
+                    <input asp-for="owner_type" class="form-control" placeholder="Masukkan tipe pemilik" />
                 </div>
 
                 <div class="col-lg-6">
@@ -160,17 +136,17 @@
 
                 <div class="col-lg-6">
                     <label class="form-label">Tahun</label>
-                    <div class="position-relative">
-                        <select asp-for="year" class="form-select">
-                            <option value="">Pilih [Title]</option>
-                            @for (int y = DateTime.Now.Year - 2; y <= DateTime.Now.Year + 1; y++)
-                            {
-                                <option value="@y">@y</option>
-                            }
-                        </select>
-                        <i class="bi bi-chevron-down icon-end"></i>
-                    </div>
+                    <input asp-for="year"
+                           class="form-control"
+                           type="number"
+                           step="1"
+                           min="1900"
+                           max="@(DateTime.Now.Year + 1)"
+                           inputmode="numeric"
+                           placeholder="Masukkan Tahun (angka)" />
+                    <span asp-validation-for="year" class="text-danger small"></span>
                 </div>
+
 
                 <div class="col-lg-6">
                     <label class="form-label">MOR</label>
@@ -179,12 +155,8 @@
 
                 <div class="col-lg-6">
                     <label class="form-label">Sales Area</label>
-                    <div class="position-relative">
-                        <select asp-for="sales_area" class="form-select">
-                            <option value="">Pilih [Title]</option>
-                        </select>
-                        <i class="bi bi-chevron-down icon-end"></i>
-                    </div>
+
+                    <input asp-for="sales_area" class="form-control" placeholder="Masukkan [Title]" />
                 </div>
 
                 <div class="col-lg-6">
@@ -198,13 +170,9 @@
                 </div>
 
                 <div class="col-lg-6">
-                    <label class="form-label">Jenis</label>
-                    <div class="position-relative">
-                        <select asp-for="type" class="form-select">
-                            <option value="">Pilih [Title]</option>
-                        </select>
-                        <i class="bi bi-chevron-down icon-end"></i>
-                    </div>
+                    <label class="form-label">Type</label>
+
+                    <input asp-for="type" class="form-control" placeholder="Masukkan Type" />
                 </div>
 
                 <div class="col-lg-6">
@@ -219,12 +187,7 @@
 
                 <div class="col-lg-6">
                     <label class="form-label">Level</label>
-                    <div class="position-relative">
-                        <select asp-for="level" class="form-select">
-                            <option value="">Pilih [Title]</option>
-                        </select>
-                        <i class="bi bi-chevron-down icon-end"></i>
-                    </div>
+                    <input asp-for="level" class="form-control" placeholder="Masukkan [Title]" />
                 </div>
 
                 <div class="col-lg-6">
@@ -244,12 +207,8 @@
 
                 <div class="col-lg-6">
                     <label class="form-label">Audit Berikutnya</label>
-                    <div class="position-relative">
-                        <select asp-for="audit_next" class="form-select" asp-items="ViewBag.AuditLevels">
-                            <option value="">Pilih [Title]</option>
-                        </select>
-                        <i class="bi bi-chevron-down icon-end"></i>
-                    </div>
+
+                    <input asp-for="audit_next" class="form-control" placeholder="Masukkan [Title]" />
                 </div>
 
                 <div class="col-lg-6">
@@ -298,7 +257,7 @@
         </div>
     </div>
 
-    <div class="card card-soft mb-4">
+    @* <div class="card card-soft mb-4">
         <div class="card-header px-4 py-3">
             <div class="fw-semibold">Informasi User Aplikasi SPBU</div>
         </div>
@@ -310,13 +269,13 @@
                         <select class="form-select" name="user_spbu_id">
                             <option value="">Pilih [Title]</option>
                             @* ganti dengan asp-items bila tersedia *@
-                        </select>
+                            @* </select>
                         <i class="bi bi-chevron-down icon-end"></i>
                     </div>
                 </div>
             </div>
         </div>
-    </div>
+    </div> *@
 
     <!-- actions -->
     <div class="sticky-action my-3">
