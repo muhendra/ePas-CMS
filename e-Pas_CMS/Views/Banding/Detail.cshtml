@@ -488,7 +488,7 @@
                             </div>
 
                             <div class="d-flex gap-2 mt-3">
-                                <button type="button" class="btn btn-success rounded-pill px-4" id="btnUpload" disabled>
+                                <button type="submit" class="btn btn-success rounded-pill px-4" id="btnUpload" disabled>
                                     Upload
                                 </button>
                                 <button type="button" class="btn btn-outline-secondary rounded-pill px-4" id="btnResetUpload" disabled>
@@ -821,6 +821,35 @@
 
 @section Scripts {
     <script>
+        document.getElementById("formUploadKlarifikasi").addEventListener("submit", function (e) {
+    e.preventDefault(); // cegah reload
+
+    const formData = new FormData(this);
+    const btnUpload = document.getElementById("btnUpload");
+    btnUpload.disabled = true;
+    btnUpload.innerText = "Uploading...";
+
+    fetch(this.action, {
+        method: "POST",
+        body: formData
+    })
+    .then(res => res.json())
+    .then(data => {
+        alert("Upload berhasil!");
+        // reset hanya bagian file, jangan form lain
+        document.getElementById("KlarifikasiFile").value = "";
+        document.getElementById("filePreview").classList.add("d-none");
+        btnUpload.disabled = false;
+        btnUpload.innerText = "Upload";
+    })
+    .catch(err => {
+        console.error(err);
+        alert("Upload gagal");
+        btnUpload.disabled = false;
+        btnUpload.innerText = "Upload";
+    });
+});
+
         // ========== Utils ==========
         function pick(obj, ...keys){
             for (const k of keys){
@@ -831,11 +860,6 @@
             }
             return '';
         }
-
-                document.getElementById("btnUpload").addEventListener("click", function() {
-            alert("Upload sukses !");
-            // atau panggil fungsi lain sesuai kebutuhan
-        });
 
         function toSrc(item){
             if (typeof item === 'string') return item;
