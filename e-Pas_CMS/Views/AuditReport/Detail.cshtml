@@ -1234,7 +1234,6 @@
             RegexOptions.IgnoreCase);
         return cleaned.Trim();
     }
-
     string RenderPenaltyLines(string? text)
     {
         if (string.IsNullOrWhiteSpace(text)) return "";
@@ -1248,25 +1247,42 @@
             // Deteksi tag per-baris
             bool hasGood = Regex.IsMatch(raw, @"\bpena[lI]ty\s+good\b", RegexOptions.IgnoreCase);
             bool hasExcellent = Regex.IsMatch(raw, @"\bpena[lI]ty\s+excellent\b", RegexOptions.IgnoreCase);
-            bool hasRelax = Regex.IsMatch(raw, @"-\s*\*?relaksasi\*?\b", RegexOptions.IgnoreCase);
+            bool hasRelax = Regex.IsMatch(raw, @"(^|\s)[-–/]?\s*\*?relaksasi\*?\b", RegexOptions.IgnoreCase);
 
-            // Bersihkan tampilan: buang semua tag penalty (bisa multiple & mixed order)
+            // 1) Buang semua tag penalty (bisa multiple & mixed order, toleransi '-' atau '/')
             var cleaned = Regex.Replace(
                 raw,
-                @"\s*-\s*pena[lI]ty\s+(good|excellent)(\s*/\s*pena[lI]ty\s+(good|excellent))*",
+                @"\s*[-/]?\s*pena[lI]ty\s+(good|excellent)(\s*/\s*pena[lI]ty\s+(good|excellent))*",
                 "",
                 RegexOptions.IgnoreCase
             );
 
-            // Bersihkan tampilan: buang tag relaksasi (variasi dengan/ tanpa * )
+            // 2) Standarisasi semua variasi 'relaksasi' → " - Relaksasi"
+            //    (toleransi: awal/whitespace, opsional '/', '-', spasi, dan * di kiri/kanan kata)
             cleaned = Regex.Replace(
                 cleaned,
-                @"\s*-\s*\*?relaksasi\*?\b",
-                "",
+                @"(?:^|\s)(?:[-–/]\s*)?\*?relaksasi\*?(?=$|\b)",
+                m => (m.Value.StartsWith(" ") ? " " : "") + "- Relaksasi",
                 RegexOptions.IgnoreCase
-            ).TrimEnd();
+            );
 
-            // Kalau kosong setelah dibersihkan, skip
+            // 3) Bersihkan sisa '/' yang mungkin menempel sebelum "- Relaksasi"
+            cleaned = Regex.Replace(
+                cleaned,
+                @"\s*/\s*(?=-\s*Relaksasi\b)",
+                " ",
+                RegexOptions.IgnoreCase
+            );
+
+            // 4) Hilangkan bintang yang tersisa setelah normalisasi (contoh: "- Relaksasi*")
+            cleaned = Regex.Replace(cleaned, @"- Relaksasi\*+", "- Relaksasi", RegexOptions.IgnoreCase);
+            cleaned = Regex.Replace(cleaned, @"(Relaksasi)\s*\*+(?=\s|$|[.,;:)\]])", "$1", RegexOptions.IgnoreCase);
+
+            // 5) Rapikan duplikasi & spasi
+            cleaned = Regex.Replace(cleaned, @"(?:\s*-\s*Relaksasi)+", " - Relaksasi", RegexOptions.IgnoreCase);
+            cleaned = Regex.Replace(cleaned, @"[ \t]{2,}", " ").TrimEnd();
+
+            // Jika kosong setelah dibersihkan, skip
             if (string.IsNullOrWhiteSpace(cleaned)) continue;
 
             // Encode aman HTML
@@ -1279,19 +1295,13 @@
               .Append(" data-has-relax=\"").Append(hasRelax ? "true" : "false").Append("\"")
               .Append(">");
 
-            // Teks utama
             sb.Append(encoded);
-
-            // Tambahkan tail terformat jika relaksasi
-            if (hasRelax)
-            {
-                sb.Append(" - Relaksasi");
-            }
 
             sb.Append("</div>");
         }
         return sb.ToString();
     }
+
 
 
 }

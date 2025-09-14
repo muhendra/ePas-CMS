@@ -2271,7 +2271,7 @@ penalty_flags AS (
                     (mqd.penalty_excellent_criteria = 'LT_1' AND tac.score_input <> 'A')
                     OR (mqd.penalty_excellent_criteria = 'EQ_0' AND tac.score_input = 'F')
                 )
-                AND COALESCE(mqd.is_relaksasi, true) = true
+                AND mqd.is_relaksasi = true
                 AND mqd.is_penalty = true
                 AND NOT (
                     mqd.id = '5e9ffc47-de99-4d7d-b8bc-0fb9b7acc81b'
@@ -2284,7 +2284,7 @@ penalty_flags AS (
         (
             tac.score_input = 'F'
             AND mqd.is_penalty = true
-            AND COALESCE(mqd.is_relaksasi, true) = true
+            AND mqd.is_relaksasi = true
             AND mqd.id <> '5e9ffc47-de99-4d7d-b8bc-0fb9b7acc81b'
         ) AS is_penalty_good_relaksasi
     FROM trx_audit_checklist tac

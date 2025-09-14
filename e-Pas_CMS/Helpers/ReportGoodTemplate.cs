@@ -17,26 +17,54 @@ public class ReportGoodTemplate : IDocument
     {
         _model = model;
     }
-
     private static (string CleanText, bool IsPenalty) ProcessPenaltyForPdfGood(string? raw)
     {
         if (string.IsNullOrWhiteSpace(raw))
             return ("-", false);
 
-        // pola ketat: strip, spasi, "penalty", spasi, "good"
-        var rxGood = new Regex(@"(^|\s)-\s+penalty\s+good(\s|$)", RegexOptions.IgnoreCase);
+        // Deteksi "penalty good" (trigger merah di template Good)
+        var rxPenaltyGood = new Regex(
+            @"(^|\s)[-/]?\s*pena[lI]ty\s+good(\b|(?=\s|$))",
+            RegexOptions.IgnoreCase | RegexOptions.Compiled
+        );
 
-        bool hit = rxGood.IsMatch(raw);
+        // Deteksi "penalty excellent" (tidak memicu merah di Good, tapi harus dibuang)
+        var rxPenaltyExcellent = new Regex(
+            @"(^|\s)[-/]?\s*pena[lI]ty\s+excellent(\b|(?=\s|$))",
+            RegexOptions.IgnoreCase | RegexOptions.Compiled
+        );
 
-        // hanya HAPUS yang "penalty good" (biarkan "penalty excellent" tetap tampil & tidak memicu merah)
-        var cleaned = rxGood.Replace(raw, " ");
+        // Deteksi relaksasi
+        var rxRelaksasi = new Regex(
+            @"(?:^|\s)(?:[-–/]\s*)?\*?relaksasi\*?(?=$|\b)",
+            RegexOptions.IgnoreCase | RegexOptions.Compiled
+        );
 
-        // rapikan baris & spasi
-        cleaned = Regex.Replace(cleaned, @"(\r?\n\s*){2,}", "\n").Trim();
-        if (string.IsNullOrWhiteSpace(cleaned))
-            cleaned = "-";
+        bool hitGood = rxPenaltyGood.IsMatch(raw);
 
-        return (cleaned, hit);
+        string text = raw;
+
+        // Buang token penalty good & penalty excellent
+        text = rxPenaltyGood.Replace(text, " ");
+        text = rxPenaltyExcellent.Replace(text, " ");
+
+        // Normalisasi relaksasi → " - Relaksasi"
+        bool hasRelaksasi = rxRelaksasi.IsMatch(text);
+        text = rxRelaksasi.Replace(text, m => (m.Value.StartsWith(" ") ? " " : "") + "- Relaksasi");
+
+        // Rapikan sisa karakter & spasi
+        text = Regex.Replace(text, @"\s*/\s*(?=-\s*Relaksasi\b)", " ", RegexOptions.IgnoreCase);
+        text = Regex.Replace(text, @"- Relaksasi\*+", "- Relaksasi", RegexOptions.IgnoreCase);
+        text = Regex.Replace(text, @"(Relaksasi)\s*\*+(?=\s|$|[.,;:)\]])", "$1", RegexOptions.IgnoreCase);
+        text = Regex.Replace(text, @"(?:\s*-\s*Relaksasi)+", " - Relaksasi", RegexOptions.IgnoreCase);
+        text = Regex.Replace(text, @"[ \t]{2,}", " ").Trim();
+
+        if (string.IsNullOrWhiteSpace(text))
+            text = "-";
+
+        // Warna merah hanya kalau baris mengandung penalty good atau relaksasi
+        bool shouldBeRed = hitGood || hasRelaksasi;
+        return (text, shouldBeRed);
     }
 
     public DocumentMetadata GetMetadata() => DocumentMetadata.Default;
@@ -259,27 +287,37 @@ public class ReportGoodTemplate : IDocument
             col.Item().PaddingTop(20).Text("KOMENTAR AUDITOR").Bold().FontSize(12);
             void KomentarItem(string label, string? value)
             {
-                var (clean, isPenalty) = ProcessPenaltyForPdfGood(value);
-
                 col.Item().Text(label).Bold().FontSize(10);
 
                 col.Item().PaddingBottom(10).Element(block =>
                 {
-                    var box = block.Container();
+                    var box = block.Container().Padding(6);
 
-                    if (isPenalty)
+                    if (string.IsNullOrWhiteSpace(value))
                     {
-                        box.Padding(6).Text(clean)
-                            .FontSize(9)
-                            .FontColor(Colors.Red.Medium)
-                            .SemiBold();
+                        box.Text("-").FontSize(9);
+                        return;
                     }
-                    else
+
+                    // Bagi ke baris, proses satu per satu
+                    var lines = value.Replace("\r\n", "\n").Split('\n');
+
+                    box.Text(t =>
                     {
-                        box.Padding(6).Text(clean).FontSize(9); // normal
-                    }
+                        foreach (var rawLine in lines)
+                        {
+                            // Panggil helper baris → balikannya teks yang sudah normalisasi + flag baris
+                            var (clean, isPenaltyLine) = ProcessPenaltyForPdfGood(rawLine);
+
+                            var line = t.Line(clean).FontSize(9).LineHeight(1.15f);
+
+                            if (isPenaltyLine)
+                                line.FontColor(Colors.Red.Medium).SemiBold();
+                        }
+                    });
                 });
             }
+
             KomentarItem("Staf Terlatih dan Termotivasi", _model.KomentarStaf);
             KomentarItem("Jaminan Kualitas dan Kuantitas", _model.KomentarQuality);
             KomentarItem("Peralatan Terpelihara dan HSSE", _model.KomentarHSSE);
