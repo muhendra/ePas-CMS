@@ -122,9 +122,10 @@ public class ReportGoodTemplate : IDocument
                 // Kanan kosong
                 row.RelativeItem()
     .AlignRight()
-    .Text(_model.CreatedDateBanding.HasValue
-        ? $"rev01-{_model.CreatedDateBanding.Value:ddMMyyyy}"
-        : "rev01-");
+.Text((_model.CreatedDateBanding.HasValue && _model.CreatedDateBanding.Value != DateTime.MinValue)
+    ? $"rev01-{_model.CreatedDateBanding.Value:ddMMyyyy}"
+    : string.Empty);
+
             });
 
 
