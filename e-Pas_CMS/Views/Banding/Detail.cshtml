@@ -821,35 +821,6 @@
 
 @section Scripts {
     <script>
-        document.getElementById("formUploadKlarifikasi").addEventListener("submit", function (e) {
-    e.preventDefault(); // cegah reload
-
-    const formData = new FormData(this);
-    const btnUpload = document.getElementById("btnUpload");
-    btnUpload.disabled = true;
-    btnUpload.innerText = "Uploading...";
-
-    fetch(this.action, {
-        method: "POST",
-        body: formData
-    })
-    .then(res => res.json())
-    .then(data => {
-        alert("Upload berhasil!");
-        // reset hanya bagian file, jangan form lain
-        document.getElementById("KlarifikasiFile").value = "";
-        document.getElementById("filePreview").classList.add("d-none");
-        btnUpload.disabled = false;
-        btnUpload.innerText = "Upload";
-    })
-    .catch(err => {
-        console.error(err);
-        alert("Upload gagal");
-        btnUpload.disabled = false;
-        btnUpload.innerText = "Upload";
-    });
-});
-
         // ========== Utils ==========
         function pick(obj, ...keys){
             for (const k of keys){
