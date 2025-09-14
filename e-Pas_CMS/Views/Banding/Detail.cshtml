@@ -541,6 +541,18 @@
         </div>
     }
 
+    @if (statusNorm == "APPROVE_CBI" || statusNorm == "REJECT_CBI" || statusNorm == "APPROVE")
+    {
+        <div class="card card-soft mb-3">
+            <div class="card-body">
+                <div class="section-title">Klarifikasi</div>
+                <div class="border rounded p-3 bg-light">
+                    @Html.Raw(string.IsNullOrWhiteSpace(Model.Klarifikasi) ? "-" : Model.Klarifikasi.Replace("\n", "<br />"))
+                </div>
+            </div>
+        </div>
+    }
+
     @if (Model.IsBanding)
     {
         <div class="card card-soft mb-3">
@@ -609,18 +621,6 @@
             }
         </div>
     </div>
-
-    @if (statusNorm == "APPROVE_CBI" || statusNorm == "REJECT_CBI" || statusNorm == "APPROVE")
-    {
-        <div class="card card-soft mb-3">
-            <div class="card-body">
-                <div class="section-title">Klarifikasi</div>
-                <div class="border rounded p-3 bg-light">
-                    @Html.Raw(string.IsNullOrWhiteSpace(Model.Klarifikasi) ? "-" : Model.Klarifikasi.Replace("\n", "<br />"))
-                </div>
-            </div>
-        </div>
-    }
 
     <!-- Tombol aksi -->
     @if (canShowActionsContainer)
