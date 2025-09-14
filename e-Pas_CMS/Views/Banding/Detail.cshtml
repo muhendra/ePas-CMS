@@ -14,11 +14,10 @@
     string statusText = Model.StatusText ?? "-";
     switch (statusNorm)
     {
-        case "APPROVED":
         case "APPROVE":
         case "BYPASS_APPROVE_PPN":
             statusClass = "bg-success"; break;
-        case "REJECTED":
+        case "REJECT":
         case "REJECT_CBI":
             statusClass = "bg-danger"; break;
         default:
@@ -66,7 +65,7 @@
                 {
                     var sc = (h.StatusCode ?? "").Trim().ToUpperInvariant();
                     var st = (h.Status ?? "").Trim().ToUpperInvariant();
-                    return sc == stageToValidate && (st == "APPROVED" || st == "APPROVE" || st == "REJECTED");
+                    return sc == stageToValidate && (st == "APPROVE" || st == "REJECT");
                 });
 
                 return rejectTagged || hasHist;
@@ -78,7 +77,7 @@
         || AllPointsProcessedCurrentStage
         || norm(statusNorm) == "APPROVE_SBM"
         || norm(statusNorm) == "APPROVE_CBI"
-        || norm(statusNorm) == "APPROVED"
+        || norm(statusNorm) == "APPROVE"
         || (hasRolePertamina && norm(statusNorm) == "REJECT_CBI");
 
     var approvalHistory = ViewBag.ApprovalHistory as IEnumerable<e_Pas_CMS.Models.TrxFeedbackPointApproval>;
@@ -92,9 +91,9 @@
             "APPROVE_SBM" => "Menunggu Persetujuan PPN",
             "APPROVE_PPN" => "Menunggu Persetujuan CBI",
             "APPROVE_CBI" => "Menunggu Persetujuan Pertamina",
-            "APPROVED" => "Banding Disetujui",
+            "APPROVE" => "Banding Disetujui",
             "BYPASS_APPROVE_PPN" => "Bypass Approve PPN",
-            "REJECTED" => "Ditolak",
+            "REJECT" => "Ditolak",
             "REJECT_CBI" => "Ditolak",
             _ => s ?? "-"
         };
@@ -325,7 +324,7 @@
             {
                 var sc = (h.StatusCode ?? "").Trim().ToUpperInvariant();
                 var st = (h.Status ?? "").Trim().ToUpperInvariant();
-                return sc == statusNorm && (st == "APPROVED" || st == "APPROVE" || st == "REJECTED");
+                return sc == statusNorm && (st == "APPROVE" || st == "REJECT");
             });
 
             var elementText = string.IsNullOrWhiteSpace(p.Element) ? "-" : p.Element;
@@ -516,7 +515,7 @@
         </div>
     }
 
-    @if (statusNorm == "APPROVE_PPN" || statusNorm == "APPROVE_CBI" || statusNorm == "REJECT_CBI" || statusNorm == "APPROVED" || statusNorm == "APPROVE")
+    @if (statusNorm == "APPROVE_PPN" || statusNorm == "APPROVE_CBI" || statusNorm == "REJECT_CBI" || statusNorm == "APPROVE" || statusNorm == "APPROVE")
     {
         <div class="card card-soft mb-3">
             <div class="card-body">
@@ -591,8 +590,8 @@
                             {
                                 var st = ((h.Status ?? "").Trim().ToUpperInvariant());
                                 var badge = "secondary";
-                                if (st == "APPROVED" || st == "APPROVE") badge = "success";
-                                else if (st == "REJECTED") badge = "danger";
+                                if (st == "APPROVE") badge = "success";
+                                else if (st == "REJECT") badge = "danger";
 
                                 var fs = (h is dynamic) ? (string)h.feedback_status : h.feedback_status;
 
@@ -611,7 +610,7 @@
         </div>
     </div>
 
-    @if (statusNorm == "APPROVE_CBI" || statusNorm == "REJECT_CBI" || statusNorm == "APPROVED" || statusNorm == "APPROVE")
+    @if (statusNorm == "APPROVE_CBI" || statusNorm == "REJECT_CBI" || statusNorm == "APPROVE")
     {
         <div class="card card-soft mb-3">
             <div class="card-body">
@@ -734,7 +733,7 @@
                 </form>
             }
 
-            @if ((statusNorm == "APPROVED" || statusNorm == "BYPASS_APPROVE_PPN") && hasRoleCBI)
+            @if ((statusNorm == "APPROVE" || statusNorm == "BYPASS_APPROVE_PPN") && hasRoleCBI)
             {
                 <button type="button"
                         class="btn btn-warning rounded-pill px-4 py-2 shadow-sm hover-scale"

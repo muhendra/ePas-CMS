@@ -47,9 +47,9 @@ namespace e_Pas_CMS.Controllers
         ("APPROVE_SBM",  "Menunggu Persetujuan PPN"),
         ("APPROVE_PPN",  "Menunggu Persetujuan CBI"),
         ("APPROVE_CBI",  "Menunggu Persetujuan Pertamina"),
-        ("APPROVED",     "Banding Disetujui"),
+        ("APPROVE",     "Banding Disetujui"),
         ("BYPASS_APPROVE_PPN", "Bypass Approve PPN"),
-        ("REJECTED",     "Ditolak"),
+        ("REJECT",     "Ditolak"),
         ("REJECT_CBI",   "Ditolak"),
     };
 
@@ -194,13 +194,13 @@ namespace e_Pas_CMS.Controllers
                     StatusCode = it.Fb.Status,
                     StatusText = (it.Fb.Status ?? "").ToUpperInvariant() switch
                     {
-                        "REJECTED" => "Ditolak",
+                        "REJECT" => "Ditolak",
                         "REJECT_CBI" => "Ditolak",
                         "UNDER_REVIEW" => "Menunggu Persetujuan SBM",
                         "APPROVE_SBM" => "Menunggu Persetujuan PPN",
                         "APPROVE_PPN" => "Menunggu Persetujuan CBI",
                         "APPROVE_CBI" => "Menunggu Persetujuan Pertamina",
-                        "APPROVED" => "Banding Disetujui",
+                        "APPROVE" => "Banding Disetujui",
                         "BYPASS_APPROVE_PPN" => "Bypass Approve PPN",
                         _ => it.Fb.Status ?? "-"
                     }
@@ -335,7 +335,7 @@ namespace e_Pas_CMS.Controllers
                     SELECT 1
                     FROM trx_feedback_point_approval tfpa
                     WHERE tfpa.trx_feedback_point_id = p.id
-                      AND tfpa.status IN ('REJECTED','REJECT_CBI')
+                      AND tfpa.status IN ('REJECT','REJECT_CBI')
                 ) 
                 THEN COALESCE(e.number || '. ' || e.title, e.title, e.description, '-') || ' (REJECT)'
                 ELSE COALESCE(e.number || '. ' || e.title, e.title, e.description, '-')
@@ -461,7 +461,7 @@ namespace e_Pas_CMS.Controllers
                 }).ToList();
 
                 // 3. Check if current point is approved
-                if (!approvals.Any(h => h.status == "APPROVED"))
+                if (!approvals.Any(h => h.status == "APPROVE"))
                     allApproved = false;
 
                 vm.Points.Add(pointVm);
@@ -551,7 +551,7 @@ namespace e_Pas_CMS.Controllers
                 // Update header langsung ke APPROVE
                 await conn.ExecuteAsync(@"
             UPDATE trx_feedback
-            SET status = 'APPROVED', updated_by = @user, updated_date = NOW()
+            SET status = 'APPROVE', updated_by = @user, updated_date = NOW()
             WHERE id = @id
         ", new { id, user = username }, tx);
 
@@ -563,7 +563,7 @@ namespace e_Pas_CMS.Controllers
                 INSERT INTO trx_feedback_point_approval
                     (id, trx_feedback_point_id, status, notes, approved_by, approved_date, feedback_status)
                 VALUES
-                    (@newid, @pid, 'BYPASS_APPROVE_PPN', @notes, @user, NOW(), 'APPROVED')
+                    (@newid, @pid, 'BYPASS_APPROVE_PPN', @notes, @user, NOW(), 'APPROVE')
             ";
 
                     foreach (var pid in pointIds)
@@ -612,7 +612,7 @@ namespace e_Pas_CMS.Controllers
             await conn.ExecuteAsync(@"
         INSERT INTO trx_feedback_point_approval 
         (id, trx_feedback_point_id, status, approved_by, approved_date, feedback_status)
-        VALUES (uuid_generate_v4(), @id, 'APPROVED', @user, NOW(), @feedback_status)",
+        VALUES (uuid_generate_v4(), @id, 'APPROVE', @user, NOW(), @feedback_status)",
                 new { id, user = username, feedback_status = status });
 
             return RedirectToAction("Detail", new { id = await GetFeedbackIdByPointId(id) });
@@ -647,14 +647,14 @@ namespace e_Pas_CMS.Controllers
             var now = DateTime.Now;
 
             // 2) Tentukan status header reject (berdasarkan stage saat ini)
-            var rejectStatus = feedback.Status == "APPROVE_PPN" ? "REJECT_CBI" : "REJECTED";
+            var rejectStatus = feedback.Status == "APPROVE_PPN" ? "REJECT_CBI" : "REJECT";
 
             // 3) Simpan rejection point
             //    Penting: tfpa.status = 'REJECTED' supaya cocok dengan query cek kamu.
             await conn.ExecuteAsync(@"
         INSERT INTO trx_feedback_point_approval 
         (id, trx_feedback_point_id, status, approved_by, approved_date, feedback_status)
-        VALUES (uuid_generate_v4(), @id, 'REJECTED', @user, @now, @feedback_status)",
+        VALUES (uuid_generate_v4(), @id, 'REJECT', @user, @now, @feedback_status)",
                 new { id, user = username, now, feedback_status = feedback.Status }, tx);
 
             // 4) Cek apakah masih ada point yang BELUM punya approval 'REJECTED'
@@ -667,7 +667,7 @@ namespace e_Pas_CMS.Controllers
               SELECT 1
               FROM trx_feedback_point_approval tfpa
               WHERE tfpa.trx_feedback_point_id = tfp.id
-                AND tfpa.status = 'REJECTED'
+                AND tfpa.status = 'REJECT'
           )",
                 new { fid = feedback.FeedbackId }, tx);
 
@@ -728,7 +728,7 @@ namespace e_Pas_CMS.Controllers
                     {
                         Id = Guid.NewGuid().ToString(),
                         TrxFeedbackPointId = pointIdFromApproval,
-                        Status = "APPROVED",
+                        Status = "APPROVE",
                         Notes = "",
                         ApprovedBy = username,
                         ApprovedDate = now,
@@ -752,10 +752,10 @@ namespace e_Pas_CMS.Controllers
                     tf.Status = "APPROVE_CBI";
                     break;
                 case "APPROVE_CBI":
-                    tf.Status = "APPROVED";
+                    tf.Status = "APPROVE";
                     break;
                 default:
-                    tf.Status = "APPROVED";
+                    tf.Status = "APPROVE";
                     break;
             }
 
@@ -774,7 +774,7 @@ namespace e_Pas_CMS.Controllers
             await conn.OpenAsync();
 
             var query = @"
-        SELECT COUNT(*) FILTER (WHERE latest.status != 'APPROVED') AS not_approved
+        SELECT COUNT(*) FILTER (WHERE latest.status != 'APPROVE') AS not_approved
         FROM trx_feedback_point p
         LEFT JOIN LATERAL (
             SELECT status
@@ -924,13 +924,13 @@ namespace e_Pas_CMS.Controllers
             var s = raw.Trim().ToUpperInvariant();
             return s switch
             {
-                "REJECTED" => "Ditolak",
+                "REJECT" => "Ditolak",
                 "REJECT_CBI" => "Ditolak",
                 "UNDER_REVIEW" => "Menunggu Persetujuan SBM",
                 "APPROVE_SBM" => "Menunggu Persetujuan PPN",
                 "APPROVE_PPN" => "Menunggu Persetujuan CBI",
                 "APPROVE_CBI" => "Menunggu Persetujuan Pertamina",
-                "APPROVED" => "Banding Disetujui",
+                "APPROVE" => "Banding Disetujui",
                 "BYPASS_APPROVE_PPN" => "Bypass Approve PPN",
                 _ => raw
             };
@@ -1000,7 +1000,7 @@ namespace e_Pas_CMS.Controllers
                     {
                         Id = Guid.NewGuid().ToString(),
                         TrxFeedbackPointId = pointIdFromApproval,
-                        Status = "APPROVED",
+                        Status = "APPROVE",
                         Notes = "",
                         ApprovedBy = username,
                         ApprovedDate = now,
@@ -1026,11 +1026,11 @@ namespace e_Pas_CMS.Controllers
             }
             else if (entity.Status == "APPROVE_CBI")
             {
-                entity.Status = "APPROVED";
+                entity.Status = "APPROVE";
             }
             else
             {
-                entity.Status = "APPROVED";
+                entity.Status = "APPROVE";
             }
 
             entity.ApprovalBy = User?.Identity?.Name ?? "system";
@@ -1085,7 +1085,7 @@ namespace e_Pas_CMS.Controllers
                     {
                         Id = Guid.NewGuid().ToString(),
                         TrxFeedbackPointId = pointIdFromApproval,
-                        Status = "REJECTED",
+                        Status = "REJECT",
                         Notes = "",
                         ApprovedBy = username,
                         ApprovedDate = now,
@@ -1096,7 +1096,7 @@ namespace e_Pas_CMS.Controllers
                 }
             }
 
-            var rejectStatus = entity.Status == "APPROVE_PPN" ? "REJECT_CBI" : "REJECTED";
+            var rejectStatus = entity.Status == "APPROVE_PPN" ? "REJECT_CBI" : "REJECT";
             entity.Status = rejectStatus;
             entity.ApprovalBy = User?.Identity?.Name ?? "system";
             entity.ApprovalDate = DateTime.Now;
