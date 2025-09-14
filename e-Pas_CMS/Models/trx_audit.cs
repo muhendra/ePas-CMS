@@ -48,6 +48,8 @@ public partial class trx_audit
 
     public DateTime? approval_date { get; set; }
     public string? approval_by { get; set; }
+    public string? good_status { get; set; }
+    public string? excellent_status { get; set; }
 
     public string? report_file_good { get; set; }
 

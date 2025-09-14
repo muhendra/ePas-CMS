@@ -228,6 +228,8 @@
 
                     const fmt = d => d.toISOString().slice(0, 10); // yyyy-MM-dd
 
+                    console.log("downsummary", start, end);
+
                     url += '' // searchTerm = ""
                         + `&startDate=${fmt(start)}`
                         + `&endDate=${fmt(end)}`;

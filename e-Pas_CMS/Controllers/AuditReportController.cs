@@ -813,26 +813,16 @@ namespace e_Pas_CMS.Controllers
                                .Where(r => r != null)
                                .ToListAsync();
 
-            var allowedStatuses = new[] { "VERIFIED", "UNDER_REVIEW" };
+            var allowedStatuses = new[] { "VERIFIED" };
 
             var query = _context.trx_audits
                 .Include(a => a.spbu)
                 .Include(a => a.app_user)
                 .Where(a =>
                     allowedStatuses.Contains(a.status) &&
-                    a.audit_type == "Basic Operational"
+                    a.audit_execution_time >= startDate &&
+                    a.audit_execution_time < endDate && a.audit_type != "Basic Operational"
                 );
-
-            // filter tanggal dinamis
-            if (startDate.HasValue)
-            {
-                query = query.Where(a => a.created_date >= startDate.Value);
-            }
-
-            if (endDate.HasValue)
-            {
-                query = query.Where(a => a.created_date < endDate.Value);
-            }
 
             if (userRegion.Any())
             {
@@ -887,113 +877,11 @@ namespace e_Pas_CMS.Controllers
 
             foreach (var a in audits)
             {
-                var sql = @"
-        SELECT 
-            mqd.weight, 
-            tac.score_input, 
-            tac.score_x, 
-            mqd.is_relaksasi
-        FROM master_questioner_detail mqd
-        LEFT JOIN trx_audit_checklist tac 
-            ON tac.master_questioner_detail_id = mqd.id 
-            AND tac.trx_audit_id = @id
-        WHERE mqd.master_questioner_id = (
-            SELECT master_questioner_checklist_id 
-            FROM trx_audit 
-            WHERE id = @id
-        )
-        AND mqd.type = 'QUESTION'";
+                var auditDate = a.audit_execution_time ?? a.updated_date ?? DateTime.MinValue;
 
-                var checklist = (await conn.QueryAsync<(decimal? weight, string score_input, decimal? score_x, bool? is_relaksasi)>(
-    sql,
-    new { id = a.id },
-    commandTimeout: 6000
-)).ToList();
-
-
-                decimal sumAF = 0, sumWeight = 0, sumX = 0;
-
-                foreach (var item in checklist)
-                {
-                    decimal w = item.weight ?? 0;
-                    string input = item.score_input?.Trim().ToUpperInvariant() ?? "";
-
-                    if (input == "X")
-                    {
-                        sumX += w;
-                        sumAF += item.score_x ?? 0;
-                    }
-                    else if (input == "F" && item.is_relaksasi == true)
-                    {
-                        sumAF += 1.00m * w;
-                    }
-                    else
-                    {
-                        decimal af = input switch
-                        {
-                            "A" => 1.00m,
-                            "B" => 0.80m,
-                            "C" => 0.60m,
-                            "D" => 0.40m,
-                            "E" => 0.20m,
-                            "F" => 0.00m,
-                            _ => 0.00m
-                        };
-                        sumAF += af * w;
-                    }
-
-                    sumWeight += w;
-                }
-
-                decimal finalScore = (sumWeight - sumX) > 0
-                    ? (sumAF / (sumWeight - sumX)) * sumWeight
-                    : 0m;
-
-                // === Special Node Score Check ===
-                var specialNodeIds = new List<Guid>
-                {
-                    Guid.Parse("555fe2e4-b95b-461b-9c92-ad8b5c837119"),
-                    Guid.Parse("bafc206f-ed29-4bbc-8053-38799e186fb0"),
-                    Guid.Parse("d26f4caa-e849-4ab4-9372-298693247272")
-                };
-
-                if (a.created_date > new DateTime(2025, 5, 31))
-                {
-                    specialNodeIds.Add(Guid.Parse("5e9ffc47-de99-4d7d-b8bc-0fb9b7acc81b"));
-                }
-
-                var specialScoreSql = @"
-                SELECT mqd.id, tac.score_input, ta.created_date
-                FROM master_questioner_detail mqd
-                LEFT JOIN trx_audit_checklist tac 
-                    ON tac.master_questioner_detail_id = mqd.id 
-                    AND tac.trx_audit_id = @id
-                LEFT JOIN trx_audit ta ON ta.id = tac.trx_audit_id
-                WHERE mqd.id = ANY(@ids);";
-
-                var specialScoresRaw = (await conn.QueryAsync<(string id, string score_input, DateTime? created_date)>(
-                    specialScoreSql,
-                    new { id = a.id, ids = specialNodeIds.Select(x => x.ToString()).ToArray() }
-                )).ToList();
-
-                var specialScores = specialScoresRaw
-                    .Where(x =>
-                        x.id != "5e9ffc47-de99-4d7d-b8bc-0fb9b7acc81b" ||
-                        (x.created_date != null && x.created_date.Value < new DateTime(2025, 6, 1))
-                    )
-                    .ToDictionary(x => x.id, x => x.score_input?.Trim().ToUpperInvariant());
-
-
-                bool forceGoodOnly = false;
-                bool forceNotCertified = false;
-
-                foreach (var score in specialScores.Values)
-                {
-                    if (score == "C")
-                        forceGoodOnly = true;
-                    else if (score != "A")
-                        forceNotCertified = true;
-                }
+                var submitDate = a.approval_date == null || a.approval_date == DateTime.MinValue
+                    ? a.updated_date
+                    : a.approval_date;
 
                 // === Penalty Check
                 var penaltyExcellentQuery = @"SELECT STRING_AGG(mqd.penalty_alert, ', ') AS penalty_alerts
@@ -1043,14 +931,6 @@ namespace e_Pas_CMS.Controllers
                 bool hasExcellentPenalty = !string.IsNullOrEmpty(penaltyExcellentResult);
                 bool hasGoodPenalty = !string.IsNullOrEmpty(penaltyGoodResult);
 
-                // === Audit Next
-                string auditNext = null;
-                string levelspbu = null;
-
-                var auditFlowSql = @"SELECT * FROM master_audit_flow WHERE audit_level = @level LIMIT 1;";
-                var auditFlow = await conn.QueryFirstOrDefaultAsync<dynamic>(auditFlowSql, new { level = a.audit_level });
-
-
                 // === Hitung Compliance
                 var checklistData = await GetChecklistDataAsync(conn, a.id);
                 var mediaList = await GetMediaPerNodeAsync(conn, a.id);
@@ -1063,11 +943,7 @@ namespace e_Pas_CMS.Controllers
                 decimal? totalScore = modelstotal.TotalScore;
                 var compliance = HitungComplianceLevelDariElements(elements);
 
-                var auditDate = a.audit_execution_time ?? a.updated_date ?? DateTime.MinValue;
 
-                var submitDate = a.approval_date == null || a.approval_date == DateTime.MinValue
-                    ? a.updated_date
-                    : a.approval_date;
                 // === Compliance validation
                 var sss = Math.Round(compliance.SSS ?? 0, 2);
                 var eqnq = Math.Round(compliance.EQnQ ?? 0, 2);
@@ -1077,62 +953,6 @@ namespace e_Pas_CMS.Controllers
 
                 bool failGood = sss < 80 || eqnq < 85 || rfs < 85 || vfc < 15 || epo < 25;
                 bool failExcellent = sss < 85 || eqnq < 85 || rfs < 85 || vfc < 20 || epo < 50;
-
-                // === Update status with compliance logic
-                string goodStatus = (finalScore >= 75 && !hasGoodPenalty && !failGood)
-                    ? "CERTIFIED"
-                    : "NOT CERTIFIED";
-
-                string excellentStatus = (finalScore >= 80 && !hasExcellentPenalty && !failExcellent && !forceNotCertified)
-                    ? (forceGoodOnly ? "GOOD" : "CERTIFIED")
-                    : "NOT CERTIFIED";
-
-                if (auditFlow != null)
-                {
-                    string passedGood = auditFlow.passed_good;
-                    string passedExcellent = auditFlow.passed_excellent;
-                    string passedAuditLevel = auditFlow.passed_audit_level;
-                    string failed_audit_level = auditFlow.failed_audit_level;
-
-                    if (string.IsNullOrWhiteSpace(passedGood) && string.IsNullOrWhiteSpace(passedExcellent) && goodStatus == "CERTIFIED" && excellentStatus == "CERTIFIED")
-                    {
-                        auditNext = passedAuditLevel;
-                    }
-                    else if (string.IsNullOrWhiteSpace(passedGood) && string.IsNullOrWhiteSpace(passedExcellent) && goodStatus == "CERTIFIED" && excellentStatus == "NOT CERTIFIED")
-                    {
-                        auditNext = passedAuditLevel;
-                    }
-                    else if (string.IsNullOrWhiteSpace(passedGood) && string.IsNullOrWhiteSpace(passedExcellent) && goodStatus == "NOT CERTIFIED" && excellentStatus == "NOT CERTIFIED")
-                    {
-                        auditNext = failed_audit_level;
-                    }
-                    else if (goodStatus == "NOT CERTIFIED" && excellentStatus == "NOT CERTIFIED")
-                    {
-                        auditNext = failed_audit_level;
-                    }
-                    else if (goodStatus == "CERTIFIED" && excellentStatus == "NOT CERTIFIED")
-                    {
-                        auditNext = passedGood;
-                    }
-                    else if (goodStatus == "CERTIFIED" && excellentStatus == "CERTIFIED")
-                    {
-                        auditNext = passedExcellent;
-                    }
-                    else if (string.IsNullOrWhiteSpace(passedGood) && string.IsNullOrWhiteSpace(passedExcellent) && finalScore >= 75)
-                    {
-                        auditNext = passedAuditLevel;
-                    }
-                    else
-                    {
-                        auditNext = failed_audit_level;
-                    }
-
-                    var auditlevelClassSql = @"SELECT audit_level_class FROM master_audit_flow WHERE audit_level = @level LIMIT 1;";
-                    var auditlevelClass = await conn.QueryFirstOrDefaultAsync<dynamic>(auditlevelClassSql, new { level = auditNext });
-                    levelspbu = auditlevelClass != null
-                    ? (auditlevelClass.audit_level_class ?? "")
-                    : "";
-                }
 
                 var checklistRaw = await conn.QueryAsync<(string number, decimal? weight, string score_input, decimal? score_x, bool? is_relaksasi)>(@"
                     SELECT DISTINCT ON (mqd.number) 
@@ -1168,9 +988,9 @@ namespace e_Pas_CMS.Controllers
                     $"\"{a.spbu.owner_type}\"",
                     $"\"{a.spbu.sbm}\"",
                     $"\"{a.audit_level}\"",
-                    $"\"{auditNext}\"",
-                    $"\"{goodStatus}\"",
-                    $"\"{excellentStatus}\"",
+                    $"\"{a.spbu.audit_next}\"",
+                    $"\"{a.good_status}\"",
+                    $"\"{a.excellent_status}\"",
                     $"\"{scores:0.##}\"",
                     $"\"{sss}\"",
                     $"\"{eqnq}\"",
@@ -1182,7 +1002,7 @@ namespace e_Pas_CMS.Controllers
                     $"\"{a.spbu.wmef}\"",
                     $"\"{a.spbu.format_fisik}\"",
                     $"\"{a.spbu.cpo}\"",
-                    $"\"{levelspbu}\"",
+                    $"\"{a.spbu.level}\"",
                     $"\"{penaltyGoodResult}\"",
                     $"\"{penaltyExcellentResult}\""
                 }.Concat(checklistValues)));
