@@ -794,7 +794,6 @@ namespace e_Pas_CMS.Controllers
             var bytes = Encoding.UTF8.GetBytes(csv.ToString());
             return File(bytes, "text/csv", fileName);
         }
-
         [HttpGet]
         public async Task<IActionResult> DownloadCsvByDate(
     string searchTerm = "",
@@ -821,7 +820,8 @@ namespace e_Pas_CMS.Controllers
                 .Where(a =>
                     allowedStatuses.Contains(a.status) &&
                     a.audit_execution_time >= startDate &&
-                    a.audit_execution_time < endDate && a.audit_type != "Basic Operational"
+                    a.audit_execution_time < endDate &&
+                    a.audit_type != "Basic Operational"
                 );
 
             if (userRegion.Any())
@@ -846,19 +846,7 @@ namespace e_Pas_CMS.Controllers
                 .OrderByDescending(a => a.audit_execution_time ?? a.updated_date)
                 .ToListAsync();
 
-            await using var conn2 = _context.Database.GetDbConnection();
-            if (conn2.State != ConnectionState.Open)
-                await conn2.OpenAsync();
-
-            var checklistNumbers = await conn2.QueryAsync<string>(@"
-        SELECT DISTINCT number 
-        FROM master_questioner_detail 
-        WHERE number IS NOT NULL AND TRIM(number) <> '' 
-        ORDER BY number ASC;
-    ");
-
-            var numberList = checklistNumbers.ToList();
-
+            // Header CSV (tanpa kolom checklist number)
             var csv = new StringBuilder();
             var headers = new[]
             {
@@ -866,10 +854,8 @@ namespace e_Pas_CMS.Controllers
         "audit_level","audit_next","good_status","excellent_status","Total Score",
         "SSS","EQnQ","RFS","VFC","EPO","wtms","qq","wmef","format_fisik","cpo",
         "kelas_spbu","penalty_good_alerts","penalty_excellent_alerts"
-    };// Tambahkan header number checklist
-            csv.AppendLine(string.Join(",", headers.Concat(numberList).Select(h => $"\"{h}\"")));
-
-            //csv.AppendLine(string.Join(",", headers.Select(h => $"\"{h}\"")));
+    };
+            csv.AppendLine(string.Join(",", headers.Select(h => $"\"{h}\"")));
 
             await using var conn = _context.Database.GetDbConnection();
             if (conn.State != ConnectionState.Open)
@@ -883,53 +869,54 @@ namespace e_Pas_CMS.Controllers
                     ? a.updated_date
                     : a.approval_date;
 
-                // === Penalty Check
-                var penaltyExcellentQuery = @"SELECT STRING_AGG(mqd.penalty_alert, ', ') AS penalty_alerts
-                FROM trx_audit_checklist tac
-                INNER JOIN master_questioner_detail mqd ON mqd.id = tac.master_questioner_detail_id
-                INNER JOIN trx_audit ta ON ta.id = tac.trx_audit_id
-                WHERE 
-                tac.trx_audit_id = @id
-                AND (
+                // === Penalty Check (EXCELLENT - non-relaksasi)
+                var penaltyExcellentQuery = @"
+            SELECT STRING_AGG(mqd.penalty_alert, ', ')
+            FROM trx_audit_checklist tac
+            JOIN master_questioner_detail mqd ON mqd.id = tac.master_questioner_detail_id
+            JOIN trx_audit ta ON ta.id = tac.trx_audit_id
+            WHERE tac.trx_audit_id = @id
+              AND (
                     (
                         tac.master_questioner_detail_id IN (
-                    '555fe2e4-b95b-461b-9c92-ad8b5c837119',
-                    'bafc206f-ed29-4bbc-8053-38799e186fb0',
-                    'd26f4caa-e849-4ab4-9372-298693247272'
-                )
-                AND tac.score_input <> 'A'
-                )
-                OR
-                (
-                tac.master_questioner_detail_id = '5e9ffc47-de99-4d7d-b8bc-0fb9b7acc81b'
-                AND ta.created_date < '2025-06-01'
-                AND tac.score_input <> 'A')
-                OR
-                (
-                    (
-                    (mqd.penalty_excellent_criteria = 'LT_1' AND tac.score_input <> 'A') OR
-                    (mqd.penalty_excellent_criteria = 'EQ_0' AND tac.score_input = 'F')
-                )
-                AND (mqd.is_relaksasi = false OR mqd.is_relaksasi IS NULL)
-                AND mqd.is_penalty = true
-                AND NOT (
-                    mqd.id = '5e9ffc47-de99-4d7d-b8bc-0fb9b7acc81b'
-                    AND ta.created_date >= '2025-06-01'
-                )));";
+                            '555fe2e4-b95b-461b-9c92-ad8b5c837119',
+                            'bafc206f-ed29-4bbc-8053-38799e186fb0',
+                            'd26f4caa-e849-4ab4-9372-298693247272'
+                        )
+                        AND tac.score_input <> 'A'
+                    )
+                 OR (
+                        tac.master_questioner_detail_id = '5e9ffc47-de99-4d7d-b8bc-0fb9b7acc81b'
+                        AND ta.created_date < DATE '2025-06-01'
+                        AND tac.score_input <> 'A'
+                    )
+                 OR (
+                        (
+                            (mqd.penalty_excellent_criteria = 'LT_1' AND tac.score_input <> 'A')
+                         OR (mqd.penalty_excellent_criteria = 'EQ_0' AND tac.score_input = 'F')
+                        )
+                        AND COALESCE(mqd.is_relaksasi, false) = false
+                        AND mqd.is_penalty = true
+                        AND NOT (
+                            mqd.id = '5e9ffc47-de99-4d7d-b8bc-0fb9b7acc81b'
+                            AND ta.created_date >= DATE '2025-06-01'
+                        )
+                    )
+              );";
 
-                var penaltyGoodQuery = @"SELECT STRING_AGG(mqd.penalty_alert, ', ') AS penalty_alerts
+                // === Penalty Check (GOOD - non-relaksasi)
+                var penaltyGoodQuery = @"
+            SELECT STRING_AGG(mqd.penalty_alert, ', ')
             FROM trx_audit_checklist tac
-            INNER JOIN master_questioner_detail mqd ON mqd.id = tac.master_questioner_detail_id
-            WHERE tac.trx_audit_id = @id AND
-              tac.score_input = 'F' AND
-              mqd.is_penalty = true AND 
-              (mqd.is_relaksasi = false OR mqd.is_relaksasi IS NULL) and mqd.id <> '5e9ffc47-de99-4d7d-b8bc-0fb9b7acc81b';";
+            JOIN master_questioner_detail mqd ON mqd.id = tac.master_questioner_detail_id
+            WHERE tac.trx_audit_id = @id
+              AND tac.score_input = 'F'
+              AND mqd.is_penalty = true
+              AND COALESCE(mqd.is_relaksasi, false) = false
+              AND mqd.id <> '5e9ffc47-de99-4d7d-b8bc-0fb9b7acc81b';";
 
                 var penaltyExcellentResult = await conn.ExecuteScalarAsync<string>(penaltyExcellentQuery, new { id = a.id });
                 var penaltyGoodResult = await conn.ExecuteScalarAsync<string>(penaltyGoodQuery, new { id = a.id });
-
-                bool hasExcellentPenalty = !string.IsNullOrEmpty(penaltyExcellentResult);
-                bool hasGoodPenalty = !string.IsNullOrEmpty(penaltyGoodResult);
 
                 // === Hitung Compliance
                 var checklistData = await GetChecklistDataAsync(conn, a.id);
@@ -937,75 +924,52 @@ namespace e_Pas_CMS.Controllers
                 var elements = BuildHierarchy(checklistData, mediaList);
                 foreach (var element in elements) AssignWeightRecursive(element);
                 CalculateChecklistScores(elements);
-                CalculateOverallScore(new DetailReportViewModel { Elements = elements }, checklistData);
-                var modelstotal = new DetailReportViewModel { Elements = elements };
-                CalculateOverallScore(modelstotal, checklistData);
-                decimal? totalScore = modelstotal.TotalScore;
+
+                // Total score
+                var modelTotal = new DetailReportViewModel { Elements = elements };
+                CalculateOverallScore(modelTotal, checklistData);
+                decimal? totalScore = modelTotal.TotalScore;
+
+                // Compliance breakdown
                 var compliance = HitungComplianceLevelDariElements(elements);
-
-
-                // === Compliance validation
                 var sss = Math.Round(compliance.SSS ?? 0, 2);
                 var eqnq = Math.Round(compliance.EQnQ ?? 0, 2);
                 var rfs = Math.Round(compliance.RFS ?? 0, 2);
                 var vfc = Math.Round(compliance.VFC ?? 0, 2);
                 var epo = Math.Round(compliance.EPO ?? 0, 2);
 
-                bool failGood = sss < 80 || eqnq < 85 || rfs < 85 || vfc < 15 || epo < 25;
-                bool failExcellent = sss < 85 || eqnq < 85 || rfs < 85 || vfc < 20 || epo < 50;
-
-                var checklistRaw = await conn.QueryAsync<(string number, decimal? weight, string score_input, decimal? score_x, bool? is_relaksasi)>(@"
-                    SELECT DISTINCT ON (mqd.number) 
-                    mqd.number, mqd.weight, tac.score_input, tac.score_x, mqd.is_relaksasi
-                FROM master_questioner_detail mqd
-                LEFT JOIN trx_audit_checklist tac 
-                    ON tac.master_questioner_detail_id = mqd.id 
-                    AND tac.trx_audit_id = @id
-                WHERE mqd.number IS NOT NULL AND TRIM(mqd.number) <> ''
-                ORDER BY mqd.number, tac.updated_date DESC NULLS LAST
-                ", new { id = a.id });
-
-                var checklistMap = checklistRaw
-                .GroupBy(x => x.number)
-                .ToDictionary(
-                    g => g.Key,
-                    g => g.First().score_input?.Trim().ToUpperInvariant() ?? ""
-                );
-
-                var checklistValues = numberList.Select(number => $"\"{(checklistMap.TryGetValue(number, out var val) ? val : "")}\"");
-
                 decimal scores = (decimal)(totalScore ?? a.score);
 
                 csv.AppendLine(string.Join(",", new[]
                 {
-                    $"\"{submitDate:yyyy-MM-dd}\"",
-                    $"\"{auditDate:yyyy-MM-dd}\"",
-                    $"\"{a.spbu.spbu_no}\"",
-                    $"\"{a.spbu.region}\"",
-                    $"\"{a.spbu.year ?? DateTime.Now.Year}\"",
-                    $"\"{a.spbu.address}\"",
-                    $"\"{a.spbu.city_name}\"",
-                    $"\"{a.spbu.owner_type}\"",
-                    $"\"{a.spbu.sbm}\"",
-                    $"\"{a.audit_level}\"",
-                    $"\"{a.spbu.audit_next}\"",
-                    $"\"{a.good_status}\"",
-                    $"\"{a.excellent_status}\"",
-                    $"\"{scores:0.##}\"",
-                    $"\"{sss}\"",
-                    $"\"{eqnq}\"",
-                    $"\"{rfs}\"",
-                    $"\"{vfc}\"",
-                    $"\"{epo}\"",
-                    $"\"{a.spbu.wtms}\"",
-                    $"\"{a.spbu.qq}\"",
-                    $"\"{a.spbu.wmef}\"",
-                    $"\"{a.spbu.format_fisik}\"",
-                    $"\"{a.spbu.cpo}\"",
-                    $"\"{a.spbu.level}\"",
-                    $"\"{penaltyGoodResult}\"",
-                    $"\"{penaltyExcellentResult}\""
-                }.Concat(checklistValues)));
+            $"\"{submitDate:yyyy-MM-dd}\"",
+            $"\"{auditDate:yyyy-MM-dd}\"",
+            $"\"{a.spbu.spbu_no}\"",
+            $"\"{a.spbu.region}\"",
+            $"\"{a.spbu.year ?? DateTime.Now.Year}\"",
+            $"\"{a.spbu.address}\"",
+            $"\"{a.spbu.city_name}\"",
+            $"\"{a.spbu.owner_type}\"",
+            $"\"{a.spbu.sbm}\"",
+            $"\"{a.audit_level}\"",
+            $"\"{a.spbu.audit_next}\"",
+            $"\"{a.good_status}\"",
+            $"\"{a.excellent_status}\"",
+            $"\"{scores:0.##}\"",
+            $"\"{sss}\"",
+            $"\"{eqnq}\"",
+            $"\"{rfs}\"",
+            $"\"{vfc}\"",
+            $"\"{epo}\"",
+            $"\"{a.spbu.wtms}\"",
+            $"\"{a.spbu.qq}\"",
+            $"\"{a.spbu.wmef}\"",
+            $"\"{a.spbu.format_fisik}\"",
+            $"\"{a.spbu.cpo}\"",
+            $"\"{a.spbu.level}\"",
+            $"\"{penaltyGoodResult}\"",
+            $"\"{penaltyExcellentResult}\""
+        }));
             }
 
             var fileName = $"Audit_Summary_{DateTime.Now:yyyyMMddHHmmss}.csv";
@@ -2422,9 +2386,9 @@ question_hierarchy AS (
 ),
 penalty_flags AS (
     SELECT
-        tac.id                          AS tac_id,
+        tac.id                           AS tac_id,
         tac.trx_audit_id,
-        tac.master_questioner_detail_id AS mqd_id,
+        tac.master_questioner_detail_id  AS mqd_id,
         tac.score_input,
         tac.comment,
         ta.created_date,
@@ -2432,35 +2396,33 @@ penalty_flags AS (
         mqd.is_relaksasi,
         mqd.penalty_excellent_criteria,
         (
-            (
-                tac.master_questioner_detail_id IN (
-                    '555fe2e4-b95b-461b-9c92-ad8b5c837119',
-                    'bafc206f-ed29-4bbc-8053-38799e186fb0',
-                    'd26f4caa-e849-4ab4-9372-298693247272'
-                )
-                AND tac.score_input <> 'A'
-            )
-            OR
-            (
-                tac.master_questioner_detail_id = '5e9ffc47-de99-4d7d-b8bc-0fb9b7acc81b'
-                AND ta.created_date < DATE '2025-06-01'
-                AND tac.score_input <> 'A'
-            )
-            OR
-            (
-                (
-                    (mqd.penalty_excellent_criteria = 'LT_1' AND tac.score_input <> 'A')
-                    OR (mqd.penalty_excellent_criteria = 'EQ_0' AND tac.score_input = 'F')
-                )
-                AND COALESCE(mqd.is_relaksasi, false) = false
-                AND mqd.is_penalty = true
-                AND NOT (
-                    mqd.id = '5e9ffc47-de99-4d7d-b8bc-0fb9b7acc81b'
-                    AND ta.created_date >= DATE '2025-06-01'
-                    AND tac.comment IS NOT NULL
-                    AND btrim(tac.comment) <> ''
-                )
-            )
+              (
+                  tac.master_questioner_detail_id IN (
+                      '555fe2e4-b95b-461b-9c92-ad8b5c837119',
+                      'bafc206f-ed29-4bbc-8053-38799e186fb0',
+                      'd26f4caa-e849-4ab4-9372-298693247272'
+                  )
+                  AND tac.score_input <> 'A'
+              )
+           OR (
+                  tac.master_questioner_detail_id = '5e9ffc47-de99-4d7d-b8bc-0fb9b7acc81b'
+                  AND ta.created_date < DATE '2025-06-01'
+                  AND tac.score_input <> 'A'
+              )
+           OR (
+                  (
+                      (mqd.penalty_excellent_criteria = 'LT_1' AND tac.score_input <> 'A')
+                   OR (mqd.penalty_excellent_criteria = 'EQ_0' AND tac.score_input = 'F')
+                  )
+                  AND COALESCE(mqd.is_relaksasi, false) = false
+                  AND mqd.is_penalty = true
+                  AND NOT (
+                      mqd.id = '5e9ffc47-de99-4d7d-b8bc-0fb9b7acc81b'
+                      AND ta.created_date >= DATE '2025-06-01'
+                      AND tac.comment IS NOT NULL
+                      AND btrim(tac.comment) <> ''
+                  )
+              )
         ) AS is_penalty_excellent,
         (
             tac.score_input = 'F'
@@ -2469,42 +2431,31 @@ penalty_flags AS (
             AND mqd.id <> '5e9ffc47-de99-4d7d-b8bc-0fb9b7acc81b'
         ) AS is_penalty_good,
         (
-            (
-                tac.master_questioner_detail_id IN (
-                    '555fe2e4-b95b-461b-9c92-ad8b5c837119',
-                    'bafc206f-ed29-4bbc-8053-38799e186fb0',
-                    'd26f4caa-e849-4ab4-9372-298693247272'
-                )
-                AND tac.score_input <> 'A'
-            )
-            OR
-            (
-                tac.master_questioner_detail_id = '5e9ffc47-de99-4d7d-b8bc-0fb9b7acc81b'
-                AND ta.created_date < DATE '2025-06-01'
-                AND tac.score_input <> 'A'
-            )
-            OR
-            (
-                (
-                    (mqd.penalty_excellent_criteria = 'LT_1' AND tac.score_input <> 'A')
-                    OR (mqd.penalty_excellent_criteria = 'EQ_0' AND tac.score_input = 'F')
-                )
-                AND mqd.is_relaksasi = true
-                AND mqd.is_penalty = true
-                AND NOT (
-                    mqd.id = '5e9ffc47-de99-4d7d-b8bc-0fb9b7acc81b'
-                    AND ta.created_date >= DATE '2025-06-01'
-                    AND tac.comment IS NOT NULL
-                    AND btrim(tac.comment) <> ''
-                )
-            )
-        ) AS is_penalty_excellent_relaksasi,
-        (
-            tac.score_input = 'F'
-            AND mqd.is_penalty = true
+            mqd.is_penalty = true
             AND mqd.is_relaksasi = true
-            AND mqd.id <> '5e9ffc47-de99-4d7d-b8bc-0fb9b7acc81b'
-        ) AS is_penalty_good_relaksasi
+            AND (
+                    (
+                        (
+                            tac.master_questioner_detail_id IN (
+                                '555fe2e4-b95b-461b-9c92-ad8b5c837119',
+                                'bafc206f-ed29-4bbc-8053-38799e186fb0',
+                                'd26f4caa-e849-4ab4-9372-298693247272'
+                            )
+                            AND tac.score_input <> 'A'
+                        )
+                        OR (
+                            tac.master_questioner_detail_id = '5e9ffc47-de99-4d7d-b8bc-0fb9b7acc81b'
+                            AND ta.created_date < DATE '2025-06-01'
+                            AND tac.score_input <> 'A'
+                        )
+                        OR (
+                            (mqd.penalty_excellent_criteria = 'LT_1' AND tac.score_input <> 'A')
+                            OR (mqd.penalty_excellent_criteria = 'EQ_0' AND tac.score_input = 'F')
+                        )
+                    )
+                    OR (tac.score_input = 'F' AND mqd.id <> '5e9ffc47-de99-4d7d-b8bc-0fb9b7acc81b')
+                )
+        ) AS is_penalty_relaksasi
     FROM trx_audit_checklist tac
     JOIN master_questioner_detail mqd ON mqd.id = tac.master_questioner_detail_id
     JOIN trx_audit ta ON ta.id = tac.trx_audit_id
@@ -2518,23 +2469,15 @@ comment_per_elemen AS (
                 regexp_replace(pf.comment, E'[\\n\\r]+', ' ', 'g')
                 ||
                 CASE
-                    WHEN (
-                        pf.is_penalty_excellent
-                        OR pf.is_penalty_good
-                        OR pf.is_penalty_excellent_relaksasi
-                        OR pf.is_penalty_good_relaksasi
-                    )
-                    THEN
+                    WHEN (pf.is_penalty_excellent OR pf.is_penalty_good OR pf.is_penalty_relaksasi) THEN
                         ' - ' ||
                         trim(
-                            both ' / ' FROM concat_ws(
+                            BOTH ' / '
+                            FROM concat_ws(
                                 ' / ',
                                 CASE WHEN pf.is_penalty_excellent THEN 'penalty excellent' END,
                                 CASE WHEN pf.is_penalty_good THEN 'penalty good' END,
-                                CASE
-                                    WHEN (pf.is_penalty_excellent_relaksasi OR pf.is_penalty_good_relaksasi)
-                                    THEN '*relaksasi*'
-                                END
+                                CASE WHEN pf.is_penalty_relaksasi THEN '*relaksasi*' END
                             )
                         )
                     ELSE ''
@@ -2549,42 +2492,46 @@ comment_per_elemen AS (
 )
 SELECT
     ta.id,
-    ta.report_no            AS ReportNo,
-    ta.audit_type           AS AuditType,
-    ta.audit_execution_time AS SubmitDate,
+    ta.report_no              AS ReportNo,
+    ta.audit_type             AS AuditType,
+    ta.audit_execution_time   AS SubmitDate,
     ta.status,
-    ta.audit_mom_final      AS Notes,
+    ta.audit_mom_final        AS Notes,
     ta.audit_level,
-    s.spbu_no               AS SpbuNo,
+    s.spbu_no                 AS SpbuNo,
     s.region,
-    s.city_name             AS Kota,
-    s.address               AS Alamat,
-    s.owner_name            AS OwnerName,
-    s.manager_name          AS ManagerName,
-    s.owner_type            AS OwnershipType,
-    s.quater                AS Quarter,
-    s.""year""                AS Year,
-    s.mor                   AS Mor,
-    s.sales_area            AS SalesArea,
-    s.sbm                   AS Sbm,
-    s.""level""               AS ClassSpbu,
-    s.phone_number_1        AS Phone,
+    s.city_name               AS Kota,
+    s.address                 AS Alamat,
+    s.owner_name              AS OwnerName,
+    s.manager_name            AS ManagerName,
+    s.owner_type              AS OwnershipType,
+    s.quater                  AS Quarter,
+    s.""year""                  AS Year,
+    s.mor                     AS Mor,
+    s.sales_area              AS SalesArea,
+    s.sbm                     AS Sbm,
+    s.""level""                 AS ClassSpbu,
+    s.phone_number_1          AS Phone,
     (SELECT all_comments FROM comment_per_elemen WHERE root_title = 'Elemen 1') AS KomentarStaf,
     (SELECT all_comments FROM comment_per_elemen WHERE root_title = 'Elemen 2') AS KomentarQuality,
     (SELECT all_comments FROM comment_per_elemen WHERE root_title = 'Elemen 3') AS KomentarHSSE,
     (SELECT all_comments FROM comment_per_elemen WHERE root_title = 'Elemen 4') AS KomentarVisual,
     (SELECT all_comments FROM comment_per_elemen WHERE root_title = 'Elemen 5') AS PenawaranKomperhensif,
-    CASE WHEN audit_mom_final IS NOT NULL AND audit_mom_final <> '' THEN audit_mom_final ELSE audit_mom_intro END AS KomentarManager,
-    approval_date           AS ApproveDate,
+    CASE
+        WHEN audit_mom_final IS NOT NULL AND audit_mom_final <> '' THEN audit_mom_final
+        ELSE audit_mom_intro
+    END AS KomentarManager,
+    approval_date         AS ApproveDate,
     (SELECT name FROM app_user WHERE username = ta.approval_by) AS ApproveBy,
-    ta.updated_date         AS UpdateDate,
-    ta.audit_level          AS AuditCurrent,
-    s.audit_next            AS AuditNext,
-    au.name                 AS NamaAuditor
+    ta.updated_date       AS UpdateDate,
+    ta.audit_level        AS AuditCurrent,
+    s.audit_next          AS AuditNext,
+    au.name               AS NamaAuditor
 FROM trx_audit ta
 JOIN spbu s   ON ta.spbu_id = s.id
-JOIN app_user au ON au.id   = ta.app_user_id
-WHERE ta.id = @id;";
+JOIN app_user au ON au.id = ta.app_user_id
+WHERE ta.id = @id;
+";
 
             var a = await conn.QueryFirstOrDefaultAsync<AuditHeaderDto>(sql, new { id });
             if (a == null)
