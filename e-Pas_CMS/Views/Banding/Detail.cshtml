@@ -255,12 +255,33 @@
     <!-- Status Banner -->
     @if (feedbackTypeNorm != "COMPLAINT")
     {
+        var closing = ViewBag.BandingClosing;
+        string stage = closing?.Stage ?? "ALL";
+        int day = closing?.Day ?? 15;
+        DateTime? deadline = closing?.Deadline;
+        DateTime? nextDeadline = closing?.NextDeadline;
+        bool isPassed = closing?.IsPassed ?? false;
+
+        DateTime dlShow = isPassed ? (nextDeadline ?? DateTime.Now) : (deadline ?? DateTime.Now);
+
         <div class="mb-3">
-            <div class="banner-status @statusClass text-white">
-                <h4 class="fw-bold mb-0">@statusText</h4>
+            <div class="banner-status @statusClass text-white rounded-3 p-3">
+                <h4 class="fw-bold mb-1">@statusText</h4>
+                <div class="small">
+                    Closing @stage setiap tanggal <b>@day</b> pukul <b>23.59</b>.
+                    @if (!isPassed)
+                    {
+                        <text>Setelah lewat waktu tersebut, status banding otomatis <b>ditolak</b>.</text>
+                    }
+                    else
+                    {
+                        <text>Periode bulan ini sudah lewat. Periode berikutnya: <b>@dlShow</b>.</text>
+                    }
+                </div>
             </div>
         </div>
     }
+
 
     <!-- Informasi SPBU -->
     <div class="card card-soft mb-3">

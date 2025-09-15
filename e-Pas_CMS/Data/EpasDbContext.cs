@@ -49,6 +49,7 @@ public partial class EpasDbContext : DbContext
     public virtual DbSet<TrxSurvey> TrxSurveys { get; set; }
 
     public virtual DbSet<TrxSurveyElement> TrxSurveyElements { get; set; }
+    public virtual DbSet<SysParameter> SysParameter { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -789,6 +790,55 @@ public partial class EpasDbContext : DbContext
                 .HasForeignKey(d => d.TrxSurveyId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("trx_survey_element_trx_survey_id_fkey");
+        });
+        modelBuilder.Entity<SysParameter>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("sys_parameter_pkey");
+
+            entity.ToTable("sys_parameter");
+
+            // unique index sesuai constraint
+            entity.HasIndex(e => e.Code, "sys_parameter_code_uk").IsUnique();
+
+            entity.Property(e => e.Id)
+                .HasMaxLength(50)
+                .HasColumnName("id")
+                .HasDefaultValueSql("uuid_generate_v4()");
+
+            entity.Property(e => e.Code)
+                .HasMaxLength(255)
+                .HasColumnName("code")
+                .IsRequired();
+
+            entity.Property(e => e.Value)
+                .HasMaxLength(255)
+                .HasColumnName("value")
+                .IsRequired();
+
+            entity.Property(e => e.Status)
+                .HasMaxLength(100)
+                .HasColumnName("status")
+                .IsRequired();
+
+            entity.Property(e => e.CreatedBy)
+                .HasMaxLength(50)
+                .HasColumnName("created_by")
+                .IsRequired();
+
+            entity.Property(e => e.CreatedDate)
+                .HasDefaultValueSql("CURRENT_TIMESTAMP")
+                .HasColumnType("timestamp(3) without time zone")
+                .HasColumnName("created_date");
+
+            entity.Property(e => e.UpdatedBy)
+                .HasMaxLength(50)
+                .HasColumnName("updated_by")
+                .IsRequired();
+
+            entity.Property(e => e.UpdatedDate)
+                .HasDefaultValueSql("CURRENT_TIMESTAMP")
+                .HasColumnType("timestamp without time zone")
+                .HasColumnName("updated_date");
         });
 
         OnModelCreatingPartial(modelBuilder);

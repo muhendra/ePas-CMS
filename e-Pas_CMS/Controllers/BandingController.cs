@@ -308,6 +308,117 @@ namespace e_Pas_CMS.Controllers
 
             };
 
+            var codes = new[]
+            {
+                "BANDING_CLOSING_DATE_SPBU",
+                "BANDING_CLOSING_DATE_SBM",
+                "BANDING_CLOSING_DATE_PPN",
+                "BANDING_CLOSING_DATE_CBI",
+                "BANDING_CLOSING_DATE_ALL"
+            };
+
+            var paramDict = await _context.SysParameter
+                .Where(p => p.Status == "ACTIVE" && codes.Contains(p.Code))
+                .ToDictionaryAsync(p => p.Code, p => p.Value);
+
+            int DayOr(string code, int def) =>
+                (paramDict.TryGetValue(code, out var v) && int.TryParse(v, out var d) && d >= 1 && d <= 31)
+                    ? d : def;
+
+            // default fallback bila parameter kosong
+            var daySPBU = DayOr("BANDING_CLOSING_DATE_SPBU", 5);
+            var daySBM = DayOr("BANDING_CLOSING_DATE_SBM", 7);
+            var dayPPN = DayOr("BANDING_CLOSING_DATE_PPN", 8);
+            var dayCBI = DayOr("BANDING_CLOSING_DATE_CBI", 15);
+            var dayALL = DayOr("BANDING_CLOSING_DATE_ALL", 15);
+
+            // ====== NEW: Tentukan stage saat ini untuk banner ======
+            // Mapping sederhana berdasarkan status proses yang Anda gunakan
+            string StageNow(string status)
+            {
+                status = (status ?? "").Trim().ToUpperInvariant();
+
+                // FINAL: sudah lewat CBI → pakai ALL (pakai param BANDING_CLOSING_DATE_ALL)
+                if (status.StartsWith("APPROVE_CBI") || status.Contains("_CBI"))
+                    return "ALL";
+
+                // Sedang/berikutnya di CBI (sesuai permintaanmu: APPROVE_PPN itu untuk CBI)
+                if (status.StartsWith("APPROVE_PPN") || status.Contains("_PPN"))
+                    return "CBI";
+
+                // Sedang/berikutnya di PPN
+                if (status.StartsWith("APPROVE_SBM") || status.Contains("_SBM"))
+                    return "PPN";
+
+                // Awal/proses SBM
+                if (status.StartsWith("UNDER_REVIEW") || status.Contains("IN_PROGRESS"))
+                    return "SBM";
+
+                // (opsional) kalau ada tahap SPBU khusus
+                if (status.Contains("SPBU"))
+                    return "SPBU";
+
+                // fallback aman
+                return "ALL";
+            }
+
+            string stage = StageNow(header.Tf.Status);
+
+            // ====== NEW: Hitung deadline bulanan ======
+            DateTime NowJakarta()
+            {
+                // Jika server UTC, ganti ke WIB bila perlu.
+                // Di banyak kasus, localtime = WIB sudah cukup:
+                return DateTime.Now;
+            }
+
+            DateTime ClampDay(int y, int m, int day) =>
+                new DateTime(y, m, Math.Min(day, DateTime.DaysInMonth(y, m)), 23, 59, 59, DateTimeKind.Local);
+
+            DateTime ComputeDeadline(int day, DateTime now, bool nextIfPassed)
+            {
+                var dl = ClampDay(now.Year, now.Month, day);
+                if (nextIfPassed && now > dl)
+                {
+                    var next = now.AddMonths(1);
+                    dl = ClampDay(next.Year, next.Month, day);
+                }
+                return dl;
+            }
+
+            var now = NowJakarta();
+
+            // pilih day sesuai stage
+            int chosenDay = stage switch
+            {
+                "SPBU" => daySPBU,
+                "SBM" => daySBM,
+                "PPN" => dayPPN,
+                "CBI" => dayCBI,
+                _ => dayALL
+            };
+
+            var deadlineThisWindow = ClampDay(now.Year, now.Month, chosenDay);
+            var isPassed = now > deadlineThisWindow;
+            var nextDeadline = ComputeDeadline(chosenDay, now, true);
+
+            // Siapkan data untuk view
+            ViewBag.BandingClosing = new
+            {
+                Stage = stage,                 // "SBM"/"PPN"/"CBI"/"SPBU"/"ALL"
+                Day = chosenDay,               // angka tanggal
+                Deadline = deadlineThisWindow, // deadline bulan ini (23:59:59)
+                NextDeadline = nextDeadline,   // kalau sudah lewat, ini deadline berikutnya
+                IsPassed = isPassed,
+
+                // Kirim semua day juga kalau banner ingin menampilkan multi-role
+                DaySPBU = daySPBU,
+                DaySBM = daySBM,
+                DayPPN = dayPPN,
+                DayCBI = dayCBI,
+                DayALL = dayALL
+            };
+
             vm.MediaKlarifikasi = klarifnotes
                 .Where(n => !string.IsNullOrWhiteSpace(n.MediaPath))
                 .Select(n => new KlfAttachmentItem
