@@ -14,6 +14,7 @@ using Microsoft.EntityFrameworkCore;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Npgsql;
+using static Dapper.SqlMapper;
 
 namespace e_Pas_CMS.Controllers
 {
@@ -874,6 +875,17 @@ namespace e_Pas_CMS.Controllers
             tf.UpdatedDate = DateTime.Now;
             await _context.SaveChangesAsync();
 
+            string sql = @"
+                UPDATE trx_audit
+                SET 
+                    is_revision = @p0,
+                    updated_by = @p1,
+                    updated_date = now()
+                WHERE id = @p2"
+            ;
+
+            int affected = await _context.Database.ExecuteSqlRawAsync(sql, true, User?.Identity?.Name ?? "system", tf.TrxAuditId);
+
             TempData["Success"] = "Status berhasil diperbarui.";
             return RedirectToAction("Index");
         }
@@ -1138,10 +1150,30 @@ namespace e_Pas_CMS.Controllers
             else if (entity.Status == "APPROVE_CBI")
             {
                 entity.Status = "APPROVE";
+
+                string sql = @"
+                UPDATE trx_audit
+                SET 
+                    is_revision = @p0,
+                    updated_by = @p1,
+                    updated_date = now()
+                WHERE id = @p2";
+
+                int affected = await _context.Database.ExecuteSqlRawAsync(sql, true, User?.Identity?.Name ?? "system", entity.TrxAuditId);
+
             }
             else
             {
                 entity.Status = "APPROVE";
+                string sql = @"
+                UPDATE trx_audit
+                SET 
+                    is_revision = @p0,
+                    updated_by = @p1,
+                    updated_date = now()
+                WHERE id = @p2";
+
+                int affected = await _context.Database.ExecuteSqlRawAsync(sql, true, User?.Identity?.Name ?? "system", entity.TrxAuditId);
             }
 
             entity.ApprovalBy = User?.Identity?.Name ?? "system";
