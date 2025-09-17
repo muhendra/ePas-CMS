@@ -1121,50 +1121,51 @@ AND mqd.type = 'QUESTION'";
 
             if (trxAudit != null)
             {
-                bool isrevision = trxAudit.is_revision;
+                // pakai nullable bool supaya bisa handle NULL
+                bool? isRevision = trxAudit.is_revision as bool?;
 
-                if (isrevision != true)
+                if (isRevision != true)  // masuk jika NULL atau false
                 {
                     string sql = @"
-                    UPDATE trx_audit
-                    SET approval_date = now(),
-                        score = @p0,
-                        approval_by = @p1,
-                        updated_date = now(),
-                        updated_by = @p1,
-                        status = 'VERIFIED',
-                        good_status = @p2,
-                        excellent_status = @p3
-                    WHERE id = @p4";
+        UPDATE trx_audit
+        SET approval_date = now(),
+            score = @p0,
+            approval_by = @p1,
+            updated_date = now(),
+            updated_by = @p1,
+            status = 'VERIFIED',
+            good_status = @p2,
+            excellent_status = @p3
+        WHERE id = @p4";
 
-                    int affected = await _context.Database.ExecuteSqlRawAsync(sql, score, currentUser, goodStatus, excellentStatus, id);
+                    int affected = await _context.Database.ExecuteSqlRawAsync(
+                        sql, score, currentUser, goodStatus, excellentStatus, id
+                    );
 
                     if (affected == 0)
                         return NotFound();
                 }
-
                 else
                 {
                     string sql = @"
-                    UPDATE trx_audit
-                    SET revision_date = now(),
-                        score = @p0,
-                        updated_date = now(),
-                        updated_by = @p1,
-                        status = 'VERIFIED',
-                        good_status = @p2,
-                        excellent_status = @p3
-                    WHERE id = @p4";
+        UPDATE trx_audit
+        SET revision_date = now(),
+            score = @p0,
+            updated_date = now(),
+            updated_by = @p1,
+            status = 'VERIFIED',
+            good_status = @p2,
+            excellent_status = @p3
+        WHERE id = @p4";
 
-                    int affected = await _context.Database.ExecuteSqlRawAsync(sql, score, currentUser, goodStatus, excellentStatus, id);
+                    int affected = await _context.Database.ExecuteSqlRawAsync(
+                        sql, score, currentUser, goodStatus, excellentStatus, id
+                    );
 
                     if (affected == 0)
                         return NotFound();
                 }
             }
-
-
-            
 
             var updateSql = @"
             UPDATE spbu
