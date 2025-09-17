@@ -141,9 +141,6 @@ public class AuditAutoSchedulerService : BackgroundService
            null as report_file_boa,
            null as boa_status
     FROM distributed
-    WHERE spbu_id IN (
-        SELECT id FROM spbu WHERE spbu_no ILIKE '%test%'
-    )
     ORDER BY app_user_id, range_audit_month, rn;";
 
     public AuditAutoSchedulerService(IServiceProvider services,
