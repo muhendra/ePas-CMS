@@ -253,7 +253,7 @@ namespace e_Pas_CMS.Controllers
 
             string status = header.Tf.Status;
 
-            if (status != "APPROVE" && header.Tf.Next_audit_before != null)
+            if (status != "APPROVE" || header.Tf.Next_audit_before == null)
             {
                 beforerevised = header.S.audit_next;
                 afterrevised = "-";
