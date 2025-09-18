@@ -449,7 +449,7 @@
         }
     }
 
-    @if (statusNorm == "APPROVE_PPN" && hasRoleCBI)
+    @if ((statusNorm == "APPROVE_PPN" || statusNorm == "APPROVE") && hasRoleCBI)
     {
         <div class="card card-soft mb-3">
             <div class="card-body">

@@ -1115,69 +1115,90 @@ AND mqd.type = 'QUESTION'";
             }
 
             decimal score = Math.Round((decimal)model.TotalScore, 2);
-
             var trxAuditSql = @"SELECT * FROM trx_audit WHERE id = @id LIMIT 1;";
-            var trxAudit = await conn.QueryFirstOrDefaultAsync<dynamic>(trxAuditSql, new { id = id });
+            var trxAudit = await conn.QueryFirstOrDefaultAsync<dynamic>(trxAuditSql, new { id });
 
-            if (trxAudit != null)
+            if (trxAudit == null)
+                return NotFound();
+
+            // pakai nullable bool supaya bisa handle NULL dari DB
+            bool? isRevision = trxAudit.is_revision is DBNull or null
+                ? (bool?)null
+                : Convert.ToBoolean(trxAudit.is_revision);
+
+            if (isRevision != true) // masuk jika NULL atau false
             {
-                // pakai nullable bool supaya bisa handle NULL
-                bool? isRevision = trxAudit.is_revision as bool?;
+                const string sqlApprove = @"
+                UPDATE trx_audit
+                SET approval_date = now(),
+                    score = @p0,
+                    approval_by = @p1,
+                    updated_date = now(),
+                    updated_by = @p1,
+                    status = 'VERIFIED',
+                    good_status = @p2,
+                    excellent_status = @p3
+                WHERE id = @p4";
 
-                if (isRevision != true)  // masuk jika NULL atau false
+                int affected = await _context.Database.ExecuteSqlRawAsync(
+                    sqlApprove, score, currentUser, goodStatus, excellentStatus, id
+                );
+                if (affected == 0) return NotFound();
+
+                const string updateSpbuWithNext = @"
+                UPDATE spbu
+                SET audit_next = @auditnext,
+                    ""level""   = @level
+                WHERE spbu_no  = @spbuNo";
+
+                await conn.ExecuteAsync(updateSpbuWithNext, new
                 {
-                    string sql = @"
-        UPDATE trx_audit
-        SET approval_date = now(),
-            score = @p0,
-            approval_by = @p1,
-            updated_date = now(),
-            updated_by = @p1,
-            status = 'VERIFIED',
-            good_status = @p2,
-            excellent_status = @p3
-        WHERE id = @p4";
-
-                    int affected = await _context.Database.ExecuteSqlRawAsync(
-                        sql, score, currentUser, goodStatus, excellentStatus, id
-                    );
-
-                    if (affected == 0)
-                        return NotFound();
-                }
-                else
-                {
-                    string sql = @"
-        UPDATE trx_audit
-        SET revision_date = now(),
-            score = @p0,
-            updated_date = now(),
-            updated_by = @p1,
-            status = 'VERIFIED',
-            good_status = @p2,
-            excellent_status = @p3
-        WHERE id = @p4";
-
-                    int affected = await _context.Database.ExecuteSqlRawAsync(
-                        sql, score, currentUser, goodStatus, excellentStatus, id
-                    );
-
-                    if (affected == 0)
-                        return NotFound();
-                }
+                    auditnext = model.AuditNext,
+                    level = levelspbu,
+                    spbuNo = model.SpbuNo
+                });
             }
-
-            var updateSql = @"
-            UPDATE spbu
-            SET audit_next = @auditnext, ""level"" = @level
-            WHERE spbu_no = @spbuNo";
-
-            await conn.ExecuteAsync(updateSql, new
+            else
             {
-                auditnext = model.AuditNext,
-                level = levelspbu,
-                spbuNo = model.SpbuNo
-            });
+                const string sqlRevision = @"
+                UPDATE trx_audit
+                SET revision_date = now(),
+                    score = @p0,
+                    updated_date = now(),
+                    updated_by = @p1,
+                    status = 'VERIFIED',
+                    good_status = @p2,
+                    excellent_status = @p3
+                WHERE id = @p4";
+
+                int affected = await _context.Database.ExecuteSqlRawAsync(
+                    sqlRevision, score, currentUser, goodStatus, excellentStatus, id
+                );
+                if (affected == 0) return NotFound();
+
+                // revision: hanya update level SPBU (tanpa mengubah audit_next)
+                const string updateSpbuLevelOnly = @"
+                UPDATE spbu
+                SET ""level"" = @level
+                WHERE spbu_no = @spbuNo";
+
+                await conn.ExecuteAsync(updateSpbuLevelOnly, new
+                {
+                    level = levelspbu,
+                    spbuNo = model.SpbuNo
+                });
+
+                const string updateFeedback = @"
+                UPDATE trx_feedback
+                SET next_audit_before = @auditbefore
+                WHERE trx_audit_id    = @trxauditid";
+
+                await conn.ExecuteAsync(updateFeedback, new
+                {
+                    auditbefore = trxAudit.audit_level,
+                    trxauditid = model.AuditId
+                });
+            }
 
             await GenerateAllVerifiedPdfReports(id);
             await GenerateAllVerifiedPdfReportsGood(id);

@@ -891,29 +891,29 @@ namespace e_Pas_CMS.Controllers
                         AND tac.score_input <> 'A'
                     )
                  OR (
-                        (
-                            (mqd.penalty_excellent_criteria = 'LT_1' AND tac.score_input <> 'A')
-                         OR (mqd.penalty_excellent_criteria = 'EQ_0' AND tac.score_input = 'F')
-                        )
-                        AND COALESCE(mqd.is_relaksasi, false) = false
-                        AND mqd.is_penalty = true
-                        AND NOT (
-                            mqd.id = '5e9ffc47-de99-4d7d-b8bc-0fb9b7acc81b'
-                            AND ta.created_date >= DATE '2025-06-01'
-                        )
-                    )
-              );";
+                          (
+                              (mqd.penalty_excellent_criteria = 'LT_1' AND tac.score_input <> 'A')
+                           OR (mqd.penalty_excellent_criteria = 'EQ_0' AND tac.score_input = 'F')
+                          )
+                          AND COALESCE(mqd.is_relaksasi, false) = false
+                          AND mqd.is_penalty = true
+                          AND NOT (
+                              mqd.id = '5e9ffc47-de99-4d7d-b8bc-0fb9b7acc81b'
+                              AND ta.created_date >= DATE '2025-06-01'
+                          )
+                      )
+                );";
 
                 // === Penalty Check (GOOD - non-relaksasi)
                 var penaltyGoodQuery = @"
-            SELECT STRING_AGG(mqd.penalty_alert, ', ')
-            FROM trx_audit_checklist tac
-            JOIN master_questioner_detail mqd ON mqd.id = tac.master_questioner_detail_id
-            WHERE tac.trx_audit_id = @id
-              AND tac.score_input = 'F'
-              AND mqd.is_penalty = true
-              AND COALESCE(mqd.is_relaksasi, false) = false
-              AND mqd.id <> '5e9ffc47-de99-4d7d-b8bc-0fb9b7acc81b';";
+                SELECT STRING_AGG(mqd.penalty_alert, ', ')
+                FROM trx_audit_checklist tac
+                JOIN master_questioner_detail mqd ON mqd.id = tac.master_questioner_detail_id
+                WHERE tac.trx_audit_id = @id
+                  AND tac.score_input = 'F'
+                  AND mqd.is_penalty = true
+                  AND COALESCE(mqd.is_relaksasi, false) = false
+                  AND mqd.id <> '5e9ffc47-de99-4d7d-b8bc-0fb9b7acc81b';";
 
                 var penaltyExcellentResult = await conn.ExecuteScalarAsync<string>(penaltyExcellentQuery, new { id = a.id });
                 var penaltyGoodResult = await conn.ExecuteScalarAsync<string>(penaltyGoodQuery, new { id = a.id });
@@ -942,34 +942,34 @@ namespace e_Pas_CMS.Controllers
 
                 csv.AppendLine(string.Join(",", new[]
                 {
-            $"\"{submitDate:yyyy-MM-dd}\"",
-            $"\"{auditDate:yyyy-MM-dd}\"",
-            $"\"{a.spbu.spbu_no}\"",
-            $"\"{a.spbu.region}\"",
-            $"\"{a.spbu.year ?? DateTime.Now.Year}\"",
-            $"\"{a.spbu.address}\"",
-            $"\"{a.spbu.city_name}\"",
-            $"\"{a.spbu.owner_type}\"",
-            $"\"{a.spbu.sbm}\"",
-            $"\"{a.audit_level}\"",
-            $"\"{a.spbu.audit_next}\"",
-            $"\"{a.good_status}\"",
-            $"\"{a.excellent_status}\"",
-            $"\"{scores:0.##}\"",
-            $"\"{sss}\"",
-            $"\"{eqnq}\"",
-            $"\"{rfs}\"",
-            $"\"{vfc}\"",
-            $"\"{epo}\"",
-            $"\"{a.spbu.wtms}\"",
-            $"\"{a.spbu.qq}\"",
-            $"\"{a.spbu.wmef}\"",
-            $"\"{a.spbu.format_fisik}\"",
-            $"\"{a.spbu.cpo}\"",
-            $"\"{a.spbu.level}\"",
-            $"\"{penaltyGoodResult}\"",
-            $"\"{penaltyExcellentResult}\""
-        }));
+                    $"\"{submitDate:yyyy-MM-dd}\"",
+                    $"\"{auditDate:yyyy-MM-dd}\"",
+                    $"\"{a.spbu.spbu_no}\"",
+                    $"\"{a.spbu.region}\"",
+                    $"\"{a.spbu.year ?? DateTime.Now.Year}\"",
+                    $"\"{a.spbu.address}\"",
+                    $"\"{a.spbu.city_name}\"",
+                    $"\"{a.spbu.owner_type}\"",
+                    $"\"{a.spbu.sbm}\"",
+                    $"\"{a.audit_level}\"",
+                    $"\"{a.spbu.audit_next}\"",
+                    $"\"{a.good_status}\"",
+                    $"\"{a.excellent_status}\"",
+                    $"\"{scores:0.##}\"",
+                    $"\"{sss}\"",
+                    $"\"{eqnq}\"",
+                    $"\"{rfs}\"",
+                    $"\"{vfc}\"",
+                    $"\"{epo}\"",
+                    $"\"{a.spbu.wtms}\"",
+                    $"\"{a.spbu.qq}\"",
+                    $"\"{a.spbu.wmef}\"",
+                    $"\"{a.spbu.format_fisik}\"",
+                    $"\"{a.spbu.cpo}\"",
+                    $"\"{a.spbu.level}\"",
+                    $"\"{penaltyGoodResult}\"",
+                    $"\"{penaltyExcellentResult}\""
+                }));
             }
 
             var fileName = $"Audit_Summary_{DateTime.Now:yyyyMMddHHmmss}.csv";
