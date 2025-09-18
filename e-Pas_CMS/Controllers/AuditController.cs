@@ -566,17 +566,17 @@ WHERE
             CalculateChecklistScores(model.Elements);
 
             var scoreSql = @"
-SELECT mqd.weight, tac.score_input, mqd.is_relaksasi
-FROM master_questioner_detail mqd
-LEFT JOIN trx_audit_checklist tac 
-    ON tac.master_questioner_detail_id = mqd.id 
-    AND tac.trx_audit_id = @id
-WHERE mqd.master_questioner_id = (
-    SELECT master_questioner_checklist_id 
-    FROM trx_audit 
-    WHERE id = @id
-)
-AND mqd.type = 'QUESTION'";
+            SELECT mqd.weight, tac.score_input, mqd.is_relaksasi
+            FROM master_questioner_detail mqd
+            LEFT JOIN trx_audit_checklist tac 
+                ON tac.master_questioner_detail_id = mqd.id 
+                AND tac.trx_audit_id = @id
+            WHERE mqd.master_questioner_id = (
+                SELECT master_questioner_checklist_id 
+                FROM trx_audit 
+                WHERE id = @id
+            )
+            AND mqd.type = 'QUESTION'";
             var checklist = (await conn.QueryAsync<(decimal? weight, string score_input, bool? is_relaksasi)>(scoreSql, new { id = idStr })).ToList();
 
             decimal totalScore = 0, maxScore = 0;
@@ -1176,6 +1176,17 @@ AND mqd.type = 'QUESTION'";
                 );
                 if (affected == 0) return NotFound();
 
+                const string updateFeedback = @"
+                UPDATE trx_feedback
+                SET next_audit_before = @auditbefore
+                WHERE trx_audit_id    = @id";
+
+                await conn.ExecuteAsync(updateFeedback, new
+                {
+                    auditbefore = existingSPBU.audit_next,
+                    trxauditid = id
+                });
+
                 const string updateSpbuWithNext = @"
                 UPDATE spbu
                 SET audit_next = @auditnext,
@@ -1189,16 +1200,7 @@ AND mqd.type = 'QUESTION'";
                     spbuNo = model.SpbuNo
                 });
 
-                const string updateFeedback = @"
-                UPDATE trx_feedback
-                SET next_audit_before = @auditbefore
-                WHERE trx_audit_id    = @trxauditid";
-
-                await conn.ExecuteAsync(updateFeedback, new
-                {
-                    auditbefore = trxAudit.audit_level,
-                    trxauditid = model.AuditId
-                });
+                
             }
 
             await GenerateAllVerifiedPdfReports(id);

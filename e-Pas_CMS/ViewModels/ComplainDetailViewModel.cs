@@ -72,6 +72,7 @@
         public List<AttachmentItem> Attachments { get; set; } = new();
 
         public string PointId { get; set; } // ← wajib, untuk form approve/reject
+        public List<string> pointMediaElements { get; set; } = new();
 
         public List<string> mediaElement { get; set; } = new();
 
@@ -123,6 +124,7 @@
         public string detail_element_label { get; set; } = default!;
         public string compared_elements { get; set; } = default!;
         public string media_elements { get; set; } = default!;
+        public string point_media_elements { get; set; } = default!;
     }
 
     public class KlarifikasiLogItem

@@ -324,6 +324,15 @@ namespace e_Pas_CMS.Controllers
                 .Select(x => x.sbm)
                 .Distinct()
                 .ToListAsync();
+            var userSpbuId = await _context.app_user_roles
+    .Where(x => x.app_user_id == id && x.spbu_id != null)
+    .Select(x => x.spbu_id)
+    .FirstOrDefaultAsync();
+
+            var userSpbuName = await _context.spbus
+                .Where(x => x.id == userSpbuId)
+                .Select(x => x.spbu_no + " - " + x.province_name + " - " + x.city_name + " - " + x.address)
+                .FirstOrDefaultAsync();
 
             var model = new RoleAuditorEditViewModel
             {
@@ -367,12 +376,22 @@ namespace e_Pas_CMS.Controllers
                     .Distinct()
                     .OrderBy(s => s)
                     .Select(s => new SelectListItem { Value = s, Text = s })
-                    .ToListAsync()
+                    .ToListAsync(),
+                    SelectedSpbuId = userSpbuId,
+                SelectedSpbuName = userSpbuName,
+                SpbuList = await _context.spbus
+        .Where(x => x.spbu_no != null)
+        .OrderBy(x => x.spbu_no)
+        .Select(x => new SelectListItem
+        {
+            Value = x.id,
+            Text = x.spbu_no + " - " + x.province_name + " - " + x.city_name + " - " + x.address
+        })
+        .ToListAsync()
             };
 
             return View(model);
         }
-
         [HttpPost("Edit/{id}")]
         public async Task<IActionResult> Edit(RoleAuditorEditViewModel model)
         {
@@ -389,7 +408,7 @@ namespace e_Pas_CMS.Controllers
                 return View(model);
             }
 
-            // Update user
+            // Update user (profil dasar)
             user.username = model.UserName;
             user.name = model.AuditorName;
             user.phone_number = model.Handphone;
@@ -403,21 +422,92 @@ namespace e_Pas_CMS.Controllers
             _context.app_users.Update(user);
             await _context.SaveChangesAsync();
 
-            var roleIds = model.SelectedRoleIds ?? new List<string>();
-            var regionIds = model.SelectedRegionIds ?? new List<string>();
-            var sbmIds = model.SelectedSbmIds ?? new List<string>();
+            // ==== Ambil pilihan terbaru dari form ====
+            var roleIds = (model.SelectedRoleIds ?? new List<string>()).Where(s => !string.IsNullOrWhiteSpace(s)).Distinct().ToList();
+            var regionIds = (model.SelectedRegionIds ?? new List<string>()).Where(s => !string.IsNullOrWhiteSpace(s)).Distinct().ToList();
+            var sbmIds = (model.SelectedSbmIds ?? new List<string>()).Where(s => !string.IsNullOrWhiteSpace(s)).Distinct().ToList();
+            var selectedSpbuId = (model.SelectedSpbuId ?? "").Trim();
 
+            // Peta roleId -> roleName
+            var roleMap = await _context.app_roles
+                .Where(r => roleIds.Contains(r.id))
+                .ToDictionaryAsync(r => r.id, r => (r.name ?? "").Trim().ToUpper());
+
+            // Cari roleId untuk DEFAULT_SPBU (yang terpilih saat ini)
+            var defaultSpbuRoleIds = roleMap
+                .Where(kv => kv.Value == "DEFAULT_SPBU")
+                .Select(kv => kv.Key)
+                .ToHashSet();
+
+            bool hasDefaultSpbuRole = defaultSpbuRoleIds.Any();
+
+            // Validasi: jika DEFAULT_SPBU dipilih, SPBU wajib dipilih
+            if (hasDefaultSpbuRole && string.IsNullOrEmpty(selectedSpbuId))
+            {
+                ModelState.AddModelError("", "SPBU wajib dipilih saat role DEFAULT_SPBU dicentang.");
+                return View(model);
+            }
+
+            // ==== Data eksisting user ====
             var existingRoles = await _context.app_user_roles
                 .Where(x => x.app_user_id == model.AuditorId)
                 .ToListAsync();
 
-            // Hapus semua kombinasi yang tidak dipilih lagi
-            var rolesToDelete = existingRoles.Where(x =>
-                !roleIds.Contains(x.app_role_id) ||
-                (x.region != null && !regionIds.Contains(x.region)) ||
-                (x.sbm != null && !sbmIds.Contains(x.sbm)) ||
-                ((x.region == null && regionIds.Any()) || (x.sbm == null && sbmIds.Any()))
-            ).ToList();
+            var rolesToDelete = new List<app_user_role>();
+
+            // Ambil semua roleId yang bernama DEFAULT_SPBU dari master (untuk bantu cek baris lama)
+            var allDefaultRoleIds = await _context.app_roles
+                .Where(r => r.name != null && r.name.ToUpper() == "DEFAULT_SPBU")
+                .Select(r => r.id)
+                .ToListAsync();
+            var allDefaultRoleIdsSet = allDefaultRoleIds.ToHashSet();
+
+            foreach (var ur in existingRoles)
+            {
+                // 1) Role tidak dipilih lagi
+                if (!roleIds.Contains(ur.app_role_id))
+                {
+                    rolesToDelete.Add(ur);
+                    continue;
+                }
+
+                // 2) Baris DEFAULT_SPBU
+                if (allDefaultRoleIdsSet.Contains(ur.app_role_id))
+                {
+                    // Jika sekarang tidak pilih DEFAULT_SPBU sama sekali -> hapus semua DEFAULT_SPBU
+                    if (!hasDefaultSpbuRole)
+                    {
+                        rolesToDelete.Add(ur);
+                        continue;
+                    }
+                    // Jika pilih DEFAULT_SPBU, pertahankan hanya spbu_id yang sama dengan pilihan baru
+                    if (string.IsNullOrEmpty(selectedSpbuId) || (ur.spbu_id ?? "") != selectedSpbuId)
+                    {
+                        rolesToDelete.Add(ur);
+                    }
+                    continue;
+                }
+
+                // 3) Non-DEFAULT_SPBU (pakai logika lama region/sbm)
+                if (ur.region != null && !regionIds.Contains(ur.region))
+                {
+                    rolesToDelete.Add(ur);
+                    continue;
+                }
+
+                if (ur.sbm != null && !sbmIds.Contains(ur.sbm))
+                {
+                    rolesToDelete.Add(ur);
+                    continue;
+                }
+
+                // Jika sebelumnya null tapi sekarang user memilih region/sbm, baris "role-only" harus dibersihkan
+                if ((ur.region == null && regionIds.Any()) || (ur.sbm == null && sbmIds.Any()))
+                {
+                    rolesToDelete.Add(ur);
+                    continue;
+                }
+            }
 
             if (rolesToDelete.Any())
             {
@@ -425,21 +515,26 @@ namespace e_Pas_CMS.Controllers
                 await _context.SaveChangesAsync();
             }
 
+            // Refresh cache kombinasi setelah delete
             var existingCombinations = await _context.app_user_roles
                 .Where(x => x.app_user_id == model.AuditorId)
                 .ToListAsync();
 
+            // ==== Tambah kombinasi yang belum ada ====
             foreach (var roleId in roleIds)
             {
-                bool addedAny = false;
+                bool isDefaultSpbu = defaultSpbuRoleIds.Contains(roleId);
 
-                if (regionIds.Any())
+                if (isDefaultSpbu)
                 {
-                    foreach (var region in regionIds)
+                    // DEFAULT_SPBU: simpan 1 baris dengan spbu_id = SelectedSpbuId (region/sbm = null)
+                    if (!string.IsNullOrEmpty(selectedSpbuId))
                     {
                         var exists = existingCombinations.Any(x =>
                             x.app_role_id == roleId &&
-                            x.region == region &&
+                            x.app_user_id == model.AuditorId &&
+                            x.spbu_id == selectedSpbuId &&
+                            x.region == null &&
                             x.sbm == null);
 
                         if (!exists)
@@ -449,14 +544,49 @@ namespace e_Pas_CMS.Controllers
                                 id = Guid.NewGuid().ToString(),
                                 app_user_id = model.AuditorId,
                                 app_role_id = roleId,
-                                region = region,
+                                spbu_id = selectedSpbuId,
+                                region = null,
                                 sbm = null
+                            });
+                        }
+                    }
+
+                    // Lewati logika region/sbm untuk role DEFAULT_SPBU
+                    continue;
+                }
+
+                // === NON-DEFAULT_SPBU ===
+
+                bool addedAny = false;
+
+                // 1) Kombinasi Region
+                if (regionIds.Any())
+                {
+                    foreach (var region in regionIds)
+                    {
+                        var exists = existingCombinations.Any(x =>
+                            x.app_role_id == roleId &&
+                            x.region == region &&
+                            x.sbm == null &&
+                            x.spbu_id == null);
+
+                        if (!exists)
+                        {
+                            _context.app_user_roles.Add(new app_user_role
+                            {
+                                id = Guid.NewGuid().ToString(),
+                                app_user_id = model.AuditorId,
+                                app_role_id = roleId,
+                                region = region,
+                                sbm = null,
+                                spbu_id = null
                             });
                             addedAny = true;
                         }
                     }
                 }
 
+                // 2) Kombinasi SBM
                 if (sbmIds.Any())
                 {
                     foreach (var sbm in sbmIds)
@@ -464,7 +594,8 @@ namespace e_Pas_CMS.Controllers
                         var exists = existingCombinations.Any(x =>
                             x.app_role_id == roleId &&
                             x.region == null &&
-                            x.sbm == sbm);
+                            x.sbm == sbm &&
+                            x.spbu_id == null);
 
                         if (!exists)
                         {
@@ -474,20 +605,22 @@ namespace e_Pas_CMS.Controllers
                                 app_user_id = model.AuditorId,
                                 app_role_id = roleId,
                                 region = null,
-                                sbm = sbm
+                                sbm = sbm,
+                                spbu_id = null
                             });
                             addedAny = true;
                         }
                     }
                 }
 
-                // Jika tidak ada region dan sbm dipilih, tetap tambahkan role saja
+                // 3) Jika user tidak memilih region & sbm, simpan role-only
                 if (!regionIds.Any() && !sbmIds.Any())
                 {
                     var exists = existingCombinations.Any(x =>
                         x.app_role_id == roleId &&
                         x.region == null &&
-                        x.sbm == null);
+                        x.sbm == null &&
+                        x.spbu_id == null);
 
                     if (!exists)
                     {
@@ -497,7 +630,8 @@ namespace e_Pas_CMS.Controllers
                             app_user_id = model.AuditorId,
                             app_role_id = roleId,
                             region = null,
-                            sbm = null
+                            sbm = null,
+                            spbu_id = null
                         });
                     }
                 }
@@ -508,6 +642,7 @@ namespace e_Pas_CMS.Controllers
             TempData["Success"] = "Data berhasil diperbarui.";
             return RedirectToAction("Index");
         }
+
 
         [HttpPost]
         public async Task<IActionResult> Delete(string id)

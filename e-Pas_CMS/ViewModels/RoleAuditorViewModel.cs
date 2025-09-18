@@ -59,6 +59,9 @@ namespace e_Pas_CMS.ViewModels
 
         public List<SelectListItem> RoleList { get; set; } = new List<SelectListItem>();
         public List<SelectListItem> RegionList { get; set; } = new List<SelectListItem>();
+        public List<SelectListItem> SpbuList { get; set; } = new();
+        public string SelectedSpbuId { get; set; }
+        public string SelectedSpbuName { get; set; }
     }
 
     public class RoleAuditorDetailViewModel

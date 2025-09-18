@@ -248,18 +248,22 @@ namespace e_Pas_CMS.Controllers
 
             if (header == null) return NotFound();
 
-            string passedGood = "";
-            string passedExcellent = "";
-            string passedAuditLevel = "";
-            string failed_audit_level = "";
+            string beforerevised = "";
+            string afterrevised = "";
 
-            var auditFlowSql = @"SELECT * FROM master_audit_flow WHERE audit_level = @level LIMIT 1;";
-            var auditFlow = await connect.QueryFirstOrDefaultAsync<dynamic>(auditFlowSql, new { level = header.S.audit_next });
+            string status = header.Tf.Status;
 
-            passedGood = auditFlow.passed_good;
-            passedExcellent = auditFlow.passed_excellent;
-            passedAuditLevel = auditFlow.passed_audit_level;
-            failed_audit_level = auditFlow.failed_audit_level;
+            if (status != "APPROVE" && header.Tf.Next_audit_before != null)
+            {
+                beforerevised = header.S.audit_next;
+                afterrevised = "-";
+            }
+
+            else
+            {
+                beforerevised = header.Tf.Next_audit_before;
+                afterrevised = header.S.audit_next;
+            }
 
             var klarifnotes = await GetMediaKlarifikasiAsync(connect, id);
 
@@ -304,8 +308,8 @@ namespace e_Pas_CMS.Controllers
                 feedback_type = header.Tf.FeedbackType,
                 AuditId = header.Ta.id,
                 Klarifikasi = header.Tf.Klarifikasi,
-                SebelumRevisi = header.S.audit_next,
-                SesudahRevisi = failed_audit_level
+                SebelumRevisi = beforerevised,
+                SesudahRevisi = afterrevised
             };
 
             var codes = new[]
@@ -408,43 +412,55 @@ namespace e_Pas_CMS.Controllers
 
             var pointRows = await conn.QueryAsync<PointRow>(@"
 SELECT 
-p.id AS point_id,
-fe.trx_audit_id,
-p.description AS description,
-CASE 
-    WHEN EXISTS (
-        SELECT 1
-        FROM trx_feedback_point_approval tfpa
-        WHERE tfpa.trx_feedback_point_id = p.id
-          AND tfpa.status IN ('REJECT','REJECT_CBI')
-    ) 
-    THEN COALESCE(e.number || '. ' || e.title, e.title, e.description, '-') || ' (REJECT)'
-    ELSE COALESCE(e.number || '. ' || e.title, e.title, e.description, '-')
-END AS element_label,
-COALESCE(se.number || '. ' || se.title, se.title, se.description, '-') AS sub_element_label,
-COALESCE(de.number || '. ' || de.title, de.title, '-')                 AS detail_element_label,
-COALESCE((
-    SELECT string_agg(me.number || ' ' || me.title, E'\n' ORDER BY me.number)
-    FROM trx_feedback_point_element pe
-    JOIN master_questioner_detail me ON me.id = pe.master_questioner_detail_id
-    WHERE pe.trx_feedback_point_id = p.id
-), '') AS compared_elements,
-COALESCE((SELECT string_agg('https://epas-assets.zarata.co.id' || t.media_path, ',' ORDER BY t.created_date, t.media_path)
-FROM (
-    SELECT DISTINCT tam.media_path, tam.created_date
-    FROM trx_feedback_point_element pe
-    JOIN master_questioner_detail me 
-      ON me.id = pe.master_questioner_detail_id
-    JOIN trx_audit_media tam 
-      ON tam.master_questioner_detail_id = me.id
-    WHERE pe.trx_feedback_point_id = p.id 
-      AND tam.trx_audit_id = fe.trx_audit_id
-      AND tam.media_path IS NOT NULL 
-      AND tam.media_type = 'IMAGE'
-) t
-), '') AS media_elements
+    p.id AS point_id,
+    fe.trx_audit_id,
+    p.description AS description,
+    CASE 
+        WHEN EXISTS (
+            SELECT 1
+            FROM trx_feedback_point_approval tfpa
+            WHERE tfpa.trx_feedback_point_id = p.id
+              AND tfpa.status IN ('REJECT','REJECT_CBI')
+        ) 
+        THEN COALESCE(e.number || '. ' || e.title, e.title, e.description, '-') || ' (REJECT)'
+        ELSE COALESCE(e.number || '. ' || e.title, e.title, e.description, '-')
+    END AS element_label,
+    COALESCE(se.number || '. ' || se.title, se.title, se.description, '-') AS sub_element_label,
+    COALESCE(de.number || '. ' || de.title, de.title, '-')                 AS detail_element_label,
+    COALESCE((
+        SELECT string_agg(me.number || ' ' || me.title, E'\n' ORDER BY me.number)
+        FROM trx_feedback_point_element pe
+        JOIN master_questioner_detail me ON me.id = pe.master_questioner_detail_id
+        WHERE pe.trx_feedback_point_id = p.id
+    ), '') AS compared_elements,
+    COALESCE((
+        SELECT string_agg('https://epas-assets.zarata.co.id' || t.media_path, ',' 
+                          ORDER BY t.created_date, t.media_path)
+        FROM (
+            SELECT DISTINCT tam.media_path, tam.created_date
+            FROM trx_feedback_point_element pe
+            JOIN master_questioner_detail me 
+              ON me.id = pe.master_questioner_detail_id
+            JOIN trx_audit_media tam 
+              ON tam.master_questioner_detail_id = me.id
+            WHERE pe.trx_feedback_point_id = p.id 
+              AND tam.trx_audit_id = fe.trx_audit_id
+              AND tam.media_path IS NOT NULL 
+              AND tam.media_type = 'IMAGE'
+        ) t
+    ), '') AS media_elements,
+    COALESCE((
+        SELECT string_agg('https://epas-assets.zarata.co.id' || t.media_path, ',' 
+                          ORDER BY t.created_date, t.media_path)
+        FROM (
+            SELECT DISTINCT tfpm.media_path, tfpm.created_date
+            FROM trx_feedback_point_media tfpm
+            WHERE tfpm.trx_feedback_point_id = p.id
+              AND tfpm.media_path IS NOT NULL
+        ) t
+    ), '') AS point_media_elements
 FROM trx_feedback_point p
-LEFT join trx_feedback fe on p.trx_feedback_id = fe.id
+LEFT JOIN trx_feedback fe ON p.trx_feedback_id = fe.id
 LEFT JOIN master_questioner_detail e  ON e.id  = p.element_master_questioner_detail_id
 LEFT JOIN master_questioner_detail se ON se.id = p.sub_element_master_questioner_detail_id
 LEFT JOIN master_questioner_detail de ON de.id = p.detail_element_master_questioner_detail_id
@@ -473,6 +489,14 @@ ORDER BY p.created_date ASC;", new { fid = id });
                                        .Select(s => s.Trim())
                                        .Where(s => !string.IsNullOrWhiteSpace(s))
                                        .ToList(),
+                    pointMediaElements = string.IsNullOrWhiteSpace(pr.point_media_elements)
+        ? new List<string>()
+        : pr.point_media_elements
+            .Split(',', StringSplitOptions.RemoveEmptyEntries)
+            .Select(s => s.Trim())
+            .Where(s => !string.IsNullOrWhiteSpace(s))
+            .Distinct()
+            .ToList(),
                     Description = pr.description,
                     Attachments = new List<AttachmentItem>(),
                     History = new List<PointApprovalHistory>()

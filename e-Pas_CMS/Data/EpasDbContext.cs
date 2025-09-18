@@ -543,6 +543,9 @@ public partial class EpasDbContext : DbContext
             entity.Property(e => e.Klarifikasi)
                 .HasMaxLength(2000)
                 .HasColumnName("klarifikasi");
+            entity.Property(e => e.Next_audit_before)
+                .HasMaxLength(500)
+                .HasColumnName("next_audit_before");
             entity.HasOne(d => d.AppUser).WithMany(p => p.TrxFeedbacks)
                 .HasForeignKey(d => d.AppUserId)
                 .OnDelete(DeleteBehavior.ClientSetNull)

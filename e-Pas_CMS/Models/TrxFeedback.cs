@@ -36,4 +36,7 @@ public partial class TrxFeedback
     public virtual ICollection<TrxFeedbackPoint> TrxFeedbackPoints { get; set; } = new List<TrxFeedbackPoint>();
 
     public string? Klarifikasi { get; set; }
+
+    public string? Next_audit_before { get; set; }
+
 }

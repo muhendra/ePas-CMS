@@ -2,6 +2,7 @@
 
 @{
     Layout = "~/Views/Shared/_Layout.cshtml";
+    bool hasDefaultSpbu = Model?.SelectedRoleNames?.Any(r => (r ?? "").Trim().ToUpper() == "DEFAULT_SPBU") == true;
 }
 
 <div class="container mt-5">
@@ -45,7 +46,7 @@
                     <span class="badge bg-primary">@role</span>
                 }
             </div>
-            @* Generate multiple hidden inputs dynamically *@
+            @* hidden inputs for SelectedRoleIds *@
             @foreach (var roleId in Model.SelectedRoleIds)
             {
                 <input type="hidden" name="SelectedRoleIds" value="@roleId" />
@@ -82,6 +83,29 @@
             }
         </div>
 
+        @* === SPBU (hanya tampil jika role DEFAULT_SPBU) === *@
+        <div class="col-md-12" id="spbuWrapper" style="display:@(hasDefaultSpbu ? "block" : "none")">
+            <label class="form-label">SPBU (Tampil jika Nama Role DEFAULT_SPBU)</label>
+            <div class="d-flex flex-column gap-2">
+                <div class="d-flex gap-2">
+                    <button type="button" id="btnOpenSpbu" class="btn btn-outline-success">
+                        Pilih SPBU
+                    </button>
+                    <button type="button" id="btnClearSpbu" class="btn btn-outline-secondary">
+                        Hapus Pilihan
+                    </button>
+                </div>
+                <input type="hidden" name="SelectedSpbuId" id="SelectedSpbuId" value="@Model.SelectedSpbuId" />
+                <div id="SpbuBadgeContainer" class="selected-display d-flex flex-wrap gap-2">
+                    @if (!string.IsNullOrWhiteSpace(Model.SelectedSpbuName))
+                    {
+                        <span class="badge bg-primary">@Model.SelectedSpbuName</span>
+                    }
+                </div>
+                <small class="text-muted">SPBU wajib dipilih jika role <b>DEFAULT_SPBU</b> dicentang.</small>
+            </div>
+        </div>
+
         <div class="col-12 text-end">
             <a href="@Url.Action("Index", "Role")" class="btn btn-secondary">Kembali</a>
             <button type="submit" class="btn btn-primary">Simpan Perubahan</button>
@@ -98,7 +122,8 @@
                 @foreach (var role in Model.RoleList)
                 {
                     <div class="form-check">
-                        <input class="form-check-input role-checkbox" type="checkbox" value="@role.Value" data-name="@role.Text">
+                        <input class="form-check-input role-checkbox" type="checkbox" value="@role.Value" data-name="@role.Text"
+                        @(Model.SelectedRoleIds.Contains(role.Value) ? "checked" : "")>
                         <label class="form-check-label">@role.Text</label>
                     </div>
                 }
@@ -120,7 +145,8 @@
                 @foreach (var region in Model.RegionList)
                 {
                     <div class="form-check">
-                        <input class="form-check-input region-checkbox" type="checkbox" value="@region.Value" data-name="@region.Text">
+                        <input class="form-check-input region-checkbox" type="checkbox" value="@region.Value" data-name="@region.Text"
+                        @(Model.SelectedRegionIds.Contains(region.Value) ? "checked" : "")>
                         <label class="form-check-label">@region.Text</label>
                     </div>
                 }
@@ -156,17 +182,62 @@
     </div>
 </div>
 
+<!-- SPBU Modal (single select) -->
+<div class="modal fade" id="spbuModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Pilih SPBU</h5>
+            </div>
+
+            <div class="px-3 pt-3">
+                <div class="input-group mb-2">
+                    <span class="input-group-text">Cari</span>
+                    <input type="text" id="spbuSearch" class="form-control" placeholder="Ketik nomor SPBU / provinsi / kota / alamat (min. 2 huruf)">
+                    <button class="btn btn-outline-secondary" type="button" id="spbuSearchClear">Clear</button>
+                </div>
+                <small id="spbuResultInfo" class="text-muted">Menampilkan semua data.</small>
+            </div>
+
+            <div class="modal-body pt-2" style="max-height:60vh; overflow:auto;">
+                @if (Model.SpbuList?.Any() == true)
+                {
+                    <div id="spbuList" class="list-group">
+                        @foreach (var spbu in Model.SpbuList)
+                        {
+                            <label class="list-group-item d-flex align-items-center gap-2 spbu-item">
+                                <input class="form-check-input spbu-radio" type="radio" name="spbuRadio"
+                                       value="@spbu.Value" data-name="@spbu.Text"
+                                @(Model.SelectedSpbuId == spbu.Value ? "checked" : "") />
+                                <span class="spbu-text">@spbu.Text</span>
+                            </label>
+                        }
+                    </div>
+                    <div id="spbuEmptyState" class="text-muted py-3 d-none">Tidak ada hasil yang cocok.</div>
+                }
+                else
+                {
+                    <div class="text-muted">Daftar SPBU tidak tersedia.</div>
+                }
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" data-bs-dismiss="modal">Tutup</button>
+                <button class="btn btn-success" id="btnPilihSpbu">Pilih</button>
+            </div>
+        </div>
+    </div>
+</div>
 
 @section Scripts {
     <script>
         $(document).ready(function () {
+            // === Open modals ===
             $('#btnOpenRole').click(function () {
                 var selectedIds = $('input[name="SelectedRoleIds"]').map(function () { return this.value; }).get();
                 $('.role-checkbox').each(function () {
                     $(this).prop('checked', selectedIds.includes($(this).val()));
                 });
-                var modal = new bootstrap.Modal(document.getElementById('roleModal'));
-                modal.show();
+                new bootstrap.Modal(document.getElementById('roleModal')).show();
             });
 
             $('#btnOpenRegion').click(function () {
@@ -174,24 +245,44 @@
                 $('.region-checkbox').each(function () {
                     $(this).prop('checked', selectedIds.includes($(this).val()));
                 });
-                var modal = new bootstrap.Modal(document.getElementById('regionModal'));
-                modal.show();
+                new bootstrap.Modal(document.getElementById('regionModal')).show();
             });
 
+            $('#btnOpenSbm').click(function () {
+                var selectedIds = $('input[name="SelectedSbmIds"]').map(function () { return this.value; }).get();
+                $('.sbm-checkbox').each(function () {
+                    $(this).prop('checked', selectedIds.includes($(this).val()));
+                });
+                new bootstrap.Modal(document.getElementById('sbmModal')).show();
+            });
+
+            $('#btnOpenSpbu').click(function () {
+                // Pre-check from hidden value
+                var current = $('#SelectedSpbuId').val() || '';
+                if (current) {
+                    $('.spbu-radio[value="' + current + '"]').prop('checked', true);
+                }
+                new bootstrap.Modal(document.getElementById('spbuModal')).show();
+
+                // Fokus ke search ketika modal dibuka
+                setTimeout(function(){ $('#spbuSearch').trigger('focus'); }, 200);
+            });
+
+            // === Confirm selections ===
             $('#btnPilihRole').click(function () {
                 var selected = $('.role-checkbox:checked');
                 var ids = selected.map(function () { return this.value; }).get();
                 var names = selected.map(function () { return $(this).data('name'); }).get();
 
-                // Clear existing hidden inputs
+                // Reset hidden inputs
                 $('input[name="SelectedRoleIds"]').remove();
-
-                // Add new hidden inputs
                 ids.forEach(id => {
                     $('<input>').attr({ type: 'hidden', name: 'SelectedRoleIds', value: id }).appendTo('form');
                 });
 
                 updateBadge('RoleBadgeContainer', names);
+                toggleSpbuSection(names); // show/hide SPBU based on role names
+
                 bootstrap.Modal.getInstance(document.getElementById('roleModal')).hide();
             });
 
@@ -200,10 +291,7 @@
                 var ids = selected.map(function () { return this.value; }).get();
                 var names = selected.map(function () { return $(this).data('name'); }).get();
 
-                // Clear existing hidden inputs
                 $('input[name="SelectedRegionIds"]').remove();
-
-                // Add new hidden inputs
                 ids.forEach(id => {
                     $('<input>').attr({ type: 'hidden', name: 'SelectedRegionIds', value: id }).appendTo('form');
                 });
@@ -212,43 +300,116 @@
                 bootstrap.Modal.getInstance(document.getElementById('regionModal')).hide();
             });
 
-            $('#btnOpenSbm').click(function () {
-                var selectedIds = $('input[name="SelectedSbmIds"]').map(function () { return this.value; }).get();
-                $('.sbm-checkbox').each(function () {
-                    $(this).prop('checked', selectedIds.includes($(this).val()));
-                });
-                var modal = new bootstrap.Modal(document.getElementById('sbmModal'));
-                modal.show();
-            });
-
             $('#btnPilihSbm').click(function () {
                 var selected = $('.sbm-checkbox:checked');
                 var ids = selected.map(function () { return this.value; }).get();
                 var names = selected.map(function () { return $(this).data('name'); }).get();
-            
-                // Clear existing hidden inputs
+
                 $('input[name="SelectedSbmIds"]').remove();
-            
-                // Add new hidden inputs
                 ids.forEach(id => {
                     $('<input>').attr({ type: 'hidden', name: 'SelectedSbmIds', value: id }).appendTo('form');
                 });
-            
+
                 updateBadge('SbmBadgeContainer', names);
                 bootstrap.Modal.getInstance(document.getElementById('sbmModal')).hide();
             });
 
+            $('#btnPilihSpbu').click(function () {
+                var selected = $('.spbu-radio:checked');
+                if (selected.length === 0) {
+                    bootstrap.Modal.getInstance(document.getElementById('spbuModal')).hide();
+                    return;
+                }
+                var id = selected.val();
+                var name = selected.data('name');
 
+                $('#SelectedSpbuId').val(id);
+                updateBadge('SpbuBadgeContainer', [name]);
+
+                bootstrap.Modal.getInstance(document.getElementById('spbuModal')).hide();
+            });
+
+            $('#btnClearSpbu').click(function () {
+                $('#SelectedSpbuId').val('');
+                updateBadge('SpbuBadgeContainer', []);
+                $('.spbu-radio').prop('checked', false);
+            });
+
+            // === Live search (client-side) ===
+            const $spbuSearch = $('#spbuSearch');
+            const $spbuList = $('#spbuList');
+            const $spbuItems = $spbuList.find('.spbu-item');
+            const $spbuEmpty = $('#spbuEmptyState');
+            const $info = $('#spbuResultInfo');
+
+            $('#spbuSearchClear').on('click', function () {
+                $spbuSearch.val('');
+                filterSpbu('');
+                $spbuSearch.trigger('focus');
+            });
+
+            $spbuSearch.on('input', debounce(function () {
+                const q = ($spbuSearch.val() || '').toString().trim();
+                filterSpbu(q);
+            }, 180));
+
+            function filterSpbu(query) {
+                const q = (query || '').toLowerCase();
+                let shown = 0;
+
+                if (q.length >= 2) {
+                    $spbuItems.each(function () {
+                        const text = $(this).find('.spbu-text').text().toLowerCase();
+                        const hit = text.includes(q);
+                        $(this).toggleClass('d-none', !hit);
+                        if (hit) shown++;
+                    });
+                    $info.text(shown > 0 ? `Hasil: ${shown}` : 'Tidak ada hasil.');
+                    $spbuEmpty.toggleClass('d-none', shown > 0);
+                } else {
+                    // show all when less than 2 chars
+                    $spbuItems.removeClass('d-none');
+                    $spbuEmpty.addClass('d-none');
+                    $info.text('Menampilkan semua data.');
+                }
+            }
+
+            // === Helpers ===
             function updateBadge(containerId, items) {
                 const container = document.getElementById(containerId);
                 container.innerHTML = '';
-                items.forEach(item => {
+                (items || []).forEach(item => {
+                    if (!item) return;
                     const badge = document.createElement('span');
                     badge.className = 'badge bg-primary';
                     badge.innerText = item;
                     container.appendChild(badge);
                 });
             }
+
+            function toggleSpbuSection(roleNames) {
+                const hasDefault = (roleNames || []).some(n => (n || '').toString().trim().toUpperCase() === 'DEFAULT_SPBU');
+                if (hasDefault) {
+                    $('#spbuWrapper').slideDown(120);
+                } else {
+                    $('#spbuWrapper').slideUp(120);
+                    $('#SelectedSpbuId').val('');
+                    updateBadge('SpbuBadgeContainer', []);
+                    $('.spbu-radio').prop('checked', false);
+                }
+            }
+
+            function debounce(fn, wait) {
+                let t;
+                return function() {
+                    clearTimeout(t);
+                    const args = arguments, ctx = this;
+                    t = setTimeout(function(){ fn.apply(ctx, args); }, wait);
+                };
+            }
+
+            // Initial toggle based on server-side roles (when page first loads)
+            toggleSpbuSection(@Html.Raw(Newtonsoft.Json.JsonConvert.SerializeObject(Model.SelectedRoleNames ?? new List<string>())));
         });
     </script>
 }

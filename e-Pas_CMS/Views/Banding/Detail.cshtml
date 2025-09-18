@@ -434,13 +434,18 @@
                     <div class="mb-2 fw-semibold mt-3">Isi @(Model.IsBanding ? "Banding" : "Komplain")</div>
                     <div class="muted">@(string.IsNullOrWhiteSpace(p.Description) ? "-" : p.Description)</div>
                     <div class="label">Dokumen Pendukung</div>
-                    @if (string.IsNullOrWhiteSpace(ViewBag.AttachmentsJson) || ViewBag.AttachmentsJson == "[]")
+                    @{
+                        var pointMediaJson = (p?.pointMediaElements != null && p.pointMediaElements.Any())
+                        ? JsonConvert.SerializeObject(p.pointMediaElements)
+                        : "[]";
+                    }
+                    @if (pointMediaJson == "[]")
                     {
                         <div class="text-muted">Tidak ada dokumen pendukung.</div>
                     }
                     else
                     {
-                        <div id="@thumbsId" class="thumb-grid" data-items='@Html.Raw(ViewBag.AttachmentsJson)'></div>
+                        <div id="@thumbsId" class="thumb-grid" data-items='@Html.Raw(pointMediaJson)'></div>
                     }
                 </div>
             </div>
