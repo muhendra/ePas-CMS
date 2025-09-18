@@ -48,6 +48,16 @@
         public string SebelumRevisi { get; set; }
         public string SesudahRevisi { get; set; }
         public List<KlfAttachmentItem> MediaKlarifikasi { get; set; } = new();
+
+
+        // riwayat klarifikasi
+        public List<KlarifikasiLogItem> KlarifikasiHistory { get; set; } = new();
+    }
+
+    public class UpdateKlarifikasiRequest
+    {
+        public string BandingId { get; set; }
+        public string Text { get; set; }
     }
 
     public class PointItem
@@ -113,6 +123,13 @@
         public string detail_element_label { get; set; } = default!;
         public string compared_elements { get; set; } = default!;
         public string media_elements { get; set; } = default!;
+    }
+
+    public class KlarifikasiLogItem
+    {
+        public DateTime CreatedDate { get; set; }
+        public string CreatedBy { get; set; } = "-";
+        public string Text { get; set; } = "";
     }
 
     public class MediaRow

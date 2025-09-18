@@ -519,15 +519,70 @@
                         </form>
                     </div>
                     <!-- Kolom kanan: ringkasan klarifikasi -->
+                    <!-- Kolom kanan: ringkasan klarifikasi -->
                     <div class="col-12 col-lg-6">
                         <label class="form-label fw-semibold">Ringkasan Klarifikasi</label>
+
                         <textarea id="txtKlarifikasi"
                                   class="form-control"
                                   rows="6"
                                   placeholder="Tulis klarifikasi keseluruhan di sini...">@Model.Klarifikasi</textarea>
+
                         <small class="text-muted d-block mt-1">
                             Catatan ini akan ikut tersimpan ketika Anda menekan tombol <em>Submit</em> atau <em>Reject</em>.
                         </small>
+
+                        @* Tampilkan tombol Update & Riwayat hanya jika status APPROVE *@
+                        @{
+                            // Fallback riwayat: pakai Model jika ada, kalau tidak coba dari ViewBag, jika tidak ada juga -> empty
+                            var klarHist = Model.KlarifikasiHistory
+                            ?? (ViewBag.KlarifikasiHistory as IEnumerable<e_Pas_CMS.ViewModels.KlarifikasiLogItem>)
+                            ?? Enumerable.Empty<e_Pas_CMS.ViewModels.KlarifikasiLogItem>();
+                        }
+
+                        @if (statusNorm == "APPROVE")
+                        {
+                            <div class="mt-2 d-flex gap-2">
+                                <button type="button"
+                                        class="btn btn-warning rounded-pill px-4"
+                                        id="btnUpdateKlarifikasi"
+                                        data-banding-id="@Model.Id">
+                                    <i class="bi bi-pencil-square"></i> Update
+                                </button>
+                            </div>
+
+                            @* <div class="mt-3">
+                                <div class="d-flex align-items-center justify-content-between">
+                                    <div class="fw-semibold">Riwayat Klarifikasi</div>
+                                    <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#riwayatKlarifikasi">
+                                        Tampilkan/Sembunyikan
+                                    </button>
+                                </div>
+
+                                <div class="collapse show" id="riwayatKlarifikasi">
+                                    @if (klarHist.Any())
+                                    {
+                                        <div class="list-group mt-2">
+                                            @foreach (var item in klarHist)
+                                            {
+                                                <div class="list-group-item">
+                                                    <div class="small text-muted">
+                                                        <span class="me-2"><i class="bi bi-clock"></i> @item.CreatedDate.ToLocalTime().ToString("dd MMM yyyy HH:mm")</span>
+                                                        <span><i class="bi bi-person"></i> @item.CreatedBy</span>
+                                                    </div>
+                                                    <div class="mt-1 white-space-prewrap">@Html.Raw(Html.Encode(item.Text).Replace("\n", "<br/>"))</div>
+                                                </div>
+                                            }
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        <div class="text-muted small mt-2">Belum ada riwayat klarifikasi.</div>
+                                    }
+                                </div>
+                            </div> *@
+                        }
+
                     </div>
                 </div>
             </div>
@@ -562,14 +617,14 @@
 
     @if (statusNorm == "APPROVE_CBI" || statusNorm == "REJECT_CBI" || statusNorm == "APPROVE")
     {
-        <div class="card card-soft mb-3">
-            <div class="card-body">
-                <div class="section-title">Klarifikasi</div>
-                <div class="border rounded p-3 bg-light">
-                    @Html.Raw(string.IsNullOrWhiteSpace(Model.Klarifikasi) ? "-" : Model.Klarifikasi.Replace("\n", "<br />"))
-                </div>
+    <div class="card card-soft mb-3">
+        <div class="card-body">
+            <div class="section-title">Klarifikasi</div>
+            <div id="klarifikasiContent" class="border rounded p-3 bg-light">
+                @Html.Raw(string.IsNullOrWhiteSpace(Model.Klarifikasi) ? "-" : Model.Klarifikasi.Replace("\n", "<br />"))
             </div>
         </div>
+    </div>
     }
 
     @if (Model.IsBanding)
@@ -1056,6 +1111,67 @@
             progBar.style.width = '60%';
             setTimeout(()=> progBar.style.width = '90%', 700);
           });
+        })();
+
+            (function () {
+            const btn = document.getElementById('btnUpdateKlarifikasi');
+            if (!btn) return;
+
+            btn.addEventListener('click', async function () {
+                const bandingId = this.getAttribute('data-banding-id');
+                const text = document.getElementById('txtKlarifikasi').value ?? '';
+                const uploadForm = document.getElementById('formUploadKlarifikasi'); // sudah ada anti-forgery token
+                const tokenInput = uploadForm?.querySelector('input[name="__RequestVerificationToken"]');
+                const token = tokenInput ? tokenInput.value : null;
+
+                if (!text.trim()) {
+                    alert('Ringkasan klarifikasi tidak boleh kosong.');
+                    return;
+                }
+
+                this.disabled = true;
+                this.innerText = 'Menyimpan...';
+
+                try {
+                    const res = await fetch('@Url.Action("UpdateKlarifikasi", "Banding")', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'RequestVerificationToken': token // kirim token via header
+                        },
+                        body: JSON.stringify({
+                            bandingId: bandingId,
+                            text: text
+                        })
+                    });
+
+                    if (!res.ok) {
+                        const t = await res.text();
+                        throw new Error(t || 'Gagal menyimpan');
+                    }
+
+                    const data = await res.json();
+                    // terserah: tampilkan toast/alert sederhana
+                    alert('Klarifikasi berhasil diperbarui.');
+                             const contentDiv = document.getElementById("klarifikasiContent");
+        if (contentDiv) {
+            if (text && text.trim() !== "") {
+                contentDiv.innerHTML = text
+                    .replace(/&/g, "&amp;")
+                    .replace(/</g, "&lt;")
+                    .replace(/\n/g, "<br/>");
+            } else {
+                contentDiv.innerHTML = "-";
+            }
+        }
+                } catch (err) {
+                    console.error(err);
+                    alert('Gagal menyimpan klarifikasi. ' + (err.message || ''));
+                } finally {
+                    this.disabled = false;
+                    this.innerHTML = '<i class="bi bi-pencil-square"></i> Update';
+                }
+            });
         })();
     </script>
 }

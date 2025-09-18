@@ -1176,14 +1176,15 @@ AND mqd.type = 'QUESTION'";
                 );
                 if (affected == 0) return NotFound();
 
-                // revision: hanya update level SPBU (tanpa mengubah audit_next)
-                const string updateSpbuLevelOnly = @"
+                const string updateSpbuWithNext = @"
                 UPDATE spbu
-                SET ""level"" = @level
-                WHERE spbu_no = @spbuNo";
+                SET audit_next = @auditnext,
+                    ""level""   = @level
+                WHERE spbu_no  = @spbuNo";
 
-                await conn.ExecuteAsync(updateSpbuLevelOnly, new
+                await conn.ExecuteAsync(updateSpbuWithNext, new
                 {
+                    auditnext = model.AuditNext,
                     level = levelspbu,
                     spbuNo = model.SpbuNo
                 });

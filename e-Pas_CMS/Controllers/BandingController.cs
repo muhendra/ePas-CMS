@@ -256,13 +256,13 @@ namespace e_Pas_CMS.Controllers
             var auditFlowSql = @"SELECT * FROM master_audit_flow WHERE audit_level = @level LIMIT 1;";
             var auditFlow = await connect.QueryFirstOrDefaultAsync<dynamic>(auditFlowSql, new { level = header.S.audit_next });
 
-            passedGood           = auditFlow.passed_good;
-            passedExcellent      = auditFlow.passed_excellent;
-            passedAuditLevel     = auditFlow.passed_audit_level;
-            failed_audit_level   = auditFlow.failed_audit_level;
+            passedGood = auditFlow.passed_good;
+            passedExcellent = auditFlow.passed_excellent;
+            passedAuditLevel = auditFlow.passed_audit_level;
+            failed_audit_level = auditFlow.failed_audit_level;
 
             var klarifnotes = await GetMediaKlarifikasiAsync(connect, id);
-            
+
             var vm = new ComplainDetailViewModel
             {
                 // Status & jenis
@@ -306,17 +306,16 @@ namespace e_Pas_CMS.Controllers
                 Klarifikasi = header.Tf.Klarifikasi,
                 SebelumRevisi = header.S.audit_next,
                 SesudahRevisi = failed_audit_level
-
             };
 
             var codes = new[]
             {
-                "BANDING_CLOSING_DATE_SPBU",
-                "BANDING_CLOSING_DATE_SBM",
-                "BANDING_CLOSING_DATE_PPN",
-                "BANDING_CLOSING_DATE_CBI",
-                "BANDING_CLOSING_DATE_ALL"
-            };
+        "BANDING_CLOSING_DATE_SPBU",
+        "BANDING_CLOSING_DATE_SBM",
+        "BANDING_CLOSING_DATE_PPN",
+        "BANDING_CLOSING_DATE_CBI",
+        "BANDING_CLOSING_DATE_ALL"
+    };
 
             var paramDict = await _context.SysParameter
                 .Where(p => p.Status == "ACTIVE" && codes.Contains(p.Code))
@@ -333,45 +332,20 @@ namespace e_Pas_CMS.Controllers
             var dayCBI = DayOr("BANDING_CLOSING_DATE_CBI", 15);
             var dayALL = DayOr("BANDING_CLOSING_DATE_ALL", 15);
 
-            // ====== NEW: Tentukan stage saat ini untuk banner ======
-            // Mapping sederhana berdasarkan status proses yang Anda gunakan
+            // ====== Stage & deadline ======
             string StageNow(string status)
             {
                 status = (status ?? "").Trim().ToUpperInvariant();
-
-                // FINAL: sudah lewat CBI → pakai ALL (pakai param BANDING_CLOSING_DATE_ALL)
-                if (status.StartsWith("APPROVE_CBI") || status.Contains("_CBI"))
-                    return "ALL";
-
-                // Sedang/berikutnya di CBI (sesuai permintaanmu: APPROVE_PPN itu untuk CBI)
-                if (status.StartsWith("APPROVE_PPN") || status.Contains("_PPN"))
-                    return "CBI";
-
-                // Sedang/berikutnya di PPN
-                if (status.StartsWith("APPROVE_SBM") || status.Contains("_SBM"))
-                    return "PPN";
-
-                // Awal/proses SBM
-                if (status.StartsWith("UNDER_REVIEW") || status.Contains("IN_PROGRESS"))
-                    return "SBM";
-
-                // (opsional) kalau ada tahap SPBU khusus
-                if (status.Contains("SPBU"))
-                    return "SPBU";
-
-                // fallback aman
+                if (status.StartsWith("APPROVE_CBI") || status.Contains("_CBI")) return "ALL";
+                if (status.StartsWith("APPROVE_PPN") || status.Contains("_PPN")) return "CBI";
+                if (status.StartsWith("APPROVE_SBM") || status.Contains("_SBM")) return "PPN";
+                if (status.StartsWith("UNDER_REVIEW") || status.Contains("IN_PROGRESS")) return "SBM";
+                if (status.Contains("SPBU")) return "SPBU";
                 return "ALL";
             }
 
             string stage = StageNow(header.Tf.Status);
-
-            // ====== NEW: Hitung deadline bulanan ======
-            DateTime NowJakarta()
-            {
-                // Jika server UTC, ganti ke WIB bila perlu.
-                // Di banyak kasus, localtime = WIB sudah cukup:
-                return DateTime.Now;
-            }
+            DateTime NowJakarta() => DateTime.Now;
 
             DateTime ClampDay(int y, int m, int day) =>
                 new DateTime(y, m, Math.Min(day, DateTime.DaysInMonth(y, m)), 23, 59, 59, DateTimeKind.Local);
@@ -388,8 +362,6 @@ namespace e_Pas_CMS.Controllers
             }
 
             var now = NowJakarta();
-
-            // pilih day sesuai stage
             int chosenDay = stage switch
             {
                 "SPBU" => daySPBU,
@@ -403,16 +375,13 @@ namespace e_Pas_CMS.Controllers
             var isPassed = now > deadlineThisWindow;
             var nextDeadline = ComputeDeadline(chosenDay, now, true);
 
-            // Siapkan data untuk view
             ViewBag.BandingClosing = new
             {
-                Stage = stage,                 // "SBM"/"PPN"/"CBI"/"SPBU"/"ALL"
-                Day = chosenDay,               // angka tanggal
-                Deadline = deadlineThisWindow, // deadline bulan ini (23:59:59)
-                NextDeadline = nextDeadline,   // kalau sudah lewat, ini deadline berikutnya
+                Stage = stage,
+                Day = chosenDay,
+                Deadline = deadlineThisWindow,
+                NextDeadline = nextDeadline,
                 IsPassed = isPassed,
-
-                // Kirim semua day juga kalau banner ingin menampilkan multi-role
                 DaySPBU = daySPBU,
                 DaySBM = daySBM,
                 DayPPN = dayPPN,
@@ -438,49 +407,49 @@ namespace e_Pas_CMS.Controllers
             await conn.OpenAsync();
 
             var pointRows = await conn.QueryAsync<PointRow>(@"
-            SELECT 
-            p.id AS point_id,
-            fe.trx_audit_id,
-            p.description AS description,
-            CASE 
-                WHEN EXISTS (
-                    SELECT 1
-                    FROM trx_feedback_point_approval tfpa
-                    WHERE tfpa.trx_feedback_point_id = p.id
-                      AND tfpa.status IN ('REJECT','REJECT_CBI')
-                ) 
-                THEN COALESCE(e.number || '. ' || e.title, e.title, e.description, '-') || ' (REJECT)'
-                ELSE COALESCE(e.number || '. ' || e.title, e.title, e.description, '-')
-            END AS element_label,
-            COALESCE(se.number || '. ' || se.title, se.title, se.description, '-') AS sub_element_label,
-            COALESCE(de.number || '. ' || de.title, de.title, '-')                 AS detail_element_label,
-            COALESCE((
-                SELECT string_agg(me.number || ' ' || me.title, E'\n' ORDER BY me.number)
-                FROM trx_feedback_point_element pe
-                JOIN master_questioner_detail me ON me.id = pe.master_questioner_detail_id
-                WHERE pe.trx_feedback_point_id = p.id
-            ), '') AS compared_elements,
-            COALESCE((SELECT string_agg('https://epas-assets.zarata.co.id' || t.media_path, ',' ORDER BY t.created_date, t.media_path)
-            FROM (
-                SELECT DISTINCT tam.media_path, tam.created_date
-                FROM trx_feedback_point_element pe
-                JOIN master_questioner_detail me 
-                  ON me.id = pe.master_questioner_detail_id
-                JOIN trx_audit_media tam 
-                  ON tam.master_questioner_detail_id = me.id
-                WHERE pe.trx_feedback_point_id = p.id 
-                  AND tam.trx_audit_id = fe.trx_audit_id
-                  AND tam.media_path IS NOT NULL 
-                  AND tam.media_type = 'IMAGE'
-            ) t
-            ), '') AS media_elements
-            FROM trx_feedback_point p
-            LEFT join trx_feedback fe on p.trx_feedback_id = fe.id
-            LEFT JOIN master_questioner_detail e  ON e.id  = p.element_master_questioner_detail_id
-            LEFT JOIN master_questioner_detail se ON se.id = p.sub_element_master_questioner_detail_id
-            LEFT JOIN master_questioner_detail de ON de.id = p.detail_element_master_questioner_detail_id
-            WHERE p.trx_feedback_id = @fid
-            ORDER BY p.created_date ASC;", new { fid = id });
+SELECT 
+p.id AS point_id,
+fe.trx_audit_id,
+p.description AS description,
+CASE 
+    WHEN EXISTS (
+        SELECT 1
+        FROM trx_feedback_point_approval tfpa
+        WHERE tfpa.trx_feedback_point_id = p.id
+          AND tfpa.status IN ('REJECT','REJECT_CBI')
+    ) 
+    THEN COALESCE(e.number || '. ' || e.title, e.title, e.description, '-') || ' (REJECT)'
+    ELSE COALESCE(e.number || '. ' || e.title, e.title, e.description, '-')
+END AS element_label,
+COALESCE(se.number || '. ' || se.title, se.title, se.description, '-') AS sub_element_label,
+COALESCE(de.number || '. ' || de.title, de.title, '-')                 AS detail_element_label,
+COALESCE((
+    SELECT string_agg(me.number || ' ' || me.title, E'\n' ORDER BY me.number)
+    FROM trx_feedback_point_element pe
+    JOIN master_questioner_detail me ON me.id = pe.master_questioner_detail_id
+    WHERE pe.trx_feedback_point_id = p.id
+), '') AS compared_elements,
+COALESCE((SELECT string_agg('https://epas-assets.zarata.co.id' || t.media_path, ',' ORDER BY t.created_date, t.media_path)
+FROM (
+    SELECT DISTINCT tam.media_path, tam.created_date
+    FROM trx_feedback_point_element pe
+    JOIN master_questioner_detail me 
+      ON me.id = pe.master_questioner_detail_id
+    JOIN trx_audit_media tam 
+      ON tam.master_questioner_detail_id = me.id
+    WHERE pe.trx_feedback_point_id = p.id 
+      AND tam.trx_audit_id = fe.trx_audit_id
+      AND tam.media_path IS NOT NULL 
+      AND tam.media_type = 'IMAGE'
+) t
+), '') AS media_elements
+FROM trx_feedback_point p
+LEFT join trx_feedback fe on p.trx_feedback_id = fe.id
+LEFT JOIN master_questioner_detail e  ON e.id  = p.element_master_questioner_detail_id
+LEFT JOIN master_questioner_detail se ON se.id = p.sub_element_master_questioner_detail_id
+LEFT JOIN master_questioner_detail de ON de.id = p.detail_element_master_questioner_detail_id
+WHERE p.trx_feedback_id = @fid
+ORDER BY p.created_date ASC;", new { fid = id });
 
             var pointList = pointRows.ToList();
             bool allApproved = true;
@@ -489,7 +458,6 @@ namespace e_Pas_CMS.Controllers
             foreach (var pr in pointList)
             {
                 var pointId = pr.point_id;
-
                 pid = pr.point_id;
 
                 var pointVm = new PointItem
@@ -501,11 +469,10 @@ namespace e_Pas_CMS.Controllers
                     DetailDibantah = string.IsNullOrWhiteSpace(pr.compared_elements) ? "-" : pr.compared_elements,
                     mediaElement = string.IsNullOrWhiteSpace(pr.media_elements)
                     ? new List<string>()
-                    : pr.media_elements
-                        .Split(',', StringSplitOptions.RemoveEmptyEntries)
-                        .Select(s => s.Trim())
-                        .Where(s => !string.IsNullOrWhiteSpace(s))
-                        .ToList(),
+                    : pr.media_elements.Split(',', StringSplitOptions.RemoveEmptyEntries)
+                                       .Select(s => s.Trim())
+                                       .Where(s => !string.IsNullOrWhiteSpace(s))
+                                       .ToList(),
                     Description = pr.description,
                     Attachments = new List<AttachmentItem>(),
                     History = new List<PointApprovalHistory>()
@@ -514,14 +481,14 @@ namespace e_Pas_CMS.Controllers
                 if (idx == 1 && string.IsNullOrWhiteSpace(vm.BodyText))
                     vm.BodyText = pr.description;
 
-                // 1. Get media
+                // 1. Media
                 var medias = await conn.QueryAsync<MediaRow>(@"
-                SELECT id, trx_feedback_point_id, media_type, media_path
-                FROM trx_feedback_point_media
-                WHERE trx_feedback_point_id = @pid
-                  AND media_path IS NOT NULL
-                  AND btrim(media_path) <> ''
-                ORDER BY created_date ASC;", new { pid = pointId });
+    SELECT id, trx_feedback_point_id, media_type, media_path
+    FROM trx_feedback_point_media
+    WHERE trx_feedback_point_id = @pid
+      AND media_path IS NOT NULL
+      AND btrim(media_path) <> ''
+    ORDER BY created_date ASC;", new { pid = pointId });
 
                 int fileIdx = 1;
                 foreach (var m in medias)
@@ -557,12 +524,12 @@ namespace e_Pas_CMS.Controllers
                     fileIdx++;
                 }
 
-                // 2. Get approval history
+                // 2. History approval per poin
                 var approvals = await conn.QueryAsync<(string status, string approved_by, DateTime approved_date, string feedback_status)>(
                 @"SELECT status, approved_by, approved_date, feedback_status 
-                  FROM trx_feedback_point_approval 
-                  WHERE trx_feedback_point_id = @pid 
-                  ORDER BY approved_date ASC", new { pid = pointId });
+          FROM trx_feedback_point_approval 
+          WHERE trx_feedback_point_id = @pid 
+          ORDER BY approved_date ASC", new { pid = pointId });
 
                 pointVm.History = approvals.Select(a => new PointApprovalHistory
                 {
@@ -572,7 +539,6 @@ namespace e_Pas_CMS.Controllers
                     StatusCode = a.feedback_status
                 }).ToList();
 
-                // 3. Check if current point is approved
                 if (!approvals.Any(h => h.status == "APPROVE"))
                     allApproved = false;
 
@@ -593,27 +559,76 @@ namespace e_Pas_CMS.Controllers
                     SizeReadable = null
                 }).ToList();
 
-            // Serialize for gallery
             ViewBag.AttachmentsJson = JsonConvert.SerializeObject(vm.Attachments);
-
-            // Flag ke View
             ViewBag.AllPointsApproved = allApproved;
+            ViewBag.BandingId = id;
 
             var history = await _context.TrxFeedbackPointApprovals
-            .FromSqlInterpolated($@"
-                select tfpa.* from trx_feedback_point_approval tfpa 
-                join trx_feedback_point tfp on tfp.id = tfpa.trx_feedback_point_id 
-                join trx_feedback tf on tfp.trx_feedback_id = tf.id
-                where tf.id = {id}
-            ")
-            .OrderByDescending(x => x.ApprovedDate)
-            .ToListAsync();
+                .FromSqlInterpolated($@"
+            select tfpa.* from trx_feedback_point_approval tfpa 
+            join trx_feedback_point tfp on tfp.id = tfpa.trx_feedback_point_id 
+            join trx_feedback tf on tfp.trx_feedback_id = tf.id
+            where tf.id = {id}
+        ")
+                .OrderByDescending(x => x.ApprovedDate)
+                .ToListAsync();
 
             ViewBag.ApprovalHistory = history;
-            ViewBag.BandingId = id;
+
+            // =========================
+            // NEW: Riwayat Klarifikasi (typed)
+            // =========================
+            var klarHist = new List<KlarifikasiLogItem>();
+            try
+            {
+                var logs = await connect.QueryAsync(@"
+            SELECT created_date, created_by, klarifikasi_text
+            FROM trx_feedback_klarifikasi_log
+            WHERE trx_feedback_id = @fid
+            ORDER BY created_date DESC;", new { fid = id });
+
+                foreach (var row in logs)
+                {
+                    klarHist.Add(new KlarifikasiLogItem
+                    {
+                        CreatedDate = (DateTime)row.created_date,
+                        CreatedBy = (string)row.created_by,
+                        Text = (string?)row.klarifikasi_text ?? ""
+                    });
+                }
+            }
+            catch
+            {
+                // abaikan jika tabel belum ada
+            }
+
+            // Fallback jika tidak ada log: tampilkan minimal versi terakhir
+            if (klarHist.Count == 0 && !string.IsNullOrWhiteSpace(header.Tf.Klarifikasi))
+            {
+                var lastDate = header.Tf.UpdatedDate != DateTime.MinValue
+                ? header.Tf.UpdatedDate
+                : (header.Tf.CreatedDate != DateTime.MinValue
+                    ? header.Tf.CreatedDate
+                    : DateTime.Now);
+
+                var lastBy = header.Tf.UpdatedBy ?? header.Tf.CreatedBy ?? "-";
+                klarHist.Add(new KlarifikasiLogItem
+                {
+                    CreatedDate = (DateTime)lastDate,
+                    CreatedBy = lastBy,
+                    Text = header.Tf.Klarifikasi ?? ""
+                });
+            }
+
+            vm.KlarifikasiHistory = klarHist; // <<-- NEW
+
+            // (opsional) jika masih dipakai di View lain
+            // ViewBag.StatusNormUpper = (header.Tf.Status ?? "").ToUpperInvariant();
 
             return View(vm);
         }
+
+
 
         [HttpPost]
         [ValidateAntiForgeryToken]
@@ -1081,6 +1096,34 @@ namespace e_Pas_CMS.Controllers
                 || (s == "APPROVE_PPN" && roleSet.Contains("CBI"))
                 || (s == "APPROVE_CBI" && roleSet.Contains("PERTAMINA"));
         }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> UpdateKlarifikasi([FromBody] UpdateKlarifikasiRequest model)
+        {
+            if (model == null || string.IsNullOrWhiteSpace(model.BandingId))
+                return BadRequest("Data tidak valid");
+
+            var currentUser = User.Identity?.Name ?? "system";
+
+            string sql = @"
+        UPDATE trx_feedback
+        SET klarifikasi = @klarifikasi,
+            updated_by = @updatedBy,
+            updated_date = NOW()
+        WHERE id = @id";
+
+            var affected = await _context.Database.ExecuteSqlRawAsync(sql,
+                new Npgsql.NpgsqlParameter("@klarifikasi", model.Text ?? (object)DBNull.Value),
+                new Npgsql.NpgsqlParameter("@updatedBy", currentUser),
+                new Npgsql.NpgsqlParameter("@id", model.BandingId));
+
+            if (affected == 0)
+                return NotFound("Data banding tidak ditemukan");
+
+            return Json(new { success = true });
+        }
+
 
         // POST: /Complain/Approve
         [HttpPost]
