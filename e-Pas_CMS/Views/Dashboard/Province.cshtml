@@ -1,79 +1,289 @@
-﻿@model List<e_Pas_CMS.ViewModels.SpbuViewModel>
+﻿@using e_Pas_CMS.ViewModels
+@using System.Globalization
+@model PaginationModel<AuditReportListViewModel>
+
 @{
-    ViewBag.Title = "Dashboard Audit Provinsi";
-    Layout = "~/Views/Shared/_Layout.cshtml";
+    ViewData["Title"] = "Dashboard Province";
+
+    int totalPages = (int)Math.Ceiling((decimal)Model.TotalItems / 10);
+    int currentPage = Model.PageNumber;
+    int windowSize = 10;
+    int currentWindow = (int)Math.Ceiling((double)currentPage / windowSize);
+    int startPage = (currentWindow - 1) * windowSize + 1;
+    int endPage = Math.Min(startPage + windowSize - 1, totalPages);
+
+    var selectedMonth = ViewBag.FilterMonth as int?;
+    var selectedYear = ViewBag.FilterYear as int?;
+    var currentYear = DateTime.Now.Year;
+
+    var selectedProvince = ViewBag.FilterProvince as string;
+    var provinces = ViewBag.Provinces as IEnumerable<string> ?? Enumerable.Empty<string>();
 }
 
-<div class="container-fluid px-4 py-5">
-    <h4 class="fw-bold mb-4">
-        Audit SPBU Berdasarkan Provinsi @if (ViewBag.SelectedProvince != null)
-        {
-            <span class="text-primary">(@ViewBag.SelectedProvince)</span>
+@section Styles {
+    <link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/jquery.dataTables.min.css" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    <style>
+        #audit-table_wrapper { overflow-x: auto; }
+
+        .table thead th {
+            background-color: #f1f3f5;
+            font-weight: 600;
+            text-align: center;
+            vertical-align: middle;
         }
-    </h4>
+        .table td, .table th { vertical-align: middle !important; font-size: 14px; }
+        .table-hover tbody tr:hover { background-color: #f8f9fa; }
+        .dataTables_wrapper .dataTables_filter { display: none; }
+        .pagination .page-link { font-weight: 500; }
 
-    <form method="get" class="row g-3 mb-4">
-        <div class="col-md-6">
-            <select name="province" class="form-select">
-                <option value="">-- Semua Provinsi --</option>
-                @foreach (var prov in (List<string>)ViewBag.ProvinceList)
-                {
-                    if (ViewBag.SelectedProvince == prov)
-                    {
-                        <option value="@prov" selected>@prov</option>
-                    }
-                    else
-                    {
-                        <option value="@prov">@prov</option>
-                    }
-                }
-            </select>
-        </div>
-        <div class="col-md-3">
-            <button type="submit" class="btn btn-primary w-100">Filter</button>
-        </div>
-    </form>
+        .badge.text-bg-success { background-color: var(--bs-success) !important; color: #fff !important; }
+        .badge.text-bg-warning { background-color: var(--bs-warning) !important; color: #000 !important; }
+        .badge.text-bg-danger { background-color: var(--bs-danger) !important; color: #fff !important; }
+        .badge.text-bg-dark { background-color: var(--bs-dark) !important; color: #fff !important; }
+        .badge.text-bg-secondary { background-color: var(--bs-secondary) !important; color: #fff !important; }
+    </style>
+}
 
-    <div class="table-responsive">
-        <table id="audit-table" class="table table-striped table-hover text-nowrap align-middle text-center">
-            <thead class="table-light">
-                <tr>
-                    <th>No</th>
-                    <th>No. SPBU</th>
-                    <th>Rayon</th>
-                    <th>Provinsi</th>
-                    <th>Kabupaten/Kota</th>
-                    <th>Alamat</th>
-                    <th>Tipe SPBU</th>
-                    <th>Tahun</th>
-                    <th>Audit</th>
-                    <th>Tipe Audit</th>
-                    <th>Tanggal Audit</th>
-                    <th>Score</th>
-                    <th>Status</th>
-                </tr>
-            </thead>
-            <tbody>
-                @for (int i = 0; i < Model.Count; i++)
+<h3 class="mb-4 fw-bold">Dashboard Province</h3>
+
+<form method="get" asp-controller="Dashboard" asp-action="Province" class="row g-2 align-items-center mb-4">
+    <div class="col-auto" style="flex: 1 1 auto; min-width: 250px;">
+        <input type="text" name="searchTerm" value="@ViewBag.SearchTerm" class="form-control w-100" placeholder="🔍 Cari SPBU, Auditor, Status..." />
+    </div>
+
+    <div class="col-auto" style="min-width: 220px;">
+        <select name="filterProvince" class="form-select w-100">
+            <option value="">🌏 Provinsi</option>
+            @foreach (var p in provinces)
+            {
+                var isSel = string.Equals(p, selectedProvince, StringComparison.OrdinalIgnoreCase);
+                if (isSel)
                 {
-                    var item = Model[i];
-                    <tr>
-                        <td>@(i + 1)</td>
-                        <td>@item.NoSpbu</td>
-                        <td>@item.Rayon</td>
-                        <td>@item.Provinsi</td>
-                        <td>@item.Kota</td>
-                        <td>@item.Alamat</td>
-                        <td>@item.TipeSpbu</td>
-                        <td>@item.Tahun</td>
-                        <td>@item.Audit</td>
-                        <td>@item.Type</td>
-                        <td>@item.TanggalSubmit.ToString("dd/MM/yyyy HH:mm")</td>
-                        <td>@item.Score</td>
-                        <td class="fw-bold text-@((item.Status == "PASS") ? "success" : "danger")">@item.Status</td>
-                    </tr>
+                    <option value="@p" selected="selected">@p</option>
                 }
-            </tbody>
-        </table>
+                else
+                {
+                    <option value="@p">@p</option>
+                }
+            }
+        </select>
+
+    </div>
+
+    <div class="col-auto" style="min-width: 180px;">
+        <select name="filterMonth" class="form-select w-100">
+            <option value="">📅 Bulan</option>
+            @for (int m = 1; m <= 12; m++)
+            {
+                var monthName = CultureInfo.CurrentCulture.DateTimeFormat.GetMonthName(m);
+                var isSelected = selectedMonth == m ? "selected" : "";
+                @Html.Raw($"<option value='{m}' {isSelected}>{monthName}</option>")
+            }
+        </select>
+    </div>
+
+    <div class="col-auto" style="min-width: 140px;">
+        <select name="filterYear" class="form-select w-100">
+            <option value="">📆 Tahun</option>
+            @for (int y = currentYear; y >= currentYear - 5; y--)
+            {
+                var isSelected = selectedYear == y ? "selected" : "";
+                @Html.Raw($"<option value='{y}' {isSelected}>{y}</option>")
+            }
+        </select>
+    </div>
+
+    <div class="col-auto">
+        <button type="submit" class="btn btn-outline-primary d-flex align-items-center gap-1">
+            <i class="bi bi-search"></i> Cari
+        </button>
+    </div>
+</form>
+
+<table id="audit-table" class="table table-bordered table-hover align-middle nowrap w-100">
+    <thead>
+        <tr>
+            <th>No</th>
+            <th>No. SPBU</th>
+            <th>Rayon</th>
+            <th>Provinsi</th>
+            <th>Kabupaten/Kota</th>
+            <th>Alamat</th>
+            <th>Kelas SPBU</th>
+            <th>Tahun</th>
+            <th>Audit</th>
+            <th>Tipe Audit</th>
+            <th>Tanggal Audit</th>
+            <th>Score</th>
+            <th>Status</th>
+        </tr>
+    </thead>
+    <tbody>
+        @for (int i = 0; i < Model.Items.Count; i++)
+        {
+            var item = Model.Items[i];
+            <tr>
+                <td>@(i + 1)</td>
+                <td>@item.SpbuNo</td>
+                <td>@item.Region</td>
+                <td>@item.Provinsi</td>
+                <td>@item.City</td>
+                <td>@item.Address</td>
+                <td>@item.KelasSpbu</td>
+                <td>@item.Year</td>
+                <td>@item.Auditlevel</td>
+                <td>@item.AuditType</td>
+                <td>@item.AuditDate?.ToString("dd/MM/yyyy")</td>
+                <td>@item.Score?.ToString("0.00")</td>
+                <td>
+                    <span class="badge @GetStatusBadgeClass(item.Status)">
+                        @(string.IsNullOrWhiteSpace(item.Status) ? "-" : item.Status)
+                    </span>
+                </td>
+            </tr>
+        }
+    </tbody>
+</table>
+
+<br />
+<div class="d-flex justify-content-end mb-2">
+    <div style="font-weight: bold; font-size: 18px;">
+        Total Data: @Model.TotalItems
     </div>
 </div>
+
+@if (totalPages > 1)
+{
+    <nav class="mt-4">
+        <ul class="pagination justify-content-start flex-wrap">
+            @if (currentPage > 1)
+            {
+                <li class="page-item">
+                    <a class="page-link"
+                       asp-controller="Dashboard"
+                       asp-action="Province"
+                       asp-route-pageNumber="1"
+                       asp-route-searchTerm="@ViewBag.SearchTerm"
+                       asp-route-filterMonth="@(selectedMonth?.ToString())"
+                       asp-route-filterYear="@(selectedYear?.ToString())"
+                       asp-route-filterProvince="@(selectedProvince)">First</a>
+                </li>
+                <li class="page-item">
+                    <a class="page-link"
+                       asp-controller="Dashboard"
+                       asp-action="Province"
+                       asp-route-pageNumber="@(currentPage - 1)"
+                       asp-route-searchTerm="@ViewBag.SearchTerm"
+                       asp-route-filterMonth="@(selectedMonth?.ToString())"
+                       asp-route-filterYear="@(selectedYear?.ToString())"
+                       asp-route-filterProvince="@(selectedProvince)">&laquo;</a>
+                </li>
+            }
+
+            @for (int i = startPage; i <= endPage; i++)
+            {
+                <li class="page-item @(i == currentPage ? "active" : "")">
+                    <a class="page-link"
+                       asp-controller="Dashboard"
+                       asp-action="Province"
+                       asp-route-pageNumber="@i"
+                       asp-route-searchTerm="@ViewBag.SearchTerm"
+                       asp-route-filterMonth="@(selectedMonth?.ToString())"
+                       asp-route-filterYear="@(selectedYear?.ToString())"
+                       asp-route-filterProvince="@(selectedProvince)">@i</a>
+                </li>
+            }
+
+            @if (currentPage < totalPages)
+            {
+                <li class="page-item">
+                    <a class="page-link"
+                       asp-controller="Dashboard"
+                       asp-action="Province"
+                       asp-route-pageNumber="@(currentPage + 1)"
+                       asp-route-searchTerm="@ViewBag.SearchTerm"
+                       asp-route-filterMonth="@(selectedMonth?.ToString())"
+                       asp-route-filterYear="@(selectedYear?.ToString())"
+                       asp-route-filterProvince="@(selectedProvince)">&raquo;</a>
+                </li>
+                <li class="page-item">
+                    <a class="page-link"
+                       asp-controller="Dashboard"
+                       asp-action="Province"
+                       asp-route-pageNumber="@totalPages"
+                       asp-route-searchTerm="@ViewBag.SearchTerm"
+                       asp-route-filterMonth="@(selectedMonth?.ToString())"
+                       asp-route-filterYear="@(selectedYear?.ToString())"
+                       asp-route-filterProvince="@(selectedProvince)">Last</a>
+                </li>
+            }
+        </ul>
+    </nav>
+}
+
+@section Scripts {
+    <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+    <script>
+        $(document).ready(function () {
+            $('#audit-table').DataTable({
+                paging: false,
+                info: false,
+                searching: false,
+                ordering: true,
+                responsive: true
+            });
+        });
+
+        (function () {
+            const btn = document.getElementById('btnDownloadCsv');
+            if (!btn) return;
+
+            btn.addEventListener('click', function () {
+                const monthSel = document.querySelector('select[name="filterMonth"]');
+                const yearSel  = document.querySelector('select[name="filterYear"]');
+                const provSel  = document.querySelector('select[name="filterProvince"]');
+
+                const mVal = monthSel ? monthSel.value : "";
+                const yVal = yearSel  ? yearSel.value  : "";
+                const pVal = provSel  ? provSel.value  : "";
+
+                let url = '@Url.Action("DownloadCsvByDate", "AuditReport")' + '?searchTerm=';
+
+                if (mVal && yVal) {
+                    const y = parseInt(yVal, 10);
+                    const m = parseInt(mVal, 10);
+                    const start = new Date(Date.UTC(y, m - 1, 1));
+                    const end   = new Date(Date.UTC(y, m, 1));
+                    const fmt = d => d.toISOString().slice(0, 10);
+
+                    url += ''
+                        + `&startDate=${fmt(start)}`
+                        + `&endDate=${fmt(end)}`;
+                }
+
+                if (pVal) {
+                    url += `&province=${encodeURIComponent(pVal)}`;
+                }
+
+                window.location.href = url;
+            });
+        })();
+    </script>
+}
+@functions {
+    public static string GetStatusBadgeClass(string? statusRaw)
+    {
+        var s = (statusRaw ?? "").Trim().ToUpperInvariant();
+        switch (s)
+        {
+            case "DRAFT": return "bg-dark text-white";
+            case "VERIFIED": return "bg-success text-white";
+            case "UNDER_REVIEW": return "bg-warning text-dark";
+            case "IN_PROGRESS_INPUT": return "bg-warning text-dark";
+            case "NOT_STARTED": return "bg-secondary text-white";
+            case "DELETED": return "bg-danger text-white";
+            default: return "bg-light text-dark";
+        }
+    }
+}

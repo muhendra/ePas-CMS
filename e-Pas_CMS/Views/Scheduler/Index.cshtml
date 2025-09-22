@@ -16,6 +16,16 @@
     var selectedMonth = ViewBag.FilterMonth as int?;
     var selectedYear = ViewBag.FilterYear as int?;
     var currentYear = DateTime.Now.Year;
+
+    // Route values agar semua filter ikut saat klik pagination
+    var routeFilters = new
+    {
+        searchTerm = Model.SearchTerm,
+        pageSize = Model.PageSize,
+        filterStatus = selectedStatus,
+        filterMonth = selectedMonth,
+        filterYear = selectedYear
+    };
 }
 
 <div class="mt-4 px-4">
@@ -54,14 +64,14 @@
                 <option value="">📌 Status</option>
                 @{
                     var statuses = new Dictionary<string, string>
-                    {
-                        { "DRAFT", "Draft" },
-                        { "NOT_STARTED", "Belum Dimulai" },
-                        { "IN_PROGRESS_INPUT", "Sedang Berlangsung (Input)" },
-                        { "IN_PROGRESS_SUBMIT", "Sedang Berlangsung (Submit)" },
-                        { "UNDER_REVIEW", "Sedang Ditinjau" },
-                        { "VERIFIED", "Terverifikasi" }
-                    };
+                {
+                { "DRAFT", "Draft" },
+                { "NOT_STARTED", "Belum Dimulai" },
+                { "IN_PROGRESS_INPUT", "Sedang Berlangsung (Input)" },
+                { "IN_PROGRESS_SUBMIT", "Sedang Berlangsung (Submit)" },
+                { "UNDER_REVIEW", "Sedang Ditinjau" },
+                { "VERIFIED", "Terverifikasi" }
+                };
 
                     foreach (var status in statuses)
                     {
@@ -118,7 +128,7 @@
             </thead>
             <tbody>
                 @{
-                    int index = (Model.CurrentPage - 1) * 10 + 1;
+                    int index = (Model.CurrentPage - 1) * Model.PageSize + 1;
                 }
                 @foreach (var item in Model.Items)
                 {
@@ -154,26 +164,55 @@
         </table>
     </div>
 
+    <!-- Label Total -->
+    <div class="mt-2 text-muted">
+        Total: @Model.TotalPages jadwal
+    </div>
+
     <nav class="mt-3">
         <ul class="pagination justify-content-start">
             @if (startPage > 1)
             {
                 <li class="page-item">
-                    <a class="page-link" href="@Url.Action("Index", new { pageNumber = startPage - 1, searchTerm = Model.SearchTerm })">« Prev</a>
+                    <a class="page-link"
+                       href="@Url.Action("Index", new {
+                            pageNumber = startPage - 1,
+                            routeFilters.searchTerm,
+                            routeFilters.pageSize,
+                            routeFilters.filterStatus,
+                            routeFilters.filterMonth,
+                            routeFilters.filterYear
+                       })">« Prev</a>
                 </li>
             }
 
             @for (int i = startPage; i <= endPage; i++)
             {
                 <li class="page-item @(i == currentPage ? "active" : "")">
-                    <a class="page-link" href="@Url.Action("Index", new { pageNumber = i, searchTerm = Model.SearchTerm })">@i</a>
+                    <a class="page-link"
+                       href="@Url.Action("Index", new {
+                            pageNumber = i,
+                            routeFilters.searchTerm,
+                            routeFilters.pageSize,
+                            routeFilters.filterStatus,
+                            routeFilters.filterMonth,
+                            routeFilters.filterYear
+                       })">@i</a>
                 </li>
             }
 
             @if (endPage < totalPages)
             {
                 <li class="page-item">
-                    <a class="page-link" href="@Url.Action("Index", new { pageNumber = endPage + 1, searchTerm = Model.SearchTerm })">Next »</a>
+                    <a class="page-link"
+                       href="@Url.Action("Index", new {
+                            pageNumber = endPage + 1,
+                            routeFilters.searchTerm,
+                            routeFilters.pageSize,
+                            routeFilters.filterStatus,
+                            routeFilters.filterMonth,
+                            routeFilters.filterYear
+                       })">Next »</a>
                 </li>
             }
         </ul>

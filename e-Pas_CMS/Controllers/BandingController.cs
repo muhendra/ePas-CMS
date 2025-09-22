@@ -43,16 +43,16 @@ namespace e_Pas_CMS.Controllers
         {
             // Opsi status (urut sesuai alur)
             var statusOptions = new List<(string Code, string Text)>
-    {
-        ("UNDER_REVIEW", "Menunggu Persetujuan SBM"),
-        ("APPROVE_SBM",  "Menunggu Persetujuan PPN"),
-        ("APPROVE_PPN",  "Menunggu Persetujuan CBI"),
-        ("APPROVE_CBI",  "Menunggu Persetujuan Pertamina"),
-        ("APPROVE",     "Banding Disetujui"),
-        ("BYPASS_APPROVE_PPN", "Bypass Approve PPN"),
-        ("REJECT",     "Ditolak"),
-        ("REJECT_CBI",   "Ditolak"),
-    };
+            {
+                ("UNDER_REVIEW", "Menunggu Persetujuan SBM"),
+                ("APPROVE_SBM",  "Menunggu Persetujuan PPN"),
+                ("APPROVE_PPN",  "Menunggu Persetujuan CBI"),
+                ("APPROVE_CBI",  "Menunggu Persetujuan Pertamina"),
+                ("APPROVE",     "Banding Disetujui"),
+                ("BYPASS_APPROVE_PPN", "Bypass Approve PPN"),
+                ("REJECT",     "Ditolak"),
+                ("REJECT_CBI",   "Ditolak"),
+            };
 
             ViewBag.StatusOptions = statusOptions;
             ViewBag.StatusFilter = statusFilter ?? "";
@@ -314,12 +314,12 @@ namespace e_Pas_CMS.Controllers
 
             var codes = new[]
             {
-        "BANDING_CLOSING_DATE_SPBU",
-        "BANDING_CLOSING_DATE_SBM",
-        "BANDING_CLOSING_DATE_PPN",
-        "BANDING_CLOSING_DATE_CBI",
-        "BANDING_CLOSING_DATE_ALL"
-    };
+                "BANDING_CLOSING_DATE_SPBU",
+                "BANDING_CLOSING_DATE_SBM",
+                "BANDING_CLOSING_DATE_PPN",
+                "BANDING_CLOSING_DATE_CBI",
+                "BANDING_CLOSING_DATE_ALL"
+            };
 
             var paramDict = await _context.SysParameter
                 .Where(p => p.Status == "ACTIVE" && codes.Contains(p.Code))
@@ -411,61 +411,61 @@ namespace e_Pas_CMS.Controllers
             await conn.OpenAsync();
 
             var pointRows = await conn.QueryAsync<PointRow>(@"
-SELECT 
-    p.id AS point_id,
-    fe.trx_audit_id,
-    p.description AS description,
-    CASE 
-        WHEN EXISTS (
-            SELECT 1
-            FROM trx_feedback_point_approval tfpa
-            WHERE tfpa.trx_feedback_point_id = p.id
-              AND tfpa.status IN ('REJECT','REJECT_CBI')
-        ) 
-        THEN COALESCE(e.number || '. ' || e.title, e.title, e.description, '-') || ' (REJECT)'
-        ELSE COALESCE(e.number || '. ' || e.title, e.title, e.description, '-')
-    END AS element_label,
-    COALESCE(se.number || '. ' || se.title, se.title, se.description, '-') AS sub_element_label,
-    COALESCE(de.number || '. ' || de.title, de.title, '-')                 AS detail_element_label,
-    COALESCE((
-        SELECT string_agg(me.number || ' ' || me.title, E'\n' ORDER BY me.number)
-        FROM trx_feedback_point_element pe
-        JOIN master_questioner_detail me ON me.id = pe.master_questioner_detail_id
-        WHERE pe.trx_feedback_point_id = p.id
-    ), '') AS compared_elements,
-    COALESCE((
-        SELECT string_agg('https://epas-assets.zarata.co.id' || t.media_path, ',' 
-                          ORDER BY t.created_date, t.media_path)
-        FROM (
-            SELECT DISTINCT tam.media_path, tam.created_date
-            FROM trx_feedback_point_element pe
-            JOIN master_questioner_detail me 
-              ON me.id = pe.master_questioner_detail_id
-            JOIN trx_audit_media tam 
-              ON tam.master_questioner_detail_id = me.id
-            WHERE pe.trx_feedback_point_id = p.id 
-              AND tam.trx_audit_id = fe.trx_audit_id
-              AND tam.media_path IS NOT NULL 
-              AND tam.media_type = 'IMAGE'
-        ) t
-    ), '') AS media_elements,
-    COALESCE((
-        SELECT string_agg('https://epas-assets.zarata.co.id' || t.media_path, ',' 
-                          ORDER BY t.created_date, t.media_path)
-        FROM (
-            SELECT DISTINCT tfpm.media_path, tfpm.created_date
-            FROM trx_feedback_point_media tfpm
-            WHERE tfpm.trx_feedback_point_id = p.id
-              AND tfpm.media_path IS NOT NULL
-        ) t
-    ), '') AS point_media_elements
-FROM trx_feedback_point p
-LEFT JOIN trx_feedback fe ON p.trx_feedback_id = fe.id
-LEFT JOIN master_questioner_detail e  ON e.id  = p.element_master_questioner_detail_id
-LEFT JOIN master_questioner_detail se ON se.id = p.sub_element_master_questioner_detail_id
-LEFT JOIN master_questioner_detail de ON de.id = p.detail_element_master_questioner_detail_id
-WHERE p.trx_feedback_id = @fid
-ORDER BY p.created_date ASC;", new { fid = id });
+            SELECT 
+                p.id AS point_id,
+                fe.trx_audit_id,
+                p.description AS description,
+                CASE 
+                    WHEN EXISTS (
+                        SELECT 1
+                        FROM trx_feedback_point_approval tfpa
+                        WHERE tfpa.trx_feedback_point_id = p.id
+                          AND tfpa.status IN ('REJECT','REJECT_CBI')
+                    ) 
+                    THEN COALESCE(e.number || '. ' || e.title, e.title, e.description, '-') || ' (REJECT)'
+                    ELSE COALESCE(e.number || '. ' || e.title, e.title, e.description, '-')
+                END AS element_label,
+                COALESCE(se.number || '. ' || se.title, se.title, se.description, '-') AS sub_element_label,
+                COALESCE(de.number || '. ' || de.title, de.title, '-')                 AS detail_element_label,
+                COALESCE((
+                    SELECT string_agg(me.number || ' ' || me.title, E'\n' ORDER BY me.number)
+                    FROM trx_feedback_point_element pe
+                    JOIN master_questioner_detail me ON me.id = pe.master_questioner_detail_id
+                    WHERE pe.trx_feedback_point_id = p.id
+                ), '') AS compared_elements,
+                COALESCE((
+                    SELECT string_agg('https://epas-assets.zarata.co.id' || t.media_path, ',' 
+                                      ORDER BY t.created_date, t.media_path)
+                    FROM (
+                        SELECT DISTINCT tam.media_path, tam.created_date
+                        FROM trx_feedback_point_element pe
+                        JOIN master_questioner_detail me 
+                          ON me.id = pe.master_questioner_detail_id
+                        JOIN trx_audit_media tam 
+                          ON tam.master_questioner_detail_id = me.id
+                        WHERE pe.trx_feedback_point_id = p.id 
+                          AND tam.trx_audit_id = fe.trx_audit_id
+                          AND tam.media_path IS NOT NULL 
+                          AND tam.media_type = 'IMAGE'
+                    ) t
+                ), '') AS media_elements,
+                COALESCE((
+                    SELECT string_agg('https://epas-assets.zarata.co.id' || t.media_path, ',' 
+                                      ORDER BY t.created_date, t.media_path)
+                    FROM (
+                        SELECT DISTINCT tfpm.media_path, tfpm.created_date
+                        FROM trx_feedback_point_media tfpm
+                        WHERE tfpm.trx_feedback_point_id = p.id
+                          AND tfpm.media_path IS NOT NULL
+                    ) t
+                ), '') AS point_media_elements
+            FROM trx_feedback_point p
+            LEFT JOIN trx_feedback fe ON p.trx_feedback_id = fe.id
+            LEFT JOIN master_questioner_detail e  ON e.id  = p.element_master_questioner_detail_id
+            LEFT JOIN master_questioner_detail se ON se.id = p.sub_element_master_questioner_detail_id
+            LEFT JOIN master_questioner_detail de ON de.id = p.detail_element_master_questioner_detail_id
+            WHERE p.trx_feedback_id = @fid
+            ORDER BY p.created_date ASC;", new { fid = id });
 
             var pointList = pointRows.ToList();
             bool allApproved = true;

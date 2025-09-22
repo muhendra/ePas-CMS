@@ -348,6 +348,20 @@
                                        asp-route-pageNumber="1"
                                        asp-route-pageSize="@Model.PageSize"
                                        asp-route-searchTerm="@ViewBag.SearchTerm"
+                                       asp-route-sortColumn="Sbm"
+                                       asp-route-sortDirection="@(ViewBag.SortColumn == "Sbm" && ViewBag.SortDirection == "asc" ? "desc" : "asc")">
+                                        Sbm
+                                        @if (ViewBag.SortColumn == "Sbm")
+                                        {
+                                            <i class="bi bi-arrow-@(ViewBag.SortDirection == "asc" ? "up" : "down")"></i>
+                                        }
+                                    </a>
+                                </th>
+                                <th>
+                                    <a asp-action="Index"
+                                       asp-route-pageNumber="1"
+                                       asp-route-pageSize="@Model.PageSize"
+                                       asp-route-searchTerm="@ViewBag.SearchTerm"
                                        asp-route-sortColumn="Auditor"
                                        asp-route-sortDirection="@(ViewBag.SortColumn == "Auditor" && ViewBag.SortDirection == "asc" ? "desc" : "asc")">
                                         Auditor
@@ -492,6 +506,7 @@
                                         <td>@item.Tahun</td>
                                         <td>@item.TanggalSubmit.ToString("dd/MM/yyyy")</td>
                                         <td>@item.NoSpbu</td>
+                                        <td>@item.Sbm</td>
                                         <td>@item.NamaAuditor</td>
                                         <td>@item.Rayon</td>
                                         <td>@item.Audit</td>

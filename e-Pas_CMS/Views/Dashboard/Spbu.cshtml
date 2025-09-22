@@ -1,28 +1,63 @@
-﻿@model List<e_Pas_CMS.ViewModels.SpbuSimpleViewModel>
+﻿@using e_Pas_CMS.ViewModels
+@model PaginationModel<e_Pas_CMS.ViewModels.SpbuSimpleViewModel>
+
 @{
     ViewBag.Title = "Data Master SPBU";
     Layout = "~/Views/Shared/_Layout.cshtml";
+
+    int totalPages = (int)Math.Ceiling((decimal)Model.TotalItems / Model.PageSize);
+    int currentPage = Model.PageNumber;
+    int windowSize = 10;
+    int currentWindow = (int)Math.Ceiling((double)currentPage / windowSize);
+    int startPage = (currentWindow - 1) * windowSize + 1;
+    int endPage = Math.Min(startPage + windowSize - 1, totalPages);
+
+    string search = ViewBag.Search as string ?? "";
+
+    var routeFilters = new
+    {
+        search = search,
+        pageSize = Model.PageSize
+    };
 }
 
-<form method="get" class="row mb-4">
-    <div class="col-md-6">
-        <input type="text" name="search" class="form-control" placeholder="Cari SPBU, provinsi, kota, pemilik, pengelola..."
-               value="@ViewBag.Search" />
-    </div>
-    <div class="col-md-2">
-        <button type="submit" class="btn btn-primary w-100">Cari</button>
-    </div>
-</form>
-
-
 <div class="container-fluid px-4 py-5">
-    <h4 class="fw-bold mb-4">Data Master SPBU</h4>
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h4 class="fw-bold mb-0">Data Master SPBU</h4>
+        <div class="text-muted">Total: @Model.TotalItems SPBU</div>
+    </div>
+
+    <form method="get" class="row gy-2 gx-2 mb-4">
+        <div class="col-md-6">
+            <input type="text"
+                   name="search"
+                   class="form-control"
+                   placeholder="Cari SPBU, provinsi, kota, pemilik, pengelola, alamat, region, SBM..."
+                   value="@search" />
+        </div>
+        <div class="col-auto">
+            <select name="pageSize" class="form-select" onchange="this.form.submit()">
+                @{
+                    int[] sizes = new[] { 10, 20, 50, 100 };
+                    foreach (var s in sizes)
+                    {
+                        var sel = Model.PageSize == s ? "selected" : "";
+                        @Html.Raw($"<option value='{s}' {sel}>{s} / halaman</option>")
+                    }
+                }
+            </select>
+        </div>
+        <div class="col-auto">
+            <button type="submit" class="btn btn-primary">Cari</button>
+            <a href="@Url.Action("Spbu", "Scheduler")" class="btn btn-outline-secondary ms-1">Reset</a>
+        </div>
+    </form>
 
     <div class="table-responsive">
         <table class="table table-striped table-hover text-nowrap align-middle">
             <thead class="table-light text-center">
                 <tr>
-                    <th>No</th>
+                    <th style="width:70px;">No</th>
                     <th>No. SPBU</th>
                     <th>Region</th>
                     <th>Provinsi</th>
@@ -38,26 +73,92 @@
                 </tr>
             </thead>
             <tbody>
-                @for (int i = 0; i < Model.Count; i++)
+                @{
+                    int index = (Model.PageNumber - 1) * Model.PageSize + 1;
+                }
+                @if (Model.Items?.Any() == true)
                 {
-                    var item = Model[i];
-                    <tr class="text-center">
-                        <td>@(i + 1)</td>
-                        <td>@item.SpbuNo</td>
-                        <td>@item.Region</td>
-                        <td>@item.Provinsi</td>
-                        <td>@item.Kota</td>
-                        <td>@item.Alamat</td>
-                        <td>@item.Pemilik</td>
-                        <td>@item.Pengelola</td>
-                        <td>@item.JenisPemilik</td>
-                        <td>@item.Tipe</td>
-                        <td>@item.Level</td>
-                        <td>@item.Kontak</td>
-                        <td class="fw-bold text-@((item.Status == "ACTIVE") ? "success" : "danger")">@item.Status</td>
+                    for (int i = 0; i < Model.Items.Count; i++)
+                    {
+                        var item = Model.Items[i];
+                        <tr class="text-center">
+                            <td>@(index + i)</td>
+                            <td class="fw-semibold">@item.SpbuNo</td>
+                            <td>@item.Region</td>
+                            <td>@item.Provinsi</td>
+                            <td>@item.Kota</td>
+                            <td class="text-start">@item.Alamat</td>
+                            <td>@item.Pemilik</td>
+                            <td>@item.Pengelola</td>
+                            <td>@item.JenisPemilik</td>
+                            <td>@item.Tipe</td>
+                            <td>@item.Level</td>
+                            <td>@item.Kontak</td>
+                            <td class="fw-bold text-@((item.Status ?? "").ToUpper() == "ACTIVE" ? "success" : "danger")">
+                                @item.Status
+                            </td>
+                        </tr>
+                    }
+                }
+                else
+                {
+                    <tr>
+                        <td colspan="13" class="text-center text-muted">Tidak ada data.</td>
                     </tr>
                 }
             </tbody>
         </table>
     </div>
+
+    <!-- Info total data -->
+    <div class="mt-2 text-muted">
+        @{
+            var start = (Model.PageNumber - 1) * Model.PageSize + 1;
+            var end = Math.Min(Model.PageNumber * Model.PageSize, Model.TotalItems);
+        }
+        Menampilkan <b>@start</b> – <b>@end</b> dari <b>@Model.TotalItems</b> SPBU
+    </div>
+
+    @if (totalPages > 1)
+    {
+        <nav class="mt-3">
+            <ul class="pagination">
+                @if (startPage > 1)
+                {
+                    <li class="page-item">
+                        <a class="page-link"
+                           href="@Url.Action("Spbu", new {
+                                pageNumber = startPage - 1,
+                                routeFilters.search,
+                                routeFilters.pageSize
+                           })">« Prev</a>
+                    </li>
+                }
+
+                @for (int i = startPage; i <= endPage; i++)
+                {
+                    <li class="page-item @(i == currentPage ? "active" : "")">
+                        <a class="page-link"
+                           href="@Url.Action("Spbu", new {
+                                pageNumber = i,
+                                routeFilters.search,
+                                routeFilters.pageSize
+                           })">@i</a>
+                    </li>
+                }
+
+                @if (endPage < totalPages)
+                {
+                    <li class="page-item">
+                        <a class="page-link"
+                           href="@Url.Action("Spbu", new {
+                                pageNumber = endPage + 1,
+                                routeFilters.search,
+                                routeFilters.pageSize
+                           })">Next »</a>
+                    </li>
+                }
+            </ul>
+        </nav>
+    }
 </div>
