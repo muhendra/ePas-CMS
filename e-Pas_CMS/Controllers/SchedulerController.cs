@@ -26,9 +26,12 @@ namespace e_Pas_CMS.Controllers
         }
 
         [HttpGet("")]
-        public async Task<IActionResult> Index(int pageNumber = 1, int pageSize = 10, string searchTerm = "", string? filterStatus = null, int? filterMonth = null, int? filterYear = null)
+        public async Task<IActionResult> Index(
+    int pageNumber = 1, int pageSize = 10,
+    string searchTerm = "", string? filterStatus = null,
+    int? filterMonth = null, int? filterYear = null)
         {
-            var query = _context.trx_audits
+            var baseQuery = _context.trx_audits
                 .Include(a => a.app_user)
                 .Include(a => a.spbu)
                 .Where(a => a.status != "DELETED");
@@ -36,57 +39,73 @@ namespace e_Pas_CMS.Controllers
             if (!string.IsNullOrWhiteSpace(searchTerm))
             {
                 var st = searchTerm.ToLower();
-                query = query.Where(a =>
+                baseQuery = baseQuery.Where(a =>
                     (a.app_user.name ?? "").ToLower().Contains(st) ||
                     (a.spbu.spbu_no ?? "").ToLower().Contains(st));
             }
 
             if (!string.IsNullOrEmpty(filterStatus))
-            {
-                query = query.Where(a => a.status == filterStatus);
-            }
-            ViewBag.FilterStatus = filterStatus;
-            
-            if (filterMonth.HasValue && filterYear.HasValue)
-            {
-                query = query.Where(a =>
-                ((a.audit_schedule_date != null ? a.audit_schedule_date.Value.Month : a.created_date.Month) == filterMonth.Value) &&
-                ((a.audit_schedule_date != null ? a.audit_schedule_date.Value.Year : a.created_date.Year) == filterYear.Value));
-            }
+                baseQuery = baseQuery.Where(a => a.status == filterStatus);
 
+            ViewBag.FilterStatus = filterStatus;
             ViewBag.FilterMonth = filterMonth;
             ViewBag.FilterYear = filterYear;
 
-            query = query.OrderByDescending(a => a.created_date);
+            // AuditDate konsisten: execution > schedule > created
+            var shaped = baseQuery.Select(a => new
+            {
+                a.id,
+                a.status,
+                AppUserName = a.app_user != null ? a.app_user.name : null,
+                AuditDate = a.audit_schedule_date.HasValue
+    ? new DateTime(
+        a.audit_schedule_date.Value.Year,
+        a.audit_schedule_date.Value.Month,
+        a.audit_schedule_date.Value.Day)
+    : a.created_date,
 
-            var totalItems = await query.CountAsync();
+                a.audit_type,
+                a.audit_level,
+                SpbuNo = a.spbu != null ? a.spbu.spbu_no : null,
+                a.report_no
+            });
 
-            var rawItems = await query
-                .OrderByDescending(x => x.audit_schedule_date)
+            if (filterMonth.HasValue && filterYear.HasValue)
+            {
+                int m = filterMonth.Value, y = filterYear.Value;
+                shaped = shaped.Where(x => x.AuditDate.Month == m && x.AuditDate.Year == y);
+            }
+
+            var totalItems = await shaped.CountAsync();
+
+            // Sampai sini masih full server-side.
+            // Baru materialisasi:
+            var rows = await shaped
+                .OrderByDescending(x => x.AuditDate)
                 .Skip((pageNumber - 1) * pageSize)
                 .Take(pageSize)
                 .ToListAsync();
 
-            var items = rawItems.Select(a => new SchedulerItemViewModel
+            // Mapping client-side (boleh panggil method/logic bebas di sini)
+            var items = rows.Select(x => new SchedulerItemViewModel
             {
-                Id = a.id,
-                Status = MapStatus(a.status),
-                AppUserName = a.app_user?.name,
-                AuditDate = (a.audit_execution_time == null || a.audit_execution_time.Value == DateTime.MinValue)
-                            ? (a.audit_schedule_date.HasValue ? a.audit_schedule_date.Value.ToDateTime(new TimeOnly()) : DateTime.MinValue)
-                            : a.audit_execution_time.Value,
-                AuditType = a.audit_type,
-                AuditLevel = a.audit_level,
-                SpbuNo = a.spbu?.spbu_no,
-                ReportNo = a.report_no
+                Id = x.id,
+                Status = MapStatus(x.status),     // ← sudah aman, ini di memory
+                AppUserName = x.AppUserName,
+                AuditDate = x.AuditDate,
+                AuditType = x.audit_type,
+                AuditLevel = x.audit_level,
+                SpbuNo = x.SpbuNo,
+                ReportNo = x.report_no
             }).ToList();
 
             var vm = new SchedulerIndexViewModel
             {
                 Items = items,
                 CurrentPage = pageNumber,
-                TotalPages = (int)Math.Ceiling((double)totalItems / pageSize),
                 PageSize = pageSize,
+                TotalItems = totalItems,
+                TotalPages = (int)Math.Ceiling((double)totalItems / pageSize),
                 SearchTerm = searchTerm
             };
 

@@ -248,6 +248,7 @@ namespace e_Pas_CMS.Controllers
                         TipeSpbu = a.Spbu.type,
                         Tahun = a.Audit.created_date.ToString("yyyy"),
                         Audit = a.Audit.audit_level,
+                        Sbm = a.Spbu.sbm,
                         //Score = Math.Round(finalScore, 2),
                         Score = Math.Round((decimal)(totalScore ?? a.Audit.score), 2),
                         Good = goodStatus,
