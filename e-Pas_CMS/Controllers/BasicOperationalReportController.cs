@@ -740,7 +740,7 @@ namespace e_Pas_CMS.Controllers
                     allowedStatuses.Contains(a.status) &&
                     a.audit_execution_time >= startDate &&
                     a.audit_execution_time < endDate &&
-                    a.audit_type != "Basic Operational"
+                    a.audit_type == "Basic Operational"
                 );
 
             if (userRegion.Any())
