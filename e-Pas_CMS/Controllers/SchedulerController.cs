@@ -57,13 +57,14 @@ namespace e_Pas_CMS.Controllers
                 a.id,
                 a.status,
                 AppUserName = a.app_user != null ? a.app_user.name : null,
-                AuditDate = a.audit_schedule_date.HasValue
-    ? new DateTime(
-        a.audit_schedule_date.Value.Year,
-        a.audit_schedule_date.Value.Month,
-        a.audit_schedule_date.Value.Day)
-    : a.created_date,
-
+                AuditDate = a.audit_execution_time.HasValue
+                ? a.audit_execution_time.Value
+                : (a.audit_schedule_date.HasValue
+                    ? new DateTime(
+                        a.audit_schedule_date.Value.Year,
+                        a.audit_schedule_date.Value.Month,
+                        a.audit_schedule_date.Value.Day)
+                    : a.created_date),
                 a.audit_type,
                 a.audit_level,
                 SpbuNo = a.spbu != null ? a.spbu.spbu_no : null,

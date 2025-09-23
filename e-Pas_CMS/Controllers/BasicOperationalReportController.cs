@@ -711,6 +711,185 @@ namespace e_Pas_CMS.Controllers
             return File(bytes, "text/csv", fileName);
         }
 
+        [HttpGet]
+        public async Task<IActionResult> DownloadCsvByDate(
+    string searchTerm = "",
+    DateTime? startDate = null,
+    DateTime? endDate = null)
+        {
+            var currentUser = User.Identity?.Name;
+
+            _context.Database.SetCommandTimeout(123600);
+
+            // Ambil region user
+            var userRegion = await (from aur in _context.app_user_roles
+                                    join au in _context.app_users on aur.app_user_id equals au.id
+                                    where au.username == currentUser
+                                    select aur.region)
+                               .Distinct()
+                               .Where(r => r != null)
+                               .ToListAsync();
+
+            var allowedStatuses = new[] { "VERIFIED" };
+
+            // Query utama dengan filter tanggal
+            var query = _context.trx_audits
+                .Include(a => a.spbu)
+                .Include(a => a.app_user)
+                .Where(a =>
+                    allowedStatuses.Contains(a.status) &&
+                    a.audit_execution_time >= startDate &&
+                    a.audit_execution_time < endDate &&
+                    a.audit_type != "Basic Operational"
+                );
+
+            if (userRegion.Any())
+            {
+                query = query.Where(x => userRegion.Contains(x.spbu.region));
+            }
+
+            if (!string.IsNullOrWhiteSpace(searchTerm))
+            {
+                searchTerm = searchTerm.ToLower();
+                query = query.Where(a =>
+                    a.spbu.spbu_no.ToLower().Contains(searchTerm) ||
+                    a.app_user.name.ToLower().Contains(searchTerm) ||
+                    a.status.ToLower().Contains(searchTerm) ||
+                    a.spbu.address.ToLower().Contains(searchTerm) ||
+                    a.spbu.province_name.ToLower().Contains(searchTerm) ||
+                    a.spbu.city_name.ToLower().Contains(searchTerm)
+                );
+            }
+
+            var audits = await query
+                .OrderByDescending(a => a.audit_execution_time ?? a.updated_date)
+                .ToListAsync();
+
+            // Header CSV (tanpa kolom checklist number)
+            var csv = new StringBuilder();
+            var headers = new[]
+            {
+        "send_date","Audit Date","spbu_no","region","year","address","city_name","tipe_spbu","rayon",
+        "audit_level","audit_next","good_status","excellent_status","Total Score",
+        "SSS","EQnQ","RFS","VFC","EPO","wtms","qq","wmef","format_fisik","cpo",
+        "kelas_spbu","penalty_good_alerts","penalty_excellent_alerts"
+    };
+            csv.AppendLine(string.Join(",", headers.Select(h => $"\"{h}\"")));
+
+            await using var conn = _context.Database.GetDbConnection();
+            if (conn.State != ConnectionState.Open)
+                await conn.OpenAsync();
+
+            foreach (var a in audits)
+            {
+                var auditDate = a.audit_execution_time ?? a.updated_date ?? DateTime.MinValue;
+                var submitDate = a.approval_date == null || a.approval_date == DateTime.MinValue
+                    ? a.updated_date
+                    : a.approval_date;
+
+                // === Penalty Check
+                var penaltyExcellentQuery = @"
+            SELECT STRING_AGG(mqd.penalty_alert, ', ')
+            FROM trx_audit_checklist tac
+            JOIN master_questioner_detail mqd ON mqd.id = tac.master_questioner_detail_id
+            JOIN trx_audit ta ON ta.id = tac.trx_audit_id
+            WHERE tac.trx_audit_id = @id
+              AND (
+                    (tac.master_questioner_detail_id IN (
+                        '555fe2e4-b95b-461b-9c92-ad8b5c837119',
+                        'bafc206f-ed29-4bbc-8053-38799e186fb0',
+                        'd26f4caa-e849-4ab4-9372-298693247272'
+                    ) AND tac.score_input <> 'A')
+                 OR (
+                        tac.master_questioner_detail_id = '5e9ffc47-de99-4d7d-b8bc-0fb9b7acc81b'
+                        AND ta.created_date < DATE '2025-06-01'
+                        AND tac.score_input <> 'A'
+                    )
+                 OR (
+                          (
+                              (mqd.penalty_excellent_criteria = 'LT_1' AND tac.score_input <> 'A')
+                           OR (mqd.penalty_excellent_criteria = 'EQ_0' AND tac.score_input = 'F')
+                          )
+                          AND COALESCE(mqd.is_relaksasi, false) = false
+                          AND mqd.is_penalty = true
+                          AND NOT (
+                              mqd.id = '5e9ffc47-de99-4d7d-b8bc-0fb9b7acc81b'
+                              AND ta.created_date >= DATE '2025-06-01'
+                          )
+                      )
+                );";
+
+                var penaltyGoodQuery = @"
+            SELECT STRING_AGG(mqd.penalty_alert, ', ')
+            FROM trx_audit_checklist tac
+            JOIN master_questioner_detail mqd ON mqd.id = tac.master_questioner_detail_id
+            WHERE tac.trx_audit_id = @id
+              AND tac.score_input = 'F'
+              AND mqd.is_penalty = true
+              AND COALESCE(mqd.is_relaksasi, false) = false
+              AND mqd.id <> '5e9ffc47-de99-4d7d-b8bc-0fb9b7acc81b';";
+
+                var penaltyExcellentResult = await conn.ExecuteScalarAsync<string>(penaltyExcellentQuery, new { id = a.id });
+                var penaltyGoodResult = await conn.ExecuteScalarAsync<string>(penaltyGoodQuery, new { id = a.id });
+
+                // === Hitung Compliance
+                var checklistData = await GetChecklistDataAsync(conn, a.id);
+                var mediaList = await GetMediaPerNodeAsync(conn, a.id);
+                var elements = BuildHierarchy(checklistData, mediaList);
+                foreach (var element in elements) AssignWeightRecursive(element);
+                CalculateChecklistScores(elements);
+
+                var modelTotal = new DetailReportViewModel { Elements = elements };
+                CalculateOverallScore(modelTotal, checklistData);
+                decimal? totalScore = modelTotal.TotalScore;
+
+                var compliance = HitungComplianceLevelDariElements(elements);
+                var sss = Math.Round(compliance.SSS ?? 0, 2);
+                var eqnq = Math.Round(compliance.EQnQ ?? 0, 2);
+                var rfs = Math.Round(compliance.RFS ?? 0, 2);
+                var vfc = Math.Round(compliance.VFC ?? 0, 2);
+                var epo = Math.Round(compliance.EPO ?? 0, 2);
+
+                decimal scores = (decimal)(totalScore ?? a.score);
+
+                csv.AppendLine(string.Join(",", new[]
+                {
+            $"\"{submitDate:yyyy-MM-dd}\"",
+            $"\"{auditDate:yyyy-MM-dd}\"",
+            $"\"{a.spbu.spbu_no}\"",
+            $"\"{a.spbu.region}\"",
+            $"\"{a.spbu.year ?? DateTime.Now.Year}\"",
+            $"\"{a.spbu.address}\"",
+            $"\"{a.spbu.city_name}\"",
+            $"\"{a.spbu.owner_type}\"",
+            $"\"{a.spbu.sbm}\"",
+            $"\"{a.audit_level}\"",
+            $"\"{a.spbu.audit_next}\"",
+            $"\"{a.good_status}\"",
+            $"\"{a.excellent_status}\"",
+            $"\"{scores:0.##}\"",
+            $"\"{sss}\"",
+            $"\"{eqnq}\"",
+            $"\"{rfs}\"",
+            $"\"{vfc}\"",
+            $"\"{epo}\"",
+            $"\"{a.spbu.wtms}\"",
+            $"\"{a.spbu.qq}\"",
+            $"\"{a.spbu.wmef}\"",
+            $"\"{a.spbu.format_fisik}\"",
+            $"\"{a.spbu.cpo}\"",
+            $"\"{a.spbu.level}\"",
+            $"\"{penaltyGoodResult}\"",
+            $"\"{penaltyExcellentResult}\""
+        }));
+            }
+
+            var fileName = $"Audit_BOA_Summary_{DateTime.Now:yyyyMMddHHmmss}.csv";
+            var bytes = Encoding.UTF8.GetBytes(csv.ToString());
+            return File(bytes, "text/csv", fileName);
+        }
+
+
         private async Task<List<AuditReportListViewModel>> GetAuditReportViewModels(List<trx_audit> audits)
         {
             var conn = _context.Database.GetDbConnection();

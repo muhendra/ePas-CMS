@@ -86,6 +86,12 @@
             <i class="bi bi-search"></i> Cari
         </button>
     </div>
+
+    <div class="col-auto">
+        <button type="button" id="btnDownloadCsv" class="btn btn-success d-flex align-items-center gap-1">
+            <i class="bi bi-download"></i> Download Summary
+        </button>
+    </div>
 </form>
 <table id="audit-table" class="table table-bordered table-hover align-middle nowrap w-100">
     <thead>
@@ -194,5 +200,43 @@
                 responsive: true
             });
         });
+
+        (function () {
+            const btn = document.getElementById('btnDownloadCsv');
+            if (!btn) return;
+
+            btn.addEventListener('click', function () {
+                const monthSel = document.querySelector('select[name="filterMonth"]');
+                const yearSel  = document.querySelector('select[name="filterYear"]');
+
+                const mVal = monthSel ? monthSel.value : "";
+                const yVal = yearSel  ? yearSel.value  : "";
+
+                // base URL ke action backend, searchTerm dikosongkan sesuai permintaan
+                let url = '@Url.Action("DownloadCsvByDate", "AuditReport")' + '?searchTerm=';
+
+                // Jika kedua filter ada → kirim startDate & endDate (endDate exclusive = 1st of next month)
+                if (mVal && yVal) {
+                    const y = parseInt(yVal, 10);
+                    const m = parseInt(mVal, 10);
+
+                    // start = yyyy-m-01, end = yyyy-(m+1)-01 (UTC supaya aman format ISO)
+                    const start = new Date(Date.UTC(y, m - 1, 1));
+                    const end   = new Date(Date.UTC(y, m, 1));
+
+                    const fmt = d => d.toISOString().slice(0, 10); // yyyy-MM-dd
+
+                    console.log("downsummary", start, end);
+
+                    url += '' // searchTerm = ""
+                        + `&startDate=${fmt(start)}`
+                        + `&endDate=${fmt(end)}`;
+                }
+                // else: tanpa bulan/tahun → unduh semua (tanpa parameter tanggal)
+
+                window.location.href = url;
+            });
+        })();
+    </script>
     </script>
 }
