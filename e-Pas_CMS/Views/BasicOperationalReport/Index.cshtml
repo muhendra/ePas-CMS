@@ -213,7 +213,7 @@
                 const yVal = yearSel  ? yearSel.value  : "";
 
                 // base URL ke action backend, searchTerm dikosongkan sesuai permintaan
-                let url = '@Url.Action("DownloadCsvByDate", " BasicOperational")' + '?searchTerm=';
+                let url = '@Url.Action("DownloadCsvByDate", " BasicOperationalReport")' + '?searchTerm=';
 
                 // Jika kedua filter ada → kirim startDate & endDate (endDate exclusive = 1st of next month)
                 if (mVal && yVal) {
