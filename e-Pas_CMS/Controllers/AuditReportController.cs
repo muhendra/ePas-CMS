@@ -409,32 +409,51 @@ namespace e_Pas_CMS.Controllers
             return View(model);
         }
 
-        public async Task<IActionResult> Index2(int pageNumber = 1, int pageSize = 100, string searchTerm = "", int? filterMonth = null, int? filterYear = null)
+        [HttpGet]
+        public async Task<IActionResult> IndexSpbu(
+    int pageNumber = 1,
+    int pageSize = 100,
+    string searchTerm = "",
+    int? filterMonth = null,
+    int? filterYear = null)
         {
-            // === EF Core: set infinite timeout (0) dan restore di finally ===
+            // ===== infinite timeout utk EF Core =====
             var previousTimeout = _context.Database.GetCommandTimeout();
             _context.Database.SetCommandTimeout(0);
+
+            using var timeoutCts = new CancellationTokenSource(TimeSpan.FromHours(6));
+            var token = CancellationTokenSource
+                .CreateLinkedTokenSource(timeoutCts.Token, HttpContext.RequestAborted)
+                .Token;
+
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+
+            int processed = 0;
+            int updated = 0;
+            var updatedSpbu = new List<string>();
 
             try
             {
                 var currentUser = User.Identity?.Name;
 
+                // ===== ambil region & sbm user =====
                 var userRegion = await (from aur in _context.app_user_roles
                                         join au in _context.app_users on aur.app_user_id equals au.id
                                         where au.username == currentUser
                                         select aur.region)
-                               .Distinct()
-                               .Where(r => r != null)
-                               .ToListAsync();
+                                   .Distinct()
+                                   .Where(r => r != null)
+                                   .ToListAsync(token);
 
                 var userSbm = await (from aur in _context.app_user_roles
                                      join au in _context.app_users on aur.app_user_id equals au.id
                                      where au.username == currentUser
                                      select aur.sbm)
-                        .Where(s => s != null)
-                        .Distinct()
-                        .ToListAsync();
+                                .Where(s => s != null)
+                                .Distinct()
+                                .ToListAsync(token);
 
+                // ===== base query: DISTINCT ON per spbu_id =====
                 var query = _context.trx_audits
                     .FromSqlInterpolated($@"
                 SELECT DISTINCT ON (spbu_id) *
@@ -446,6 +465,7 @@ namespace e_Pas_CMS.Controllers
                     .Include(a => a.app_user)
                     .AsNoTracking();
 
+                // filter by user region/sbm
                 if (userRegion.Any() || userSbm.Any())
                 {
                     query = query.Where(x =>
@@ -454,19 +474,21 @@ namespace e_Pas_CMS.Controllers
                     );
                 }
 
+                // search
                 if (!string.IsNullOrWhiteSpace(searchTerm))
                 {
-                    searchTerm = searchTerm.ToLower();
+                    var sterm = searchTerm.ToLower();
                     query = query.Where(a =>
-                        a.spbu.spbu_no.ToLower().Contains(searchTerm) ||
-                        a.app_user.name.ToLower().Contains(searchTerm) ||
-                        a.status.ToLower().Contains(searchTerm) ||
-                        a.spbu.address.ToLower().Contains(searchTerm) ||
-                        a.spbu.province_name.ToLower().Contains(searchTerm) ||
-                        a.spbu.city_name.ToLower().Contains(searchTerm)
+                        a.spbu.spbu_no.ToLower().Contains(sterm) ||
+                        a.app_user.name.ToLower().Contains(sterm) ||
+                        a.status.ToLower().Contains(sterm) ||
+                        a.spbu.address.ToLower().Contains(sterm) ||
+                        a.spbu.province_name.ToLower().Contains(sterm) ||
+                        a.spbu.city_name.ToLower().Contains(sterm)
                     );
                 }
 
+                // filter bulan/tahun
                 if (filterMonth.HasValue && filterYear.HasValue)
                 {
                     query = query.Where(a =>
@@ -474,41 +496,34 @@ namespace e_Pas_CMS.Controllers
                         ((a.audit_execution_time != null ? a.audit_execution_time.Value.Year : a.created_date.Year) == filterYear.Value));
                 }
 
-                ViewBag.FilterMonth = filterMonth;
-                ViewBag.FilterYear = filterYear;
-
+                // urutan seperti semula
                 query = query.OrderByDescending(a => a.audit_execution_time)
                              .ThenByDescending(a => a.id);
 
-                var totalItems = await query.CountAsync();
+                // ambil semua audit yg match (tanpa View/Pagination)
+                var audits = await query.ToListAsync(token);
 
-                var pagedAudits = await query
-                    .Skip((pageNumber - 1) * pageSize)
-                    .Take(pageSize)
-                    .ToListAsync();
-
+                // ===== koneksi & transaksi =====
                 var conn = _context.Database.GetDbConnection();
                 if (conn.State != ConnectionState.Open)
-                    await conn.OpenAsync();
+                    await conn.OpenAsync(token);
 
-                // === Postgres: matikan statement_timeout untuk sesi ini ===
-                // (tidak wajib kalau sudah set CommandTimeout=0, tapi bagus untuk berjaga-jaga)
+                // matikan statement_timeout di sesi
                 await conn.ExecuteAsync("SET statement_timeout TO 0;", commandTimeout: 0);
 
-                var result = new List<AuditReportListViewModel>();
-
-                // === Transaksi untuk batch update audit_next ===
-                await using var tx = await conn.BeginTransactionAsync();
-
-                // Juga pastikan statement_timeout=0 di scope transaksi
+                await using var tx = await conn.BeginTransactionAsync(token);
+                // matikan statement_timeout di scope transaksi
                 await conn.ExecuteAsync("SET LOCAL statement_timeout = 0;", transaction: tx, commandTimeout: 0);
 
                 try
                 {
-                    foreach (var a in pagedAudits)
+                    foreach (var a in audits)
                     {
+                        token.ThrowIfCancellationRequested();
+                        processed++;
+
                         // --- Ambil checklist untuk hitung finalScore ---
-                        var sql = @"
+                        const string sqlChecklist = @"
                     SELECT 
                         mqd.weight, 
                         tac.score_input, 
@@ -526,7 +541,7 @@ namespace e_Pas_CMS.Controllers
                     AND mqd.type = 'QUESTION'";
 
                         var checklist = (await conn.QueryAsync<(decimal? weight, string score_input, decimal? score_x, bool? is_relaksasi)>(
-                            sql, new { id = a.id }, transaction: tx, commandTimeout: 0)).ToList();
+                            sqlChecklist, new { id = a.id }, transaction: tx, commandTimeout: 0)).ToList();
 
                         decimal sumAF = 0, sumWeight = 0, sumX = 0;
 
@@ -579,7 +594,7 @@ namespace e_Pas_CMS.Controllers
                             specialNodeIds.Add(Guid.Parse("5e9ffc47-de99-4d7d-b8bc-0fb9b7acc81b"));
                         }
 
-                        var specialScoreSql = @"
+                        const string specialScoreSql = @"
                     SELECT mqd.id, tac.score_input, ta.created_date
                     FROM master_questioner_detail mqd
                     LEFT JOIN trx_audit_checklist tac 
@@ -614,7 +629,7 @@ namespace e_Pas_CMS.Controllers
                         }
 
                         // === Penalty checks ===
-                        var penaltyExcellentQuery = @"
+                        const string penaltyExcellentQuery = @"
                     SELECT STRING_AGG(mqd.penalty_alert, ', ') AS penalty_alerts
                     FROM trx_audit_checklist tac
                     INNER JOIN master_questioner_detail mqd ON mqd.id = tac.master_questioner_detail_id
@@ -651,7 +666,7 @@ namespace e_Pas_CMS.Controllers
                             )
                         );";
 
-                        var penaltyGoodQuery = @"
+                        const string penaltyGoodQuery = @"
                     SELECT STRING_AGG(mqd.penalty_alert, ', ') AS penalty_alerts
                     FROM trx_audit_checklist tac
                     INNER JOIN master_questioner_detail mqd ON mqd.id = tac.master_questioner_detail_id
@@ -674,7 +689,7 @@ namespace e_Pas_CMS.Controllers
                         string auditNext = null;
                         string levelspbu = null;
 
-                        var auditFlowSql = @"SELECT * FROM master_audit_flow WHERE audit_level = @level LIMIT 1;";
+                        const string auditFlowSql = @"SELECT * FROM master_audit_flow WHERE audit_level = @level LIMIT 1;";
                         var auditFlow = await conn.QueryFirstOrDefaultAsync<dynamic>(
                             auditFlowSql, new { level = a.audit_level }, transaction: tx, commandTimeout: 0);
 
@@ -708,8 +723,7 @@ namespace e_Pas_CMS.Controllers
                             ? (forceGoodOnly ? "GOOD" : "CERTIFIED")
                             : "NOT CERTIFIED";
 
-                        decimal scoress = Math.Round((decimal)(totalScore ?? 0m), 2);
-
+                        // mapping auditNext berdasar flow
                         if (auditFlow != null)
                         {
                             string passedGood = auditFlow.passed_good;
@@ -718,110 +732,69 @@ namespace e_Pas_CMS.Controllers
                             string failed_audit_level = auditFlow.failed_audit_level;
 
                             if (string.IsNullOrWhiteSpace(passedGood) && string.IsNullOrWhiteSpace(passedExcellent) && goodStatus == "CERTIFIED" && excellentStatus == "CERTIFIED")
-                            {
                                 auditNext = passedAuditLevel;
-                            }
                             else if (string.IsNullOrWhiteSpace(passedGood) && string.IsNullOrWhiteSpace(passedExcellent) && goodStatus == "CERTIFIED" && excellentStatus == "NOT CERTIFIED")
-                            {
                                 auditNext = passedAuditLevel;
-                            }
                             else if (string.IsNullOrWhiteSpace(passedGood) && string.IsNullOrWhiteSpace(passedExcellent) && goodStatus == "NOT CERTIFIED" && excellentStatus == "NOT CERTIFIED")
-                            {
                                 auditNext = failed_audit_level;
-                            }
                             else if (goodStatus == "NOT CERTIFIED" && excellentStatus == "NOT CERTIFIED")
-                            {
                                 auditNext = failed_audit_level;
-                            }
                             else if (goodStatus == "CERTIFIED" && excellentStatus == "NOT CERTIFIED")
-                            {
                                 auditNext = passedGood;
-                            }
                             else if (goodStatus == "CERTIFIED" && excellentStatus == "CERTIFIED")
-                            {
                                 auditNext = passedExcellent;
-                            }
                             else if (string.IsNullOrWhiteSpace(passedGood) && string.IsNullOrWhiteSpace(passedExcellent) && finalScore >= 75)
-                            {
                                 auditNext = passedAuditLevel;
-                            }
                             else
-                            {
                                 auditNext = failed_audit_level;
-                            }
 
-                            var auditlevelClassSql = @"SELECT audit_level_class FROM master_audit_flow WHERE audit_level = @level LIMIT 1;";
+                            // levelspbu (kalau kamu butuh simpan/cek)
+                            const string auditlevelClassSql = @"SELECT audit_level_class FROM master_audit_flow WHERE audit_level = @level LIMIT 1;";
                             var auditlevelClass = await conn.QueryFirstOrDefaultAsync<dynamic>(
                                 auditlevelClassSql, new { level = auditNext }, transaction: tx, commandTimeout: 0);
 
-                            levelspbu = auditlevelClass != null
-                                ? (auditlevelClass.audit_level_class ?? "")
-                                : "";
+                            levelspbu = auditlevelClass != null ? (auditlevelClass.audit_level_class ?? "") : "";
                         }
 
-                        // === UPDATE spbu.audit_next sesuai spbu_id audit ===
-                        var updateSql = @"UPDATE spbu SET audit_next = @auditNext WHERE id = @spbuId;";
-                        await conn.ExecuteAsync(updateSql, new { auditNext, spbuId = a.spbu_id }, transaction: tx, commandTimeout: 0);
-
-                        // === Susun item untuk view ===
-                        result.Add(new AuditReportListViewModel
+                        // === UPDATE spbu.audit_next ===
+                        const string updateSql = @"UPDATE spbu SET audit_next = @auditNext WHERE id = @spbuId;";
+                        var rows = await conn.ExecuteAsync(updateSql, new { auditNext, spbuId = a.spbu_id }, transaction: tx, commandTimeout: 0);
+                        if (rows > 0)
                         {
-                            TrxAuditId = a.id,
-                            ReportNo = a.report_no,
-                            SpbuNo = a.spbu.spbu_no,
-                            Region = a.spbu.region,
-                            Address = a.spbu.address,
-                            City = a.spbu.city_name,
-                            SBM = a.spbu.sbm,
-                            SAM = a.spbu.sam,
-                            Province = a.spbu.province_name,
-                            Year = a.spbu.year ?? DateTime.Now.Year,
-                            AuditDate = (a.audit_execution_time == null || a.audit_execution_time.Value == DateTime.MinValue) ? a.updated_date.Value : a.audit_execution_time.Value,
-                            SubmitDate = a.approval_date.GetValueOrDefault() == DateTime.MinValue ? a.updated_date : a.approval_date.GetValueOrDefault(),
-                            Auditor = a.app_user.name,
-                            GoodStatus = goodStatus,
-                            ExcellentStatus = excellentStatus,
-                            Score = totalScore ?? a.score,
-                            WTMS = a.spbu.wtms,
-                            QQ = a.spbu.qq,
-                            WMEF = a.spbu.wmef,
-                            FormatFisik = a.spbu.format_fisik,
-                            CPO = a.spbu.cpo,
-                            KelasSpbu = levelspbu,
-                            Auditlevel = a.audit_level,
-                            AuditNext = auditNext,
-                            ApproveDate = a.approval_date ?? DateTime.Now,
-                            ApproveBy = string.IsNullOrWhiteSpace(a.approval_by) ? "-" : a.approval_by,
-                            SSS = Math.Round(compliance.SSS ?? 0, 2),
-                            EQnQ = Math.Round(compliance.EQnQ ?? 0, 2),
-                            RFS = Math.Round(compliance.RFS ?? 0, 2),
-                            VFC = Math.Round(compliance.VFC ?? 0, 2),
-                            EPO = Math.Round(compliance.EPO ?? 0, 2)
-                        });
+                            updated++;
+                            updatedSpbu.Add(a.spbu_id);
+                        }
                     }
 
-                    await tx.CommitAsync();
+                    await tx.CommitAsync(token);
                 }
                 catch
                 {
-                    await tx.RollbackAsync();
+                    await tx.RollbackAsync(token);
                     throw;
                 }
 
-                var model = new PaginationModel<AuditReportListViewModel>
+                sw.Stop();
+                return Ok(new
                 {
-                    Items = result,
-                    PageNumber = pageNumber,
-                    PageSize = pageSize,
-                    TotalItems = totalItems
-                };
-
-                ViewBag.SearchTerm = searchTerm;
-                return View(model);
+                    message = "Selesai update audit_next ke tabel spbu (tanpa render view).",
+                    processed,
+                    updated,
+                    duration_ms = sw.ElapsedMilliseconds,
+                    // hati-hati kalau list bisa panjang; bisa di-comment kalau takut respons besar
+                    spbu_ids_updated = updatedSpbu.Distinct().ToList()
+                });
+            }
+            catch (OperationCanceledException)
+            {
+                return StatusCode(408, new { error = "Operation timed out atau request dibatalkan." });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { error = ex.Message, stack = ex.StackTrace });
             }
             finally
             {
-                // restore timeout EF Core ke nilai sebelumnya
                 _context.Database.SetCommandTimeout(previousTimeout);
             }
         }
