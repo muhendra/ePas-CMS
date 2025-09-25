@@ -409,7 +409,7 @@ namespace e_Pas_CMS.Controllers
             return View(model);
         }
 
-        public async Task<IActionResult> Index2(int pageNumber = 1, int pageSize = 500, string searchTerm = "", int? filterMonth = null, int? filterYear = null)
+        public async Task<IActionResult> Index2(int pageNumber = 1, int pageSize = 100, string searchTerm = "", int? filterMonth = null, int? filterYear = null)
         {
             var currentUser = User.Identity?.Name;
 
