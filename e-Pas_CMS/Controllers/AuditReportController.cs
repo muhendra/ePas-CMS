@@ -734,8 +734,17 @@ namespace e_Pas_CMS.Controllers
 
                     // === UPDATE spbu.audit_next sesuai spbu_id audit ===
                     // Note: auditNext bisa null; jika ingin kosongkan kolom saat null, biarkan saja (Dapper => NULL).
-                    var updateSql = @"UPDATE spbu SET audit_next = @auditNext WHERE id = @spbuId;";
-                    await conn.ExecuteAsync(updateSql, new { auditNext = auditNext ?? string.Empty, spbuId = a.spbu_id }, transaction: tx);
+                    var updateSql = @"
+                    UPDATE spbu 
+                    SET 
+                        audit_current = @auditLevel,
+                        audit_next    = @auditNext
+                    WHERE id = @spbuId;
+                    ";
+
+                    await conn.ExecuteAsync(updateSql,
+                        new { auditLevel = a.audit_level ?? string.Empty, auditNext = auditNext ?? string.Empty, spbuId = a.spbu_id },
+                        transaction: tx);
 
                     // === Susun item untuk view ===
                     result.Add(new AuditReportListViewModel

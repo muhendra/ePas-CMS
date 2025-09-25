@@ -65,9 +65,8 @@
         }
     </ul>
 }
-
-<!-- Q&Q CHECK -->
-@if (Model.QqChecks != null && Model.QqChecks.Any())
+<!-- Q&Q CHECK (tabel hasil Quality & Quantity Check jika ada) -->
+@if (Model.QqChecks?.Any() == true)
 {
     <h4 class="mt-5 fw-bold">Q&Q Check</h4>
     <div class="table-responsive">
@@ -79,39 +78,53 @@
                     <th>DU Serial No</th>
                     <th>Product</th>
                     <th>Mode</th>
-                    <th>Quantity Variation (Measure)</th>
-                    <th>Quantity Variation (%)</th>
-                    <th>Observed Density</th>
-                    <th>Observed Temp</th>
-                    <th>Observed Density (15°)</th>
-                    <th>Reference Density (15°)</th>
-                    <th>Tank Number</th>
-                    <th>Density Variation</th>
+                    <th>Qty Var (m)</th>
+                    <th>Qty Var (%)</th>
+                    <th>Density</th>
+                    <th>Temp</th>
+                    <th>Density15°</th>
+                    <th>Ref Density15°</th>
+                    <th>Tank No</th>
+                    <th>Density Var</th>
                 </tr>
             </thead>
             <tbody>
-                @foreach (var item in Model.QqChecks)
+                @foreach (var qq in Model.QqChecks)
                 {
                     <tr>
-                        <td>@item.NozzleNumber</td>
-                        <td>@item.DuMake</td>
-                        <td>@item.DuSerialNo</td>
-                        <td>@item.Product</td>
-                        <td>@item.Mode</td>
-                        <td>@item.QuantityVariationWithMeasure?.ToString("0.00")</td>
-                        <td>@item.QuantityVariationInPercentage?.ToString("0.00")</td>
-                        <td>@item.ObservedDensity?.ToString("0.000")</td>
-                        <td>@item.ObservedTemp?.ToString("0.0")</td>
-                        <td>@item.ObservedDensity15Degree?.ToString("0.000")</td>
-                        <td>@item.ReferenceDensity15Degree?.ToString("0.000")</td>
-                        <td>@item.TankNumber</td>
-                        <td>@item.DensityVariation?.ToString("0.000")</td>
+                        <td>@qq.NozzleNumber</td>
+                        <td>@qq.DuMake</td>
+                        <td>@qq.DuSerialNo</td>
+                        <td>@qq.Product</td>
+                        <td>@qq.Mode</td>
+                        <!-- Qty Var (m) -->
+                        <td style="
+    background-color: @(qq.QuantityVariationWithMeasure < -100m ? "#ff0000" : "transparent");">
+                            @qq.QuantityVariationWithMeasure
+                        </td>
+
+                        <!-- Qty Var (%) hitung dari Qty Var (m) -->
+                        @{
+                            var qtyVarPercent = (qq.QuantityVariationWithMeasure / 20000m) * 100m; // -120 -> -0.60%
+                        }
+                        <td style="
+    background-color: @(qtyVarPercent < -0.5m ? "#ff0000" :
+                        qtyVarPercent >  0.5m ? "#ffff00" : "transparent");">
+                            @($"{qtyVarPercent:0.00}%")
+                        </td>
+                        <td>@qq.ObservedDensity</td>
+                        <td>@qq.ObservedTemp</td>
+                        <td>@qq.ObservedDensity15Degree</td>
+                        <td>@qq.ReferenceDensity15Degree</td>
+                        <td>@qq.TankNumber</td>
+                        <td>@qq.DensityVariation</td>
                     </tr>
                 }
             </tbody>
         </table>
     </div>
 }
+
 
 <!-- CATATAN AUDIT -->
 @if (Model.AuditType == "Mystery Audit" || Model.AuditType == "Mystery Guest")
