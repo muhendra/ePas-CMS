@@ -724,6 +724,7 @@ namespace e_Pas_CMS.Controllers
                             : "NOT CERTIFIED";
 
                         // mapping auditNext berdasar flow
+
                         if (auditFlow != null)
                         {
                             string passedGood = auditFlow.passed_good;
@@ -732,32 +733,47 @@ namespace e_Pas_CMS.Controllers
                             string failed_audit_level = auditFlow.failed_audit_level;
 
                             if (string.IsNullOrWhiteSpace(passedGood) && string.IsNullOrWhiteSpace(passedExcellent) && goodStatus == "CERTIFIED" && excellentStatus == "CERTIFIED")
+                            {
                                 auditNext = passedAuditLevel;
+                            }
                             else if (string.IsNullOrWhiteSpace(passedGood) && string.IsNullOrWhiteSpace(passedExcellent) && goodStatus == "CERTIFIED" && excellentStatus == "NOT CERTIFIED")
+                            {
                                 auditNext = passedAuditLevel;
+                            }
                             else if (string.IsNullOrWhiteSpace(passedGood) && string.IsNullOrWhiteSpace(passedExcellent) && goodStatus == "NOT CERTIFIED" && excellentStatus == "NOT CERTIFIED")
+                            {
                                 auditNext = failed_audit_level;
+                            }
                             else if (goodStatus == "NOT CERTIFIED" && excellentStatus == "NOT CERTIFIED")
+                            {
                                 auditNext = failed_audit_level;
+                            }
                             else if (goodStatus == "CERTIFIED" && excellentStatus == "NOT CERTIFIED")
+                            {
                                 auditNext = passedGood;
+                            }
                             else if (goodStatus == "CERTIFIED" && excellentStatus == "CERTIFIED")
+                            {
                                 auditNext = passedExcellent;
+                            }
                             else if (string.IsNullOrWhiteSpace(passedGood) && string.IsNullOrWhiteSpace(passedExcellent) && finalScore >= 75)
+                            {
                                 auditNext = passedAuditLevel;
+                            }
                             else
+                            {
                                 auditNext = failed_audit_level;
+                            }
 
-                            // levelspbu (kalau kamu butuh simpan/cek)
-                            const string auditlevelClassSql = @"SELECT audit_level_class FROM master_audit_flow WHERE audit_level = @level LIMIT 1;";
-                            var auditlevelClass = await conn.QueryFirstOrDefaultAsync<dynamic>(
-                                auditlevelClassSql, new { level = auditNext }, transaction: tx, commandTimeout: 0);
-
-                            levelspbu = auditlevelClass != null ? (auditlevelClass.audit_level_class ?? "") : "";
+                            var auditlevelClassSql = @"SELECT audit_level_class FROM master_audit_flow WHERE audit_level = @level LIMIT 1;";
+                            var auditlevelClass = await conn.QueryFirstOrDefaultAsync<dynamic>(auditlevelClassSql, new { level = auditNext });
+                            levelspbu = auditlevelClass != null
+                            ? (auditlevelClass.audit_level_class ?? "")
+                            : "";
                         }
 
                         // === UPDATE spbu.audit_next ===
-                        const string updateSql = @"UPDATE spbu SET audit_next = @auditNext WHERE id = @spbuId;";
+                        const string updateSql = @"UPDATE spbu SET audit_next = COALESCE(@auditNext, '') WHERE id = @spbuId;";
                         var rows = await conn.ExecuteAsync(updateSql, new { auditNext, spbuId = a.spbu_id }, transaction: tx, commandTimeout: 0);
                         if (rows > 0)
                         {
