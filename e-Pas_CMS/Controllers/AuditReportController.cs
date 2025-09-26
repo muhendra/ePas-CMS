@@ -272,7 +272,7 @@ namespace e_Pas_CMS.Controllers
                 //    : "NOT CERTIFIED";
 
                 // === Audit Next
-                string auditNext = null;
+                string auditNext = "";
                 string levelspbu = null;
 
                 var auditFlowSql = @"SELECT * FROM master_audit_flow WHERE audit_level = @level LIMIT 1;";
@@ -647,7 +647,7 @@ namespace e_Pas_CMS.Controllers
                     bool hasGoodPenalty = !string.IsNullOrEmpty(penaltyGoodResult);
 
                     // === Audit Next base (Flow) ===
-                    string auditNext = null;
+                    string auditNext = "";
                     string levelspbu = null;
 
                     var auditFlowSql = @"SELECT * FROM master_audit_flow WHERE audit_level = @level LIMIT 1;";
