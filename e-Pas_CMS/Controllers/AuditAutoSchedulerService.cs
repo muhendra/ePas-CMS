@@ -118,9 +118,14 @@ public class AuditAutoSchedulerService : BackgroundService
            audit_next as audit_level,
            audit_type,
            (
-             date_trunc('month', audit_execution_time + (range_audit_month || ' month')::interval)
-             + (rn - 1) * interval '1 day'
-           )::date as audit_schedule_date,
+			  date_trunc('month', audit_execution_time + (range_audit_month || ' month')::interval)
+			  + (((rn - 1) % CAST(
+			        extract(day from date_trunc('month',
+			           audit_execution_time + (range_audit_month || ' month')::interval)
+			           + interval '1 month - 1 day'
+			        ) AS int)
+			     ) * interval '1 day')
+		   )::date as audit_schedule_date,
            null as audit_execution_time,
            0 as audit_media_upload,
            0 as audit_media_total,
