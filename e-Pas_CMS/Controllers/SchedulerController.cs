@@ -225,47 +225,22 @@ namespace e_Pas_CMS.Controllers
 
         [HttpPost("Edit/{id}")]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Edit(AuditEditViewModel model)
+        public ActionResult Edit(AuditEditViewModel model)
         {
-            // transaksi supaya update audit + rename username atomik
-            await using var tx = await _context.Database.BeginTransactionAsync();
+            var audit = _context.trx_audits.FirstOrDefault(a => a.id == model.Id);
+            if (audit == null) return NotFound();
 
-            // ambil audit + username lama
-            var audit = await _context.trx_audits
-                .Include(a => a.app_user)
-                .FirstOrDefaultAsync(a => a.id == model.Id);
-
-            if (audit == null)
-                return NotFound();
-
-            // username lama dari auditor saat ini (boleh null)
-            var oldUsername = audit.app_user != null
-                ? await _context.app_users
-                    .Where(u => u.id == audit.app_user_id)
-                    .Select(u => u.username)   // <-- pastikan kolomnya "username"
-                    .FirstOrDefaultAsync()
-                : null;
-
-            // username baru dari auditor terpilih (boleh null)
-            var newUsername = !string.IsNullOrWhiteSpace(model.AppUserId)
-                ? await _context.app_users
-                    .Where(u => u.id == model.AppUserId)
-                    .Select(u => u.username)   // <-- pastikan kolomnya "username"
-                    .FirstOrDefaultAsync()
-                : null;
-
-            // ====== UPDATE FIELD AUDIT ======
             var allowedStatus = new[] { "DRAFT", "NOT_STARTED" };
-            var newStatus = (model.Status ?? "").Trim();
+            var newStatus = (model.Status ?? "").Trim().ToUpperInvariant();
 
-            var isCurrentEarly = allowedStatus.Contains((audit.status ?? "").Trim(), StringComparer.OrdinalIgnoreCase);
-            if (allowedStatus.Contains(newStatus, StringComparer.OrdinalIgnoreCase) && isCurrentEarly)
+            var isCurrentEarly = allowedStatus.Contains((audit.status ?? "").Trim().ToUpperInvariant());
+            if (allowedStatus.Contains(newStatus) && isCurrentEarly)
             {
-                audit.status = newStatus.ToUpperInvariant(); // simpan status dari form
+                audit.status = newStatus;   // simpan status dari form
             }
 
             audit.spbu_id = model.SpbuId;
-            audit.app_user_id = model.AppUserId; // ganti auditor
+            audit.app_user_id = model.AppUserId;
             audit.audit_level = model.AuditLevel;
             audit.audit_type = model.AuditType;
             audit.audit_schedule_date = model.AuditScheduleDate;
@@ -273,114 +248,67 @@ namespace e_Pas_CMS.Controllers
             audit.audit_mom_final = model.AuditMomFinal;
 
             var typeNorm = (model.AuditType ?? "").Trim();
-            bool isBOA = typeNorm.Equals("Basic Operational", StringComparison.OrdinalIgnoreCase);
 
-            if (isBOA)
+            if (typeNorm == "Basic Operational")
             {
                 // BOA tidak pakai INTRO
                 audit.master_questioner_intro_id = null;
 
-                var latestChecklist = await _context.master_questioners
+                var latestChecklist = _context.master_questioners
                     .Where(m => m.type == "Basic Operational" && m.category == "CHECKLIST")
                     .OrderByDescending(m => m.version)
                     .Select(m => m.id)
-                    .FirstOrDefaultAsync();
+                    .FirstOrDefault();
 
+                // fallback ke default jika memang perlu
                 audit.master_questioner_checklist_id = latestChecklist
                     ?? audit.master_questioner_checklist_id
                     ?? "4b295bf0-9d29-4a56-9004-4b96ab656257";
             }
             else
             {
-                var latestIntro = await _context.master_questioners
+                // Untuk Regular/Mystery: cari INTRO & CHECKLIST sesuai tipe yang dipilih
+                var latestIntro = _context.master_questioners
                     .Where(m => m.type == typeNorm && m.category == "INTRO")
                     .OrderByDescending(m => m.version)
                     .Select(m => m.id)
-                    .FirstOrDefaultAsync();
+                    .FirstOrDefault();
 
-                var latestChecklist = await _context.master_questioners
+                var latestChecklist = _context.master_questioners
                     .Where(m => m.type == typeNorm && m.category == "CHECKLIST")
                     .OrderByDescending(m => m.version)
                     .Select(m => m.id)
-                    .FirstOrDefaultAsync();
+                    .FirstOrDefault();
 
+                // gunakan hasil terbaru jika ada; kalau tidak ada, pertahankan nilai lama
                 audit.master_questioner_intro_id = latestIntro
                     ?? audit.master_questioner_intro_id
-                    ?? (typeNorm.Equals("Mystery Audit", StringComparison.OrdinalIgnoreCase)
-                        ? "7e3dca2d-2d99-4a8d-9fc0-9b80cb4c3a79"
-                        : audit.master_questioner_intro_id);
+                    // default hanya kalau sebelumnya kosong dan tipe "Mystery Audit"
+                    ?? (typeNorm == "Mystery Audit" ? "7e3dca2d-2d99-4a8d-9fc0-9b80cb4c3a79" : audit.master_questioner_intro_id);
 
                 audit.master_questioner_checklist_id = latestChecklist
                     ?? audit.master_questioner_checklist_id
-                    ?? (typeNorm.Equals("Mystery Audit", StringComparison.OrdinalIgnoreCase)
-                        ? "16d4f8e1-360a-47b0-86b7-8ac55a1a6f75"
-                        : audit.master_questioner_checklist_id);
+                    ?? (typeNorm == "Mystery Audit" ? "16d4f8e1-360a-47b0-86b7-8ac55a1a6f75" : audit.master_questioner_checklist_id);
             }
 
             // ---- METADATA ----
             audit.updated_date = DateTime.Now;
             audit.updated_by = User.Identity?.Name ?? "SYSTEM";
 
-            if (!string.IsNullOrWhiteSpace(oldUsername) &&
-                !string.IsNullOrWhiteSpace(newUsername) &&
-                !string.Equals(oldUsername, newUsername, StringComparison.Ordinal))
-            {
-                await RenameUsernameEverywhereAsync(oldUsername.Trim(), newUsername.Trim());
-            }
+            _context.SaveChanges();
 
-            await _context.SaveChangesAsync();
-
-            var spbu = await _context.spbus.FirstOrDefaultAsync(s => s.id == model.SpbuId);
+            // ---- UPDATE audit_next DI SPBU ----
+            var spbu = _context.spbus.FirstOrDefault(s => s.id == model.SpbuId);
             if (spbu != null)
             {
-                spbu.audit_next = model.AuditLevel ?? string.Empty;
+                spbu.audit_next = model.AuditLevel;
                 spbu.updated_by = User.Identity?.Name ?? "SYSTEM";
                 spbu.updated_date = DateTime.Now;
-                await _context.SaveChangesAsync();
+                _context.SaveChanges();
             }
-
-            await tx.CommitAsync();
 
             TempData["Success"] = "Data berhasil diperbarui.";
             return RedirectToAction("Index");
-        }
-        private async Task RenameUsernameEverywhereAsync(string oldUsername, string newUsername, CancellationToken ct = default)
-        {
-            await _context.Database.ExecuteSqlRawAsync(
-                @"UPDATE trx_audit SET created_by = {1} WHERE created_by = {0};",
-                new object[] { oldUsername, newUsername }, ct);
-
-            await _context.Database.ExecuteSqlRawAsync(
-                @"UPDATE trx_audit SET updated_by = {1} WHERE updated_by = {0};",
-                new object[] { oldUsername, newUsername }, ct);
-
-            await _context.Database.ExecuteSqlRawAsync(
-                @"UPDATE trx_audit SET approval_by = {1} WHERE approval_by = {0};",
-                new object[] { oldUsername, newUsername }, ct);
-
-            await _context.Database.ExecuteSqlRawAsync(
-                @"UPDATE trx_audit_checklist SET created_by = {1} WHERE created_by = {0};",
-                new object[] { oldUsername, newUsername }, ct);
-
-            await _context.Database.ExecuteSqlRawAsync(
-                @"UPDATE trx_audit_checklist SET updated_by = {1} WHERE updated_by = {0};",
-                new object[] { oldUsername, newUsername }, ct);
-
-            await _context.Database.ExecuteSqlRawAsync(
-                @"UPDATE trx_audit_media SET created_by = {1} WHERE created_by = {0};",
-                new object[] { oldUsername, newUsername }, ct);
-
-            await _context.Database.ExecuteSqlRawAsync(
-                @"UPDATE trx_audit_media SET updated_by = {1} WHERE updated_by = {0};",
-                new object[] { oldUsername, newUsername }, ct);
-
-            await _context.Database.ExecuteSqlRawAsync(
-                @"UPDATE trx_audit_qq SET created_by = {1} WHERE created_by = {0};",
-                new object[] { oldUsername, newUsername }, ct);
-
-            await _context.Database.ExecuteSqlRawAsync(
-                @"UPDATE trx_audit_qq SET updated_by = {1} WHERE updated_by = {0};",
-                new object[] { oldUsername, newUsername }, ct);
         }
 
         [HttpGet("Detail/{id}")]
@@ -718,6 +646,5 @@ namespace e_Pas_CMS.Controllers
             }
             return RedirectToAction("Index");
         }
-
-}
+    }
 }
