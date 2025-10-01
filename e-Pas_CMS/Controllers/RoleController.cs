@@ -35,7 +35,7 @@ namespace e_Pas_CMS.Controllers
                     (!string.IsNullOrEmpty(x.username) && x.username.ToLower().Contains(lowerSearch))
                 );
             }
-        
+
             var totalItems = await query.CountAsync();
             var totalPages = (int)Math.Ceiling(totalItems / (double)pageSize);
 
@@ -96,11 +96,6 @@ namespace e_Pas_CMS.Controllers
         {
             var model = new RoleAuditorAddViewModel
             {
-                //AuditorList = _context.app_users
-                //    .Where(x => x.status == "ACTIVE")
-                //    .Select(x => new SelectListItem { Value = x.id, Text = x.name })
-                //    .ToList(),
-
                 RoleList = _context.app_roles
                     .Where(x => x.status == "ACTIVE")
                     .Select(x => new SelectListItem { Value = x.id, Text = x.name })
@@ -112,22 +107,23 @@ namespace e_Pas_CMS.Controllers
                     .OrderBy(r => r)
                     .Select(r => new SelectListItem { Value = r, Text = r })
                     .ToList(),
-                SbmList = _context.spbus
-            .Where(x => x.sbm != null)
-            .Select(x => x.sbm)
-            .Distinct()
-            .OrderBy(s => s)
-            .Select(s => new SelectListItem { Value = s, Text = s })
-            .ToList(),
-                SpbuList = _context.spbus
-    .Where(x => x.spbu_no != null)
-    .OrderBy(x => x.spbu_no)
-    .Select(x => new SelectListItem
-    {
-        Value = x.id,
-        Text = x.spbu_no + " - " + x.province_name + " - " + x.city_name + " - " + x.address
-    }).ToList()
 
+                SbmList = _context.spbus
+                    .Where(x => x.sbm != null)
+                    .Select(x => x.sbm)
+                    .Distinct()
+                    .OrderBy(s => s)
+                    .Select(s => new SelectListItem { Value = s, Text = s })
+                    .ToList(),
+
+                SpbuList = _context.spbus
+                    .Where(x => x.spbu_no != null)
+                    .OrderBy(x => x.spbu_no)
+                    .Select(x => new SelectListItem
+                    {
+                        Value = x.id,
+                        Text = x.spbu_no + " - " + x.province_name + " - " + x.city_name + " - " + x.address
+                    }).ToList()
             };
 
             return View(model);
@@ -264,8 +260,6 @@ namespace e_Pas_CMS.Controllers
             }
         }
 
-
-
         [HttpGet("GetAuditorList")]
         public async Task<IActionResult> GetAuditorList(int page = 1, int pageSize = 10, string search = "")
         {
@@ -324,10 +318,11 @@ namespace e_Pas_CMS.Controllers
                 .Select(x => x.sbm)
                 .Distinct()
                 .ToListAsync();
+
             var userSpbuId = await _context.app_user_roles
-    .Where(x => x.app_user_id == id && x.spbu_id != null)
-    .Select(x => x.spbu_id)
-    .FirstOrDefaultAsync();
+                .Where(x => x.app_user_id == id && x.spbu_id != null)
+                .Select(x => x.spbu_id)
+                .FirstOrDefaultAsync();
 
             var userSpbuName = await _context.spbus
                 .Where(x => x.id == userSpbuId)
@@ -377,21 +372,23 @@ namespace e_Pas_CMS.Controllers
                     .OrderBy(s => s)
                     .Select(s => new SelectListItem { Value = s, Text = s })
                     .ToListAsync(),
-                    SelectedSpbuId = userSpbuId,
+
+                SelectedSpbuId = userSpbuId,
                 SelectedSpbuName = userSpbuName,
                 SpbuList = await _context.spbus
-        .Where(x => x.spbu_no != null)
-        .OrderBy(x => x.spbu_no)
-        .Select(x => new SelectListItem
-        {
-            Value = x.id,
-            Text = x.spbu_no + " - " + x.province_name + " - " + x.city_name + " - " + x.address
-        })
-        .ToListAsync()
+                    .Where(x => x.spbu_no != null)
+                    .OrderBy(x => x.spbu_no)
+                    .Select(x => new SelectListItem
+                    {
+                        Value = x.id,
+                        Text = x.spbu_no + " - " + x.province_name + " - " + x.city_name + " - " + x.address
+                    })
+                    .ToListAsync()
             };
 
             return View(model);
         }
+
         [HttpPost("Edit/{id}")]
         public async Task<IActionResult> Edit(RoleAuditorEditViewModel model)
         {
@@ -458,35 +455,7 @@ namespace e_Pas_CMS.Controllers
                 // ====== Jika username berubah: rename referensi di tabel-tabel terkait ======
                 if (isUsernameChanged && !string.IsNullOrWhiteSpace(oldUsername))
                 {
-                    // Pakai parameter untuk aman dari injection
-                    var pOld = new Npgsql.NpgsqlParameter("oldUser", oldUsername);
-                    var pNew = new Npgsql.NpgsqlParameter("newUser", newUsername);
-
-                    // trx_audit
-                    await _context.Database.ExecuteSqlRawAsync(
-                        "UPDATE trx_audit SET created_by = @newUser WHERE created_by = @oldUser", pNew, pOld);
-                    await _context.Database.ExecuteSqlRawAsync(
-                        "UPDATE trx_audit SET updated_by = @newUser WHERE updated_by = @oldUser", pNew, pOld);
-                    await _context.Database.ExecuteSqlRawAsync(
-                        "UPDATE trx_audit SET approval_by = @newUser WHERE approval_by = @oldUser", pNew, pOld);
-
-                    // trx_audit_checklist
-                    await _context.Database.ExecuteSqlRawAsync(
-                        "UPDATE trx_audit_checklist SET created_by = @newUser WHERE created_by = @oldUser", pNew, pOld);
-                    await _context.Database.ExecuteSqlRawAsync(
-                        "UPDATE trx_audit_checklist SET updated_by = @newUser WHERE updated_by = @oldUser", pNew, pOld);
-
-                    // trx_audit_media
-                    await _context.Database.ExecuteSqlRawAsync(
-                        "UPDATE trx_audit_media SET created_by = @newUser WHERE created_by = @oldUser", pNew, pOld);
-                    await _context.Database.ExecuteSqlRawAsync(
-                        "UPDATE trx_audit_media SET updated_by = @newUser WHERE updated_by = @oldUser", pNew, pOld);
-
-                    // trx_audit_qq
-                    await _context.Database.ExecuteSqlRawAsync(
-                        "UPDATE trx_audit_qq SET created_by = @newUser WHERE created_by = @oldUser", pNew, pOld);
-                    await _context.Database.ExecuteSqlRawAsync(
-                        "UPDATE trx_audit_qq SET updated_by = @newUser WHERE updated_by = @oldUser", pNew, pOld);
+                    await RenameUsernameReferencesAsync(_context, oldUsername, newUsername);
                 }
 
                 // ==== Ambil pilihan terbaru dari form ====
@@ -624,8 +593,6 @@ namespace e_Pas_CMS.Controllers
                     }
 
                     // === NON-DEFAULT_SPBU ===
-                    bool addedAny = false;
-
                     // 1) Kombinasi Region
                     if (regionIds.Any())
                     {
@@ -648,7 +615,6 @@ namespace e_Pas_CMS.Controllers
                                     sbm = null,
                                     spbu_id = null
                                 });
-                                addedAny = true;
                             }
                         }
                     }
@@ -675,7 +641,6 @@ namespace e_Pas_CMS.Controllers
                                     sbm = sbm,
                                     spbu_id = null
                                 });
-                                addedAny = true;
                             }
                         }
                     }
@@ -747,7 +712,6 @@ namespace e_Pas_CMS.Controllers
             return RedirectToAction("Index");
         }
 
-
         private ActionResult HttpNotFound()
         {
             throw new NotImplementedException();
@@ -782,7 +746,6 @@ namespace e_Pas_CMS.Controllers
 
             return View(result);
         }
-
 
         [HttpGet("GetSpbuList")]
         public async Task<IActionResult> GetSpbuList(int page = 1, int pageSize = 10, string search = "")
@@ -965,43 +928,6 @@ namespace e_Pas_CMS.Controllers
                 var auditNextSql = @"SELECT * FROM spbu WHERE id = @id LIMIT 1;";
                 var auditNextRes = await conn.QueryFirstOrDefaultAsync<dynamic>(auditNextSql, new { id = spbuId });
 
-                //if (auditFlow != null)
-                //{
-                //    string passedGood = auditFlow.passed_good;
-                //    string passedExcellent = auditFlow.passed_excellent;
-                //    string passedAuditLevel = auditFlow.passed_audit_level;
-                //    string failed_audit_level = auditFlow.failed_audit_level;
-
-                //    if (string.IsNullOrWhiteSpace(passedGood) && string.IsNullOrWhiteSpace(passedExcellent) && goodStatus == "CERTIFIED" && excellentStatus == "CERTIFIED")
-                //    {
-                //        auditNext = passedAuditLevel;
-                //    }
-                //    else if (string.IsNullOrWhiteSpace(passedGood) && string.IsNullOrWhiteSpace(passedExcellent) && goodStatus == "CERTIFIED" && excellentStatus == "NOT CERTIFIED")
-                //    {
-                //        auditNext = passedAuditLevel;
-                //    }
-                //    else if (string.IsNullOrWhiteSpace(passedGood) && string.IsNullOrWhiteSpace(passedExcellent) && goodStatus == "NOT CERTIFIED" && excellentStatus == "NOT CERTIFIED")
-                //    {
-                //        auditNext = failed_audit_level;
-                //    }
-                //    else if (goodStatus == "CERTIFIED" && excellentStatus == "NOT CERTIFIED")
-                //    {
-                //        auditNext = passedGood;
-                //    }
-                //    else if (goodStatus == "CERTIFIED" && excellentStatus == "CERTIFIED")
-                //    {
-                //        auditNext = passedExcellent;
-                //    }
-                //    else if (string.IsNullOrWhiteSpace(passedGood) && string.IsNullOrWhiteSpace(passedExcellent) && finalScore >= 75)
-                //    {
-                //        auditNext = passedAuditLevel;
-                //    }
-                //    else
-                //    {
-                //        auditNext = failed_audit_level;
-                //    }
-                //}
-
                 auditNext = auditNextRes.audit_next;
 
                 var auditlevelClassSql = @"SELECT audit_level_class FROM master_audit_flow WHERE audit_level = @level LIMIT 1;";
@@ -1021,8 +947,8 @@ namespace e_Pas_CMS.Controllers
 
                 if (isBasicOperational)
                 {
-                    var sqlChecklist = "select id from master_questioner where type = 'Basic Operational' and category = 'CHECKLIST' order by version desc limit 1";
-                    checklistId = await conn2.QueryFirstOrDefaultAsync<string>(sqlChecklist);
+                    var sqlChecklistBO = "select id from master_questioner where type = 'Basic Operational' and category = 'CHECKLIST' order by version desc limit 1";
+                    checklistId = await conn2.QueryFirstOrDefaultAsync<string>(sqlChecklistBO);
                 }
                 else
                 {
@@ -1077,5 +1003,45 @@ namespace e_Pas_CMS.Controllers
             return RedirectToAction("Add");
         }
 
+        // ======================= HELPER RENAME USERNAME =========================
+        // Pakai lower(trim(...)) + ExecuteSqlInterpolated agar match case-insensitive & aman parameter
+        private static async Task RenameUsernameReferencesAsync(EpasDbContext ctx, string oldUsername, string newUsername)
+        {
+            string oldU = (oldUsername ?? "").Trim();
+            string newU = (newUsername ?? "").Trim();
+
+            if (string.IsNullOrEmpty(oldU) || string.IsNullOrEmpty(newU) || string.Equals(oldU, newU, StringComparison.Ordinal))
+                return;
+
+            async Task<int> UpdateCol(string table, string column)
+            {
+                var sql = $@"
+                UPDATE {table}
+                   SET {column} = @p0
+                 WHERE lower(trim({column})) = lower(trim(@p1))";
+                
+                return await ctx.Database.ExecuteSqlRawAsync(sql, newU, oldU);
+            }
+
+            var updated = new Dictionary<string, int>
+            {
+                [$"trx_audit.created_by"] = await UpdateCol("trx_audit", "created_by"),
+                [$"trx_audit.updated_by"] = await UpdateCol("trx_audit", "updated_by"),
+                [$"trx_audit.approval_by"] = await UpdateCol("trx_audit", "approval_by"),
+
+                [$"trx_audit_checklist.created_by"] = await UpdateCol("trx_audit_checklist", "created_by"),
+                [$"trx_audit_checklist.updated_by"] = await UpdateCol("trx_audit_checklist", "updated_by"),
+
+                [$"trx_audit_media.created_by"] = await UpdateCol("trx_audit_media", "created_by"),
+                [$"trx_audit_media.updated_by"] = await UpdateCol("trx_audit_media", "updated_by"),
+
+                [$"trx_audit_qq.created_by"] = await UpdateCol("trx_audit_qq", "created_by"),
+                [$"trx_audit_qq.updated_by"] = await UpdateCol("trx_audit_qq", "updated_by")
+            };
+
+            // Optional: debug log jumlah baris ter-update
+            foreach (var kv in updated)
+                Console.WriteLine($"[RenameUsername] {kv.Key} => {kv.Value} rows");
+        }
     }
 }
