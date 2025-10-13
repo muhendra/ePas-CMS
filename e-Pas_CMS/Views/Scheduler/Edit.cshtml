@@ -1,6 +1,7 @@
 ﻿@model e_Pas_CMS.ViewModels.AuditEditViewModel
 @{
     Layout = "~/Views/Shared/_Layout.cshtml";
+    var statusUpper = (Model?.Status ?? "").Trim().ToUpperInvariant();
 }
 
 <div class="container py-4 px-3">
@@ -10,22 +11,35 @@
         @Html.HiddenFor(m => m.Id)
         @Html.HiddenFor(m => m.SpbuId, new { id = "SpbuId" })
         @Html.HiddenFor(m => m.AppUserId, new { id = "AppUserId" })
-        <div class="form-floating mb-3">
-            @Html.DropDownListFor(m => m.Status,
-                     new SelectList(new[]
-                     {
-            new { Value = "DRAFT",         Text = "Draft" },
+
+        @if (statusUpper == "DRAFT" || statusUpper == "NOT_STARTED" || statusUpper == "BELUM DIMULAI")
+        {
+            <div class="form-floating mb-3" id="StatusSelectWrap">
+                @Html.DropDownListFor(m => m.Status,
+                         new SelectList(new[]
+                         {
+            new { Value = "DRAFT",       Text = "Draft" },
             new { Value = "NOT_STARTED", Text = "Belum Dimulai" }
             }, "Value", "Text", Model.Status),
-                     new { @class = "form-select", id = "Status" })
-            <label for="Status">Status</label>
-        </div>
+                         new { @class = "form-select", id = "StatusSelect" })
+                <label for="StatusSelect">Status</label>
+            </div>
+        }
 
         <div class="card shadow-sm rounded-4 p-4 mb-4">
             <h5 class="fw-semibold mb-3 text-primary">Informasi SPBU & Auditor</h5>
-            <label>Status</label>
+
+            <label class="form-label">Status</label>
             <div class="form-floating mb-3">
-                @Html.TextBoxFor(m => m.Status, new { @class = "form-control", @readonly = "readonly", disabled = "disabled", placeholder = "Status" })
+                @Html.TextBoxFor(m => m.Status, new
+                    {
+                        @class = "form-control",
+                        id = "StatusReadonly",
+                        @readonly = "readonly",
+                        disabled = "disabled",
+                        placeholder = "Status"
+                    })
+                <label for="StatusReadonly">Status</label>
             </div>
 
             <div class="mb-3">
@@ -53,14 +67,14 @@
                 <label for="AuditLevel">Audit Level</label>
             </div>
 
-
             <div class="form-floating mb-3">
                 @Html.DropDownListFor(m => m.AuditType, new SelectList(new[]
                          {
-                new { Value = "Regular Audit", Text = "Regular Audit" },
-                new { Value = "Mystery Audit", Text = "Mystery Audit" },
-                new { Value = "Basic Operational", Text = "Basic Operational" }
-                }, "Value", "Text", Model.AuditType), new { @class = "form-select", id = "AuditType" })
+                new { Value = "Regular Audit",    Text = "Regular Audit" },
+                new { Value = "Mystery Audit",    Text = "Mystery Audit" },
+                new { Value = "Basic Operational",Text = "Basic Operational" }
+                }, "Value", "Text", Model.AuditType),
+                         new { @class = "form-select", id = "AuditType" })
                 <label for="AuditType">Audit Type</label>
             </div>
 
@@ -125,10 +139,11 @@
         function loadSpbuList(search = "") {
             $.get("@Url.Action("GetSpbuList", "Scheduler")", { search: search, page: spbuPage }, function (data) {
                 let html = "<ul class='list-group'>";
-                data.items.forEach(item => {
+                (data.items || []).forEach(item => {
+                    const text = `${item.spbu_no} - ${item.address}`;
                     html += `<li class='list-group-item list-group-item-action' style='cursor:pointer'
-                            onclick="selectSpbu('${item.id}', '${item.spbu_no} - ${item.address}')">
-                            ${item.spbu_no} - ${item.address}</li>`;
+                                onclick="selectSpbu('${item.id}', '${text.replace(/'/g, "\\'")}')">
+                                ${text}</li>`;
                 });
                 html += "</ul>";
                 $("#spbuList").html(html);
@@ -138,9 +153,10 @@
         function loadAuditorList(search = "") {
             $.get("@Url.Action("GetAuditorList", "Scheduler")", { search: search, page: auditorPage }, function (data) {
                 let html = "<ul class='list-group'>";
-                data.items.forEach(item => {
+                (data.items || []).forEach(item => {
                     html += `<li class='list-group-item list-group-item-action' style='cursor:pointer'
-                            onclick="selectAuditor('${item.id}', '${item.text}')">${item.text}</li>`;
+                                onclick="selectAuditor('${item.id}', '${(item.text || "").replace(/'/g, "\\'")}')">
+                                ${item.text}</li>`;
                 });
                 html += "</ul>";
                 $("#auditorList").html(html);
@@ -183,6 +199,25 @@
             }
         }
 
+        // Hide/Show dropdown Status (client-side safety net)
+        function toggleStatusVisibility(initialStatus) {
+            const s = (initialStatus || $("#StatusSelect").val() || "")
+                .toString().trim().toUpperCase();
+
+            const $wrap = $("#StatusSelectWrap");
+            const $select = $("#StatusSelect");
+
+            if (!$wrap.length) return; // dropdown tidak dirender (server-side sudah menyembunyikan)
+
+            if (s === "UNDER_REVIEW" || s === "VERIFIED") {
+                $wrap.hide();
+                $select.prop("disabled", true);
+            } else {
+                $wrap.show();
+                $select.prop("disabled", false);
+            }
+        }
+
         $(document).ready(function () {
             $("#searchSpbu").on("input", function () {
                 spbuPage = 1;
@@ -200,6 +235,14 @@
             document.addEventListener('hidden.bs.modal', function () {
                 document.body.classList.remove('modal-open');
                 document.querySelectorAll('.modal-backdrop').forEach(e => e.remove());
+            });
+
+            // Jalankan pengecekan berdasarkan nilai server
+            toggleStatusVisibility('@statusUpper');
+
+            // Jika dropdown ada & berubah, evaluasi lagi
+            $(document).on("change", "#StatusSelect", function () {
+                toggleStatusVisibility($(this).val());
             });
         });
     </script>
