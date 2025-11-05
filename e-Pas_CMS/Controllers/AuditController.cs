@@ -759,6 +759,7 @@ WHERE
         [HttpGet("Audit/Detail/{id}")]
         public async Task<IActionResult> Detail(string id)
         {
+
             // --- EF Core tetap pakai _context untuk data LINQ ---
             var audit = await (
                 from ta in _context.trx_audits
@@ -1052,17 +1053,48 @@ WHERE
                       mqd.is_penalty = true AND 
                       (mqd.is_relaksasi = false OR mqd.is_relaksasi IS NULL);";
 
+            string auditNext = "";
+            string levelspbu = null;
+
+
+            // === Hitung Compliance
+            var elements = BuildHierarchy(checklistData, mediaList);
+            foreach (var element in elements) AssignWeightRecursive(element);
+            CalculateChecklistScores(elements);
+            CalculateOverallScore(new DetailReportViewModel { Elements = elements }, checklistData);
+            var modelstotal = new DetailReportViewModel { Elements = elements };
+            CalculateOverallScore(modelstotal, checklistData);
+            decimal? totalScore = modelstotal.TotalScore;
+            var compliance = HitungComplianceLevelDariElements(elements);
+
+            // === Compliance validation
+            var sss = Math.Round(compliance.SSS ?? 0, 2);
+            var eqnq = Math.Round(compliance.EQnQ ?? 0, 2);
+            var rfs = Math.Round(compliance.RFS ?? 0, 2);
+            var vfc = Math.Round(compliance.VFC ?? 0, 2);
+            var epo = Math.Round(compliance.EPO ?? 0, 2);
+
+            bool failGood = sss < 80 || eqnq < 85 || rfs < 85 || vfc < 15 || epo < 25;
+            bool failExcellent = sss < 85 || eqnq < 85 || rfs < 85 || vfc < 20 || epo < 50;
+
+
             var penaltyExcellentResult = await conn.ExecuteScalarAsync<string>(penaltyExcellentQuery, new { id = model.AuditId });
             var penaltyGoodResult = await conn.ExecuteScalarAsync<string>(penaltyGoodQuery, new { id = model.AuditId });
 
             bool hasExcellentPenalty = !string.IsNullOrEmpty(penaltyExcellentResult);
             bool hasGoodPenalty = !string.IsNullOrEmpty(penaltyGoodResult);
 
-            goodStatus = (model.TotalScore >= 75 && !hasGoodPenalty) ? "CERTIFIED" : "NOT CERTIFIED";
-            excellentStatus = (model.TotalScore >= 80 && !hasExcellentPenalty) ? "CERTIFIED" : "NOT CERTIFIED";
+            // === Update status with compliance logic
+            goodStatus = (model.TotalScore >= 75 && !hasGoodPenalty && !failGood)
+                ? "CERTIFIED"
+                : "NOT CERTIFIED";
 
-            string auditNext = nextauditsspbu;
-            string levelspbu = null;
+            excellentStatus = (model.TotalScore >= 80 && !hasExcellentPenalty && !failExcellent)
+                ? "CERTIFIED" 
+                : "NOT CERTIFIED";
+
+            auditNext = nextauditsspbu;
+            levelspbu = null;
 
             var auditFlowSql = @"SELECT * FROM master_audit_flow WHERE audit_level = @level LIMIT 1;";
             var auditFlow = await conn.QueryFirstOrDefaultAsync<dynamic>(auditFlowSql, new { level = model.AuditCurrent });
@@ -1114,6 +1146,8 @@ WHERE
                 : "";
             }
 
+            string test = model.AuditNext;
+
             decimal score = Math.Round((decimal)model.TotalScore, 2);
             var trxAuditSql = @"SELECT * FROM trx_audit WHERE id = @id LIMIT 1;";
             var trxAudit = await conn.QueryFirstOrDefaultAsync<dynamic>(trxAuditSql, new { id });
@@ -1148,14 +1182,19 @@ WHERE
                 const string updateSpbuWithNext = @"
                 UPDATE spbu
                 SET audit_next = @auditnext,
-                    ""level""   = @level
+                    ""level""   = @level,
+                    audit_current = @current,
+                    updated_date = now(),
+                    updated_by = @upby
                 WHERE spbu_no  = @spbuNo";
 
                 await conn.ExecuteAsync(updateSpbuWithNext, new
                 {
                     auditnext = model.AuditNext,
                     level = levelspbu,
-                    spbuNo = model.SpbuNo
+                    spbuNo = model.SpbuNo,
+                    current = model.AuditCurrent,
+                    upby = currentUser
                 });
             }
             else
@@ -1190,17 +1229,20 @@ WHERE
                 const string updateSpbuWithNext = @"
                 UPDATE spbu
                 SET audit_next = @auditnext,
-                    ""level""   = @level
+                    ""level""   = @level,
+                    audit_current = @current,
+                    updated_date = now(),
+                    updated_by = @upby
                 WHERE spbu_no  = @spbuNo";
 
                 await conn.ExecuteAsync(updateSpbuWithNext, new
                 {
                     auditnext = model.AuditNext,
                     level = levelspbu,
-                    spbuNo = model.SpbuNo
+                    spbuNo = model.SpbuNo,
+                    current = model.AuditCurrent,
+                    upby = currentUser
                 });
-
-                
             }
 
             await GenerateAllVerifiedPdfReports(id);

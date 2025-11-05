@@ -823,13 +823,17 @@ namespace e_Pas_CMS.Controllers
 
             var allowedStatuses = new[] { "VERIFIED", "UNDER_REVIEW" };
 
+            var start = new DateTime(2025, 08, 1);
+            var end = new DateTime(2025, 09, 1);
+
             var query = _context.trx_audits
                 .Include(a => a.spbu)
                 .Include(a => a.app_user)
                 .Where(a =>
                     allowedStatuses.Contains(a.status) &&
-                    a.created_date >= new DateTime(2025, 8, 1) &&
-                    a.created_date < new DateTime(2025, 9, 1) && a.audit_type == "Basic Operational"
+                    a.audit_type != "Basic Operational" &&
+                    ((a.audit_execution_time ?? a.created_date) >= start) &&
+                    ((a.audit_execution_time ?? a.created_date) < end)
                 );
 
             if (userRegion.Any())
@@ -863,7 +867,7 @@ namespace e_Pas_CMS.Controllers
         FROM master_questioner_detail 
         WHERE number IS NOT NULL AND TRIM(number) <> '' 
         ORDER BY number ASC;
-    ");
+        ");
 
             var numberList = checklistNumbers.ToList();
 
@@ -874,7 +878,7 @@ namespace e_Pas_CMS.Controllers
         "audit_level","audit_next","good_status","excellent_status","Total Score",
         "SSS","EQnQ","RFS","VFC","EPO","wtms","qq","wmef","format_fisik","cpo",
         "kelas_spbu","penalty_good_alerts","penalty_excellent_alerts"
-    };// Tambahkan header number checklist
+        };// Tambahkan header number checklist
             csv.AppendLine(string.Join(",", headers.Concat(numberList).Select(h => $"\"{h}\"")));
 
             //csv.AppendLine(string.Join(",", headers.Select(h => $"\"{h}\"")));
@@ -886,21 +890,21 @@ namespace e_Pas_CMS.Controllers
             foreach (var a in audits)
             {
                 var sql = @"
-        SELECT 
-            mqd.weight, 
-            tac.score_input, 
-            tac.score_x, 
-            mqd.is_relaksasi
-        FROM master_questioner_detail mqd
-        LEFT JOIN trx_audit_checklist tac 
-            ON tac.master_questioner_detail_id = mqd.id 
-            AND tac.trx_audit_id = @id
-        WHERE mqd.master_questioner_id = (
-            SELECT master_questioner_checklist_id 
-            FROM trx_audit 
-            WHERE id = @id
-        )
-        AND mqd.type = 'QUESTION'";
+                SELECT 
+                    mqd.weight, 
+                    tac.score_input, 
+                    tac.score_x, 
+                    mqd.is_relaksasi
+                FROM master_questioner_detail mqd
+                LEFT JOIN trx_audit_checklist tac 
+                    ON tac.master_questioner_detail_id = mqd.id 
+                    AND tac.trx_audit_id = @id
+                WHERE mqd.master_questioner_id = (
+                    SELECT master_questioner_checklist_id 
+                    FROM trx_audit 
+                    WHERE id = @id
+                )
+                AND mqd.type = 'QUESTION'";
 
                 var checklist = (await conn.QueryAsync<(decimal? weight, string score_input, decimal? score_x, bool? is_relaksasi)>(
     sql,
