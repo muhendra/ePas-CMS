@@ -984,6 +984,7 @@ WHERE
             var model = MapToViewModel(basic);
 
             string nextauditsspbu = "";
+            string spbuid = "";
 
             var existingSPBU = await _context.spbus
                     .Where(x => x.spbu_no == model.SpbuNo)
@@ -993,6 +994,7 @@ WHERE
             if (existingSPBU != null)
             {
                 nextauditsspbu = existingSPBU.audit_next;
+                spbuid = existingSPBU.id;
             }
 
             var penaltySql = @"
@@ -1215,10 +1217,9 @@ WHERE
                 );
                 if (affected == 0) return NotFound();
 
-                const string updateFeedback = @"
-                UPDATE trx_feedback
+                const string updateFeedback = @"UPDATE trx_feedback
                 SET next_audit_before = @auditbefore
-                WHERE trx_audit_id    = @id";
+                WHERE trx_audit_id = @trxauditid";
 
                 await conn.ExecuteAsync(updateFeedback, new
                 {
@@ -1242,6 +1243,16 @@ WHERE
                     spbuNo = model.SpbuNo,
                     current = model.AuditCurrent,
                     upby = currentUser
+                });
+
+                const string updatUnused = @"
+                UPDATE trx_audit
+                SET status = 'DELETED'
+                WHERE spbu_id = @spbuid AND STATUS IN ('DRAFT', 'NOT_STARTED')";
+
+                await conn.ExecuteAsync(updatUnused, new
+                {
+                    spbuid = spbuid
                 });
             }
 
