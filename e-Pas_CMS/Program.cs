@@ -62,6 +62,13 @@ app.UseStaticFiles();
 
 app.UseRouting();
 
+app.Use(async (context, next) =>
+{
+    if (context.Request.Path.Equals("/privacy-policy", StringComparison.OrdinalIgnoreCase))
+        context.Request.Path = "/privacy-policy.html";
+    await next();
+});
+
 app.UseCors("AllowFrontend");
 
 app.UseSession();

@@ -1,0 +1,112 @@
+﻿@{
+    Layout = null; // ini layout paling atas
+    var pageTitle = ViewData["Title"] as string ?? "E-PAS";
+}
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>@pageTitle</title>
+    <style>
+        :root {
+            --fg: #1f2937;
+            --muted: #6b7280;
+            --brand: #0ea5e9;
+            --bg: #ffffff;
+            --card: #f8fafc;
+        }
+
+        html, body {
+            margin: 0;
+            padding: 0;
+            background: var(--bg);
+            color: var(--fg);
+            font-family: -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Inter,Ubuntu,"Helvetica Neue",Arial,sans-serif;
+            line-height: 1.6
+        }
+
+        .wrap {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 28px 20px 64px
+        }
+
+        h1, h2, h3 {
+            line-height: 1.25
+        }
+
+        h1 {
+            font-size: 2rem;
+            margin: 0 0 8px
+        }
+
+        .meta {
+            color: var(--muted);
+            margin: 0 0 24px
+        }
+
+        nav {
+            background: var(--card);
+            border: 1px solid #e5e7eb;
+            border-radius: 10px;
+            padding: 16px;
+            margin: 16px 0 28px
+        }
+
+            nav a {
+                color: var(--brand);
+                text-decoration: none
+            }
+
+            nav ol {
+                margin: 0 0 0 18px;
+                padding: 0
+            }
+
+        section {
+            margin: 28px 0
+        }
+
+        a {
+            color: var(--brand)
+        }
+
+        code {
+            background: #f1f5f9;
+            border-radius: 4px;
+            padding: 0 4px
+        }
+
+        ul {
+            margin: 8px 0 8px 22px
+        }
+
+        .note {
+            background: #fef3c7;
+            border: 1px solid #fde68a;
+            border-radius: 10px;
+            padding: 12px;
+            margin: 18px 0;
+            color: #92400e
+        }
+
+        footer {
+            margin-top: 36px;
+            color: var(--muted);
+            font-size: .95rem
+        }
+    </style>
+    @RenderSection("Head", required: false)
+</head>
+<body>
+    <main class="wrap">
+        @RenderBody()
+        <footer>
+            <p>&copy; <span id="y"></span> PT. Pertamina Patra Niaga — PT. Citrabuana Indoloka. Seluruh hak cipta dilindungi.</p>
+        </footer>
+    </main>
+    <script>document.getElementById('y').textContent=new Date().getFullYear();</script>
+    @RenderSection("Scripts", required: false)
+</body>
+</html>
