@@ -573,6 +573,7 @@ namespace e_Pas_CMS.Controllers
                     audit_media_total = 0,
                     audit_mom_intro = "",
                     audit_mom_final = "",
+                    form_type_auditor1 = "FULL",
                     form_status_auditor1 = "NOT_STARTED",
                     status = "NOT_STARTED",
                     created_by = currentUser,
