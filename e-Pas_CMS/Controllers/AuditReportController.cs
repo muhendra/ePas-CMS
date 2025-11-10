@@ -23,6 +23,7 @@ using System.Text;
 using static System.Formats.Asn1.AsnWriter;
 using Microsoft.Extensions.Configuration;
 using System.Data.Common;
+using System.Globalization;
 
 namespace e_Pas_CMS.Controllers
 {
@@ -32,12 +33,14 @@ namespace e_Pas_CMS.Controllers
         private readonly EpasDbContext _context;
         private readonly ILogger<AuditReportController> _logger;
         private readonly IConfiguration _configuration;
+        private readonly IWebHostEnvironment _env;
 
-        public AuditReportController(EpasDbContext context, ILogger<AuditReportController> logger, IConfiguration configuration)
+        public AuditReportController(EpasDbContext context, ILogger<AuditReportController> logger, IConfiguration configuration, IWebHostEnvironment env)
         {
             _context = context;
             _logger = logger;
             _configuration = configuration;
+            _env = env;
         }
 
         public async Task<IActionResult> Index(int pageNumber = 1, int pageSize = 10, string searchTerm = "", int? filterMonth = null, int? filterYear = null)
@@ -803,8 +806,6 @@ namespace e_Pas_CMS.Controllers
             return View(model);
         }
 
-        
-
         [HttpGet]
         public async Task<IActionResult> DownloadCsv(string searchTerm = "")
         {
@@ -823,8 +824,8 @@ namespace e_Pas_CMS.Controllers
 
             var allowedStatuses = new[] { "VERIFIED", "UNDER_REVIEW" };
 
-            var start = new DateTime(2025, 08, 1);
-            var end = new DateTime(2025, 09, 1);
+            var start = new DateTime(2025, 10, 1);
+            var end = new DateTime(2025, 11, 1);
 
             var query = _context.trx_audits
                 .Include(a => a.spbu)
@@ -1201,201 +1202,151 @@ namespace e_Pas_CMS.Controllers
     DateTime? startDate = null,
     DateTime? endDate = null)
         {
-            var currentUser = User.Identity?.Name;
-
-            _context.Database.SetCommandTimeout(123600);
-
-            var userRegion = await (from aur in _context.app_user_roles
-                                    join au in _context.app_users on aur.app_user_id equals au.id
-                                    where au.username == currentUser
-                                    select aur.region)
-                               .Distinct()
-                               .Where(r => r != null)
-                               .ToListAsync();
-
-            var allowedStatuses = new[] { "VERIFIED" };
-
-            var query = _context.trx_audits
-                .Include(a => a.spbu)
-                .Include(a => a.app_user)
-                .Where(a =>
-                    allowedStatuses.Contains(a.status) &&
-                    a.audit_execution_time >= startDate &&
-                    a.audit_execution_time < endDate &&
-                    a.audit_type != "Basic Operational"
-                );
-
-            if (userRegion.Any())
+            if (startDate == null || endDate == null)
             {
-                query = query.Where(x => userRegion.Contains(x.spbu.region));
+                // boleh kamu ganti default-nya kalau perlu
+                return BadRequest("startDate dan endDate wajib diisi.");
             }
 
-            if (!string.IsNullOrWhiteSpace(searchTerm))
+            // Normalisasi jam supaya perbandingan gampang
+            startDate = startDate.Value.Date;
+            endDate = endDate.Value.Date;
+
+            // Folder: wwwroot/Report
+            var reportFolder = Path.Combine(_env.WebRootPath, "Report");
+
+            if (!Directory.Exists(reportFolder))
+                return NotFound("Folder report tidak ditemukan.");
+
+            // Kumpulkan list file berdasarkan rentang bulan
+            var files = new List<string>();
+
+            var cursor = new DateTime(startDate.Value.Year, startDate.Value.Month, 1);
+            var last = new DateTime(endDate.Value.Year, endDate.Value.Month, 1);
+
+            while (cursor <= last)
             {
-                searchTerm = searchTerm.ToLower();
-                query = query.Where(a =>
-                    a.spbu.spbu_no.ToLower().Contains(searchTerm) ||
-                    a.app_user.name.ToLower().Contains(searchTerm) ||
-                    a.status.ToLower().Contains(searchTerm) ||
-                    a.spbu.address.ToLower().Contains(searchTerm) ||
-                    a.spbu.province_name.ToLower().Contains(searchTerm) ||
-                    a.spbu.city_name.ToLower().Contains(searchTerm)
-                );
-            }
+                var monthAbbr = cursor.ToString("MMM", CultureInfo.InvariantCulture); // Jul, Aug, dst
+                var fileName = $"{monthAbbr}_{cursor:yyyy}_Audit_Summary.csv";
+                var fullPath = Path.Combine(reportFolder, fileName);
 
-            var audits = await query
-                .OrderByDescending(a => a.audit_execution_time ?? a.updated_date)
-                .ToListAsync();
-
-            // Header CSV (tanpa kolom checklist number)
-            var csv = new StringBuilder();
-            var headers = new[]
-            {
-        "send_date","Audit Date","spbu_no","region","year","address","city_name","tipe_spbu","rayon",
-        "audit_level","audit_next","good_status","excellent_status","Total Score",
-        "SSS","EQnQ","RFS","VFC","EPO","wtms","qq","wmef","format_fisik","cpo",
-        "kelas_spbu","penalty_good_alerts","penalty_excellent_alerts"
-    };
-            csv.AppendLine(string.Join(",", headers.Select(h => $"\"{h}\"")));
-
-            await using var conn = _context.Database.GetDbConnection();
-            if (conn.State != ConnectionState.Open)
-                await conn.OpenAsync();
-
-            foreach (var a in audits)
-            {
-                var auditDate = a.audit_execution_time ?? a.updated_date ?? DateTime.MinValue;
-
-                var submitDate = a.approval_date == null || a.approval_date == DateTime.MinValue
-                    ? a.updated_date
-                    : a.approval_date;
-
-                // === Penalty Check (EXCELLENT - non-relaksasi)
-                var penaltyExcellentQuery = @"
-            SELECT STRING_AGG(mqd.penalty_alert, ', ')
-            FROM trx_audit_checklist tac
-            JOIN master_questioner_detail mqd ON mqd.id = tac.master_questioner_detail_id
-            JOIN trx_audit ta ON ta.id = tac.trx_audit_id
-            WHERE tac.trx_audit_id = @id
-              AND (
-                    (
-                        tac.master_questioner_detail_id IN (
-                            '555fe2e4-b95b-461b-9c92-ad8b5c837119',
-                            'bafc206f-ed29-4bbc-8053-38799e186fb0',
-                            'd26f4caa-e849-4ab4-9372-298693247272'
-                        )
-                        AND tac.score_input <> 'A'
-                    )
-                 OR (
-                        tac.master_questioner_detail_id = '5e9ffc47-de99-4d7d-b8bc-0fb9b7acc81b'
-                        AND ta.created_date < DATE '2025-06-01'
-                        AND tac.score_input <> 'A'
-                    )
-                 OR (
-                          (
-                              (mqd.penalty_excellent_criteria = 'LT_1' AND tac.score_input <> 'A')
-                           OR (mqd.penalty_excellent_criteria = 'EQ_0' AND tac.score_input = 'F')
-                          )
-                          AND COALESCE(mqd.is_relaksasi, false) = false
-                          AND mqd.is_penalty = true
-                          AND NOT (
-                              mqd.id = '5e9ffc47-de99-4d7d-b8bc-0fb9b7acc81b'
-                              AND ta.created_date >= DATE '2025-06-01'
-                          )
-                      )
-                );";
-
-                // === Penalty Check (GOOD - non-relaksasi)
-                var penaltyGoodQuery = @"
-                SELECT STRING_AGG(mqd.penalty_alert, ', ')
-                FROM trx_audit_checklist tac
-                JOIN master_questioner_detail mqd ON mqd.id = tac.master_questioner_detail_id
-                WHERE tac.trx_audit_id = @id
-                  AND tac.score_input = 'F'
-                  AND mqd.is_penalty = true
-                  AND COALESCE(mqd.is_relaksasi, false) = false
-                  AND mqd.id <> '5e9ffc47-de99-4d7d-b8bc-0fb9b7acc81b';";
-
-                var penaltyExcellentResult = await conn.ExecuteScalarAsync<string>(penaltyExcellentQuery, new { id = a.id });
-                var penaltyGoodResult = await conn.ExecuteScalarAsync<string>(penaltyGoodQuery, new { id = a.id });
-
-                // === Hitung Compliance
-                var checklistData = await GetChecklistDataAsync(conn, a.id);
-                var mediaList = await GetMediaPerNodeAsync(conn, a.id);
-                var elements = BuildHierarchy(checklistData, mediaList);
-                foreach (var element in elements) AssignWeightRecursive(element);
-                CalculateChecklistScores(elements);
-
-                // Total score
-                var modelTotal = new DetailReportViewModel { Elements = elements };
-                CalculateOverallScore(modelTotal, checklistData);
-                decimal? totalScore = modelTotal.TotalScore;
-
-                // Compliance breakdown
-                var compliance = HitungComplianceLevelDariElements(elements);
-                var sss = Math.Round(compliance.SSS ?? 0, 2);
-                var eqnq = Math.Round(compliance.EQnQ ?? 0, 2);
-                var rfs = Math.Round(compliance.RFS ?? 0, 2);
-                var vfc = Math.Round(compliance.VFC ?? 0, 2);
-                var epo = Math.Round(compliance.EPO ?? 0, 2);
-
-                decimal scores = (decimal)(totalScore ?? a.score);
-
-                csv.AppendLine(string.Join(",", new[]
+                if (System.IO.File.Exists(fullPath))
                 {
-                    $"\"{submitDate:yyyy-MM-dd}\"",
-                    $"\"{auditDate:yyyy-MM-dd}\"",
-                    $"\"{a.spbu.spbu_no}\"",
-                    $"\"{a.spbu.region}\"",
-                    $"\"{a.spbu.year ?? DateTime.Now.Year}\"",
-                    $"\"{a.spbu.address}\"",
-                    $"\"{a.spbu.city_name}\"",
-                    $"\"{a.spbu.owner_type}\"",
-                    $"\"{a.spbu.sbm}\"",
-                    $"\"{a.audit_level}\"",
-                    $"\"{a.spbu.audit_next}\"",
-                    $"\"{a.good_status}\"",
-                    $"\"{a.excellent_status}\"",
-                    $"\"{scores:0.##}\"",
-                    $"\"{sss}\"",
-                    $"\"{eqnq}\"",
-                    $"\"{rfs}\"",
-                    $"\"{vfc}\"",
-                    $"\"{epo}\"",
-                    $"\"{a.spbu.wtms}\"",
-                    $"\"{a.spbu.qq}\"",
-                    $"\"{a.spbu.wmef}\"",
-                    $"\"{a.spbu.format_fisik}\"",
-                    $"\"{a.spbu.cpo}\"",
-                    $"\"{a.spbu.level}\"",
-                    $"\"{penaltyGoodResult}\"",
-                    $"\"{penaltyExcellentResult}\""
-                }));
+                    files.Add(fullPath);
+                }
+
+                cursor = cursor.AddMonths(1);
             }
 
-            var fileName = $"Audit_Summary_{DateTime.Now:yyyyMMddHHmmss}.csv";
-            var bytes = Encoding.UTF8.GetBytes(csv.ToString());
-            return File(bytes, "text/csv", fileName);
+            if (files.Count == 0)
+                return NotFound("Tidak ada file report untuk periode tersebut.");
+
+            var sb = new StringBuilder();
+            bool headerWritten = false;
+
+            searchTerm = searchTerm?.Trim();
+            bool hasSearch = !string.IsNullOrWhiteSpace(searchTerm);
+
+            foreach (var file in files)
+            {
+                var lines = await System.IO.File.ReadAllLinesAsync(file);
+                if (lines.Length == 0) continue;
+
+                // Tuliskan header sekali saja (baris pertama file pertama)
+                if (!headerWritten)
+                {
+                    sb.AppendLine(lines[0]);
+                    headerWritten = true;
+                }
+
+                // Mulai dari baris ke-2 (index 1) = data
+                for (int i = 1; i < lines.Length; i++)
+                {
+                    var line = lines[i];
+                    if (string.IsNullOrWhiteSpace(line)) continue;
+
+                    // Filter searchTerm (cek di seluruh baris)
+                    if (hasSearch &&
+                        !line.Contains(searchTerm, StringComparison.OrdinalIgnoreCase))
+                    {
+                        continue;
+                    }
+
+                    // Filter tanggal berdasarkan kolom "Audit Date"
+                    // Asumsi format baris: "send_date","Audit Date","spbu_no",...
+                    // dan kita simpan sebagai "yyyy-MM-dd"
+                    if (startDate != null || endDate != null)
+                    {
+                        var cols = SplitCsvLine(line); // helper di bawah
+                        if (cols.Length > 1) // kolom ke-2 = Audit Date
+                        {
+                            var auditDateStr = cols[1]; // sudah tanpa tanda kutip
+                            if (DateTime.TryParse(auditDateStr, out var auditDate))
+                            {
+                                auditDate = auditDate.Date;
+
+                                if (auditDate < startDate.Value || auditDate > endDate.Value)
+                                    continue;
+                            }
+                        }
+                    }
+
+                    sb.AppendLine(line);
+                }
+            }
+            // Tentukan bulan dan tahun dari endDate (atau current date kalau null)
+            var reportMonth = (startDate ?? DateTime.Now).ToString("MMM", CultureInfo.InvariantCulture); // contoh: "Nov"
+            var reportYear = (endDate ?? DateTime.Now).ToString("yyyy");
+
+            // Format akhir: "Nov_2025_BOA_Audit_Summary_20251110115233.csv"
+            var outFileName = $"{reportMonth}_{reportYear}_BOA_Audit_Summary_{DateTime.Now:yyyyMMddHHmmss}.csv";
+
+            var bytes = Encoding.UTF8.GetBytes(sb.ToString());
+            return File(bytes, "text/csv", outFileName);
         }
 
-        //    public async Task<IActionResult> DownloadCsv(string searchTerm = "")
+        private static string[] SplitCsvLine(string line)
+        {
+            if (string.IsNullOrEmpty(line))
+                return Array.Empty<string>();
+
+            // buang quote awal/akhir, lalu split pakai "," di tengah
+            // contoh: "\"2025-07-01\",\"2025-07-03\",\"xxxx\""
+            // -> 2025-07-01 | 2025-07-03 | xxxx
+            return line.Trim()
+                       .Trim('"')
+                       .Split("\",\"", StringSplitOptions.None);
+        }
+
+        //    [HttpGet]
+        //    public async Task<IActionResult> DownloadCsvByDate(
+        //string searchTerm = "",
+        //DateTime? startDate = null,
+        //DateTime? endDate = null)
         //    {
         //        var currentUser = User.Identity?.Name;
+
+        //        _context.Database.SetCommandTimeout(123600);
 
         //        var userRegion = await (from aur in _context.app_user_roles
         //                                join au in _context.app_users on aur.app_user_id equals au.id
         //                                where au.username == currentUser
         //                                select aur.region)
-        //                   .Distinct()
-        //                   .Where(r => r != null)
-        //                   .ToListAsync();
+        //                           .Distinct()
+        //                           .Where(r => r != null)
+        //                           .ToListAsync();
+
+        //        var allowedStatuses = new[] { "VERIFIED" };
 
         //        var query = _context.trx_audits
-        //.Include(a => a.spbu)
-        //.Include(a => a.app_user)
-        //.Where(a => a.status == "VERIFIED"
-        //    && a.created_date >= new DateTime(2025, 5, 1)
-        //    && a.created_date < new DateTime(2025, 6, 1));
+        //            .Include(a => a.spbu)
+        //            .Include(a => a.app_user)
+        //            .Where(a =>
+        //                allowedStatuses.Contains(a.status) &&
+        //                a.audit_execution_time >= startDate &&
+        //                a.audit_execution_time < endDate &&
+        //                a.audit_type != "Basic Operational"
+        //            );
 
         //        if (userRegion.Any())
         //        {
@@ -1417,21 +1368,137 @@ namespace e_Pas_CMS.Controllers
 
         //        var audits = await query
         //            .OrderByDescending(a => a.audit_execution_time ?? a.updated_date)
-        //            .ToListAsync(); // ❗️ Tidak pakai Skip & Take
+        //            .ToListAsync();
 
-        //        var result = await GetAuditReportViewModels(audits);
-
-        //        // Buat CSV
+        //        // Header CSV (tanpa kolom checklist number)
         //        var csv = new StringBuilder();
-        //        csv.AppendLine("\"Submit Date\",\"Audit Date\",\"SPBU No\",\"Region\",\"Year\",\"Address\",\"City\",\"SBM\",\"Audit Level\",\"Next Audit\",\"Good Status\",\"Excellent Status\",\"Total Score\",\"SSS\",\"EQnQ\",\"RFS\",\"VFC\",\"EPO\",\"WTMS\",\"QQ\",\"WMEF\",\"Format Fisik\",\"CPO\",\"Kelas SPBU\"");
-
-        //        foreach (var r in result)
+        //        var headers = new[]
         //        {
-        //            csv.AppendLine($"\"{r.SubmitDate:yyyy-MM-dd HH:mm:ss}\",\"{r.AuditDate:yyyy-MM-dd HH:mm:ss}\",\"{r.SpbuNo}\",\"{r.Region}\",\"{r.Year}\",\"{r.Address}\",\"{r.City}\",\"{r.SBM}\",\"{r.Auditlevel}\",\"{r.AuditNext}\",\"{r.GoodStatus}\",\"{r.ExcellentStatus}\",\"{r.Score:F2}\",\"{r.SSS:F2}\",\"{r.EQnQ:F2}\",\"{r.RFS:F2}\",\"{r.VFC:F2}\",\"{r.EPO:F2}\",\"{r.WTMS}\",\"{r.QQ}\",\"{r.WMEF}\",\"{r.FormatFisik}\",\"{r.CPO}\",\"{r.KelasSpbu}\"");
+        //    "send_date","Audit Date","spbu_no","region","year","address","city_name","tipe_spbu","rayon",
+        //    "audit_level","audit_next","good_status","excellent_status","Total Score",
+        //    "SSS","EQnQ","RFS","VFC","EPO","wtms","qq","wmef","format_fisik","cpo",
+        //    "kelas_spbu","penalty_good_alerts","penalty_excellent_alerts"
+        //};
+        //        csv.AppendLine(string.Join(",", headers.Select(h => $"\"{h}\"")));
+
+        //        await using var conn = _context.Database.GetDbConnection();
+        //        if (conn.State != ConnectionState.Open)
+        //            await conn.OpenAsync();
+
+        //        foreach (var a in audits)
+        //        {
+        //            var auditDate = a.audit_execution_time ?? a.updated_date ?? DateTime.MinValue;
+
+        //            var submitDate = a.approval_date == null || a.approval_date == DateTime.MinValue
+        //                ? a.updated_date
+        //                : a.approval_date;
+
+        //            // === Penalty Check (EXCELLENT - non-relaksasi)
+        //            var penaltyExcellentQuery = @"
+        //        SELECT STRING_AGG(mqd.penalty_alert, ', ')
+        //        FROM trx_audit_checklist tac
+        //        JOIN master_questioner_detail mqd ON mqd.id = tac.master_questioner_detail_id
+        //        JOIN trx_audit ta ON ta.id = tac.trx_audit_id
+        //        WHERE tac.trx_audit_id = @id
+        //          AND (
+        //                (
+        //                    tac.master_questioner_detail_id IN (
+        //                        '555fe2e4-b95b-461b-9c92-ad8b5c837119',
+        //                        'bafc206f-ed29-4bbc-8053-38799e186fb0',
+        //                        'd26f4caa-e849-4ab4-9372-298693247272'
+        //                    )
+        //                    AND tac.score_input <> 'A'
+        //                )
+        //             OR (
+        //                    tac.master_questioner_detail_id = '5e9ffc47-de99-4d7d-b8bc-0fb9b7acc81b'
+        //                    AND ta.created_date < DATE '2025-06-01'
+        //                    AND tac.score_input <> 'A'
+        //                )
+        //             OR (
+        //                      (
+        //                          (mqd.penalty_excellent_criteria = 'LT_1' AND tac.score_input <> 'A')
+        //                       OR (mqd.penalty_excellent_criteria = 'EQ_0' AND tac.score_input = 'F')
+        //                      )
+        //                      AND COALESCE(mqd.is_relaksasi, false) = false
+        //                      AND mqd.is_penalty = true
+        //                      AND NOT (
+        //                          mqd.id = '5e9ffc47-de99-4d7d-b8bc-0fb9b7acc81b'
+        //                          AND ta.created_date >= DATE '2025-06-01'
+        //                      )
+        //                  )
+        //            );";
+
+        //            // === Penalty Check (GOOD - non-relaksasi)
+        //            var penaltyGoodQuery = @"
+        //            SELECT STRING_AGG(mqd.penalty_alert, ', ')
+        //            FROM trx_audit_checklist tac
+        //            JOIN master_questioner_detail mqd ON mqd.id = tac.master_questioner_detail_id
+        //            WHERE tac.trx_audit_id = @id
+        //              AND tac.score_input = 'F'
+        //              AND mqd.is_penalty = true
+        //              AND COALESCE(mqd.is_relaksasi, false) = false
+        //              AND mqd.id <> '5e9ffc47-de99-4d7d-b8bc-0fb9b7acc81b';";
+
+        //            var penaltyExcellentResult = await conn.ExecuteScalarAsync<string>(penaltyExcellentQuery, new { id = a.id });
+        //            var penaltyGoodResult = await conn.ExecuteScalarAsync<string>(penaltyGoodQuery, new { id = a.id });
+
+        //            // === Hitung Compliance
+        //            var checklistData = await GetChecklistDataAsync(conn, a.id);
+        //            var mediaList = await GetMediaPerNodeAsync(conn, a.id);
+        //            var elements = BuildHierarchy(checklistData, mediaList);
+        //            foreach (var element in elements) AssignWeightRecursive(element);
+        //            CalculateChecklistScores(elements);
+
+        //            // Total score
+        //            var modelTotal = new DetailReportViewModel { Elements = elements };
+        //            CalculateOverallScore(modelTotal, checklistData);
+        //            decimal? totalScore = modelTotal.TotalScore;
+
+        //            // Compliance breakdown
+        //            var compliance = HitungComplianceLevelDariElements(elements);
+        //            var sss = Math.Round(compliance.SSS ?? 0, 2);
+        //            var eqnq = Math.Round(compliance.EQnQ ?? 0, 2);
+        //            var rfs = Math.Round(compliance.RFS ?? 0, 2);
+        //            var vfc = Math.Round(compliance.VFC ?? 0, 2);
+        //            var epo = Math.Round(compliance.EPO ?? 0, 2);
+
+        //            decimal scores = (decimal)(totalScore ?? a.score);
+
+        //            csv.AppendLine(string.Join(",", new[]
+        //            {
+        //                $"\"{submitDate:yyyy-MM-dd}\"",
+        //                $"\"{auditDate:yyyy-MM-dd}\"",
+        //                $"\"{a.spbu.spbu_no}\"",
+        //                $"\"{a.spbu.region}\"",
+        //                $"\"{a.spbu.year ?? DateTime.Now.Year}\"",
+        //                $"\"{a.spbu.address}\"",
+        //                $"\"{a.spbu.city_name}\"",
+        //                $"\"{a.spbu.owner_type}\"",
+        //                $"\"{a.spbu.sbm}\"",
+        //                $"\"{a.audit_level}\"",
+        //                $"\"{a.spbu.audit_next}\"",
+        //                $"\"{a.good_status}\"",
+        //                $"\"{a.excellent_status}\"",
+        //                $"\"{scores:0.##}\"",
+        //                $"\"{sss}\"",
+        //                $"\"{eqnq}\"",
+        //                $"\"{rfs}\"",
+        //                $"\"{vfc}\"",
+        //                $"\"{epo}\"",
+        //                $"\"{a.spbu.wtms}\"",
+        //                $"\"{a.spbu.qq}\"",
+        //                $"\"{a.spbu.wmef}\"",
+        //                $"\"{a.spbu.format_fisik}\"",
+        //                $"\"{a.spbu.cpo}\"",
+        //                $"\"{a.spbu.level}\"",
+        //                $"\"{penaltyGoodResult}\"",
+        //                $"\"{penaltyExcellentResult}\""
+        //            }));
         //        }
 
+        //        var fileName = $"Audit_Summary_{DateTime.Now:yyyyMMddHHmmss}.csv";
         //        var bytes = Encoding.UTF8.GetBytes(csv.ToString());
-        //        return File(bytes, "text/csv", $"Audit_Report_{DateTime.Now:yyyyMMddHHmmss}.csv");
+        //        return File(bytes, "text/csv", fileName);
         //    }
 
         private async Task<List<AuditReportListViewModel>> GetAuditReportViewModels(List<trx_audit> audits)
