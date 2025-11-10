@@ -15,6 +15,8 @@ public partial class trx_audit
 
     public string? app_user_id { get; set; }
 
+    public string? app_user_id_auditor2 { get; set; }
+
     public string? master_questioner_intro_id { get; set; }
 
     public string? master_questioner_checklist_id { get; set; }
@@ -28,6 +30,8 @@ public partial class trx_audit
 
     public DateTime? audit_execution_time { get; set; }
 
+    public DateTime? audit_execution_time_auditor2 { get; set; }
+
     public int? audit_media_upload { get; set; }
 
     public int? audit_media_total { get; set; }
@@ -35,6 +39,14 @@ public partial class trx_audit
     public string? audit_mom_intro { get; set; }
 
     public string? audit_mom_final { get; set; }
+
+    public string? form_type_auditor1 { get; set; }
+
+    public string? form_type_auditor2 { get; set; }
+
+    public string? form_status_auditor1 { get; set; }
+    
+    public string? form_status_auditor2 { get; set; }
 
     public string status { get; set; } = null!;
 
