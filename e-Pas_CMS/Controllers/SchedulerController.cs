@@ -236,8 +236,11 @@ namespace e_Pas_CMS.Controllers
             var isCurrentEarly = allowedStatus.Contains((audit.status ?? "").Trim().ToUpperInvariant());
             if (allowedStatus.Contains(newStatus) && isCurrentEarly)
             {
+                audit.form_status_auditor1 = newStatus;
                 audit.status = newStatus;   // simpan status dari form
             }
+
+            audit.form_type_auditor1 = "FULL";
 
             audit.spbu_id = model.SpbuId;
             audit.app_user_id = model.AppUserId;
@@ -573,6 +576,8 @@ namespace e_Pas_CMS.Controllers
                     audit_media_total = 0,
                     audit_mom_intro = "",
                     audit_mom_final = "",
+                    form_type_auditor1 = "FULL",
+                    form_status_auditor1 = "NOT_STARTED",
                     status = "NOT_STARTED",
                     created_by = currentUser,
                     created_date = currentTime,
