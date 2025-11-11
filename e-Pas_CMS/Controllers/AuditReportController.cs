@@ -1197,113 +1197,147 @@ namespace e_Pas_CMS.Controllers
         }
 
         [HttpGet]
-        public async Task<IActionResult> DownloadCsvByDate(
-    string searchTerm = "",
-    DateTime? startDate = null,
-    DateTime? endDate = null)
+        public IActionResult DownloadCsvByDate(int month, int year, string? searchTerm = "")
         {
-            if (startDate == null || endDate == null)
+            // Validasi basic
+            if (month < 1 || month > 12 || year < 1 || year > 9999)
             {
-                // boleh kamu ganti default-nya kalau perlu
-                return BadRequest("startDate dan endDate wajib diisi.");
+                return BadRequest("Parameter bulan/tahun tidak valid.");
             }
 
-            // Normalisasi jam supaya perbandingan gampang
-            startDate = startDate.Value.Date;
-            endDate = endDate.Value.Date;
-
-            // Folder: wwwroot/Report
             var reportFolder = Path.Combine(_env.WebRootPath, "Report");
-
             if (!Directory.Exists(reportFolder))
                 return NotFound("Folder report tidak ditemukan.");
 
-            // Kumpulkan list file berdasarkan rentang bulan
-            var files = new List<string>();
+            // Ambil singkatan bulan: Jan, Feb, Mar, ... Sep, dst
+            var monthAbbr = CultureInfo.InvariantCulture
+                .DateTimeFormat
+                .AbbreviatedMonthNames[month - 1];   // index = month - 1
 
-            var cursor = new DateTime(startDate.Value.Year, startDate.Value.Month, 1);
-            var last = new DateTime(endDate.Value.Year, endDate.Value.Month, 1);
+            if (string.IsNullOrEmpty(monthAbbr))
+                return BadRequest("Bulan tidak valid.");
 
-            while (cursor <= last)
-            {
-                var monthAbbr = cursor.ToString("MMM", CultureInfo.InvariantCulture); // Jul, Aug, dst
-                var fileName = $"{monthAbbr}_{cursor:yyyy}_Audit_Summary.csv";
-                var fullPath = Path.Combine(reportFolder, fileName);
+            // Nama file di wwwroot/Report, contoh: Sep_2025_Audit_Summary.csv
+            var sourceFileName = $"{monthAbbr}_{year}_Audit_Summary.csv";
+            var fullPath = Path.Combine(reportFolder, sourceFileName);
 
-                if (System.IO.File.Exists(fullPath))
-                {
-                    files.Add(fullPath);
-                }
+            if (!System.IO.File.Exists(fullPath))
+                return NotFound($"File report {sourceFileName} tidak ditemukan.");
 
-                cursor = cursor.AddMonths(1);
-            }
+            // Nama file saat di-download (boleh pakai timestamp supaya unik)
+            var downloadFileName = $"{monthAbbr}_{year}_Audit_Summary_{DateTime.Now:yyyyMMddHHmmss}.csv";
 
-            if (files.Count == 0)
-                return NotFound("Tidak ada file report untuk periode tersebut.");
-
-            var sb = new StringBuilder();
-            bool headerWritten = false;
-
-            searchTerm = searchTerm?.Trim();
-            bool hasSearch = !string.IsNullOrWhiteSpace(searchTerm);
-
-            foreach (var file in files)
-            {
-                var lines = await System.IO.File.ReadAllLinesAsync(file);
-                if (lines.Length == 0) continue;
-
-                // Tuliskan header sekali saja (baris pertama file pertama)
-                if (!headerWritten)
-                {
-                    sb.AppendLine(lines[0]);
-                    headerWritten = true;
-                }
-
-                // Mulai dari baris ke-2 (index 1) = data
-                for (int i = 1; i < lines.Length; i++)
-                {
-                    var line = lines[i];
-                    if (string.IsNullOrWhiteSpace(line)) continue;
-
-                    // Filter searchTerm (cek di seluruh baris)
-                    if (hasSearch &&
-                        !line.Contains(searchTerm, StringComparison.OrdinalIgnoreCase))
-                    {
-                        continue;
-                    }
-
-                    // Filter tanggal berdasarkan kolom "Audit Date"
-                    // Asumsi format baris: "send_date","Audit Date","spbu_no",...
-                    // dan kita simpan sebagai "yyyy-MM-dd"
-                    if (startDate != null || endDate != null)
-                    {
-                        var cols = SplitCsvLine(line); // helper di bawah
-                        if (cols.Length > 1) // kolom ke-2 = Audit Date
-                        {
-                            var auditDateStr = cols[1]; // sudah tanpa tanda kutip
-                            if (DateTime.TryParse(auditDateStr, out var auditDate))
-                            {
-                                auditDate = auditDate.Date;
-
-                                if (auditDate < startDate.Value || auditDate > endDate.Value)
-                                    continue;
-                            }
-                        }
-                    }
-
-                    sb.AppendLine(line);
-                }
-            }
-            // Tentukan bulan dan tahun dari endDate (atau current date kalau null)
-            var reportMonth = (startDate ?? DateTime.Now).ToString("MMM", CultureInfo.InvariantCulture); // contoh: "Nov"
-            var reportYear = (endDate ?? DateTime.Now).ToString("yyyy");
-
-            // Format akhir: "Nov_2025_BOA_Audit_Summary_20251110115233.csv"
-            var outFileName = $"{reportMonth}_{reportYear}_Audit_Summary_{DateTime.Now:yyyyMMddHHmmss}.csv";
-
-            var bytes = Encoding.UTF8.GetBytes(sb.ToString());
-            return File(bytes, "text/csv", outFileName);
+            return PhysicalFile(fullPath, "text/csv", downloadFileName);
         }
+
+        //    [HttpGet]
+        //    public async Task<IActionResult> DownloadCsvByDate(
+        //string searchTerm = "",
+        //DateTime? startDate = null,
+        //DateTime? endDate = null)
+        //    {
+        //        if (startDate == null || endDate == null)
+        //        {
+        //            // boleh kamu ganti default-nya kalau perlu
+        //            return BadRequest("startDate dan endDate wajib diisi.");
+        //        }
+
+        //        // Normalisasi jam supaya perbandingan gampang
+        //        startDate = startDate.Value.Date;
+        //        endDate = endDate.Value.Date;
+
+        //        // Folder: wwwroot/Report
+        //        var reportFolder = Path.Combine(_env.WebRootPath, "Report");
+
+        //        if (!Directory.Exists(reportFolder))
+        //            return NotFound("Folder report tidak ditemukan.");
+
+        //        // Kumpulkan list file berdasarkan rentang bulan
+        //        var files = new List<string>();
+
+        //        var cursor = new DateTime(startDate.Value.Year, startDate.Value.Month, 1);
+        //        var last = new DateTime(endDate.Value.Year, endDate.Value.Month, 1);
+
+        //        while (cursor <= last)
+        //        {
+        //            var monthAbbr = cursor.ToString("MMM", CultureInfo.InvariantCulture); // Jul, Aug, dst
+        //            var fileName = $"{monthAbbr}_{cursor:yyyy}_Audit_Summary.csv";
+        //            var fullPath = Path.Combine(reportFolder, fileName);
+
+        //            if (System.IO.File.Exists(fullPath))
+        //            {
+        //                files.Add(fullPath);
+        //            }
+
+        //            cursor = cursor.AddMonths(1);
+        //        }
+
+        //        if (files.Count == 0)
+        //            return NotFound("Tidak ada file report untuk periode tersebut.");
+
+        //        var sb = new StringBuilder();
+        //        bool headerWritten = false;
+
+        //        searchTerm = searchTerm?.Trim();
+        //        bool hasSearch = !string.IsNullOrWhiteSpace(searchTerm);
+
+        //        foreach (var file in files)
+        //        {
+        //            var lines = await System.IO.File.ReadAllLinesAsync(file);
+        //            if (lines.Length == 0) continue;
+
+        //            // Tuliskan header sekali saja (baris pertama file pertama)
+        //            if (!headerWritten)
+        //            {
+        //                sb.AppendLine(lines[0]);
+        //                headerWritten = true;
+        //            }
+
+        //            // Mulai dari baris ke-2 (index 1) = data
+        //            for (int i = 1; i < lines.Length; i++)
+        //            {
+        //                var line = lines[i];
+        //                if (string.IsNullOrWhiteSpace(line)) continue;
+
+        //                // Filter searchTerm (cek di seluruh baris)
+        //                if (hasSearch &&
+        //                    !line.Contains(searchTerm, StringComparison.OrdinalIgnoreCase))
+        //                {
+        //                    continue;
+        //                }
+
+        //                // Filter tanggal berdasarkan kolom "Audit Date"
+        //                // Asumsi format baris: "send_date","Audit Date","spbu_no",...
+        //                // dan kita simpan sebagai "yyyy-MM-dd"
+        //                if (startDate != null || endDate != null)
+        //                {
+        //                    var cols = SplitCsvLine(line); // helper di bawah
+        //                    if (cols.Length > 1) // kolom ke-2 = Audit Date
+        //                    {
+        //                        var auditDateStr = cols[1]; // sudah tanpa tanda kutip
+        //                        if (DateTime.TryParse(auditDateStr, out var auditDate))
+        //                        {
+        //                            auditDate = auditDate.Date;
+
+        //                            if (auditDate < startDate.Value || auditDate > endDate.Value)
+        //                                continue;
+        //                        }
+        //                    }
+        //                }
+
+        //                sb.AppendLine(line);
+        //            }
+        //        }
+        //        // Tentukan bulan dan tahun dari endDate (atau current date kalau null)
+        //        var reportMonth = (startDate ?? DateTime.Now).ToString("MMM", CultureInfo.InvariantCulture); // contoh: "Nov"
+        //        var reportYear = (endDate ?? DateTime.Now).ToString("yyyy");
+
+        //        // Format akhir: "Nov_2025_BOA_Audit_Summary_20251110115233.csv"
+        //        var outFileName = $"{reportMonth}_{reportYear}_Audit_Summary_{DateTime.Now:yyyyMMddHHmmss}.csv";
+
+        //        var bytes = Encoding.UTF8.GetBytes(sb.ToString());
+        //        return File(bytes, "text/csv", outFileName);
+        //    }
 
         private static string[] SplitCsvLine(string line)
         {
