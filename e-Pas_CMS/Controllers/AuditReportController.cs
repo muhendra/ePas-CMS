@@ -1299,7 +1299,7 @@ namespace e_Pas_CMS.Controllers
             var reportYear = (endDate ?? DateTime.Now).ToString("yyyy");
 
             // Format akhir: "Nov_2025_BOA_Audit_Summary_20251110115233.csv"
-            var outFileName = $"{reportMonth}_{reportYear}_BOA_Audit_Summary_{DateTime.Now:yyyyMMddHHmmss}.csv";
+            var outFileName = $"{reportMonth}_{reportYear}_Audit_Summary_{DateTime.Now:yyyyMMddHHmmss}.csv";
 
             var bytes = Encoding.UTF8.GetBytes(sb.ToString());
             return File(bytes, "text/csv", outFileName);
