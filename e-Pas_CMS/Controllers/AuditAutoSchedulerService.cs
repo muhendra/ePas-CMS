@@ -1,14 +1,8 @@
-﻿using System;
-using System.Data;
+﻿using System.Data;
 using System.Data.Common;
-using System.Threading;
-using System.Threading.Tasks;
 using Dapper;
 using e_Pas_CMS.Data;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Logging;
 
 public class AuditAutoSchedulerService : BackgroundService
 {
@@ -45,7 +39,12 @@ public class AuditAutoSchedulerService : BackgroundService
         report_file_good,
         report_file_excellent,
         report_file_boa,
-        boa_status
+        boa_status,
+        app_user_id_auditor2,
+        form_type_auditor1,
+		form_type_auditor2,
+		form_status_auditor1,
+		form_status_auditor2
     )
     WITH
     latest_verified AS (
@@ -53,7 +52,10 @@ public class AuditAutoSchedulerService : BackgroundService
             ta.spbu_id,
             ta.app_user_id,
             COALESCE(ta.audit_execution_time, ta.audit_schedule_date) AS last_verified_date,
-            ta.audit_execution_time
+            ta.audit_execution_time,
+            ta.app_user_id_auditor2,
+            ta.form_type_auditor1,
+	        ta.form_type_auditor2
         FROM trx_audit ta
         WHERE ta.status IN ('VERIFIED')
         ORDER BY ta.spbu_id, ta.audit_execution_time DESC, ta.audit_schedule_date DESC
@@ -80,6 +82,9 @@ public class AuditAutoSchedulerService : BackgroundService
             s.spbu_no,
             s.id as spbu_id,
             lv.app_user_id,
+            lv.app_user_id_auditor2,
+            lv.form_type_auditor1,
+	        lv.form_type_auditor2,
             s.audit_next,
             lv.audit_execution_time,
             lp.last_progress_date,
@@ -144,7 +149,12 @@ public class AuditAutoSchedulerService : BackgroundService
            null as report_file_good,
            null as report_file_excellent,
            null as report_file_boa,
-           null as boa_status
+           null as boa_status,
+           app_user_id_auditor2,
+           form_type_auditor1,
+	       form_type_auditor2,
+	       'DRAFT' as form_status_auditor1,
+	       'DRAFT' as form_status_auditor2
     FROM distributed
     ORDER BY app_user_id, range_audit_month, rn;";
 

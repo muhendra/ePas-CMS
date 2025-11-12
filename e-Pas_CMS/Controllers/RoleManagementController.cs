@@ -3,9 +3,7 @@ using Microsoft.AspNetCore.Authorization;
 using e_Pas_CMS.ViewModels;
 using e_Pas_CMS.Data;
 using Microsoft.EntityFrameworkCore;
-using e_Pas_CMS.Models;
 using System.Data;
-using Dapper;
 using Microsoft.AspNetCore.Mvc.Rendering;
 
 namespace e_Pas_CMS.Controllers

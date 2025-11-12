@@ -7,7 +7,6 @@ using e_Pas_CMS.Models;
 using System.Data;
 using Dapper;
 using Microsoft.AspNetCore.Mvc.Rendering;
-using Microsoft.Extensions.Logging;
 using Npgsql;
 
 namespace e_Pas_CMS.Controllers

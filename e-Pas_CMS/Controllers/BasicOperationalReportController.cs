@@ -1,8 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Data;
-using System.Linq;
-using System.Threading.Tasks;
+﻿using System.Data;
 using Dapper;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -15,14 +11,10 @@ using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.AspNetCore.Mvc.ViewFeatures;
 using QuestPDF.Fluent;
 using Newtonsoft.Json;
-using System.Xml.Linq;
 using Npgsql;
-using System.Reflection.Emit;
 using e_Pas_CMS.Models;
 using System.Text;
-using static System.Formats.Asn1.AsnWriter;
 using System.Globalization;
-using Microsoft.AspNetCore.Hosting;
 
 
 namespace e_Pas_CMS.Controllers

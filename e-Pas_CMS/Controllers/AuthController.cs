@@ -1,8 +1,6 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using e_Pas_CMS.ViewModels;
-using e_Pas_CMS.Models;
 using Microsoft.EntityFrameworkCore;
-using BCrypt.Net;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using System.Security.Claims;

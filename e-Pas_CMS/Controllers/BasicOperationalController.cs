@@ -1,20 +1,13 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Data;
+﻿using System.Data;
 using System.Diagnostics;
-using System.Linq;
-using System.Threading.Tasks;
 using Dapper;
 using e_Pas_CMS.Data;
-using e_Pas_CMS.Models;
 using e_Pas_CMS.ViewModels;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Configuration;
 using Npgsql;
 using QuestPDF.Fluent;
-using static NpgsqlTypes.NpgsqlTsQuery;
 
 namespace e_Pas_CMS.Controllers
 {

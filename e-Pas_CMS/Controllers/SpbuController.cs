@@ -1,15 +1,11 @@
-﻿using Dapper;
-using e_Pas_CMS.Data;
+﻿using e_Pas_CMS.Data;
 using e_Pas_CMS.Models;
 using e_Pas_CMS.ViewModels;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.EntityFrameworkCore;
-using System;
 using System.Data;
-using System.Linq;
-using System.Threading.Tasks;
 
 [Authorize]
 public class SpbuController : Controller
