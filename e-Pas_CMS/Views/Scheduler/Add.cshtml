@@ -62,7 +62,12 @@
             <div class="row g-4">
                 <div class="col-md-6">
                     <label for="tanggalAudit" class="form-label">Tanggal Audit</label>
-                    <input type="date" class="form-control" id="tanggalAudit" name="TanggalAudit" />
+                    <input type="date"
+                           class="form-control"
+                           id="tanggalAudit"
+                           name="TanggalAudit"
+                           min="1900-01-01"
+                           max="2100-12-31" />
                 </div>
 
                 <div class="col-md-6">
