@@ -86,7 +86,7 @@ namespace e_Pas_CMS.Controllers
                     a.spbu.address.ToLower().Contains(searchTerm) ||
                     a.spbu.province_name.ToLower().Contains(searchTerm) ||
                     a.spbu.city_name.ToLower().Contains(searchTerm)
-                );
+                ).OrderByDescending(a => a.audit_execution_time);
             }
 
             if (filterMonth.HasValue && filterYear.HasValue)
@@ -100,7 +100,7 @@ namespace e_Pas_CMS.Controllers
             ViewBag.FilterYear = filterYear;
 
             query = query.OrderByDescending(a => a.audit_execution_time)
-                         .ThenByDescending(a => a.id);
+                         .ThenByDescending(a => a.updated_date);
 
             var totalItems = await query.CountAsync();
 
@@ -3028,12 +3028,18 @@ SELECT
     ta.updated_date       AS UpdateDate,
     ta.audit_level        AS AuditCurrent,
     s.audit_next          AS AuditNext,
-    au.name               AS NamaAuditor
-FROM trx_audit ta
-JOIN spbu s   ON ta.spbu_id = s.id
-JOIN app_user au ON au.id = ta.app_user_id
-WHERE ta.id = @id;
-";
+    au.name               AS NamaAuditor,
+    COALESCE(
+            (SELECT name 
+             FROM app_user 
+             WHERE id = ta.app_user_id_auditor2
+             LIMIT 1),
+            '-'
+        ) AS NamaAuditor2
+    FROM trx_audit ta
+    JOIN spbu s   ON ta.spbu_id = s.id
+    JOIN app_user au ON au.id = ta.app_user_id
+    WHERE ta.id = @id;";
 
             var a = await conn.QueryFirstOrDefaultAsync<AuditHeaderDto>(sql, new { id });
             if (a == null)
@@ -3204,7 +3210,8 @@ WHERE ta.id = @id;
                 AuditCurrent = basic.AuditCurrent,
                 AuditNext = basic.AuditNext,
                 ApproveBy = basic.ApproveBy,
-                NamaAuditor = basic.NamaAuditor
+                NamaAuditor = basic.NamaAuditor,
+                NamaAuditor2 = basic.NamaAuditor2
             };
         }
 

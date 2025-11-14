@@ -66,13 +66,23 @@
                 </div>
 
                 <div class="col-md-6">
-                    <label class="form-label">Pilih Auditor</label>
+                    <label class="form-label">Pilih Auditor 1</label>
                     <button type="button" id="btnOpenAuditor" class="btn btn-primary w-100 d-flex align-items-center justify-content-center gap-2 rounded-pill shadow-sm py-2 px-3">
                         <i class="bi bi-person-check"></i>
                         Pilih Auditor
                     </button>
                     <div class="selected-spbu-display" id="selectedAuditorText"></div>
                     <input type="hidden" id="selectedAuditorId" name="AuditorId" />
+                </div>
+
+                <div class="col-md-6">
+                    <label class="form-label">Pilih Auditor 2 (opsional)</label>
+                    <button type="button" id="btnOpenAuditor2" class="btn btn-primary w-100 d-flex align-items-center justify-content-center gap-2 rounded-pill shadow-sm py-2 px-3">
+                        <i class="bi bi-person-check"></i>
+                        Pilih Auditor 2
+                    </button>
+                    <div class="selected-spbu-display" id="selectedAuditor2Text"></div>
+                    <input type="hidden" id="selectedAuditor2Id" name="Auditor2Id" />
                 </div>
 
                 <div class="col-md-6">
@@ -275,6 +285,7 @@
         // === AUDITOR ===
         let auditorPage = 1;
         let auditorSearch = '';
+        let currentAuditorSlot = 1; // 1 = Auditor utama, 2 = Auditor 2
 
         function loadAuditorList(page = 1, search = '') {
             fetch(`/Scheduler/GetAuditorList?page=${page}&search=${encodeURIComponent(search)}`)
@@ -311,6 +322,13 @@
         }
 
         document.getElementById('btnOpenAuditor').addEventListener('click', () => {
+            currentAuditorSlot = 1;
+            loadAuditorList(1);
+            auditorModal.show();
+        });
+
+        document.getElementById('btnOpenAuditor2').addEventListener('click', () => {
+            currentAuditorSlot = 2;
             loadAuditorList(1);
             auditorModal.show();
         });
@@ -337,19 +355,17 @@
             const id = selected.value;
             const name = selected.dataset.name;
 
-            document.getElementById('selectedAuditorText').innerText = name;
-            document.getElementById('selectedAuditorId').value = id;
+            if (currentAuditorSlot === 1) {
+                document.getElementById('selectedAuditorText').innerText = name;
+                document.getElementById('selectedAuditorId').value = id;
+            } else {
+                document.getElementById('selectedAuditor2Text').innerText = name;
+                document.getElementById('selectedAuditor2Id').value = id;
+            }
 
             auditorModal.hide();
         });
 
-        // === Default tanggal hari ini ===
-        document.addEventListener('DOMContentLoaded', function () {
-            const now = new Date();
-            const todayOnly = now.toISOString().split('T')[0];
-            const tanggalInput = document.getElementById('tanggalAudit');
-            if (tanggalInput) tanggalInput.value = todayOnly;
-        });
     </script>
 
 

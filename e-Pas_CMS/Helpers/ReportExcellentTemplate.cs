@@ -754,7 +754,7 @@ public class ReportExcellentTemplate : IDocument
             InfoRow("Auditor 1", _model.NamaAuditor,
                     "", "");
 
-            InfoRow("Auditor 2", "-",
+            InfoRow("Auditor 2", _model.NamaAuditor2,
                     "", "");
 
             InfoRow("Acknowledge", "Sabar Kembaren",

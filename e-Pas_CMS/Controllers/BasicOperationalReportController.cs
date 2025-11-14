@@ -1862,7 +1862,14 @@ WHERE
         ta.updated_date as UpdateDate,
         ta.audit_level as AuditCurrent,
         s.audit_next as AuditNext,
-        au.name as NamaAuditor
+        au.name as NamaAuditor,
+    COALESCE(
+        (SELECT name 
+         FROM app_user 
+         WHERE id = ta.app_user_id_auditor2
+         LIMIT 1),
+        '-'
+    ) AS NamaAuditor2
     FROM trx_audit ta
     JOIN spbu s ON ta.spbu_id = s.id
     join app_user au on au.id = ta.app_user_id
@@ -2025,7 +2032,8 @@ WHERE
                 AuditCurrent = basic.AuditCurrent,
                 AuditNext = basic.AuditNext,
                 ApproveBy = basic.ApproveBy,
-                NamaAuditor = basic.NamaAuditor
+                NamaAuditor = basic.NamaAuditor,
+                NamaAuditor2 = basic.NamaAuditor2
             };
         }
 

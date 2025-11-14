@@ -387,7 +387,7 @@ namespace e_Pas_CMS.Controllers
 
         [HttpPost("AddScheduler")]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> AddScheduler(string AuditorId, string selectedSpbuIds, string TipeAudit, DateTime TanggalAudit)
+        public async Task<IActionResult> AddScheduler(string AuditorId, string Auditor2Id, string selectedSpbuIds, string TipeAudit, DateTime TanggalAudit)
         {
             if (string.IsNullOrEmpty(AuditorId) || string.IsNullOrEmpty(selectedSpbuIds) || string.IsNullOrEmpty(TipeAudit))
             {
@@ -558,13 +558,17 @@ namespace e_Pas_CMS.Controllers
                     introId = await conn2.QueryFirstOrDefaultAsync<string>(sqlIntro);
                 }
 
+                var hasAuditor2 = !string.IsNullOrEmpty(Auditor2Id);
+
                 var trxAudit = new trx_audit
                 {
                     id = Guid.NewGuid().ToString(),
                     report_prefix = "",
                     report_no = "",
                     spbu_id = spbuId,
-                    app_user_id = userId,
+                    app_user_id = userId,                         // Auditor 1
+                    app_user_id_auditor2 = hasAuditor2 ? Auditor2Id : null,  // Auditor 2
+
                     master_questioner_intro_id = introId,
                     master_questioner_checklist_id = checklistId,
                     audit_level = nextauditsspbu,
@@ -575,8 +579,14 @@ namespace e_Pas_CMS.Controllers
                     audit_media_total = 0,
                     audit_mom_intro = "",
                     audit_mom_final = "",
+
                     form_type_auditor1 = "FULL",
                     form_status_auditor1 = "NOT_STARTED",
+
+                    // kalau Auditor2Id ada → set QQ & NOT_STARTED, kalau tidak → null
+                    form_type_auditor2 = hasAuditor2 ? "QQ" : null,
+                    form_status_auditor2 = hasAuditor2 ? "NOT_STARTED" : null,
+
                     status = "NOT_STARTED",
                     created_by = currentUser,
                     created_date = currentTime,
@@ -643,6 +653,8 @@ namespace e_Pas_CMS.Controllers
             if (audit != null)
             {
                 audit.status = "DELETED";
+                audit.form_status_auditor1 = "DELETED";
+                audit.form_status_auditor2 = "DELETED";
                 audit.updated_date = DateTime.Now;
                 audit.updated_by = User.Identity?.Name ?? "SYSTEM";
                 _context.SaveChanges();

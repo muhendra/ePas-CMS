@@ -7,6 +7,8 @@ namespace e_Pas_CMS.ViewModels
         public string AuditId { get; set; }
         public string ReportNo { get; set; }
         public string NamaAuditor { get; set; }
+
+        public string NamaAuditor2 { get; set; }
         public DateTime? TanggalSubmit { get; set; }
         public DateTime? TanggalAudit { get; set; }
         public string Status { get; set; }
@@ -118,6 +120,8 @@ namespace e_Pas_CMS.ViewModels
         public decimal score { get; set; }
 
         public string NamaAuditor { get; set; }
+
+        public string NamaAuditor2 { get; set; }
 
     }
 
