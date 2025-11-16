@@ -8,6 +8,7 @@ using System.Data;
 using Dapper;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Npgsql;
+using System.Globalization;
 
 namespace e_Pas_CMS.Controllers
 {
@@ -387,11 +388,44 @@ namespace e_Pas_CMS.Controllers
 
         [HttpPost("AddScheduler")]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> AddScheduler(string AuditorId, string Auditor2Id, string selectedSpbuIds, string TipeAudit, DateTime TanggalAudit)
+        public async Task<IActionResult> AddScheduler(
+    string AuditorId,
+    string Auditor2Id,
+    string selectedSpbuIds,
+    string TipeAudit,
+    string TanggalAudit   // ← sekarang string, kita parse manual
+)
         {
+            // === VALIDASI INPUT WAJIB ===
             if (string.IsNullOrEmpty(AuditorId) || string.IsNullOrEmpty(selectedSpbuIds) || string.IsNullOrEmpty(TipeAudit))
             {
                 return BadRequest("Data tidak lengkap.");
+            }
+
+            // === VALIDASI & PARSE TANGGAL AUDIT ===
+            if (string.IsNullOrWhiteSpace(TanggalAudit))
+            {
+                return BadRequest("Tanggal Audit wajib diisi.");
+            }
+
+            // HTML <input type="date"> kirim format "yyyy-MM-dd"
+            if (!DateTime.TryParseExact(
+                    TanggalAudit,
+                    "yyyy-MM-dd",
+                    CultureInfo.InvariantCulture,
+                    DateTimeStyles.None,
+                    out var tanggalAuditDt))
+            {
+                return BadRequest("Format Tanggal Audit tidak valid.");
+            }
+
+            // Range penjagaan tanggal (silakan sesuaikan kalau mau)
+            var minDate = new DateTime(2000, 1, 1);
+            var maxDate = new DateTime(2100, 12, 31);
+
+            if (tanggalAuditDt < minDate || tanggalAuditDt > maxDate)
+            {
+                return BadRequest($"Tanggal Audit harus antara {minDate:yyyy-MM-dd} dan {maxDate:yyyy-MM-dd}.");
             }
 
             string nextauditsspbu = "";
@@ -433,21 +467,21 @@ namespace e_Pas_CMS.Controllers
                     await conn.OpenAsync();
 
                 var sql = @"
-                SELECT
-                    mqd.weight,
-                    tac.score_input,
-                    tac.score_x,
-                    mqd.is_relaksasi
-                FROM master_questioner_detail mqd
-                LEFT JOIN trx_audit_checklist tac
-                    ON tac.master_questioner_detail_id = mqd.id
-                    AND tac.trx_audit_id = @id
-                WHERE mqd.master_questioner_id = (
-                    SELECT master_questioner_checklist_id
-                    FROM trx_audit
-                    WHERE id = @id
-                )
-                AND mqd.type = 'QUESTION'";
+        SELECT
+            mqd.weight,
+            tac.score_input,
+            tac.score_x,
+            mqd.is_relaksasi
+        FROM master_questioner_detail mqd
+        LEFT JOIN trx_audit_checklist tac
+            ON tac.master_questioner_detail_id = mqd.id
+            AND tac.trx_audit_id = @id
+        WHERE mqd.master_questioner_id = (
+            SELECT master_questioner_checklist_id
+            FROM trx_audit
+            WHERE id = @id
+        )
+        AND mqd.type = 'QUESTION'";
 
                 var checklist = (await conn.QueryAsync<(decimal? weight, string score_input, decimal? score_x, bool? is_relaksasi)>(sql, new { id = tid }))
                     .ToList();
@@ -491,22 +525,22 @@ namespace e_Pas_CMS.Controllers
                     : 0m;
 
                 var penaltyExcellentQuery = @"SELECT STRING_AGG(mqd.penalty_alert, ', ') AS penalty_alerts
-                FROM trx_audit_checklist tac
-                INNER JOIN master_questioner_detail mqd ON mqd.id = tac.master_questioner_detail_id
-                WHERE
-                    tac.trx_audit_id = @id and
-                    ((mqd.penalty_excellent_criteria = 'LT_1' and tac.score_input <> 'A') or
-                    (mqd.penalty_excellent_criteria = 'EQ_0' and tac.score_input = 'F')) and
-                    (mqd.is_relaksasi = false or mqd.is_relaksasi is null) and
-                    mqd.is_penalty = true;";
+        FROM trx_audit_checklist tac
+        INNER JOIN master_questioner_detail mqd ON mqd.id = tac.master_questioner_detail_id
+        WHERE
+            tac.trx_audit_id = @id and
+            ((mqd.penalty_excellent_criteria = 'LT_1' and tac.score_input <> 'A') or
+            (mqd.penalty_excellent_criteria = 'EQ_0' and tac.score_input = 'F')) and
+            (mqd.is_relaksasi = false or mqd.is_relaksasi is null) and
+            mqd.is_penalty = true;";
 
                 var penaltyGoodQuery = @"SELECT STRING_AGG(mqd.penalty_alert, ', ') AS penalty_alerts
-                FROM trx_audit_checklist tac
-                INNER JOIN master_questioner_detail mqd ON mqd.id = tac.master_questioner_detail_id
-                WHERE tac.trx_audit_id = @id AND
-                      tac.score_input = 'F' AND
-                      mqd.is_penalty = true AND
-                      (mqd.is_relaksasi = false OR mqd.is_relaksasi IS NULL);";
+        FROM trx_audit_checklist tac
+        INNER JOIN master_questioner_detail mqd ON mqd.id = tac.master_questioner_detail_id
+        WHERE tac.trx_audit_id = @id AND
+              tac.score_input = 'F' AND
+              mqd.is_penalty = true AND
+              (mqd.is_relaksasi = false OR mqd.is_relaksasi IS NULL);";
 
                 var penaltyExcellentResult = await conn.ExecuteScalarAsync<string>(penaltyExcellentQuery, new { id = tid });
                 var penaltyGoodResult = await conn.ExecuteScalarAsync<string>(penaltyGoodQuery, new { id = tid });
@@ -573,7 +607,8 @@ namespace e_Pas_CMS.Controllers
                     master_questioner_checklist_id = checklistId,
                     audit_level = nextauditsspbu,
                     audit_type = TipeAudit,
-                    audit_schedule_date = DateOnly.FromDateTime(TanggalAudit),
+                    // pakai tanggal yang sudah divalidasi & diparse
+                    audit_schedule_date = DateOnly.FromDateTime(tanggalAuditDt),
                     audit_execution_time = null,
                     audit_media_upload = 0,
                     audit_media_total = 0,
@@ -583,7 +618,6 @@ namespace e_Pas_CMS.Controllers
                     form_type_auditor1 = "FULL",
                     form_status_auditor1 = "NOT_STARTED",
 
-                    // kalau Auditor2Id ada → set QQ & NOT_STARTED, kalau tidak → null
                     form_type_auditor2 = hasAuditor2 ? "QQ" : null,
                     form_status_auditor2 = hasAuditor2 ? "NOT_STARTED" : null,
 
