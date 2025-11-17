@@ -53,6 +53,7 @@ builder.Services.AddCors(options =>
 
 builder.Services.AddHostedService<ReminderNotificationService>();
 builder.Services.AddHostedService<AuditAutoSchedulerService>();
+builder.Services.AddHostedService<FixingStatusAutoSchedulerService>();
 
 var app = builder.Build();
 
