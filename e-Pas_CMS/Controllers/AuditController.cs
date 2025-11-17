@@ -1162,49 +1162,24 @@ WHERE
                 ? (bool?)null
                 : Convert.ToBoolean(trxAudit.is_revision);
 
-            // --- 1. Cek apakah ada Auditor 2 ---
-            var isAuditor2Sql = @"
-            SELECT 1 
-            FROM trx_audit 
-            WHERE id = @id 
-              AND app_user_id_auditor2 IS NOT NULL 
-            LIMIT 1;
-            ";
-
-            var isAuditor2 = await conn.QueryFirstOrDefaultAsync<int?>(isAuditor2Sql, new { id });
-
-            string formStatusAuditor2Value = isAuditor2 != null ? "VERIFIED" : null;
-
             if (isRevision != true) // masuk jika NULL atau false
             {
                 const string sqlApprove = @"
                 UPDATE trx_audit
-                SET 
-                    approval_date = now(),
+                SET approval_date = now(),
                     score = @p0,
                     approval_by = @p1,
                     updated_date = now(),
                     updated_by = @p1,
                     status = 'VERIFIED',
-                    form_status_auditor1 = 'VERIFIED',
-                    form_status_auditor2 = @p1_2,
                     good_status = @p2,
                     excellent_status = @p3
-                WHERE id = @p4;
-                ";
+                WHERE id = @p4";
 
                 int affected = await _context.Database.ExecuteSqlRawAsync(
-                    sqlApprove,
-                    score,                     // @p0
-                    currentUser,               // @p1
-                    formStatusAuditor2Value,   // @p1_2
-                    goodStatus,                // @p2
-                    excellentStatus,           // @p3
-                    id                         // @p4
+                    sqlApprove, score, currentUser, goodStatus, excellentStatus, id
                 );
-
-                if (affected == 0)
-                    return NotFound();
+                if (affected == 0) return NotFound();
 
                 const string updateSpbuWithNext = @"
                 UPDATE spbu
@@ -1226,34 +1201,21 @@ WHERE
             }
             else
             {
-                const string sqlApprove = @"
+                const string sqlRevision = @"
                 UPDATE trx_audit
-                SET 
-                    approval_date = now(),
+                SET revision_date = now(),
                     score = @p0,
-                    approval_by = @p1,
                     updated_date = now(),
                     updated_by = @p1,
                     status = 'VERIFIED',
-                    form_status_auditor1 = 'VERIFIED',
-                    form_status_auditor2 = @p1_2,
                     good_status = @p2,
                     excellent_status = @p3
-                WHERE id = @p4;
-                ";
+                WHERE id = @p4";
 
                 int affected = await _context.Database.ExecuteSqlRawAsync(
-                    sqlApprove,
-                    score,                     // @p0
-                    currentUser,               // @p1
-                    formStatusAuditor2Value,   // @p1_2
-                    goodStatus,                // @p2
-                    excellentStatus,           // @p3
-                    id                         // @p4
+                    sqlRevision, score, currentUser, goodStatus, excellentStatus, id
                 );
-
-                if (affected == 0)
-                    return NotFound();
+                if (affected == 0) return NotFound();
 
                 const string updateFeedback = @"UPDATE trx_feedback
                 SET next_audit_before = @auditbefore
