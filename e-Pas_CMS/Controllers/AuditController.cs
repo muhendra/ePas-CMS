@@ -1190,7 +1190,7 @@ WHERE
                     updated_by = @p1,
                     status = 'VERIFIED',
                     form_status_auditor1 = 'VERIFIED',
-                    form_status_auditor2 = @p1_2,
+                    form_status_auditor2 = @p5,
                     good_status = @p2,
                     excellent_status = @p3
                 WHERE id = @p4;
@@ -1200,10 +1200,10 @@ WHERE
                     sqlApprove,
                     score,                     // @p0
                     currentUser,               // @p1
-                    formStatusAuditor2Value,   // @p1_2
                     goodStatus,                // @p2
                     excellentStatus,           // @p3
-                    id                         // @p4
+                    id,                        // @p4
+                    formStatusAuditor2Value    // @p5 
                 );
 
                 if (affected == 0)
@@ -1239,7 +1239,7 @@ WHERE
                     updated_by = @p1,
                     status = 'VERIFIED',
                     form_status_auditor1 = 'VERIFIED',
-                    form_status_auditor2 = @p1_2,
+                    form_status_auditor2 = @p5,
                     good_status = @p2,
                     excellent_status = @p3
                 WHERE id = @p4;
@@ -1249,10 +1249,10 @@ WHERE
                     sqlApprove,
                     score,                     // @p0
                     currentUser,               // @p1
-                    formStatusAuditor2Value,   // @p1_2
                     goodStatus,                // @p2
                     excellentStatus,           // @p3
-                    id                         // @p4
+                    id,                        // @p4
+                    formStatusAuditor2Value    // @p5 
                 );
 
                 if (affected == 0)
