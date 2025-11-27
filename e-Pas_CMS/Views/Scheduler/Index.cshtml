@@ -122,6 +122,7 @@
                     <th>Tipe Audit</th>
                     <th>Level</th>
                     <th>SPBU</th>
+                    <th>SBM</th>
                     <th>No Report</th>
                     <th>Aksi</th>
                 </tr>
@@ -142,6 +143,7 @@
                         <td>@item.AuditType</td>
                         <td>@item.AuditLevel</td>
                         <td>@item.SpbuNo</td>
+                        <td>@item.SBM</td>
                         <td>@item.ReportNo</td>
                         <td>
                             <a href="@Url.Action("Detail", "Scheduler", new { id = item.Id })" class="btn btn-sm btn-outline-primary me-1">

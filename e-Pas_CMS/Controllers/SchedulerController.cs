@@ -68,6 +68,7 @@ namespace e_Pas_CMS.Controllers
                 a.audit_type,
                 a.audit_level,
                 SpbuNo = a.spbu != null ? a.spbu.spbu_no : null,
+                SBM = a.spbu.sbm,
                 a.report_no
             });
 
@@ -97,6 +98,7 @@ namespace e_Pas_CMS.Controllers
                 AuditType = x.audit_type,
                 AuditLevel = x.audit_level,
                 SpbuNo = x.SpbuNo,
+                SBM = x.SBM,
                 ReportNo = x.report_no
             }).ToList();
 
