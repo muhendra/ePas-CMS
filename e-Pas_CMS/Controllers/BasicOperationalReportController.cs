@@ -379,13 +379,16 @@ namespace e_Pas_CMS.Controllers
 
             var allowedStatuses = new[] { "VERIFIED" };
 
+            var start = new DateTime(2025, 11, 1);
+            var end = new DateTime(2025, 12, 1);
+
             var query = _context.trx_audits
                 .Include(a => a.spbu)
                 .Include(a => a.app_user)
                 .Where(a =>
                     allowedStatuses.Contains(a.status) &&
-                    a.created_date >= new DateTime(2025, 11, 1) &&
-                    a.created_date < new DateTime(2025, 12, 1) &&
+                    ((a.audit_execution_time ?? a.created_date) >= start) &&
+                    ((a.audit_execution_time ?? a.created_date) < end) &&
                     a.audit_type == "Basic Operational"
                 );
 
