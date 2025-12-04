@@ -4,6 +4,8 @@
     {
         public string ReportNo { get; set; }
         public string NamaAuditor { get; set; }
+
+        public string Auditor2 { get; set; }
         public DateTime? TanggalSubmit { get; set; }
         public string Status { get; set; }
 

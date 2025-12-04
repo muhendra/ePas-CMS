@@ -825,8 +825,8 @@ namespace e_Pas_CMS.Controllers
 
                 var allowedStatuses = new[] { "VERIFIED", "UNDER_REVIEW" };
 
-                var start = new DateTime(2025, 11, 1);
-                var end = new DateTime(2025, 12, 1);
+                var start = new DateTime(2025, 12, 1);
+                var end = new DateTime(2025, 12, 31);
 
                 var query = _context.trx_audits
                     .Include(a => a.spbu)

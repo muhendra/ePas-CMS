@@ -8,6 +8,7 @@ namespace e_Pas_CMS.ViewModels
         public string Id { get; set; }
         public string SpbuId { get; set; }
         public string AppUserId { get; set; }
+        public string AppUserIdAuditor2 {  get; set; }
         public string AuditLevel { get; set; }
         public List<SelectListItem> AuditLevelList { get; set; }
         public string AuditType { get; set; }

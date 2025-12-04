@@ -54,18 +54,28 @@ namespace e_Pas_CMS.Controllers
                     .Where(s => s != null)
                     .Distinct()
                     .ToListAsync();
+                var query =
+    from a in _context.trx_audits
+    join s in _context.spbus on a.spbu_id equals s.id
 
-                var query = from a in _context.trx_audits
-                            join s in _context.spbus on a.spbu_id equals s.id
-                            join u in _context.app_users on a.app_user_id equals u.id into aud
-                            from u in aud.DefaultIfEmpty()
-                            where a.status == "UNDER_REVIEW" && a.audit_type != "Basic Operational"
-                            select new
-                            {
-                                Audit = a,
-                                Spbu = s,
-                                AuditorName = u.name
-                            };
+    // Auditor 1 (LEFT JOIN)
+    join u in _context.app_users on a.app_user_id equals u.id into aud1
+    from u in aud1.DefaultIfEmpty()
+
+        // Auditor 2 (LEFT JOIN)
+    join u2 in _context.app_users on a.app_user_id_auditor2 equals u2.id into aud2
+    from u2 in aud2.DefaultIfEmpty()
+
+    where a.status == "UNDER_REVIEW"
+          && a.audit_type != "Basic Operational"
+    select new
+    {
+        Audit = a,
+        Spbu = s,
+        AuditorName = u.name,          // Auditor 1
+        Auditor2Name = u2 != null ? u2.name : null
+    };
+
 
                 if (userRegion.Any() || userSbm.Any())
                 {
@@ -350,6 +360,7 @@ WHERE
                         Kota = a.Spbu.city_name,
                         Sbm = a.Spbu.sbm,
                         NamaAuditor = a.AuditorName,
+                        Auditor2 = a.Auditor2Name,
                         Report = a.Audit.report_no,
                         TanggalSubmit = (a.Audit.audit_execution_time == null || a.Audit.audit_execution_time.Value == DateTime.MinValue)
                             ? a.Audit.updated_date.Value
@@ -762,15 +773,26 @@ WHERE
 
             // --- EF Core tetap pakai _context untuk data LINQ ---
             var audit = await (
-                from ta in _context.trx_audits
-                join au in _context.app_users on ta.app_user_id equals au.id
-                join s in _context.spbus on ta.spbu_id equals s.id
-                where ta.id == id
-                select new DetailAuditViewModel
-                {
-                    ReportNo = ta.report_no,
-                    NamaAuditor = au.name,
-                    TanggalSubmit = (ta.audit_execution_time == null || ta.audit_execution_time.Value == DateTime.MinValue)
+    from ta in _context.trx_audits
+
+        // JOIN auditor utama
+    join au in _context.app_users on ta.app_user_id equals au.id into aud1
+    from au in aud1.DefaultIfEmpty()
+
+        // JOIN auditor kedua (LEFT JOIN)
+    join au2 in _context.app_users on ta.app_user_id_auditor2 equals au2.id into aud2
+    from au2 in aud2.DefaultIfEmpty()
+
+    join s in _context.spbus on ta.spbu_id equals s.id
+
+    where ta.id == id
+
+    select new DetailAuditViewModel
+    {
+        ReportNo = ta.report_no,
+        NamaAuditor = au.name,
+        Auditor2 = au2.name ?? "-",   // <--- tambahan
+        TanggalSubmit = (ta.audit_execution_time == null || ta.audit_execution_time.Value == DateTime.MinValue)
                                     ? ta.updated_date.Value
                                     : ta.audit_execution_time.Value,
                     Status = ta.status,
