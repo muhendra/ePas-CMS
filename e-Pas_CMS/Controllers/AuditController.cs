@@ -54,18 +54,28 @@ namespace e_Pas_CMS.Controllers
                     .Where(s => s != null)
                     .Distinct()
                     .ToListAsync();
+                var query =
+    from a in _context.trx_audits
+    join s in _context.spbus on a.spbu_id equals s.id
 
-                var query = from a in _context.trx_audits
-                            join s in _context.spbus on a.spbu_id equals s.id
-                            join u in _context.app_users on a.app_user_id equals u.id into aud
-                            from u in aud.DefaultIfEmpty()
-                            where a.status == "UNDER_REVIEW" && a.audit_type != "Basic Operational"
-                            select new
-                            {
-                                Audit = a,
-                                Spbu = s,
-                                AuditorName = u.name
-                            };
+    // Auditor 1 (LEFT JOIN)
+    join u in _context.app_users on a.app_user_id equals u.id into aud1
+    from u in aud1.DefaultIfEmpty()
+
+        // Auditor 2 (LEFT JOIN)
+    join u2 in _context.app_users on a.app_user_id_auditor2 equals u2.id into aud2
+    from u2 in aud2.DefaultIfEmpty()
+
+    where a.status == "UNDER_REVIEW"
+          && a.audit_type != "Basic Operational"
+    select new
+    {
+        Audit = a,
+        Spbu = s,
+        AuditorName = u.name,          // Auditor 1
+        Auditor2Name = u2 != null ? u2.name : null
+    };
+
 
                 if (userRegion.Any() || userSbm.Any())
                 {
@@ -350,6 +360,7 @@ WHERE
                         Kota = a.Spbu.city_name,
                         Sbm = a.Spbu.sbm,
                         NamaAuditor = a.AuditorName,
+                        Auditor2 = a.Auditor2Name,
                         Report = a.Audit.report_no,
                         TanggalSubmit = (a.Audit.audit_execution_time == null || a.Audit.audit_execution_time.Value == DateTime.MinValue)
                             ? a.Audit.updated_date.Value
@@ -762,15 +773,26 @@ WHERE
 
             // --- EF Core tetap pakai _context untuk data LINQ ---
             var audit = await (
-                from ta in _context.trx_audits
-                join au in _context.app_users on ta.app_user_id equals au.id
-                join s in _context.spbus on ta.spbu_id equals s.id
-                where ta.id == id
-                select new DetailAuditViewModel
-                {
-                    ReportNo = ta.report_no,
-                    NamaAuditor = au.name,
-                    TanggalSubmit = (ta.audit_execution_time == null || ta.audit_execution_time.Value == DateTime.MinValue)
+    from ta in _context.trx_audits
+
+        // JOIN auditor utama
+    join au in _context.app_users on ta.app_user_id equals au.id into aud1
+    from au in aud1.DefaultIfEmpty()
+
+        // JOIN auditor kedua (LEFT JOIN)
+    join au2 in _context.app_users on ta.app_user_id_auditor2 equals au2.id into aud2
+    from au2 in aud2.DefaultIfEmpty()
+
+    join s in _context.spbus on ta.spbu_id equals s.id
+
+    where ta.id == id
+
+    select new DetailAuditViewModel
+    {
+        ReportNo = ta.report_no,
+        NamaAuditor = au.name,
+        Auditor2 = au2.name ?? "-",   // <--- tambahan
+        TanggalSubmit = (ta.audit_execution_time == null || ta.audit_execution_time.Value == DateTime.MinValue)
                                     ? ta.updated_date.Value
                                     : ta.audit_execution_time.Value,
                     Status = ta.status,
@@ -1162,24 +1184,52 @@ WHERE
                 ? (bool?)null
                 : Convert.ToBoolean(trxAudit.is_revision);
 
+            // --- 1. Cek apakah ada Auditor 2 ---
+            var isAuditor2Sql = @"
+            SELECT 1 
+            FROM trx_audit 
+            WHERE id = @id 
+              AND app_user_id_auditor2 IS NOT NULL 
+            LIMIT 1;
+            ";
+
+            var isAuditor2 = await conn.QueryFirstOrDefaultAsync<int?>(isAuditor2Sql, new { id });
+
+            // Tentukan nilai form_status_auditor2
+            // Jika ada auditor 2 → VERIFIED
+            // Jika tidak ada → NULL
+            string formStatusAuditor2Value = isAuditor2 != null ? "VERIFIED" : null;
+
             if (isRevision != true) // masuk jika NULL atau false
             {
                 const string sqlApprove = @"
                 UPDATE trx_audit
-                SET approval_date = now(),
+                SET 
+                    approval_date = now(),
                     score = @p0,
                     approval_by = @p1,
                     updated_date = now(),
                     updated_by = @p1,
                     status = 'VERIFIED',
+                    form_status_auditor1 = 'VERIFIED',
+                    form_status_auditor2 = @p5,
                     good_status = @p2,
                     excellent_status = @p3
-                WHERE id = @p4";
+                WHERE id = @p4;
+                ";
 
                 int affected = await _context.Database.ExecuteSqlRawAsync(
-                    sqlApprove, score, currentUser, goodStatus, excellentStatus, id
+                    sqlApprove,
+                    score,                     // @p0
+                    currentUser,               // @p1
+                    goodStatus,                // @p2
+                    excellentStatus,           // @p3
+                    id,                        // @p4
+                    formStatusAuditor2Value    // @p5 
                 );
-                if (affected == 0) return NotFound();
+
+                if (affected == 0)
+                    return NotFound();
 
                 const string updateSpbuWithNext = @"
                 UPDATE spbu
@@ -1201,21 +1251,34 @@ WHERE
             }
             else
             {
-                const string sqlRevision = @"
+                const string sqlApprove = @"
                 UPDATE trx_audit
-                SET revision_date = now(),
+                SET 
+                    approval_date = now(),
                     score = @p0,
+                    approval_by = @p1,
                     updated_date = now(),
                     updated_by = @p1,
                     status = 'VERIFIED',
+                    form_status_auditor1 = 'VERIFIED',
+                    form_status_auditor2 = @p5,
                     good_status = @p2,
                     excellent_status = @p3
-                WHERE id = @p4";
+                WHERE id = @p4;
+                ";
 
                 int affected = await _context.Database.ExecuteSqlRawAsync(
-                    sqlRevision, score, currentUser, goodStatus, excellentStatus, id
+                    sqlApprove,
+                    score,                     // @p0
+                    currentUser,               // @p1
+                    goodStatus,                // @p2
+                    excellentStatus,           // @p3
+                    id,                        // @p4
+                    formStatusAuditor2Value    // @p5 
                 );
-                if (affected == 0) return NotFound();
+
+                if (affected == 0)
+                    return NotFound();
 
                 const string updateFeedback = @"UPDATE trx_feedback
                 SET next_audit_before = @auditbefore

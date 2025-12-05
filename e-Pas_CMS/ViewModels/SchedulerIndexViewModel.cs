@@ -20,6 +20,7 @@
         public string AuditLevel { get; set; }
         public string SpbuNo { get; set; }
         public string ReportNo { get; set; }
+        public string SBM { get; set; }
     }
 
 }

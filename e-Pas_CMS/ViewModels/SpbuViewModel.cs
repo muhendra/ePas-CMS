@@ -9,6 +9,8 @@
         public Decimal Score { get; set; }
         public string Rayon { get; set; }
         public string NamaAuditor { get; set; }
+
+        public string Auditor2 { get; set; }
         public string Provinsi { get; set; }
         public string Kota { get; set; }
         public string Sbm { get; set; }

@@ -68,6 +68,7 @@ namespace e_Pas_CMS.Controllers
                 a.audit_type,
                 a.audit_level,
                 SpbuNo = a.spbu != null ? a.spbu.spbu_no : null,
+                SBM = a.spbu.sbm,
                 a.report_no
             });
 
@@ -97,6 +98,7 @@ namespace e_Pas_CMS.Controllers
                 AuditType = x.audit_type,
                 AuditLevel = x.audit_level,
                 SpbuNo = x.SpbuNo,
+                SBM = x.SBM,
                 ReportNo = x.report_no
             }).ToList();
 
@@ -199,18 +201,23 @@ namespace e_Pas_CMS.Controllers
                 Id = audit.id,
                 SpbuId = audit.spbu_id,
                 AppUserId = audit.app_user_id,
+                AppUserIdAuditor2 = audit.app_user_id_auditor2,   // <--- TAMBAHAN
+
                 AuditLevel = audit.audit_level,
                 AuditType = audit.audit_type,
                 AuditScheduleDate = audit.audit_schedule_date,
                 Status = MapStatus(audit.status),
                 AuditMomIntro = audit.audit_mom_intro,
                 AuditMomFinal = audit.audit_mom_final,
+
                 SpbuList = _context.spbus
                     .Select(s => new SelectListItem { Value = s.id, Text = s.spbu_no })
                     .ToList(),
+
                 UserList = _context.app_users
                     .Select(u => new SelectListItem { Value = u.id, Text = u.name })
                     .ToList(),
+
                 AuditLevelList = auditLevels
                     .Select(a => new SelectListItem
                     {
@@ -237,13 +244,37 @@ namespace e_Pas_CMS.Controllers
             if (allowedStatus.Contains(newStatus) && isCurrentEarly)
             {
                 audit.form_status_auditor1 = newStatus;
-                audit.status = newStatus;   // simpan status dari form
+                audit.status = newStatus;
             }
 
             audit.form_type_auditor1 = "FULL";
 
             audit.spbu_id = model.SpbuId;
             audit.app_user_id = model.AppUserId;
+
+            // ===== AUDITOR 2 =====
+            if (!string.IsNullOrWhiteSpace(model.AppUserIdAuditor2))
+            {
+                audit.app_user_id_auditor2 = model.AppUserIdAuditor2;
+
+                // Kalau sebelumnya belum pernah di-set, init form_type & status auditor2
+                if (string.IsNullOrEmpty(audit.form_type_auditor2))
+                {
+                    audit.form_type_auditor2 = "QQ";
+                }
+                if (string.IsNullOrEmpty(audit.form_status_auditor2))
+                {
+                    audit.form_status_auditor2 = "NOT_STARTED";
+                }
+            }
+            else
+            {
+                // kalau mau, kosongkan auditor 2 saat form kosong
+                audit.app_user_id_auditor2 = null;
+                // audit.form_type_auditor2 = null;
+                // audit.form_status_auditor2 = null;
+            }
+
             audit.audit_level = model.AuditLevel;
             audit.audit_type = model.AuditType;
             audit.audit_schedule_date = model.AuditScheduleDate;
@@ -263,14 +294,12 @@ namespace e_Pas_CMS.Controllers
                     .Select(m => m.id)
                     .FirstOrDefault();
 
-                // fallback ke default jika memang perlu
                 audit.master_questioner_checklist_id = latestChecklist
                     ?? audit.master_questioner_checklist_id
                     ?? "4b295bf0-9d29-4a56-9004-4b96ab656257";
             }
             else
             {
-                // Untuk Regular/Mystery: cari INTRO & CHECKLIST sesuai tipe yang dipilih
                 var latestIntro = _context.master_questioners
                     .Where(m => m.type == typeNorm && m.category == "INTRO")
                     .OrderByDescending(m => m.version)
@@ -283,24 +312,24 @@ namespace e_Pas_CMS.Controllers
                     .Select(m => m.id)
                     .FirstOrDefault();
 
-                // gunakan hasil terbaru jika ada; kalau tidak ada, pertahankan nilai lama
                 audit.master_questioner_intro_id = latestIntro
                     ?? audit.master_questioner_intro_id
-                    // default hanya kalau sebelumnya kosong dan tipe "Mystery Audit"
-                    ?? (typeNorm == "Mystery Audit" ? "7e3dca2d-2d99-4a8d-9fc0-9b80cb4c3a79" : audit.master_questioner_intro_id);
+                    ?? (typeNorm == "Mystery Audit"
+                        ? "7e3dca2d-2d99-4a8d-9fc0-9b80cb4c3a79"
+                        : audit.master_questioner_intro_id);
 
                 audit.master_questioner_checklist_id = latestChecklist
                     ?? audit.master_questioner_checklist_id
-                    ?? (typeNorm == "Mystery Audit" ? "16d4f8e1-360a-47b0-86b7-8ac55a1a6f75" : audit.master_questioner_checklist_id);
+                    ?? (typeNorm == "Mystery Audit"
+                        ? "16d4f8e1-360a-47b0-86b7-8ac55a1a6f75"
+                        : audit.master_questioner_checklist_id);
             }
 
-            // ---- METADATA ----
             audit.updated_date = DateTime.Now;
             audit.updated_by = User.Identity?.Name ?? "SYSTEM";
 
             _context.SaveChanges();
 
-            // ---- UPDATE audit_next DI SPBU ----
             var spbu = _context.spbus.FirstOrDefault(s => s.id == model.SpbuId);
             if (spbu != null)
             {

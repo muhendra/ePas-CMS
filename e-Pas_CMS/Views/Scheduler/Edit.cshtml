@@ -11,6 +11,7 @@
         @Html.HiddenFor(m => m.Id)
         @Html.HiddenFor(m => m.SpbuId, new { id = "SpbuId" })
         @Html.HiddenFor(m => m.AppUserId, new { id = "AppUserId" })
+        @Html.HiddenFor(m => m.AppUserIdAuditor2, new { id = "AppUserIdAuditor2" })
 
         @if (statusUpper == "DRAFT" || statusUpper == "NOT_STARTED" || statusUpper == "BELUM DIMULAI")
         {
@@ -45,16 +46,37 @@
             <div class="mb-3">
                 <label class="form-label">SPBU</label>
                 <div class="input-group">
-                    <input type="text" class="form-control" id="SpbuInfo" value="@Model.SpbuList.FirstOrDefault(x => x.Value == Model.SpbuId)?.Text" readonly />
-                    <button type="button" class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#spbuModal">Pilih SPBU</button>
+                    <input type="text" class="form-control" id="SpbuInfo"
+                           value="@Model.SpbuList.FirstOrDefault(x => x.Value == Model.SpbuId)?.Text" readonly />
+                    <button type="button" class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#spbuModal">
+                        Pilih SPBU
+                    </button>
                 </div>
             </div>
 
             <div class="mb-3">
-                <label class="form-label">Auditor</label>
+                <label class="form-label">Auditor 1</label>
                 <div class="input-group">
-                    <input type="text" class="form-control" id="AuditorInfo" value="@Model.UserList.FirstOrDefault(x => x.Value == Model.AppUserId)?.Text" readonly />
-                    <button type="button" class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#auditorModal">Pilih Auditor</button>
+                    <input type="text" class="form-control" id="AuditorInfo"
+                           value="@Model.UserList.FirstOrDefault(x => x.Value == Model.AppUserId)?.Text" readonly />
+                    <button type="button" class="btn btn-outline-primary"
+                            data-bs-toggle="modal" data-bs-target="#auditorModal"
+                            onclick="setCurrentAuditorSlot(1)">
+                        Pilih Auditor 1
+                    </button>
+                </div>
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label">Auditor 2 (opsional)</label>
+                <div class="input-group">
+                    <input type="text" class="form-control" id="Auditor2Info"
+                           value="@Model.UserList.FirstOrDefault(x => x.Value == Model.AppUserIdAuditor2)?.Text" readonly />
+                    <button type="button" class="btn btn-outline-primary"
+                            data-bs-toggle="modal" data-bs-target="#auditorModal"
+                            onclick="setCurrentAuditorSlot(2)">
+                        Pilih Auditor 2
+                    </button>
                 </div>
             </div>
         </div>
@@ -63,23 +85,26 @@
             <h5 class="fw-semibold mb-3 text-primary">Detail Audit</h5>
 
             <div class="form-floating mb-3">
-                @Html.DropDownListFor(m => m.AuditLevel, Model.AuditLevelList, "Pilih Audit Level", new { @class = "form-select", id = "AuditLevel" })
+                @Html.DropDownListFor(m => m.AuditLevel, Model.AuditLevelList, "Pilih Audit Level",
+                         new { @class = "form-select", id = "AuditLevel" })
                 <label for="AuditLevel">Audit Level</label>
             </div>
 
             <div class="form-floating mb-3">
-                @Html.DropDownListFor(m => m.AuditType, new SelectList(new[]
+                @Html.DropDownListFor(m => m.AuditType,
+                         new SelectList(new[]
                          {
-                new { Value = "Regular Audit",    Text = "Regular Audit" },
-                new { Value = "Mystery Audit",    Text = "Mystery Audit" },
-                new { Value = "Basic Operational",Text = "Basic Operational" }
+                new { Value = "Regular Audit",     Text = "Regular Audit" },
+                new { Value = "Mystery Audit",     Text = "Mystery Audit" },
+                new { Value = "Basic Operational", Text = "Basic Operational" }
                 }, "Value", "Text", Model.AuditType),
                          new { @class = "form-select", id = "AuditType" })
                 <label for="AuditType">Audit Type</label>
             </div>
 
             <div class="form-floating mb-3">
-                @Html.TextBoxFor(m => m.AuditScheduleDate, "{0:yyyy-MM-dd}", new { @class = "form-control", type = "date", placeholder = "Tanggal Audit" })
+                @Html.TextBoxFor(m => m.AuditScheduleDate, "{0:yyyy-MM-dd}",
+                         new { @class = "form-control", type = "date", placeholder = "Tanggal Audit" })
                 <label>Tanggal Audit</label>
             </div>
         </div>
@@ -111,7 +136,7 @@
     </div>
 </div>
 
-<!-- Modal Auditor -->
+<!-- Modal Auditor (dipakai untuk Auditor 1 & 2) -->
 <div class="modal fade" id="auditorModal" tabindex="-1" aria-labelledby="auditorModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-lg">
         <div class="modal-content rounded-4">
@@ -135,44 +160,33 @@
     <script>
         let spbuPage = 1;
         let auditorPage = 1;
+        let currentAuditorSlot = 1; // 1 = Auditor 1, 2 = Auditor 2
 
-        function loadSpbuList(search = "") {
-            $.get("@Url.Action("GetSpbuList", "Scheduler")", { search: search, page: spbuPage }, function (data) {
-                let html = "<ul class='list-group'>";
-                (data.items || []).forEach(item => {
-                    const text = `${item.spbu_no} - ${item.address}`;
-                    html += `<li class='list-group-item list-group-item-action' style='cursor:pointer'
-                                onclick="selectSpbu('${item.id}', '${text.replace(/'/g, "\\'")}')">
-                                ${text}</li>`;
-                });
-                html += "</ul>";
-                $("#spbuList").html(html);
-            });
+        function setCurrentAuditorSlot(slot) {
+            currentAuditorSlot = slot;
         }
 
-        function loadAuditorList(search = "") {
-            $.get("@Url.Action("GetAuditorList", "Scheduler")", { search: search, page: auditorPage }, function (data) {
-                let html = "<ul class='list-group'>";
-                (data.items || []).forEach(item => {
-                    html += `<li class='list-group-item list-group-item-action' style='cursor:pointer'
-                                onclick="selectAuditor('${item.id}', '${(item.text || "").replace(/'/g, "\\'")}')">
-                                ${item.text}</li>`;
+        // ================== SPBU ==================
+        function loadSpbuList(search = "") {
+            $.get("@Url.Action("GetSpbuList", "Scheduler")",
+                { search: search, page: spbuPage },
+                function (data) {
+                    let html = "<ul class='list-group'>";
+                    (data.items || []).forEach(item => {
+                        const text = `${item.spbu_no} - ${item.address}`;
+                        html += `<li class='list-group-item list-group-item-action' style='cursor:pointer'
+                                    onclick="selectSpbu('${item.id}', '${text.replace(/'/g, "\\'")}')">
+                                    ${text}</li>`;
+                    });
+                    html += "</ul>";
+                    $("#spbuList").html(html);
                 });
-                html += "</ul>";
-                $("#auditorList").html(html);
-            });
         }
 
         function selectSpbu(id, text) {
             $("#SpbuId").val(id);
             $("#SpbuInfo").val(text);
             bootstrap.Modal.getInstance(document.getElementById('spbuModal')).hide();
-        }
-
-        function selectAuditor(id, text) {
-            $("#AppUserId").val(id);
-            $("#AuditorInfo").val(text);
-            bootstrap.Modal.getInstance(document.getElementById('auditorModal')).hide();
         }
 
         function nextSpbu() {
@@ -187,6 +201,34 @@
             }
         }
 
+        // ================== AUDITOR (1 & 2) ==================
+        function loadAuditorList(search = "") {
+            $.get("@Url.Action("GetAuditorList", "Scheduler")",
+                { search: search, page: auditorPage },
+                function (data) {
+                    let html = "<ul class='list-group'>";
+                    (data.items || []).forEach(item => {
+                        const text = item.text || "";
+                        html += `<li class='list-group-item list-group-item-action' style='cursor:pointer'
+                                    onclick="selectAuditor('${item.id}', '${text.replace(/'/g, "\\'")}')">
+                                    ${text}</li>`;
+                    });
+                    html += "</ul>";
+                    $("#auditorList").html(html);
+                });
+        }
+
+        function selectAuditor(id, text) {
+            if (currentAuditorSlot === 1) {
+                $("#AppUserId").val(id);
+                $("#AuditorInfo").val(text);
+            } else {
+                $("#AppUserIdAuditor2").val(id);
+                $("#Auditor2Info").val(text);
+            }
+            bootstrap.Modal.getInstance(document.getElementById('auditorModal')).hide();
+        }
+
         function nextAuditor() {
             auditorPage++;
             loadAuditorList($("#searchAuditor").val());
@@ -199,7 +241,7 @@
             }
         }
 
-        // Hide/Show dropdown Status (client-side safety net)
+        // ================== STATUS DROPDOWN VISIBILITY ==================
         function toggleStatusVisibility(initialStatus) {
             const s = (initialStatus || $("#StatusSelect").val() || "")
                 .toString().trim().toUpperCase();
@@ -207,7 +249,7 @@
             const $wrap = $("#StatusSelectWrap");
             const $select = $("#StatusSelect");
 
-            if (!$wrap.length) return; // dropdown tidak dirender (server-side sudah menyembunyikan)
+            if (!$wrap.length) return;
 
             if (s === "UNDER_REVIEW" || s === "VERIFIED") {
                 $wrap.hide();
@@ -219,17 +261,20 @@
         }
 
         $(document).ready(function () {
+            // SPBU
             $("#searchSpbu").on("input", function () {
                 spbuPage = 1;
                 loadSpbuList($(this).val());
             });
 
+            loadSpbuList();
+
+            // Auditor
             $("#searchAuditor").on("input", function () {
                 auditorPage = 1;
                 loadAuditorList($(this).val());
             });
 
-            loadSpbuList();
             loadAuditorList();
 
             document.addEventListener('hidden.bs.modal', function () {
@@ -237,10 +282,9 @@
                 document.querySelectorAll('.modal-backdrop').forEach(e => e.remove());
             });
 
-            // Jalankan pengecekan berdasarkan nilai server
+            // Status visibility awal
             toggleStatusVisibility('@statusUpper');
 
-            // Jika dropdown ada & berubah, evaluasi lagi
             $(document).on("change", "#StatusSelect", function () {
                 toggleStatusVisibility($(this).val());
             });
