@@ -65,7 +65,7 @@ public class AuditAutoSchedulerService : BackgroundService
             ta.spbu_id,
             ta.audit_schedule_date AS last_progress_date
         FROM trx_audit ta
-        WHERE ta.status IN ('DRAFT','NOT_STARTED','IN_PROGRESS_INPUT','UNDER_REVIEW')
+        WHERE ta.status IN ('DRAFT','NOT_STARTED','IN_PROGRESS_INPUT','IN_PROGRESS_SUBMIT','UNDER_REVIEW')
         ORDER BY ta.spbu_id, ta.audit_schedule_date desc, ta.audit_execution_time DESC
     ),
     latest_master_questioner AS (
@@ -154,7 +154,10 @@ public class AuditAutoSchedulerService : BackgroundService
            form_type_auditor1,
 	       form_type_auditor2,
 	       'DRAFT' as form_status_auditor1,
-	       'DRAFT' as form_status_auditor2
+           CASE 
+                WHEN app_user_id_auditor2 IS NULL THEN NULL
+                ELSE 'DRAFT'
+            END as form_status_auditor2
     FROM distributed
     ORDER BY app_user_id, range_audit_month, rn;";
 
@@ -231,16 +234,45 @@ public class AuditAutoSchedulerService : BackgroundService
         if (conn.State != ConnectionState.Open)
             await conn.OpenAsync(ct);
 
-        await using var tx = await conn.BeginTransactionAsync(ct);
-        try
+        // SOFT DELETE
+        await using (var tx1 = await conn.BeginTransactionAsync(ct))
         {
-            await conn.ExecuteAsync(CreateSchedulerSql, transaction: tx);
-            await tx.CommitAsync(ct);
+            try
+            {
+                const string deleteSql = @"
+                    UPDATE trx_audit 
+                    SET 
+                        status = 'DELETED',
+                        form_status_auditor1 = 'DELETED',
+                        form_status_auditor2 = 'DELETED',
+                        updated_by = 'SYSTEM-AUTO-SCHEDULE-DELETE',
+                        updated_date = current_timestamp
+                    WHERE status = 'DRAFT';
+                ";
+
+                await conn.ExecuteAsync(deleteSql, transaction: tx1);
+                await tx1.CommitAsync(ct);
+            }
+            catch
+            {
+                await tx1.RollbackAsync(ct);
+                throw;
+            }
         }
-        catch
+
+        // INSERT
+        await using (var tx2 = await conn.BeginTransactionAsync(ct))
         {
-            await tx.RollbackAsync(ct);
-            throw;
+            try
+            {
+                await conn.ExecuteAsync(CreateSchedulerSql, transaction: tx2);
+                await tx2.CommitAsync(ct);
+            }
+            catch
+            {
+                await tx2.RollbackAsync(ct);
+                throw;
+            }
         }
     }
 }
