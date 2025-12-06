@@ -681,23 +681,63 @@ namespace e_Pas_CMS.Controllers
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> RunAutoSchedule()
         {
-            var sql = AuditAutoSchedulerService.CreateSchedulerSql;
-
             try
             {
                 var cs = _context.Database.GetConnectionString();
                 await using var conn = new NpgsqlConnection(cs);
                 await conn.OpenAsync();
-                await using var tx = await conn.BeginTransactionAsync();
 
-                // Pastikan ekstensi uuid tersedia
-                await conn.ExecuteAsync("CREATE EXTENSION IF NOT EXISTS \"uuid-ossp\";", transaction: tx);
+                // SOFT DELETE
+                const string deleteSql = @"
+                    UPDATE trx_audit 
+                    SET 
+                        status = 'DELETED',
+                        form_status_auditor1 = 'DELETED',
+                        form_status_auditor2 = 'DELETED',
+                        updated_by = 'SYSTEM-AUTO-SCHEDULE-DELETE',
+                        updated_date = current_timestamp
+                    WHERE status = 'DRAFT';
+                ";
 
-                var affected = await conn.ExecuteAsync(sql, transaction: tx, commandTimeout: 600);
+                await using (var tx1 = await conn.BeginTransactionAsync())
+                {
+                    try
+                    {
+                        await conn.ExecuteAsync(
+                            "CREATE EXTENSION IF NOT EXISTS \"uuid-ossp\";",
+                            transaction: tx1
+                        );
 
-                await tx.CommitAsync();
+                        var updated = await conn.ExecuteAsync(deleteSql, transaction: tx1);
 
-                TempData["Success"] = $"Run Scheduler selesai. {affected} jadwal baru dibuat.";
+                        await tx1.CommitAsync();
+                        _logger.LogInformation("AutoSchedule: {Count} record DRAFT diubah menjadi DELETED.", updated);
+                    }
+                    catch
+                    {
+                        await tx1.RollbackAsync();
+                        throw;
+                    }
+                }
+
+                // INSERT
+                var insertSql = AuditAutoSchedulerService.CreateSchedulerSql;
+
+                await using (var tx2 = await conn.BeginTransactionAsync())
+                {
+                    try
+                    {
+                        var inserted = await conn.ExecuteAsync(insertSql, transaction: tx2, commandTimeout: 600);
+
+                        await tx2.CommitAsync();
+                        TempData["Success"] = $"Run Scheduler selesai. {inserted} jadwal baru dibuat.";
+                    }
+                    catch
+                    {
+                        await tx2.RollbackAsync();
+                        throw;
+                    }
+                }
             }
             catch (Exception ex)
             {
