@@ -48,24 +48,46 @@ public class AuditAutoSchedulerService : BackgroundService
     )
     WITH
     latest_verified AS (
-        SELECT DISTINCT ON (ta.spbu_id)
-            ta.spbu_id,
-            ta.app_user_id,
-            COALESCE(ta.audit_execution_time, ta.audit_schedule_date) AS last_verified_date,
-            ta.audit_execution_time,
-            ta.app_user_id_auditor2,
-            ta.form_type_auditor1,
-	        ta.form_type_auditor2
+        SELECT DISTINCT ON (ta.spbu_id) 
+			ta.spbu_id,
+	        ta.app_user_id,
+	        ta.audit_level,
+	        COALESCE(ta.audit_execution_time, ta.audit_schedule_date) AS last_verified_date,
+	        ta.audit_execution_time,
+	        ta.good_status, 
+	        ta.excellent_status,
+	        ta.boa_status,
+	        ta.app_user_id_auditor2,
+	        ta.form_type_auditor1,
+		    ta.form_type_auditor2
         FROM trx_audit ta
         WHERE ta.status IN ('VERIFIED')
         ORDER BY ta.spbu_id, ta.audit_execution_time DESC, ta.audit_schedule_date DESC
     ),
+    latest_verified_with_next_audit AS (
+		SELECT 
+		    lv.*,
+		    CASE 
+		        WHEN lv.good_status = 'CERTIFIED' OR lv.boa_status = 'CERTIFIED' THEN 
+		            COALESCE(
+		                maf.passed_audit_level,
+		                CASE 
+		                    WHEN lv.excellent_status = 'CERTIFIED' THEN maf.passed_excellent
+		                    WHEN lv.good_status = 'CERTIFIED' THEN maf.passed_good
+		                END
+		            )
+		        ELSE 
+		            maf.failed_audit_level
+		    END AS audit_next
+		FROM latest_verified lv
+		JOIN master_audit_flow maf ON maf.audit_level = lv.audit_level
+    ),    
     latest_progress AS (
         SELECT DISTINCT ON (ta.spbu_id)
             ta.spbu_id,
             ta.audit_schedule_date AS last_progress_date
         FROM trx_audit ta
-        WHERE ta.status IN ('DRAFT','NOT_STARTED','IN_PROGRESS_INPUT','UNDER_REVIEW')
+        WHERE ta.status IN ('DRAFT','NOT_STARTED','IN_PROGRESS_INPUT','IN_PROGRESS_SUBMIT','UNDER_REVIEW')
         ORDER BY ta.spbu_id, ta.audit_schedule_date desc, ta.audit_execution_time DESC
     ),
     latest_master_questioner AS (
@@ -81,31 +103,31 @@ public class AuditAutoSchedulerService : BackgroundService
         SELECT
             s.spbu_no,
             s.id as spbu_id,
-            lv.app_user_id,
-            lv.app_user_id_auditor2,
-            lv.form_type_auditor1,
-	        lv.form_type_auditor2,
-            s.audit_next,
-            lv.audit_execution_time,
+            lvna.app_user_id,
+            lvna.app_user_id_auditor2,
+            lvna.form_type_auditor1,
+	        lvna.form_type_auditor2,
+            lvna.audit_next,
+            lvna.audit_execution_time,
             lp.last_progress_date,
             maf.range_audit_month,
             maf.audit_type,
             lmqi.id as master_questioner_intro_id,
             lmqc.id as master_questioner_checklist_id
         FROM spbu s
+        INNER JOIN latest_verified_with_next_audit lvna
+	        ON lvna.spbu_id = s.id
         INNER JOIN master_audit_flow maf
-            ON maf.audit_level = s.audit_next
+            ON maf.audit_level = lvna.audit_next
            AND maf.range_audit_month IS NOT null
         LEFT JOIN latest_master_questioner lmqi
             ON lmqi.type = maf.audit_type AND lmqi.category = 'INTRO'
         LEFT JOIN latest_master_questioner lmqc
             ON lmqc.type = maf.audit_type AND lmqc.category = 'CHECKLIST'
-        LEFT JOIN latest_verified lv
-            ON lv.spbu_id = s.id
         LEFT JOIN latest_progress lp
             ON lp.spbu_id = s.id
         WHERE lp.last_progress_date IS NULL
-          AND lv.last_verified_date IS NOT NULL
+          AND lvna.last_verified_date IS NOT NULL
     ),
     distributed AS (
         SELECT d.*,
@@ -154,9 +176,12 @@ public class AuditAutoSchedulerService : BackgroundService
            form_type_auditor1,
 	       form_type_auditor2,
 	       'DRAFT' as form_status_auditor1,
-	       'DRAFT' as form_status_auditor2
+           CASE 
+                WHEN app_user_id_auditor2 IS NULL THEN NULL
+                ELSE 'DRAFT'
+            END as form_status_auditor2
     FROM distributed
-    ORDER BY app_user_id, range_audit_month, rn;";
+    ORDER BY app_user_id, range_audit_month, rn";
 
     public AuditAutoSchedulerService(IServiceProvider services,
                                      ILogger<AuditAutoSchedulerService> logger)
@@ -231,16 +256,45 @@ public class AuditAutoSchedulerService : BackgroundService
         if (conn.State != ConnectionState.Open)
             await conn.OpenAsync(ct);
 
-        await using var tx = await conn.BeginTransactionAsync(ct);
-        try
+        // SOFT DELETE
+        await using (var tx1 = await conn.BeginTransactionAsync(ct))
         {
-            await conn.ExecuteAsync(CreateSchedulerSql, transaction: tx);
-            await tx.CommitAsync(ct);
+            try
+            {
+                const string deleteSql = @"
+                    UPDATE trx_audit 
+                    SET 
+                        status = 'DELETED',
+                        form_status_auditor1 = 'DELETED',
+                        form_status_auditor2 = 'DELETED',
+                        updated_by = 'SYSTEM-AUTO-SCHEDULE-DELETE',
+                        updated_date = current_timestamp
+                    WHERE status = 'DRAFT';
+                ";
+
+                await conn.ExecuteAsync(deleteSql, transaction: tx1);
+                await tx1.CommitAsync(ct);
+            }
+            catch
+            {
+                await tx1.RollbackAsync(ct);
+                throw;
+            }
         }
-        catch
+
+        // INSERT
+        await using (var tx2 = await conn.BeginTransactionAsync(ct))
         {
-            await tx.RollbackAsync(ct);
-            throw;
+            try
+            {
+                await conn.ExecuteAsync(CreateSchedulerSql, transaction: tx2);
+                await tx2.CommitAsync(ct);
+            }
+            catch
+            {
+                await tx2.RollbackAsync(ct);
+                throw;
+            }
         }
     }
 }
