@@ -825,41 +825,29 @@ namespace e_Pas_CMS.Controllers
 
                 var allowedStatuses = new[] { "VERIFIED", "UNDER_REVIEW" };
 
-                var start = new DateTime(2025, 12, 1);
-                var end = new DateTime(2025, 12, 31);
-
-                var query = _context.trx_audits
-                    .Include(a => a.spbu)
-                    .Include(a => a.app_user)
+                var baseQuery = _context.trx_audits
                     .Where(a =>
                         allowedStatuses.Contains(a.status) &&
-                        a.audit_type != "Basic Operational" &&
-                        ((a.audit_execution_time ?? a.created_date) >= start) &&
-                        ((a.audit_execution_time ?? a.created_date) < end)
+                        a.audit_type != "Basic Operational"
                     );
 
-                if (userRegion.Any())
-                {
-                    query = query.Where(x => userRegion.Contains(x.spbu.region));
-                }
-
-                if (!string.IsNullOrWhiteSpace(searchTerm))
-                {
-                    searchTerm = searchTerm.ToLower();
-                    query = query.Where(a =>
-                        a.spbu.spbu_no.ToLower().Contains(searchTerm) ||
-                        a.app_user.name.ToLower().Contains(searchTerm) ||
-                        a.status.ToLower().Contains(searchTerm) ||
-                        a.spbu.address.ToLower().Contains(searchTerm) ||
-                        a.spbu.province_name.ToLower().Contains(searchTerm) ||
-                        a.spbu.city_name.ToLower().Contains(searchTerm)
+                var lastAuditIdsQuery = baseQuery
+                    .GroupBy(a => a.spbu_id) // atau a.spbu.spbu_no, sesuaikan
+                    .Select(g => g
+                        .OrderByDescending(a => a.audit_execution_time ?? a.created_date)
+                        .Select(a => a.id)
+                        .FirstOrDefault()
                     );
-                }
+
+                var query = _context.trx_audits
+                    .Where(a => lastAuditIdsQuery.Contains(a.id))
+                    .Include(a => a.spbu)
+                    .Include(a => a.app_user);
 
                 var audits = await query
-                    .OrderByDescending(a => a.audit_execution_time ?? a.updated_date)
+                    .OrderBy(a => a.spbu.spbu_no)
+                    .ThenByDescending(a => a.audit_execution_time ?? a.created_date)
                     .ToListAsync();
-
                 await using var conn2 = _context.Database.GetDbConnection();
                 if (conn2.State != ConnectionState.Open)
                     await conn2.OpenAsync();
@@ -1164,6 +1152,23 @@ namespace e_Pas_CMS.Controllers
                             ? (auditlevelClass.audit_level_class ?? "")
                             : "";
                     }
+
+                    // === UPDATE AUDIT_NEXT & LEVEL SPBU KE TABEL SPBU
+                    var updateSpbuSql = @"
+                    UPDATE spbu 
+                    SET 
+                        audit_next = @auditNext,
+                        ""level""   = @level,
+                        updated_date = NOW()
+                    WHERE id = @spbuId;
+                    ";
+
+                    await conn.ExecuteAsync(updateSpbuSql, new
+                    {
+                        auditNext = auditNext,
+                        level = levelspbu,
+                        spbuId = a.spbu_id
+                    });
 
                     var checklistRaw = await conn.QueryAsync<(string number, decimal? weight, string score_input, decimal? score_x, bool? is_relaksasi)>(@"
                 SELECT DISTINCT ON (mqd.number) 

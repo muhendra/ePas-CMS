@@ -49,7 +49,10 @@ public partial class EpasDbContext : DbContext
     public virtual DbSet<TrxSurvey> TrxSurveys { get; set; }
 
     public virtual DbSet<TrxSurveyElement> TrxSurveyElements { get; set; }
+
     public virtual DbSet<SysParameter> SysParameter { get; set; }
+
+    public virtual DbSet<trx_audit_not_started_log> trx_audit_not_started_logs { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -173,6 +176,54 @@ public partial class EpasDbContext : DbContext
                 .HasForeignKey(d => d.spbu_id)
                 .HasConstraintName("app_user_role_spbu_id_fkey");
         });
+
+        modelBuilder.Entity<trx_audit_not_started_log>(entity =>
+        {
+            entity.ToTable("trx_audit_not_started_log");
+
+            entity.HasKey(e => e.id);
+
+            entity.Property(e => e.id)
+                .HasMaxLength(50);
+
+            entity.Property(e => e.trx_audit_id)
+                .HasMaxLength(50)
+                .IsRequired();
+
+            entity.Property(e => e.spbu_id)
+                .HasMaxLength(50);
+
+            entity.Property(e => e.old_status)
+                .HasMaxLength(100);
+
+            entity.Property(e => e.new_status)
+                .HasMaxLength(100)
+                .IsRequired();
+
+            entity.Property(e => e.old_form_status_auditor1)
+                .HasMaxLength(100);
+
+            entity.Property(e => e.new_form_status_auditor1)
+                .HasMaxLength(100);
+
+            entity.Property(e => e.changed_by)
+                .HasMaxLength(50)
+                .IsRequired();
+
+            entity.Property(e => e.note);
+
+            entity.Property(e => e.changed_date)
+                .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+            entity.HasOne(d => d.trx_audit)
+                .WithMany()
+                .HasForeignKey(d => d.trx_audit_id);
+
+            entity.HasOne(d => d.spbu)
+                .WithMany()
+                .HasForeignKey(d => d.spbu_id);
+        });
+
 
         modelBuilder.Entity<master_audit_flow>(entity =>
         {

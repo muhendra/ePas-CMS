@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Data;
 using System.Diagnostics;
 using System.Linq;
+using System.Security.Claims;
 using System.Threading.Tasks;
 using Dapper;
 using e_Pas_CMS.Data;
@@ -34,8 +35,10 @@ namespace e_Pas_CMS.Controllers
 
         public async Task<IActionResult> Index(int pageNumber = 1, int pageSize = DefaultPageSize, string searchTerm = "", string sortColumn = "TanggalAudit", string sortDirection = "desc")
         {
+            string trxauditid = "";
             try
             {
+
                 var currentUser = User.Identity?.Name;
                 bool isReadonlyUser = currentUser == "usermanagement1";
 
@@ -124,6 +127,9 @@ namespace e_Pas_CMS.Controllers
 
                 foreach (var a in items)
                 {
+
+                    trxauditid = a.Audit.id;
+
                     var sql = @"
                     SELECT 
                         mqd.weight, 
@@ -344,6 +350,7 @@ WHERE
                         : "";
                     }
 
+                    
                     result.Add(new SpbuViewModel
                     {
                         Id = a.Audit.id,
@@ -402,7 +409,7 @@ WHERE
 
             catch (Exception ex)
             {
-                TempData["Error"] = "Terjadi kesalahan saat memuat data. Silakan coba lagi.";
+                TempData["Error"] = "Terjadi kesalahan saat memuat data. Silakan coba lagi" + trxauditid;
                 return View(new PaginationModel<SpbuViewModel>
                 {
                     Items = new List<SpbuViewModel>(),
@@ -728,7 +735,7 @@ WHERE
 
         private async Task<List<AuditQqCheckItem>> GetQqCheckDataAsync(IDbConnection conn, string id)
         {
-            string sql = @"SELECT nozzle_number AS NozzleNumber,
+            string sql = @"SELECT id AS Id, nozzle_number AS NozzleNumber,
                        du_make  AS DuMake,
                        du_serial_no AS DuSerialNo,
                        product  AS Product,
@@ -770,6 +777,19 @@ WHERE
         [HttpGet("Audit/Detail/{id}")]
         public async Task<IActionResult> Detail(string id)
         {
+            var userIdString = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+            var roleNames = await _context.app_user_roles
+                .Where(aur => aur.app_user_id == userIdString) // ✅ STRING vs STRING
+                .Join(_context.app_roles,
+                      aur => aur.app_role_id,
+                      ar => ar.id,
+                      (aur, ar) => ar.name)
+                .Distinct()
+                .ToListAsync();
+
+            ViewBag.IsSuperadmin = roleNames
+                .Any(r => r.Equals("Superadmin", StringComparison.OrdinalIgnoreCase));
 
             // --- EF Core tetap pakai _context untuk data LINQ ---
             var audit = await (
@@ -985,6 +1005,82 @@ WHERE
 
             ViewBag.AuditId = id;
             return View(audit);
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> UpdateQq([FromBody] UpdateQqRequest req)
+        {
+            if (!User.IsInRole("Superadmin"))
+                return Forbid();
+
+            if (req == null || string.IsNullOrWhiteSpace(req.QqId) || string.IsNullOrWhiteSpace(req.AuditId))
+                return BadRequest("Invalid payload.");
+
+            // (opsional) hitung ulang percent dari measure kalau kamu mau konsisten
+            // kalau tidak, ya ambil dari req.QuantityVariationInPercentage
+            if (req.QuantityVariationWithMeasure.HasValue)
+            {
+                // contoh hitungan kamu yang di view: /20000*100
+                req.QuantityVariationInPercentage = (req.QuantityVariationWithMeasure.Value / 20000m) * 100m;
+            }
+
+            var currentUser = User.Identity?.Name ?? "system";
+
+            var connectionString = _context.Database.GetConnectionString();
+            await using var conn = new NpgsqlConnection(connectionString);
+            await conn.OpenAsync();
+
+            var sql = @"
+        UPDATE trx_audit_qq
+        SET
+            nozzle_number = @NozzleNumber,
+            du_make = @DuMake,
+            du_serial_no = @DuSerialNo,
+            product = @Product,
+            mode = @Mode,
+
+            quantity_variation_with_measure = @QuantityVariationWithMeasure,
+            quantity_variation_in_percentage = @QuantityVariationInPercentage,
+
+            observed_density = @ObservedDensity,
+            observed_temp = @ObservedTemp,
+            observed_density_15_degree = @ObservedDensity15Degree,
+            reference_density_15_degree = @ReferenceDensity15Degree,
+
+            tank_number = @TankNumber,
+            density_variation = @DensityVariation,
+
+            updated_by = @UpdatedBy,
+            updated_date = NOW()
+        WHERE id = @QqId
+          AND trx_audit_id = @AuditId;
+    ";
+
+            var affected = await conn.ExecuteAsync(sql, new
+            {
+                req.QqId,
+                req.AuditId,
+                req.NozzleNumber,
+                req.DuMake,
+                req.DuSerialNo,
+                req.Product,
+                req.Mode,
+                req.QuantityVariationWithMeasure,
+                req.QuantityVariationInPercentage,
+                req.ObservedDensity,
+                req.ObservedTemp,
+                req.ObservedDensity15Degree,
+                req.ReferenceDensity15Degree,
+                req.TankNumber,
+                req.DensityVariation,
+                UpdatedBy = currentUser
+            });
+
+            if (affected == 0)
+                return NotFound("QQ row not found or audit mismatch.");
+
+            return Ok(new { message = "Q&Q updated" });
         }
 
         [HttpPost("audit/approve/{id}")]

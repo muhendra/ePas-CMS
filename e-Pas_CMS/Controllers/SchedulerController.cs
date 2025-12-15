@@ -115,6 +115,93 @@ namespace e_Pas_CMS.Controllers
             return View(vm);
         }
 
+        [HttpGet("NotStarted")]
+        public IActionResult Index_NotStarted(
+            string searchTerm = "",
+            int pageNumber = 1,
+            int pageSize = 10,
+            string sortColumn = "ChangedDate",
+            string sortDirection = "desc")
+        {
+            searchTerm ??= "";
+            var term = searchTerm.Trim().ToLower();
+
+            var query =
+                from log in _context.trx_audit_not_started_logs.AsNoTracking()
+                join a in _context.trx_audits.AsNoTracking() on log.trx_audit_id equals a.id into aj
+                from a in aj.DefaultIfEmpty()
+                join s in _context.spbus.AsNoTracking() on log.spbu_id equals s.id into sj
+                from s in sj.DefaultIfEmpty()
+                select new TrxAuditNotStartedLogViewModel
+                {
+                    Id = log.id,
+                    TrxAuditId = log.trx_audit_id,
+                    ReportNo = a != null ? a.report_no : null,
+
+                    SpbuId = log.spbu_id,
+                    SpbuNo = s != null ? s.spbu_no : null,
+                    Region = s != null ? s.region : null,
+                    Kota = s != null ? s.city_name : null,
+
+                    OldStatus = log.old_status,
+                    NewStatus = log.new_status,
+                    OldFormStatusAuditor1 = log.old_form_status_auditor1,
+                    NewFormStatusAuditor1 = log.new_form_status_auditor1,
+
+                    ChangedBy = log.changed_by,
+                    ChangedDateUtc = log.changed_date,
+                    Note = log.note
+                };
+
+            if (!string.IsNullOrWhiteSpace(term))
+            {
+                query = query.Where(x =>
+                    (x.SpbuNo ?? "").ToLower().Contains(term) ||
+                    (x.ReportNo ?? "").ToLower().Contains(term) ||
+                    (x.Region ?? "").ToLower().Contains(term) ||
+                    (x.Kota ?? "").ToLower().Contains(term) ||
+                    (x.ChangedBy ?? "").ToLower().Contains(term) ||
+                    (x.OldStatus ?? "").ToLower().Contains(term) ||
+                    (x.NewStatus ?? "").ToLower().Contains(term) ||
+                    (x.Note ?? "").ToLower().Contains(term) ||
+                    (x.TrxAuditId ?? "").ToLower().Contains(term)
+                );
+            }
+
+            bool asc = (sortDirection ?? "asc").ToLower() == "asc";
+            query = (sortColumn ?? "").ToLower() switch
+            {
+                "nospbu" => asc ? query.OrderBy(x => x.SpbuNo) : query.OrderByDescending(x => x.SpbuNo),
+                "reportno" => asc ? query.OrderBy(x => x.ReportNo) : query.OrderByDescending(x => x.ReportNo),
+                "region" => asc ? query.OrderBy(x => x.Region) : query.OrderByDescending(x => x.Region),
+                "kota" => asc ? query.OrderBy(x => x.Kota) : query.OrderByDescending(x => x.Kota),
+                "oldstatus" => asc ? query.OrderBy(x => x.OldStatus) : query.OrderByDescending(x => x.OldStatus),
+                "newstatus" => asc ? query.OrderBy(x => x.NewStatus) : query.OrderByDescending(x => x.NewStatus),
+                "changedby" => asc ? query.OrderBy(x => x.ChangedBy) : query.OrderByDescending(x => x.ChangedBy),
+                _ => asc ? query.OrderBy(x => x.ChangedDateUtc) : query.OrderByDescending(x => x.ChangedDateUtc),
+            };
+
+            if (pageNumber < 1) pageNumber = 1;
+            if (pageSize <= 0) pageSize = 10;
+
+            var totalItems = query.Count();
+            var items = query.Skip((pageNumber - 1) * pageSize).Take(pageSize).ToList();
+
+            var model = new PaginationModel<TrxAuditNotStartedLogViewModel>
+            {
+                Items = items,
+                PageNumber = pageNumber,
+                PageSize = pageSize,
+                TotalItems = totalItems
+            };
+
+            ViewBag.SearchTerm = searchTerm;
+            ViewBag.SortColumn = sortColumn;
+            ViewBag.SortDirection = sortDirection;
+
+            return View(model); // akan cari Views/AuditNotStartedLog/Index_NotStarted.cshtml
+        }
+
         // Helper method to map status
         private string MapStatus(string status) => status switch
         {
@@ -237,10 +324,14 @@ namespace e_Pas_CMS.Controllers
             var audit = _context.trx_audits.FirstOrDefault(a => a.id == model.Id);
             if (audit == null) return NotFound();
 
+            // ===== CAPTURE OLD (buat deteksi perubahan) =====
+            var oldStatus = (audit.status ?? "").Trim().ToUpperInvariant();
+            var oldFormStatusAud1 = (audit.form_status_auditor1 ?? "").Trim().ToUpperInvariant();
+
             var allowedStatus = new[] { "DRAFT", "NOT_STARTED" };
             var newStatus = (model.Status ?? "").Trim().ToUpperInvariant();
 
-            var isCurrentEarly = allowedStatus.Contains((audit.status ?? "").Trim().ToUpperInvariant());
+            var isCurrentEarly = allowedStatus.Contains(oldStatus);
             if (allowedStatus.Contains(newStatus) && isCurrentEarly)
             {
                 audit.form_status_auditor1 = newStatus;
@@ -257,22 +348,15 @@ namespace e_Pas_CMS.Controllers
             {
                 audit.app_user_id_auditor2 = model.AppUserIdAuditor2;
 
-                // Kalau sebelumnya belum pernah di-set, init form_type & status auditor2
                 if (string.IsNullOrEmpty(audit.form_type_auditor2))
-                {
                     audit.form_type_auditor2 = "QQ";
-                }
+
                 if (string.IsNullOrEmpty(audit.form_status_auditor2))
-                {
                     audit.form_status_auditor2 = "NOT_STARTED";
-                }
             }
             else
             {
-                // kalau mau, kosongkan auditor 2 saat form kosong
                 audit.app_user_id_auditor2 = null;
-                // audit.form_type_auditor2 = null;
-                // audit.form_status_auditor2 = null;
             }
 
             audit.audit_level = model.AuditLevel;
@@ -285,7 +369,6 @@ namespace e_Pas_CMS.Controllers
 
             if (typeNorm == "Basic Operational")
             {
-                // BOA tidak pakai INTRO
                 audit.master_questioner_intro_id = null;
 
                 var latestChecklist = _context.master_questioners
@@ -327,6 +410,34 @@ namespace e_Pas_CMS.Controllers
 
             audit.updated_date = DateTime.Now;
             audit.updated_by = User.Identity?.Name ?? "SYSTEM";
+
+            // ===== DETEKSI TRANSISI DRAFT -> NOT_STARTED (status & form_status_auditor1) =====
+            var finalStatus = (audit.status ?? "").Trim().ToUpperInvariant();
+            var finalFormStatusAud1 = (audit.form_status_auditor1 ?? "").Trim().ToUpperInvariant();
+
+            bool isDraftToNotStarted =
+                oldStatus == "DRAFT" && finalStatus == "NOT_STARTED";
+
+            // kalau mau lebih ketat pakai form_status_auditor1 juga:
+            // bool isDraftToNotStarted =
+            //     oldFormStatusAud1 == "DRAFT" && finalFormStatusAud1 == "NOT_STARTED";
+
+            if (isDraftToNotStarted)
+            {
+                _context.trx_audit_not_started_logs.Add(new trx_audit_not_started_log
+                {
+                    id = Guid.NewGuid().ToString(), // ✅ wajib isi supaya EF bisa track
+                    trx_audit_id = audit.id,
+                    spbu_id = audit.spbu_id,
+                    old_status = oldStatus,
+                    new_status = finalStatus,
+                    old_form_status_auditor1 = oldFormStatusAud1,
+                    new_form_status_auditor1 = finalFormStatusAud1,
+                    changed_by = User.Identity?.Name ?? "SYSTEM",
+                    changed_date = DateTime.UtcNow,
+                    note = "Status changed from DRAFT to NOT_STARTED via Edit Scheduler"
+                });
+            }
 
             _context.SaveChanges();
 

@@ -9,6 +9,7 @@
     bool isReadonlyUser = currentUser == "usermanagement1";
     var batasTanggal = new DateTime(2025, 5, 11);
     bool hideUploadButton = Model.TanggalSubmit.HasValue && Model.TanggalSubmit.Value > batasTanggal;
+    bool isSuperadmin = (ViewBag.IsSuperadmin as bool?) ?? false;
 }
 
 @Html.AntiForgeryToken()
@@ -74,61 +75,145 @@
 @if (Model.QqChecks != null && Model.QqChecks.Any())
 {
     <h4 class="mt-5 fw-bold">Q&Q Check</h4>
-    <div class="table-responsive">
-        <table class="table table-bordered table-striped mt-3">
-            <thead class="table-light">
-                <tr>
-                    <th>Nozzle Number</th>
-                    <th>DU Make</th>
-                    <th>DU Serial No</th>
-                    <th>Product</th>
-                    <th>Mode</th>
-                    <th>Quantity Variation (Measure)</th>
-                    <th>Quantity Variation (%)</th>
-                    <th>Observed Density</th>
-                    <th>Observed Temp</th>
-                    <th>Observed Density (15°)</th>
-                    <th>Reference Density (15°)</th>
-                    <th>Tank Number</th>
-                    <th>Density Variation</th>
-                </tr>
-            </thead>
-            <tbody>
-                @foreach (var item in Model.QqChecks)
-                {
+
+    @* Toggle hanya untuk superadmin *@
+    @if (isSuperadmin)
+    {
+        <div class="d-flex align-items-center gap-2 mt-2 mb-2">
+            <div class="form-check form-switch m-0">
+                <input class="form-check-input" type="checkbox" id="qqEditToggle">
+                <label class="form-check-label fw-semibold" for="qqEditToggle">Edit Mode</label>
+            </div>
+            <span class="text-muted small" id="qqModeLabel">View Only</span>
+        </div>
+    }
+
+    @* =========================
+       VIEW ONLY (DEFAULT)
+       ========================= *@
+    <div id="qqViewOnly">
+        <div class="table-responsive">
+            <table class="table table-bordered table-striped mt-3">
+                <thead class="table-light">
                     <tr>
-                        <td>@item.NozzleNumber</td>
-                        <td>@item.DuMake</td>
-                        <td>@item.DuSerialNo</td>
-                        <td>@item.Product</td>
-                        <td>@item.Mode</td>
-                        <!-- Qty Var (m) -->
-                        <td style="
-    background-color: @(item.QuantityVariationWithMeasure < -60m ? "#ff0000" : "transparent");">
-                            @item.QuantityVariationWithMeasure
-                        </td>
-
-                        <!-- Qty Var (%) hitung dari Qty Var (m) -->
-                        @{
-                            var qtyVarPercent = (item.QuantityVariationWithMeasure / 20000m) * 100m; // -120 -> -0.60%
-                        }
-                        <td style="
-    background-color: @(qtyVarPercent < -0.3m ? "#ff0000" :
-                        qtyVarPercent >  0.3m ? "#ffff00" : "transparent");">
-                            @($"{qtyVarPercent:0.00}%")
-                        </td>
-
-                        <td>@item.ObservedDensity?.ToString("0.000")</td>
-                        <td>@item.ObservedTemp?.ToString("0.0")</td>
-                        <td>@item.ObservedDensity15Degree?.ToString("0.000")</td>
-                        <td>@item.ReferenceDensity15Degree?.ToString("0.000")</td>
-                        <td>@item.TankNumber</td>
-                        <td>@item.DensityVariation?.ToString("0.000")</td>
+                        <th>Nozzle Number</th>
+                        <th>DU Make</th>
+                        <th>DU Serial No</th>
+                        <th>Product</th>
+                        <th>Mode</th>
+                        <th>Quantity Variation (Measure)</th>
+                        <th>Quantity Variation (%)</th>
+                        <th>Observed Density</th>
+                        <th>Observed Temp</th>
+                        <th>Observed Density (15°)</th>
+                        <th>Reference Density (15°)</th>
+                        <th>Tank Number</th>
+                        <th>Density Variation</th>
                     </tr>
-                }
-            </tbody>
-        </table>
+                </thead>
+                <tbody>
+                    @foreach (var item in Model.QqChecks)
+                    {
+                        var qtyVarPercent = (item.QuantityVariationWithMeasure / 20000m) * 100m; // -120 -> -0.60%
+
+                        <tr>
+                            <td>@item.NozzleNumber</td>
+                            <td>@item.DuMake</td>
+                            <td>@item.DuSerialNo</td>
+                            <td>@item.Product</td>
+                            <td>@item.Mode</td>
+
+                            <td style="background-color:@(item.QuantityVariationWithMeasure < -60m ? "#ff0000" : "transparent");">
+                                @item.QuantityVariationWithMeasure
+                            </td>
+
+                            <td style="background-color:@(qtyVarPercent < -0.3m ? "#ff0000" : qtyVarPercent > 0.3m ? "#ffff00" : "transparent");">
+                                @($"{qtyVarPercent:0.00}%")
+                            </td>
+
+                            <td>@item.ObservedDensity?.ToString("0.000")</td>
+                            <td>@item.ObservedTemp?.ToString("0.0")</td>
+                            <td>@item.ObservedDensity15Degree?.ToString("0.000")</td>
+                            <td>@item.ReferenceDensity15Degree?.ToString("0.000")</td>
+                            <td>@item.TankNumber</td>
+                            <td>@item.DensityVariation?.ToString("0.000")</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
     </div>
+
+    @* =========================
+       EDIT MODE (superadmin only, hidden by default)
+       ========================= *@
+    @if (isSuperadmin)
+    {
+        <div id="qqEditMode" class="d-none">
+            <div class="table-responsive">
+                <table class="table table-bordered table-striped mt-3">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Nozzle Number</th>
+                            <th>DU Make</th>
+                            <th>DU Serial No</th>
+                            <th>Product</th>
+                            <th>Mode</th>
+                            <th>Quantity Variation (Measure)</th>
+                            <th>Quantity Variation (%)</th>
+                            <th>Observed Density</th>
+                            <th>Observed Temp</th>
+                            <th>Observed Density (15°)</th>
+                            <th>Reference Density (15°)</th>
+                            <th>Tank Number</th>
+                            <th>Density Variation</th>
+                            <th style="min-width:120px;">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var item in Model.QqChecks)
+                        {
+                            <tr data-qq-id="@item.Id" data-audit-id="@ViewBag.AuditId">
+                                <td><input class="form-control form-control-sm qq-nozzle" value="@item.NozzleNumber" /></td>
+                                <td><input class="form-control form-control-sm qq-dumake" value="@item.DuMake" /></td>
+                                <td><input class="form-control form-control-sm qq-duserial" value="@item.DuSerialNo" /></td>
+                                <td><input class="form-control form-control-sm qq-product" value="@item.Product" /></td>
+                                <td><input class="form-control form-control-sm qq-mode" value="@item.Mode" /></td>
+
+                                <td>
+                                    <input type="number" step="0.01"
+                                           class="form-control form-control-sm qq-qvmeasure"
+                                           value="@item.QuantityVariationWithMeasure" />
+                                </td>
+
+                                <td>
+                                    <input type="number" step="0.01"
+                                           class="form-control form-control-sm qq-qvpercent"
+                                           value="@item.QuantityVariationInPercentage"
+                                           readonly />
+                                </td>
+
+                                <td><input type="number" step="0.001" class="form-control form-control-sm qq-obdens" value="@item.ObservedDensity" /></td>
+                                <td><input type="number" step="0.1" class="form-control form-control-sm qq-obtemp" value="@item.ObservedTemp" /></td>
+                                <td><input type="number" step="0.001" class="form-control form-control-sm qq-obdens15" value="@item.ObservedDensity15Degree" /></td>
+                                <td><input type="number" step="0.001" class="form-control form-control-sm qq-refdens15" value="@item.ReferenceDensity15Degree" /></td>
+                                <td><input type="number" class="form-control form-control-sm qq-tank" value="@item.TankNumber" /></td>
+                                <td><input type="number" step="0.001" class="form-control form-control-sm qq-densvar" value="@item.DensityVariation" /></td>
+
+                                <td>
+                                    <button type="button" class="btn btn-sm btn-success btn-save-qq">Save</button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="text-muted small mt-2">
+                * Qty Variation (%) akan otomatis dihitung dari Qty Variation (Measure)
+            </div>
+        </div>
+    }
 }
 
 <!-- CATATAN AUDIT -->
@@ -1602,6 +1687,123 @@ else if (!string.IsNullOrEmpty(Model.Notes) || (Model.FinalDocuments != null && 
                 ride: false
             });
         }
+
+              function getToken() {
+          return document.querySelector('input[name="__RequestVerificationToken"]')?.value || '';
+        }
+
+        // auto hitung percent saat measure berubah
+        $(document).on('input', '.qq-qvmeasure', function () {
+            const measure = parseFloat($(this).val());
+            const $row = $(this).closest('tr');
+            if (!isNaN(measure)) {
+                const percent = (measure / 20000) * 100;
+                $row.find('.qq-qvpercent').val(percent.toFixed(2));
+            }
+        });
+
+                function setQqEditMode(isEdit) {
+            document.querySelectorAll('.qq-field').forEach(el => {
+                el.disabled = !isEdit;
+            });
+
+            document.querySelectorAll('.btn-save-qq').forEach(btn => {
+                if (isEdit) btn.classList.remove('d-none');
+                else btn.classList.add('d-none');
+            });
+
+            const lbl = document.getElementById('qqModeLabel');
+            if (lbl) lbl.textContent = isEdit ? 'Edit Enabled' : 'View Only';
+        }
+
+                document.addEventListener('DOMContentLoaded', function () {
+            const toggle   = document.getElementById('qqEditToggle');
+            const viewBox  = document.getElementById('qqViewOnly');
+            const editBox  = document.getElementById('qqEditMode');
+            const modeLbl  = document.getElementById('qqModeLabel');
+
+            // kalau bukan superadmin / toggle tidak ada → skip
+            if (!toggle || !viewBox || !editBox) return;
+
+            // ===== DEFAULT: VIEW ONLY =====
+            toggle.checked = false;
+            viewBox.classList.remove('d-none');
+            editBox.classList.add('d-none');
+            if (modeLbl) modeLbl.textContent = 'View Only';
+
+            // ===== TOGGLE HANDLER =====
+            toggle.addEventListener('change', function () {
+                if (this.checked) {
+                    // EDIT MODE
+                    viewBox.classList.add('d-none');
+                    editBox.classList.remove('d-none');
+                    if (modeLbl) modeLbl.textContent = 'Edit Enabled';
+                } else {
+                    // VIEW MODE
+                    editBox.classList.add('d-none');
+                    viewBox.classList.remove('d-none');
+                    if (modeLbl) modeLbl.textContent = 'View Only';
+                }
+            });
+        });
+
+
+        // Guard save: harus edit mode ON
+        $(document).on('click', '.btn-save-qq', function () {
+            const toggle = document.getElementById('qqEditToggle');
+            if (toggle && !toggle.checked) {
+                alert('Aktifkan Edit Mode dulu.');
+                return;
+            }
+        });
+
+
+        $(document).on('click', '.btn-save-qq', function () {
+            const $row = $(this).closest('tr');
+            const qqId = $row.data('qq-id');
+            const auditId = $row.data('audit-id');
+
+            const payload = {
+                QqId: qqId,
+                AuditId: auditId,
+                NozzleNumber: $row.find('.qq-nozzle').val(),
+                DuMake: $row.find('.qq-dumake').val(),
+                DuSerialNo: $row.find('.qq-duserial').val(),
+                Product: $row.find('.qq-product').val(),
+                Mode: $row.find('.qq-mode').val(),
+                QuantityVariationWithMeasure: parseFloat($row.find('.qq-qvmeasure').val()) || null,
+                QuantityVariationInPercentage: parseFloat($row.find('.qq-qvpercent').val()) || null,
+                ObservedDensity: parseFloat($row.find('.qq-obdens').val()) || null,
+                ObservedTemp: parseFloat($row.find('.qq-obtemp').val()) || null,
+                ObservedDensity15Degree: parseFloat($row.find('.qq-obdens15').val()) || null,
+                ReferenceDensity15Degree: parseFloat($row.find('.qq-refdens15').val()) || null,
+                TankNumber: parseInt($row.find('.qq-tank').val()) || null,
+                DensityVariation: parseFloat($row.find('.qq-densvar').val()) || null
+            };
+
+            fetch('/Audit/UpdateQq', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'RequestVerificationToken': getToken()
+                },
+                body: JSON.stringify(payload)
+            })
+            .then(res => {
+                if (!res.ok) return res.text().then(t => Promise.reject(t));
+                // notifikasi ringan
+                const alertBox = document.createElement('div');
+                alertBox.className = 'alert alert-success alert-dismissible fade show position-fixed top-0 start-50 translate-middle-x mt-3';
+                alertBox.style.zIndex = '9999';
+                alertBox.innerHTML = `Q&Q berhasil diupdate <button type="button" class="btn-close" data-bs-dismiss="alert"></button>`;
+                document.body.appendChild(alertBox);
+                setTimeout(() => alertBox.remove(), 2000);
+            })
+            .catch(err => {
+                console.error(err);
+                alert('Gagal update Q&Q: ' + err);
+            });
+        });
 
     </script>
 }

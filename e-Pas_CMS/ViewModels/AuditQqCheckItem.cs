@@ -2,6 +2,7 @@
 {
     public class AuditQqCheckItem
     {
+        public string Id { get; set; }
         public string NozzleNumber { get; set; }
         public string DuMake { get; set; }
         public string DuSerialNo { get; set; }

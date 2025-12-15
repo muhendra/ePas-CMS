@@ -264,7 +264,7 @@
             <div class="col-md-2">
                 <select name="pageSize" class="form-select">
                     @{
-                        var pageSizes = new[] { 10, 25, 50 };
+                        var pageSizes = new[] { 1,10, 25, 50 };
                         foreach (var size in pageSizes)
                         {
                             <option value="@size" selected="@(Model.PageSize == size)">@size per halaman</option>

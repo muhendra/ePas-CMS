@@ -407,7 +407,8 @@
                 @if (userMenuFunctions.Contains("SSCH"))
                 {
                     <li class="nav-item menu-group">
-                        <a class="nav-link menu-trigger" data-target="#menu-scheduler" role="button" aria-expanded="false" aria-controls="menu-scheduler">
+                        <a class="nav-link menu-trigger" data-target="#menu-scheduler" role="button"
+                           aria-expanded="false" aria-controls="menu-scheduler">
                             <span class="d-flex align-items-center gap-2">
                                 <i class="bi bi-alarm"></i>
                                 <strong>Scheduler</strong>
@@ -418,8 +419,16 @@
                         <div class="collapse submenu-panel" id="menu-scheduler">
                             <ul class="nav flex-column mt-1">
                                 <li class="nav-item">
-                                    <a class="nav-link @(IsActive("Scheduler","Index") ? "active" : "")" asp-controller="Scheduler" asp-action="Index">
+                                    <a class="nav-link @(IsActive("Scheduler","Index") ? "active" : "")"
+                                       asp-controller="Scheduler" asp-action="Index">
                                         <span class="dot"></span> Add Scheduler
+                                    </a>
+                                </li>
+
+                                <li class="nav-item">
+                                    <a class="nav-link @(IsActive("Scheduler","Index_NotStarted") ? "active" : "")"
+                                       asp-controller="Scheduler" asp-action="Index_NotStarted">
+                                        <span class="dot"></span> Log Changed Status
                                     </a>
                                 </li>
                             </ul>
@@ -427,7 +436,6 @@
                     </li>
                 }
 
-                @* --- Access Menu --- *@
                 @if (userMenuFunctions.Contains("AROLE") || userMenuFunctions.Contains("AUSER"))
                 {
                     <li class="nav-item menu-group">
