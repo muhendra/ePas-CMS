@@ -825,11 +825,16 @@ namespace e_Pas_CMS.Controllers
 
                 var allowedStatuses = new[] { "VERIFIED", "UNDER_REVIEW" };
 
+                var start = new DateTime(2025, 11, 1);
+                var end = new DateTime(2025, 12, 1);
+
                 var baseQuery = _context.trx_audits
-                    .Where(a =>
-                        allowedStatuses.Contains(a.status) &&
-                        a.audit_type != "Basic Operational"
-                    );
+                .Where(a =>
+                    allowedStatuses.Contains(a.status) &&
+                    a.audit_type != "Basic Operational" &&
+                    (a.audit_execution_time ?? a.created_date) >= start &&
+                    (a.audit_execution_time ?? a.created_date) < end
+                );
 
                 var lastAuditIdsQuery = baseQuery
                     .GroupBy(a => a.spbu_id) // atau a.spbu.spbu_no, sesuaikan
