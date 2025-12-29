@@ -1,5 +1,9 @@
 send_date,Audit Date,spbu_no,region,year,address,city_name,tipe_spbu,rayon,audit_level,audit_next,result,Total Score,SSS,EQnQ,RFS,kelas_spbu,penalty_alerts
-2025-12-27,2025-12-27,34-16827,III,2025,JL TRANSYOGI DESA TANJUNGRASA,Kab Bogor,,SBM Jabode V Fuel,BOA1,BOA2,NOT CERTIFIED,88.45,76.33,98.54,89.73,Basic,Masa Berlaku APAR
+2025-12-28,2025-12-28,14-2856102,I,2025,"Jl. Pagar Tapah Darussalam Kab.Rokan Hulu Rokan Hulu, Riau",Kab.Rokan Hulu,DODO,SBM Riau II Fuel,BOA1,BOA2,NOT CERTIFIED,89.19,83.00,98.30,86.30,Basic,Izin Prinsip
+2025-12-28,2025-12-28,14-285680,I,2025,Jl.Diponegoro No.124 Pasir Pangaraian,Kab Rokan Hulu,,SBM Riau II Fuel,BOA1,BOA2,NOT CERTIFIED,88.62,90.33,79.01,94.55,Basic,
+2025-12-27,2025-12-27,84-98102,VIII,2025,"Jl. Sisingamangaraja, Biak",Kab Biak Numfor,DODO,SBM Papua II,BOA1,CA,CERTIFIED,97.55,96.33,100.00,96.40,Basic,
+2025-12-27,2025-12-27,74-91764,VII,2025,"Kel. Mataran, Kab.  Enrekang",Kab. Enrekang,,SBM Sulselbar III Fuel,BOA1,BOA2,NOT CERTIFIED,41.44,29.00,48.07,45.51,Basic,"Salam, Nol, Trims, APAR, DU Dispenser, Masa Berlaku APAR, CCTV, Izin Prinsip, APAB, Pelumas"
+2025-12-28,2025-12-27,34-16827,III,2025,JL TRANSYOGI DESA TANJUNGRASA,Kab Bogor,,SBM Jabode V Fuel,BOA1,CA,CERTIFIED,91.53,81.33,98.54,93.75,Basic,
 2025-12-27,2025-12-27,34-16613,III,2025,"JL.RY CIBATOK II, CIBUNGBULANG",Kab Bogor,,SBM Jabode V Fuel,BOA1,BOA2,NOT CERTIFIED,78.72,66.67,94.68,75.49,Basic,Izin Prinsip
 2025-12-27,2025-12-27,84-98103,VIII,2025,Jl. Sriwijaya Ridge II Kab Biak,Kab. Biak Numfor,DODO,SBM Papua II,BOA1,CA,CERTIFIED,97.4,96.33,100.00,96.25,Basic,
 2025-12-27,2025-12-27,34-16922,III,2025,"Jl.Raya Pasir Jambu Sukaraja, KABUPATEN BOGOR",Kabupaten Bogor,,SBM Jabode V Fuel,BOA1,BOA2,NOT CERTIFIED,85.76,84.67,90.32,83.17,Basic,DU Dispenser
@@ -24,7 +28,7 @@ send_date,Audit Date,spbu_no,region,year,address,city_name,tipe_spbu,rayon,audit
 2025-12-24,2025-12-24,74-90627,VII,2025,"Jl. Prs Makassar-Parepare KM. 43, Kab. Pangkep",Kab. Pangkep,,SBM Sulselbar I Fuel,BOA1,BOA2,NOT CERTIFIED,34.94,21.67,20.47,55.20,Basic,"Trims, Masa Berlaku APAR, Nol, Salam, CCTV, Izin Prinsip, APAR, Pelumas"
 2025-12-26,2025-12-24,64-77101,VI,2025,"JL. MULAWARMAN, KOTA TARAKAN",KOTA TARAKAN,,SBM Kaltimut V Fuel,BOA1,CA,CERTIFIED,85.38,81.67,86.28,87.20,Basic,
 2025-12-26,2025-12-24,63-74302,VI,2025,"JL. IR. H. JUANDA RT.002 RW.001, DE",Kab KotawaringinTim,,SBM Kalteng II Fuel,BOA1,CA,CERTIFIED,90.08,81.67,98.47,89.86,Basic,
-2025-12-23,2025-12-23,34-16616,III,2025,,Kodya Bogor,,SBM Jabode IV Fuel,BOA1,BOA2,NOT CERTIFIED,65.17,55.67,69.13,68.29,Basic,"APAR, Pelumas, Izin Prinsip, APAB"
+2025-12-23,2025-12-23,34-16616,III,2025,"Jl. Raya Jasinga Koleang, Koleang, Kec. Jasinga",Kodya Bogor,,SBM Jabode IV Fuel,BOA1,BOA2,NOT CERTIFIED,65.17,55.67,69.13,68.29,Basic,"APAR, Pelumas, Izin Prinsip, APAB"
 2025-12-23,2025-12-23,34-16612,III,2025,JL.ACE TABRANI KP. PASIR GINTUNG,Kab Bogor,,SBM Jabode V Fuel,BOA1,BOA2,NOT CERTIFIED,73.22,64.00,79.49,74.58,Basic,"Pelumas, Izin Prinsip, APAR, Grounding"
 2025-12-24,2025-12-23,14-288671,I,2025, Jl. Tuanku Tambusan Perwira Dumai,Kota Dumai,DODO,SBM Riau II Fuel,BOA1,BOA2,NOT CERTIFIED,82.96,72.00,77.61,95.38,Basic,Pelumas
 2025-12-24,2025-12-23,84-99904,VIII,2025,Jl pendidikan kel. koperapoka,Kab Mimika,,SBM Papua Tengah II,BOA1,CA,CERTIFIED,96.17,94.33,100.00,94.43,Basic,
@@ -46,7 +50,7 @@ send_date,Audit Date,spbu_no,region,year,address,city_name,tipe_spbu,rayon,audit
 2025-12-24,2025-12-22,54-84307,V,2025,"DESA PLAMPANG KEC. PLAMPANG, Kab. Sumbawa",Kab. Sumbawa,,SBM NTB II Fuel,BOA1,BOA2,NOT CERTIFIED,44.14,16.67,45.86,63.17,Basic,"Salam, APAR, Masa Berlaku APAR, Nol, Pelumas, Izin Prinsip, Trims"
 2025-12-24,2025-12-22,74-91511,VII,2025,"JL. TRANS SULAWESI, DESA KASANO,KEC",Kab Pasangkayu,,SBM Sulselbar V Fuel,BOA1,BOA2,NOT CERTIFIED,34.63,22.67,23.70,51.42,Basic,"APAB, Salam, Masa Berlaku APAR, Trims, Nol, CCTV, Pelumas, APAR"
 2025-12-24,2025-12-22,54-61410,V,2010,"Tanggungan, Glagahan, Kec. Perak",Kabupaten Jombang,V,SBM Surabaya II Fuel,BOA1,BOA2,NOT CERTIFIED,70.06,64.00,85.62,62.90,Basic,"Pelumas, Masa Berlaku APAR, APAR"
-2025-12-23,2025-12-22,64-70704,VII,2025,"JL. LINGKAR SELATAN KM.20, KOTA BANJAR BARU",KOTA BANJAR BARU,,SBM Sultra III Fuel,BOA1,BOA2,NOT CERTIFIED,49.91,44.67,64.64,42.85,Basic,"Masa Berlaku APAR, APAR, Grounding, Izin Prinsip, APAB, Pelumas, CCTV"
+2025-12-23,2025-12-22,64-70704,VI,2025,"JL. LINGKAR SELATAN KM.20, KOTA BANJAR BARU",KOTA BANJAR BARU,,SBM Sultra III Fuel,BOA1,BOA2,NOT CERTIFIED,49.91,44.67,64.64,42.85,Basic,"Masa Berlaku APAR, APAR, Grounding, Izin Prinsip, APAB, Pelumas, CCTV"
 2025-12-24,2025-12-22,54-84302,V,2025,"JL. RAYA - DS. KARANG DIMA, Kab. Sumbawa",Kab. Sumbawa,,SBM NTB II Fuel,BOA1,BOA2,NOT CERTIFIED,54.87,31.00,83.81,50.99,Basic,"Salam, APAR, CCTV, Grounding, Trims, Masa Berlaku APAR, APAB"
 2025-12-24,2025-12-22,74-91505,VII,2025,JL. TRANS SULAWESI - PALU,Kab Pasangkayu,,SBM Sulselbar V Fuel,BOA1,BOA2,NOT CERTIFIED,50.74,88.33,18.55,46.10,Basic,"Izin Prinsip, APAR, Grounding, Masa Berlaku APAR, APAB, Pelumas, CCTV"
 2025-12-23,2025-12-20,74-95705,VII,2025,"Desa Kosio , Kab. Bolmong",Kab. Bolmong Induk,,SBM Sulutgo II Fuel,BOA1,CA,CERTIFIED,92.62,84.67,99.04,93.57,Basic,
@@ -140,7 +144,7 @@ send_date,Audit Date,spbu_no,region,year,address,city_name,tipe_spbu,rayon,audit
 2025-12-17,2025-12-16,64-79113,VI,2025,"JL.SANGGAU LEDO, KEC.SANGGAU LEDO",Kab Bengkayang,,SBM Kalbar I Fuel,BOA1,BOA2,NOT CERTIFIED,55.7,71.33,46.72,50.08,Basic,"Pelumas, APAB, APAR, Izin Prinsip, Grounding, Masa Berlaku APAR"
 2025-12-17,2025-12-16,64-72101,VI,2025,"JL. HASAN BASRI PANCASERAI NO.1 PAGATAN, KAB. TANAH BUMBU",Kab Tanah Bumbu,,SBM Kalsel III Fuel,BOA1,BOA2,NOT CERTIFIED,89.03,84.00,93.29,89.68,Basic,"Izin Prinsip, CCTV"
 2025-12-16,2025-12-16,54-68436,V,2025,"Jl Raya Genteng-Rogojampi, DS. SUMBER SARI SRONO, Kab. Banyuwangi",Kab. Banyuwangi,,SBM Malang III Fuel,BOA1,CA,CERTIFIED,91.59,80.00,100.00,93.69,Basic,
-2025-12-17,2025-12-16,64-70604,VI,2025,,KAB. BANJAR,,SBM Kalsel I Fuel,BOA1,BOA2,NOT CERTIFIED,49.96,39.67,51.58,56.49,Basic,"CCTV, HP, APAR, Pelumas, Izin Prinsip, APAB"
+2025-12-17,2025-12-16,64-70604,VI,2025,"Jalan A. Yani, KM. 63, Simpang Tiga",KAB. BANJAR,,SBM Kalsel I Fuel,BOA1,BOA2,NOT CERTIFIED,49.96,39.67,51.58,56.49,Basic,"CCTV, HP, APAR, Pelumas, Izin Prinsip, APAB"
 2025-12-22,2025-12-16,74-95320,VII,2025,"Jl. Raya Tomohon, Kota Tomohon",Kodya Tomohon,,SBM Sulutgo II Fuel,BOA1,CA,CERTIFIED,94.8,92.33,100.00,92.75,Basic,
 2025-12-17,2025-12-16,44-59416,IV,2025,"Jl. Raya Raguklampitan, Ds. Pulodarat, Kec. Pecangaan",Kab. Jepara,,SBM Semarang III Fuel,BOA1,BOA2,NOT CERTIFIED,74.51,61.33,81.98,78.55,Basic,"Izin Prinsip, CCTV"
 2025-12-16,2025-12-16,34-16123,III,2025,Jl. Raya Bojong Gede,Kodya Bogor,,SBM Jabode IV Fuel,BOA1,CA,CERTIFIED,94.95,87.00,98.47,98.18,Basic,
@@ -205,6 +209,3 @@ send_date,Audit Date,spbu_no,region,year,address,city_name,tipe_spbu,rayon,audit
 2025-12-15,2025-12-10,34-15152,III,2025,JL. BENTENG BETAWI KEL. PORIS PLAWA,Kota Tangerang,,SBM Banten I Fuel,BOA1,BOA2,NOT CERTIFIED,78.05,77.33,74.52,81.15,Basic,"Izin Prinsip, Pelumas"
 2025-12-12,2025-12-10,44-57606,IV,2025,"Jl. Ds. Biting, Purwantoro",Kab Wonogiri,DODO,SBM Yogyakarta IV Fuel,BOA1,BOA2,NOT CERTIFIED,81.51,77.84,88.50,78.62,Basic,"Pelumas, Izin Prinsip"
 2025-12-11,2025-12-10,14-289672,I,2025,Jalan lintas Bagansiapiapi-Ujung Tanjung Bagan Punak Pesisir Kecamatan Bangko Kabupaten RokanHilir,Kab.Rokan Hulu,DODO,SBM Riau II Fuel,BOA1,BOA2,NOT CERTIFIED,64.34,30.00,80.26,77.90,Basic,"Izin Prinsip, Pelumas, Trims, Nol, Salam, APAR"
-2025-12-11,2025-12-10,54-63121,V,2025,Jl. Raya Dungus Ds. Banjarsari Dagangan,Kab Madiun,DODO,SBM Kediri III Fuel,BOA1,BOA2,NOT CERTIFIED,0,0,0,0,Basic,"DU Dispenser, PELUMAS"
-2025-12-10,2025-12-09,54-63109,V,2025,Jl. PB Sudirman Caruban Kab. Madiun,Kab Madiun,DODO,SBM Kediri III Fuel,BOA1,BOA2,NOT CERTIFIED,0,0,0,0,Basic,DU Dispenser
-2025-12-10,2025-12-09,54-63115,V,2025,Ds. Pilangrejo Kec. Pilangkenceng Kab. Madiun,Kab Madiun,DODO,SBM Kediri III Fuel,BOA1,BOA2,NOT CERTIFIED,0,0,0,0,Basic,"Rompi Khusus, APAB, DU Dispenser"
