@@ -10,6 +10,38 @@
     int endPage = Math.Min(Model.TotalPages, Model.Page + window);
 }
 
+<style>
+    /* ✅ bikin kolom fixed biar Size tidak ketutup */
+    .uploadlib-table {
+        table-layout: fixed;
+        width: 100%;
+    }
+
+    /* ✅ truncate text panjang */
+    .uploadlib-name {
+        max-width: 100%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        display: inline-block;
+        vertical-align: bottom;
+    }
+
+    /* biar link juga ikut truncate */
+    .uploadlib-name-link {
+        display: inline-flex;
+        gap: .35rem;
+        align-items: center;
+        max-width: 100%;
+        min-width: 0;
+    }
+
+    .uploadlib-badge {
+        font-size: 11px;
+        padding: .2rem .45rem;
+    }
+</style>
+
 <div class="container mt-4">
     <div class="d-flex justify-content-between align-items-center mb-3">
         <div>
@@ -69,14 +101,23 @@
         <div class="card-body">
 
             <div class="table-responsive">
-                <table class="table table-hover align-middle">
+                <table class="table table-hover align-middle uploadlib-table">
+                    <!-- ✅ enforce width kolom biar Size tetap terlihat -->
+                    <colgroup>
+                        <col style="width:40%">
+                        <col style="width:15%">
+                        <col style="width:15%">
+                        <col style="width:20%">
+                        <col style="width:10%">
+                    </colgroup>
+
                     <thead>
                         <tr>
-                            <th style="width: 40%;">Name</th>
-                            <th style="width: 15%;">Type</th>
-                            <th style="width: 15%;">Size</th>
-                            <th style="width: 20%;">Modified</th>
-                            <th style="width: 10%;" class="text-end">Action</th>
+                            <th>Name</th>
+                            <th>Type</th>
+                            <th>Size</th>
+                            <th>Modified</th>
+                            <th class="text-end">Action</th>
                         </tr>
                     </thead>
 
@@ -95,16 +136,28 @@
                                 {
                                     <tr>
                                         <td>
-                                            <a href="@Url.Action("Index", "UploadLibrary", new { folder = item.RelPath, q = Model.Query, page = 1, pageSize = Model.PageSize })">
-                                                📁 @item.Name
+                                            <a class="uploadlib-name-link"
+                                               href="@Url.Action("Index", "UploadLibrary", new { folder = item.RelPath, q = Model.Query, page = 1, pageSize = Model.PageSize })"
+                                               title="Audit ID: @item.Name">
+                                                <span>📁</span>
+
+                                                <!-- ✅ tampilkan spbu_no (DisplayName) -->
+                                                <span class="uploadlib-name">@item.DisplayName</span>
+
+                                                @if (item.IsMappedFromAudit)
+                                                {
+                                                    <span class="badge bg-info uploadlib-badge">SPBU</span>
+                                                }
                                             </a>
                                         </td>
                                         <td>Folder</td>
-                                        <td class="text-muted">-</td>
+                                        <td class="text-muted">
+                                            @(item.ChildCount.HasValue ? $"{item.ChildCount.Value} items" : "-")
+                                        </td>
                                         <td>@item.LastWriteTime.ToString("yyyy-MM-dd HH:mm")</td>
                                         <td class="text-end">
                                             <form method="post" action="/UploadLibrary/DeleteFolder" class="d-inline"
-                                                  onsubmit="return confirm('Hapus folder kosong: @item.Name ?');">
+                                                  onsubmit="return confirm('Hapus folder kosong (Audit ID): @item.Name ?');">
                                                 @Html.AntiForgeryToken()
                                                 <input type="hidden" name="path" value="@item.RelPath" />
                                                 <input type="hidden" name="returnFolder" value="@Model.CurrentRel" />
@@ -119,7 +172,12 @@
                                 else
                                 {
                                     <tr>
-                                        <td>📄 @item.Name</td>
+                                        <td title="@item.Name">
+                                            <span class="uploadlib-name-link">
+                                                <span>📄</span>
+                                                <span class="uploadlib-name">@item.DisplayName</span>
+                                            </span>
+                                        </td>
                                         <td>File</td>
                                         <td>@(item.SizeBytes.HasValue ? HumanSize(item.SizeBytes.Value) : "-")</td>
                                         <td>@item.LastWriteTime.ToString("yyyy-MM-dd HH:mm")</td>
