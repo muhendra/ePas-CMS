@@ -1,8 +1,13 @@
 ﻿@model YourApp.Controllers.UploadLibraryController.LibraryVm
 @using static YourApp.Controllers.UploadLibraryController
+@using System
 
 @{
     ViewData["Title"] = "Upload Library";
+
+    int window = 5; // jumlah tombol halaman di sekitar current
+    int startPage = Math.Max(1, Model.Page - window);
+    int endPage = Math.Min(Model.TotalPages, Model.Page + window);
 }
 
 <div class="container mt-4">
@@ -25,6 +30,7 @@
             {
                 var (name, rel) = Model.Breadcrumbs[i];
                 var isLast = i == Model.Breadcrumbs.Count - 1;
+
                 if (isLast)
                 {
                     <li class="breadcrumb-item active">@name</li>
@@ -32,7 +38,7 @@
                 else
                 {
                     <li class="breadcrumb-item">
-                        <a href="@Url.Action("Index", new { folder = rel, q = Model.Query })">@name</a>
+                        <a href="@Url.Action("Index", "UploadLibrary", new { folder = rel, q = Model.Query, page = 1, pageSize = Model.PageSize })">@name</a>
                     </li>
                 }
             }
@@ -40,8 +46,11 @@
     </nav>
 
     <!-- Search -->
-    <form method="get" class="row g-2 mb-3">
+    <form method="get" action="/UploadLibrary" class="row g-2 mb-3">
         <input type="hidden" name="folder" value="@Model.CurrentRel" />
+        <input type="hidden" name="page" value="1" />
+        <input type="hidden" name="pageSize" value="@Model.PageSize" />
+
         <div class="col-md-6">
             <input class="form-control" name="q" value="@Model.Query" placeholder="Search nama file/folder..." />
         </div>
@@ -49,7 +58,10 @@
             <button class="btn btn-primary w-100" type="submit">Search</button>
         </div>
         <div class="col-md-2">
-            <a class="btn btn-outline-secondary w-100" href="@Url.Action("Index", new { folder = Model.CurrentRel })">Reset</a>
+            <a class="btn btn-outline-secondary w-100"
+               href="@Url.Action("Index", "UploadLibrary", new { folder = Model.CurrentRel, page = 1, pageSize = Model.PageSize })">
+                Reset
+            </a>
         </div>
     </form>
 
@@ -67,62 +79,125 @@
                             <th style="width: 10%;" class="text-end">Action</th>
                         </tr>
                     </thead>
+
                     <tbody>
-                        @if (!Model.Folders.Any() && !Model.Files.Any())
+                        @if (Model.Items == null || !Model.Items.Any())
                         {
                             <tr>
                                 <td colspan="5" class="text-muted">Tidak ada data.</td>
                             </tr>
                         }
-
-                        @foreach (var d in Model.Folders)
+                        else
                         {
-                            <tr>
-                                <td>
-                                    <a href="@Url.Action("Index", new { folder = d.RelPath, q = Model.Query })">
-                                        📁 @d.Name
-                                    </a>
-                                </td>
-                                <td>Folder</td>
-                                <td class="text-muted">-</td>
-                                <td>@d.LastWriteTime.ToString("yyyy-MM-dd HH:mm")</td>
-                                <td class="text-end">
-                                    <form method="post" action="@Url.Action("DeleteFolder")" class="d-inline"
-                                          onsubmit="return confirm('Hapus folder kosong: @d.Name ?');">
-                                        @Html.AntiForgeryToken()
-                                        <input type="hidden" name="path" value="@d.RelPath" />
-                                        <input type="hidden" name="returnFolder" value="@Model.CurrentRel" />
-                                        <input type="hidden" name="q" value="@Model.Query" />
-                                        <button class="btn btn-sm btn-outline-danger">Delete</button>
-                                    </form>
-                                </td>
-                            </tr>
-                        }
+                            @foreach (var item in Model.Items)
+                            {
+                                if (item.IsDir)
+                                {
+                                    <tr>
+                                        <td>
+                                            <a href="@Url.Action("Index", "UploadLibrary", new { folder = item.RelPath, q = Model.Query, page = 1, pageSize = Model.PageSize })">
+                                                📁 @item.Name
+                                            </a>
+                                        </td>
+                                        <td>Folder</td>
+                                        <td class="text-muted">-</td>
+                                        <td>@item.LastWriteTime.ToString("yyyy-MM-dd HH:mm")</td>
+                                        <td class="text-end">
+                                            <form method="post" action="/UploadLibrary/DeleteFolder" class="d-inline"
+                                                  onsubmit="return confirm('Hapus folder kosong: @item.Name ?');">
+                                                @Html.AntiForgeryToken()
+                                                <input type="hidden" name="path" value="@item.RelPath" />
+                                                <input type="hidden" name="returnFolder" value="@Model.CurrentRel" />
+                                                <input type="hidden" name="q" value="@Model.Query" />
+                                                <input type="hidden" name="page" value="@Model.Page" />
+                                                <input type="hidden" name="pageSize" value="@Model.PageSize" />
+                                                <button class="btn btn-sm btn-outline-danger">Delete</button>
+                                            </form>
+                                        </td>
+                                    </tr>
+                                }
+                                else
+                                {
+                                    <tr>
+                                        <td>📄 @item.Name</td>
+                                        <td>File</td>
+                                        <td>@(item.SizeBytes.HasValue ? HumanSize(item.SizeBytes.Value) : "-")</td>
+                                        <td>@item.LastWriteTime.ToString("yyyy-MM-dd HH:mm")</td>
+                                        <td class="text-end">
+                                            <a class="btn btn-sm btn-outline-primary"
+                                               href="/UploadLibrary/Download?path=@Uri.EscapeDataString(item.RelPath)">
+                                                Download
+                                            </a>
 
-                        @foreach (var f in Model.Files)
-                        {
-                            <tr>
-                                <td>📄 @f.Name</td>
-                                <td>File</td>
-                                <td>@(f.SizeBytes.HasValue ? HumanSize(f.SizeBytes.Value) : "-")</td>
-                                <td>@f.LastWriteTime.ToString("yyyy-MM-dd HH:mm")</td>
-                                <td class="text-end">
-                                    <a class="btn btn-sm btn-outline-primary"
-                                       href="@Url.Action("Download", new { path = f.RelPath })">Download</a>
-
-                                    <form method="post" action="@Url.Action("DeleteFile")" class="d-inline"
-                                          onsubmit="return confirm('Hapus file: @f.Name ?');">
-                                        @Html.AntiForgeryToken()
-                                        <input type="hidden" name="path" value="@f.RelPath" />
-                                        <input type="hidden" name="returnFolder" value="@Model.CurrentRel" />
-                                        <input type="hidden" name="q" value="@Model.Query" />
-                                        <button class="btn btn-sm btn-outline-danger">Delete</button>
-                                    </form>
-                                </td>
-                            </tr>
+                                            <form method="post" action="/UploadLibrary/DeleteFile" class="d-inline"
+                                                  onsubmit="return confirm('Hapus file: @item.Name ?');">
+                                                @Html.AntiForgeryToken()
+                                                <input type="hidden" name="path" value="@item.RelPath" />
+                                                <input type="hidden" name="returnFolder" value="@Model.CurrentRel" />
+                                                <input type="hidden" name="q" value="@Model.Query" />
+                                                <input type="hidden" name="page" value="@Model.Page" />
+                                                <input type="hidden" name="pageSize" value="@Model.PageSize" />
+                                                <button class="btn btn-sm btn-outline-danger">Delete</button>
+                                            </form>
+                                        </td>
+                                    </tr>
+                                }
+                            }
                         }
                     </tbody>
                 </table>
+            </div>
+
+            <!-- Pagination -->
+            <div class="d-flex flex-wrap justify-content-between align-items-center mt-3 gap-2">
+                <div class="text-muted">
+                    Total: <b>@Model.TotalItems</b> item • Page <b>@Model.Page</b> / <b>@Model.TotalPages</b>
+                </div>
+
+                <form method="get" action="/UploadLibrary" class="d-flex align-items-center gap-2">
+                    <input type="hidden" name="folder" value="@Model.CurrentRel" />
+                    <input type="hidden" name="q" value="@Model.Query" />
+                    <input type="hidden" name="page" value="1" />
+                    <label class="text-muted mb-0">Page size</label>
+                    <select class="form-select form-select-sm" name="pageSize" onchange="this.form.submit()">
+                        @foreach (var ps in Model.AllowedPageSizes)
+                        {
+                            <option value="@ps" selected="@(ps == Model.PageSize)">@ps</option>
+                        }
+                    </select>
+                </form>
+
+                <nav aria-label="pagination">
+                    <ul class="pagination pagination-sm mb-0">
+                        <li class="page-item @(Model.Page <= 1 ? "disabled" : "")">
+                            <a class="page-link"
+                               href="@Url.Action("Index", "UploadLibrary", new { folder = Model.CurrentRel, q = Model.Query, page = 1, pageSize = Model.PageSize })">«</a>
+                        </li>
+
+                        <li class="page-item @(Model.Page <= 1 ? "disabled" : "")">
+                            <a class="page-link"
+                               href="@Url.Action("Index", "UploadLibrary", new { folder = Model.CurrentRel, q = Model.Query, page = Model.Page - 1, pageSize = Model.PageSize })">‹</a>
+                        </li>
+
+                        @for (int p = startPage; p <= endPage; p++)
+                        {
+                            <li class="page-item @(p == Model.Page ? "active" : "")">
+                                <a class="page-link"
+                                   href="@Url.Action("Index", "UploadLibrary", new { folder = Model.CurrentRel, q = Model.Query, page = p, pageSize = Model.PageSize })">@p</a>
+                            </li>
+                        }
+
+                        <li class="page-item @(Model.Page >= Model.TotalPages ? "disabled" : "")">
+                            <a class="page-link"
+                               href="@Url.Action("Index", "UploadLibrary", new { folder = Model.CurrentRel, q = Model.Query, page = Model.Page + 1, pageSize = Model.PageSize })">›</a>
+                        </li>
+
+                        <li class="page-item @(Model.Page >= Model.TotalPages ? "disabled" : "")">
+                            <a class="page-link"
+                               href="@Url.Action("Index", "UploadLibrary", new { folder = Model.CurrentRel, q = Model.Query, page = Model.TotalPages, pageSize = Model.PageSize })">»</a>
+                        </li>
+                    </ul>
+                </nav>
             </div>
 
         </div>

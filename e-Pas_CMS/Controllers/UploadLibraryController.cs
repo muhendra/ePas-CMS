@@ -55,19 +55,35 @@ namespace YourApp.Controllers
         {
             public string CurrentRel { get; set; } = "";
             public string? Query { get; set; }
+
             public List<(string name, string rel)> Breadcrumbs { get; set; } = new();
-            public List<LibraryItemVm> Folders { get; set; } = new();
-            public List<LibraryItemVm> Files { get; set; } = new();
+
+            // ✅ hasil (yang sudah dipaginasi) - biar view gampang
+            public List<LibraryItemVm> Items { get; set; } = new();
+
+            // ✅ pagination info
+            public int Page { get; set; }
+            public int PageSize { get; set; }
+            public int TotalItems { get; set; }
+            public int TotalPages { get; set; }
+
+            // optional: untuk dropdown
+            public int[] AllowedPageSizes { get; set; } = new[] { 20, 50, 100, 200 };
         }
+
 
         // ✅ Browse root: /UploadLibrary  (juga /UploadLibrary/Index)
         [HttpGet("")]
         [HttpGet("Index")]
-        public IActionResult Index(string? folder = "", string? q = "")
+        public IActionResult Index(string? folder = "", string? q = "", int page = 1, int pageSize = 50)
         {
-            // kalau BasePath belum ada -> tampilkan error yang jelas (biar gak 500 silent)
             if (!Directory.Exists(BasePath))
                 return Problem($"BasePath not found: {BasePath}", statusCode: 500);
+
+            // guard page/pageSize
+            if (page < 1) page = 1;
+            var allowedSizes = new[] { 20, 50, 100, 200 };
+            if (!allowedSizes.Contains(pageSize)) pageSize = 50;
 
             var rel = NormalizeAndValidateRelative(folder);
             var physical = ToPhysicalPathFromRel(rel);
@@ -83,7 +99,10 @@ namespace YourApp.Controllers
             var vm = new LibraryVm
             {
                 CurrentRel = rel,
-                Query = q
+                Query = q,
+                Page = page,
+                PageSize = pageSize,
+                AllowedPageSizes = allowedSizes
             };
 
             // breadcrumbs
@@ -110,31 +129,44 @@ namespace YourApp.Controllers
                 files = files.Where(f => f.Name.Contains(q, StringComparison.OrdinalIgnoreCase));
             }
 
-            vm.Folders = dirs
+            // gabung (folder dulu), mapping ke VM
+            var folderItems = dirs
                 .OrderBy(d => d.Name)
                 .Select(d => new LibraryItemVm
                 {
                     Name = d.Name,
                     IsDir = true,
                     RelPath = string.IsNullOrEmpty(rel) ? d.Name : $"{rel}/{d.Name}",
-                    LastWriteTime = d.LastWriteTime
-                })
-                .ToList();
+                    LastWriteTime = d.LastWriteTime,
+                    SizeBytes = null
+                });
 
-            vm.Files = files
+            var fileItems = files
                 .OrderBy(f => f.Name)
                 .Select(f => new LibraryItemVm
                 {
                     Name = f.Name,
                     IsDir = false,
                     RelPath = string.IsNullOrEmpty(rel) ? f.Name : $"{rel}/{f.Name}",
-                    SizeBytes = f.Length,
-                    LastWriteTime = f.LastWriteTime
-                })
+                    LastWriteTime = f.LastWriteTime,
+                    SizeBytes = f.Length
+                });
+
+            var allItems = folderItems.Concat(fileItems).ToList();
+
+            vm.TotalItems = allItems.Count;
+            vm.TotalPages = Math.Max(1, (int)Math.Ceiling(vm.TotalItems / (double)vm.PageSize));
+
+            if (vm.Page > vm.TotalPages) vm.Page = vm.TotalPages;
+
+            vm.Items = allItems
+                .Skip((vm.Page - 1) * vm.PageSize)
+                .Take(vm.PageSize)
                 .ToList();
 
             return View(vm);
         }
+
 
         // ✅ /UploadLibrary/Download?path=....
         [HttpGet("Download")]
