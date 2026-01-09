@@ -4,6 +4,7 @@ using System.Text;
 
 namespace YourApp.Controllers
 {
+    [Route("Scheduler")]
     [Authorize] // tambah policy/role kalau perlu
     [Route("[controller]/[action]")]
     public class UploadLibraryController : Controller
@@ -58,6 +59,7 @@ namespace YourApp.Controllers
             public List<LibraryItemVm> Files { get; set; } = new();
         }
 
+        [HttpGet("")]
         [HttpGet]
         public IActionResult Index(string? folder = "", string? q = "")
         {
