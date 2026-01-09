@@ -4,7 +4,7 @@ using System.Text;
 
 namespace YourApp.Controllers
 {
-    [Route("Scheduler")]
+    [Route("UploadLibrary")]
     [Authorize] // tambah policy/role kalau perlu
     [Route("[controller]/[action]")]
     public class UploadLibraryController : Controller
