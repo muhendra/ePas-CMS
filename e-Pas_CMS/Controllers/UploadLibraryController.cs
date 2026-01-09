@@ -1,15 +1,17 @@
-﻿using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.Authorization;
-using System.Text;
+﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
 
 namespace YourApp.Controllers
 {
+    [Authorize]
     [Route("UploadLibrary")]
-    [Authorize] // tambah policy/role kalau perlu
-    [Route("[controller]/[action]")]
     public class UploadLibraryController : Controller
     {
-        // base path FIX sesuai server kamu
+        // ✅ base path FIX sesuai server
         private const string BasePath = "/var/www/epas-asset/wwwroot/uploads";
 
         private static string NormalizeAndValidateRelative(string? rel)
@@ -17,36 +19,35 @@ namespace YourApp.Controllers
             rel ??= "";
             rel = rel.Replace('\\', '/').Trim();
 
-            // biar konsisten: tidak boleh absolute
+            // tidak boleh absolute
             if (rel.StartsWith("/")) rel = rel.TrimStart('/');
 
-            // gabung + normalize
-            var combined = Path.GetFullPath(Path.Combine(BasePath, rel));
-
-            // pastikan masih di bawah BasePath
             var baseFull = Path.GetFullPath(BasePath);
+
+            // gabung + normalize
+            var combined = Path.GetFullPath(Path.Combine(baseFull, rel));
+
+            // pastikan masih di bawah BasePath (anti path traversal)
             if (!combined.StartsWith(baseFull + Path.DirectorySeparatorChar) && combined != baseFull)
                 throw new InvalidOperationException("Invalid path.");
 
-            // kembalikan RELATIVE yang bersih (pakai separator '/')
+            // kembalikan RELATIVE yang bersih (pakai '/')
             var cleanedRel = Path.GetRelativePath(baseFull, combined).Replace('\\', '/');
             return cleanedRel == "." ? "" : cleanedRel;
         }
 
         private static string ToPhysicalPathFromRel(string rel)
         {
-            rel ??= "";
             var baseFull = Path.GetFullPath(BasePath);
-            var full = Path.GetFullPath(Path.Combine(baseFull, rel));
-            return full;
+            return Path.GetFullPath(Path.Combine(baseFull, rel ?? ""));
         }
 
         public class LibraryItemVm
         {
             public string Name { get; set; } = "";
-            public string RelPath { get; set; } = "";     // path relatif dari uploads
+            public string RelPath { get; set; } = "";
             public bool IsDir { get; set; }
-            public long? SizeBytes { get; set; }          // null untuk folder
+            public long? SizeBytes { get; set; }
             public DateTime LastWriteTime { get; set; }
         }
 
@@ -59,16 +60,20 @@ namespace YourApp.Controllers
             public List<LibraryItemVm> Files { get; set; } = new();
         }
 
+        // ✅ Browse root: /UploadLibrary  (juga /UploadLibrary/Index)
         [HttpGet("")]
-        [HttpGet]
+        [HttpGet("Index")]
         public IActionResult Index(string? folder = "", string? q = "")
         {
+            // kalau BasePath belum ada -> tampilkan error yang jelas (biar gak 500 silent)
+            if (!Directory.Exists(BasePath))
+                return Problem($"BasePath not found: {BasePath}", statusCode: 500);
+
             var rel = NormalizeAndValidateRelative(folder);
             var physical = ToPhysicalPathFromRel(rel);
 
             if (!Directory.Exists(physical))
             {
-                // kalau folder tidak ada, fallback ke root uploads
                 rel = "";
                 physical = ToPhysicalPathFromRel(rel);
             }
@@ -94,7 +99,6 @@ namespace YourApp.Controllers
                 }
             }
 
-            // list folders + files
             var dirInfo = new DirectoryInfo(physical);
 
             IEnumerable<DirectoryInfo> dirs = dirInfo.EnumerateDirectories();
@@ -112,7 +116,7 @@ namespace YourApp.Controllers
                 {
                     Name = d.Name,
                     IsDir = true,
-                    RelPath = (string.IsNullOrEmpty(rel) ? d.Name : $"{rel}/{d.Name}"),
+                    RelPath = string.IsNullOrEmpty(rel) ? d.Name : $"{rel}/{d.Name}",
                     LastWriteTime = d.LastWriteTime
                 })
                 .ToList();
@@ -123,7 +127,7 @@ namespace YourApp.Controllers
                 {
                     Name = f.Name,
                     IsDir = false,
-                    RelPath = (string.IsNullOrEmpty(rel) ? f.Name : $"{rel}/{f.Name}"),
+                    RelPath = string.IsNullOrEmpty(rel) ? f.Name : $"{rel}/{f.Name}",
                     SizeBytes = f.Length,
                     LastWriteTime = f.LastWriteTime
                 })
@@ -132,7 +136,8 @@ namespace YourApp.Controllers
             return View(vm);
         }
 
-        [HttpGet]
+        // ✅ /UploadLibrary/Download?path=....
+        [HttpGet("Download")]
         public IActionResult Download(string path)
         {
             var rel = NormalizeAndValidateRelative(path);
@@ -144,11 +149,11 @@ namespace YourApp.Controllers
             var fileName = Path.GetFileName(physical);
             var stream = new FileStream(physical, FileMode.Open, FileAccess.Read, FileShare.Read);
 
-            // Force download
             return File(stream, "application/octet-stream", fileName);
         }
 
-        [HttpPost]
+        // ✅ /UploadLibrary/DeleteFile (POST)
+        [HttpPost("DeleteFile")]
         [ValidateAntiForgeryToken]
         public IActionResult DeleteFile(string path, string? returnFolder = "", string? q = "")
         {
@@ -161,7 +166,8 @@ namespace YourApp.Controllers
             return RedirectToAction(nameof(Index), new { folder = returnFolder, q });
         }
 
-        [HttpPost]
+        // ✅ /UploadLibrary/DeleteFolder (POST) - hanya folder kosong
+        [HttpPost("DeleteFolder")]
         [ValidateAntiForgeryToken]
         public IActionResult DeleteFolder(string path, string? returnFolder = "", string? q = "")
         {
@@ -170,7 +176,6 @@ namespace YourApp.Controllers
 
             if (Directory.Exists(physical))
             {
-                // default: hanya hapus folder kosong (aman)
                 if (Directory.EnumerateFileSystemEntries(physical).Any())
                 {
                     TempData["Error"] = "Folder tidak kosong. Hapus isi folder dulu.";
@@ -184,7 +189,6 @@ namespace YourApp.Controllers
             return RedirectToAction(nameof(Index), new { folder = returnFolder, q });
         }
 
-        // helper format size (opsional)
         public static string HumanSize(long bytes)
         {
             string[] units = { "B", "KB", "MB", "GB", "TB" };
