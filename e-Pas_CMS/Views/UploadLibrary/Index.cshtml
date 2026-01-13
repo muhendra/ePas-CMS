@@ -43,13 +43,46 @@
         padding: .2rem .45rem;
     }
 
+    /* ✅ Action buttons rapi */
+    .action-cell {
+        display: flex;
+        justify-content: flex-end;
+        gap: .5rem;
+        flex-wrap: nowrap;
+        align-items: center;
+        white-space: nowrap;
+    }
+
+    .btn-action {
+        min-width: 86px;
+        padding: .25rem .55rem;
+        line-height: 1.15;
+    }
+
+        .btn-action.btn-sm {
+            border-radius: .35rem;
+        }
+
+    /* ✅ toolbar (download/delete bulan) */
+    .month-toolbar {
+        display: flex;
+        flex-wrap: wrap;
+        gap: .5rem;
+        align-items: center;
+        margin-bottom: 1rem;
+    }
+
+        .month-toolbar .btn {
+            border-radius: .45rem;
+        }
+
     /* ✅ modal preview */
     .preview-modal-backdrop {
         position: fixed;
         inset: 0;
         background: rgba(0,0,0,.6);
         display: none;
-        z-index: 1055; /* bootstrap modal range */
+        z-index: 1055;
     }
 
     .preview-modal {
@@ -181,13 +214,13 @@
     </form>
 
     <!-- Actions: Download/Delete for Selected Month -->
-    <div class="d-flex flex-wrap gap-2 mb-3">
+    <div class="month-toolbar">
         <a class="btn btn-outline-primary @(string.IsNullOrEmpty(Model.Month) ? "disabled" : "")"
            href="@Url.Action("DownloadMonth", "UploadLibrary", new { folder = Model.CurrentRel, q = Model.Query, month = Model.Month })">
             Download ZIP (Selected Month)
         </a>
 
-        <form method="post" action="/UploadLibrary/DeleteMonth"
+        <form method="post" action="/UploadLibrary/DeleteMonth" class="m-0"
               onsubmit="return confirm('Yakin DELETE semua asset untuk bulan ' + document.getElementById('monthSelect').value + ' ? Ini akan hapus folder/file (folder recursive).');">
             @Html.AntiForgeryToken()
             <input type="hidden" name="folder" value="@Model.CurrentRel" />
@@ -255,24 +288,25 @@
                                         <td class="text-muted">@(item.ChildCount.HasValue ? $"{item.ChildCount.Value} items" : "-")</td>
                                         <td>@item.LastWriteTime.ToString("yyyy-MM-dd HH:mm")</td>
                                         <td class="text-end">
-                                            <!-- ✅ NEW: Download ZIP per SPBU/folder -->
-                                            <a class="btn btn-sm btn-outline-primary me-1"
-                                               href="@Url.Action("DownloadSpbu", "UploadLibrary", new { path = item.RelPath, month = Model.Month })"
-                                               title="Download ZIP untuk SPBU ini">
-                                                Download
-                                            </a>
+                                            <div class="action-cell">
+                                                <a class="btn btn-sm btn-outline-primary btn-action"
+                                                   href="@Url.Action("DownloadSpbu", "UploadLibrary", new { path = item.RelPath, month = Model.Month })"
+                                                   title="Download ZIP untuk folder/SPBU ini">
+                                                    Download
+                                                </a>
 
-                                            <form method="post" action="/UploadLibrary/DeleteFolder" class="d-inline"
-                                                  onsubmit="return confirm('Hapus folder kosong (Audit ID): @item.Name ?');">
-                                                @Html.AntiForgeryToken()
-                                                <input type="hidden" name="path" value="@item.RelPath" />
-                                                <input type="hidden" name="returnFolder" value="@Model.CurrentRel" />
-                                                <input type="hidden" name="q" value="@Model.Query" />
-                                                <input type="hidden" name="month" value="@Model.Month" />
-                                                <input type="hidden" name="page" value="@Model.Page" />
-                                                <input type="hidden" name="pageSize" value="@Model.PageSize" />
-                                                <button class="btn btn-sm btn-outline-danger">Delete</button>
-                                            </form>
+                                                <form method="post" action="/UploadLibrary/DeleteFolder" class="m-0"
+                                                      onsubmit="return confirm('Hapus folder (jika kosong): @item.Name ?');">
+                                                    @Html.AntiForgeryToken()
+                                                    <input type="hidden" name="path" value="@item.RelPath" />
+                                                    <input type="hidden" name="returnFolder" value="@Model.CurrentRel" />
+                                                    <input type="hidden" name="q" value="@Model.Query" />
+                                                    <input type="hidden" name="month" value="@Model.Month" />
+                                                    <input type="hidden" name="page" value="@Model.Page" />
+                                                    <input type="hidden" name="pageSize" value="@Model.PageSize" />
+                                                    <button class="btn btn-sm btn-outline-danger btn-action" type="submit">Delete</button>
+                                                </form>
+                                            </div>
                                         </td>
                                     </tr>
                                 }
@@ -289,7 +323,6 @@
 
                                                 @if (isImg || isVid)
                                                 {
-                                                    <!-- ✅ klik nama file => preview modal -->
                                                     <a href="javascript:void(0)"
                                                        class="uploadlib-name js-preview"
                                                        data-rel="@item.RelPath"
@@ -309,22 +342,24 @@
                                         <td>@(item.SizeBytes.HasValue ? HumanSize(item.SizeBytes.Value) : "-")</td>
                                         <td>@item.LastWriteTime.ToString("yyyy-MM-dd HH:mm")</td>
                                         <td class="text-end">
-                                            <a class="btn btn-sm btn-outline-primary"
-                                               href="/UploadLibrary/Download?path=@Uri.EscapeDataString(item.RelPath)">
-                                                Download
-                                            </a>
+                                            <div class="action-cell">
+                                                <a class="btn btn-sm btn-outline-primary btn-action"
+                                                   href="/UploadLibrary/Download?path=@Uri.EscapeDataString(item.RelPath)">
+                                                    Download
+                                                </a>
 
-                                            <form method="post" action="/UploadLibrary/DeleteFile" class="d-inline"
-                                                  onsubmit="return confirm('Hapus file: @item.Name ?');">
-                                                @Html.AntiForgeryToken()
-                                                <input type="hidden" name="path" value="@item.RelPath" />
-                                                <input type="hidden" name="returnFolder" value="@Model.CurrentRel" />
-                                                <input type="hidden" name="q" value="@Model.Query" />
-                                                <input type="hidden" name="month" value="@Model.Month" />
-                                                <input type="hidden" name="page" value="@Model.Page" />
-                                                <input type="hidden" name="pageSize" value="@Model.PageSize" />
-                                                <button class="btn btn-sm btn-outline-danger">Delete</button>
-                                            </form>
+                                                <form method="post" action="/UploadLibrary/DeleteFile" class="m-0"
+                                                      onsubmit="return confirm('Hapus file: @item.Name ?');">
+                                                    @Html.AntiForgeryToken()
+                                                    <input type="hidden" name="path" value="@item.RelPath" />
+                                                    <input type="hidden" name="returnFolder" value="@Model.CurrentRel" />
+                                                    <input type="hidden" name="q" value="@Model.Query" />
+                                                    <input type="hidden" name="month" value="@Model.Month" />
+                                                    <input type="hidden" name="page" value="@Model.Page" />
+                                                    <input type="hidden" name="pageSize" value="@Model.PageSize" />
+                                                    <button class="btn btn-sm btn-outline-danger btn-action" type="submit">Delete</button>
+                                                </form>
+                                            </div>
                                         </td>
                                     </tr>
                                 }
@@ -391,7 +426,7 @@
     </div>
 </div>
 
-<!-- ✅ Preview Modal (pure HTML + JS, no dependency) -->
+<!-- ✅ Preview Modal -->
 <div id="previewBackdrop" class="preview-modal-backdrop"></div>
 <div id="previewModal" class="preview-modal" role="dialog" aria-modal="true" aria-hidden="true">
     <div class="preview-card">
@@ -402,9 +437,7 @@
                 <button type="button" class="btn-icon" id="previewCloseBtn" aria-label="Close">✕</button>
             </div>
         </div>
-        <div class="preview-body" id="previewBody">
-            <!-- injected -->
-        </div>
+        <div class="preview-body" id="previewBody"></div>
     </div>
 </div>
 

@@ -9,6 +9,8 @@ using System.IO;
 using System.IO.Compression;
 using System.Linq;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Http.Features;
+using Microsoft.Net.Http.Headers;
 
 namespace YourApp.Controllers
 {
@@ -317,9 +319,7 @@ namespace YourApp.Controllers
 
             q = (q ?? "").Trim();
 
-            // Build listing sama seperti Index (tanpa pagination)
             var dirInfo = new DirectoryInfo(physical);
-
             IEnumerable<DirectoryInfo> dirs = dirInfo.EnumerateDirectories();
             IEnumerable<FileInfo> files = dirInfo.EnumerateFiles();
 
@@ -333,83 +333,52 @@ namespace YourApp.Controllers
             var fileList = files.OrderBy(f => f.Name).ToList();
 
             var auditIds = dirList.Select(d => d.Name).Where(n => Guid.TryParse(n, out _)).ToList();
-            var auditMetaMap = auditIds.Any() ? await GetAuditMetaMapAsync(auditIds) : new Dictionary<string, AuditMeta>();
+            var auditMetaMap = auditIds.Any()
+                ? await GetAuditMetaMapAsync(auditIds)
+                : new Dictionary<string, AuditMeta>();
 
-            var items = new List<LibraryItemVm>();
+            // Kumpulin semua file yang masuk bulan tsb
+            var zipFiles = new List<(string FullPath, string EntryName)>();
 
+            // folders (recursive)
             foreach (var d in dirList)
             {
                 var mapped = auditMetaMap.TryGetValue(d.Name, out var meta);
                 var filterDate = mapped ? meta!.AuditDate : d.LastWriteTime;
 
-                if (filterDate.Year == y && filterDate.Month == m)
+                if (filterDate.Year != y || filterDate.Month != m)
+                    continue;
+
+                // top folder name dalam zip = spbu_no kalau ada
+                var top = mapped ? meta!.SpbuNo : d.Name;
+                var baseDir = d.FullName.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+                var baseLen = baseDir.Length + 1;
+
+                foreach (var file in Directory.EnumerateFiles(baseDir, "*", SearchOption.AllDirectories))
                 {
-                    items.Add(new LibraryItemVm
-                    {
-                        Name = d.Name,
-                        DisplayName = mapped ? meta!.SpbuNo : d.Name,
-                        IsMappedFromAudit = mapped,
-                        IsDir = true,
-                        RelPath = string.IsNullOrEmpty(rel) ? d.Name : $"{rel}/{d.Name}",
-                        FilterDate = filterDate
-                    });
+                    var relPath = file.Substring(baseLen).Replace('\\', '/');
+                    var entryName = $"{top}/{relPath}";
+                    zipFiles.Add((file, entryName));
                 }
             }
 
+            // files di current folder
             foreach (var f in fileList)
             {
                 var filterDate = f.LastWriteTime;
-                if (filterDate.Year == y && filterDate.Month == m)
-                {
-                    items.Add(new LibraryItemVm
-                    {
-                        Name = f.Name,
-                        DisplayName = f.Name,
-                        IsMappedFromAudit = false,
-                        IsDir = false,
-                        RelPath = string.IsNullOrEmpty(rel) ? f.Name : $"{rel}/{f.Name}",
-                        FilterDate = filterDate
-                    });
-                }
+                if (filterDate.Year != y || filterDate.Month != m)
+                    continue;
+
+                zipFiles.Add((f.FullName, f.Name));
             }
 
-            if (!items.Any())
+            if (zipFiles.Count == 0)
                 return NotFound("No items in selected month.");
 
-            // Create temp zip file (streaming-friendly)
-            var tmp = Path.Combine(Path.GetTempPath(), $"uploads_{rel.Replace('/', '_')}_{month}_{Guid.NewGuid():N}.zip");
-
-            using (var zip = ZipFile.Open(tmp, ZipArchiveMode.Create))
-            {
-                foreach (var it in items)
-                {
-                    var full = ToPhysicalPathFromRel(it.RelPath);
-
-                    if (it.IsDir)
-                    {
-                        // add directory recursively
-                        AddDirectoryToZip(zip, full, it.DisplayName, it.Name); // display name as top folder
-                    }
-                    else
-                    {
-                        if (System.IO.File.Exists(full))
-                        {
-                            var entryName = it.DisplayName;
-                            zip.CreateEntryFromFile(full, entryName);
-                        }
-                    }
-                }
-            }
-
-            HttpContext.Response.OnCompleted(() =>
-            {
-                try { System.IO.File.Delete(tmp); } catch { }
-                return Task.CompletedTask;
-            });
-
             var downloadName = $"uploads_{(string.IsNullOrEmpty(rel) ? "root" : rel.Replace('/', '_'))}_{month}.zip";
-            return PhysicalFile(tmp, "application/zip", downloadName);
+            return await StreamZipToResponseAsync(downloadName, zipFiles, HttpContext.RequestAborted);
         }
+
 
         // ✅ Delete per bulan (recursive untuk folder)
         [HttpPost("DeleteMonth")]
@@ -563,5 +532,46 @@ namespace YourApp.Controllers
             }
             return $"{size:0.##} {units[unit]}";
         }
+
+        private async Task<IActionResult> StreamZipToResponseAsync(
+    string downloadName,
+    IEnumerable<(string FullPath, string EntryName)> files,
+    CancellationToken ct)
+        {
+            // Disable buffering supaya response bisa langsung mengalir (penting kalau di-reverse proxy)
+            HttpContext.Features.Get<IHttpResponseBodyFeature>()?.DisableBuffering();
+
+            Response.StatusCode = 200;
+            Response.ContentType = "application/zip";
+            Response.Headers[HeaderNames.ContentDisposition] = $"attachment; filename=\"{downloadName}\"";
+            Response.Headers[HeaderNames.CacheControl] = "no-store";
+
+            // ZipArchive bisa nulis incremental ke response stream
+            using (var zip = new ZipArchive(Response.Body, ZipArchiveMode.Create, leaveOpen: true))
+            {
+                foreach (var (fullPath, entryName) in files)
+                {
+                    ct.ThrowIfCancellationRequested();
+
+                    if (!System.IO.File.Exists(fullPath))
+                        continue;
+
+                    // buat entry
+                    var entry = zip.CreateEntry(entryName.Replace('\\', '/'), CompressionLevel.Fastest);
+
+                    // copy stream file -> zip entry stream (async)
+                    await using var entryStream = entry.Open();
+                    await using var fs = new FileStream(fullPath, FileMode.Open, FileAccess.Read, FileShare.Read, 1024 * 128, useAsync: true);
+                    await fs.CopyToAsync(entryStream, 1024 * 128, ct);
+
+                    // flush berkala agar koneksi tetap aktif (dan progress download terasa)
+                    await Response.Body.FlushAsync(ct);
+                }
+            }
+
+            // ZipArchive akan nulis central directory di akhir saat dispose -> tetap valid
+            return new EmptyResult();
+        }
+
     }
 }
