@@ -2,6 +2,7 @@
 @using static YourApp.Controllers.UploadLibraryController
 @using System
 @using System.IO
+@using IOPath = System.IO.Path
 
 @{
     ViewData["Title"] = "Upload Library";
@@ -270,7 +271,7 @@
                                 }
                                 else
                                 {
-                                    var ext = (Path.GetExtension(item.Name ?? "") ?? "").ToLowerInvariant();
+                                    var ext = (System.IO.Path.GetExtension(item.Name ?? "") ?? "").ToLowerInvariant();
                                     var isImg = ext == ".jpg" || ext == ".jpeg" || ext == ".png" || ext == ".gif" || ext == ".webp";
                                     var isVid = ext == ".mp4" || ext == ".webm" || ext == ".ogg" || ext == ".mov" || ext == ".m4v";
 
@@ -320,6 +321,7 @@
                                         </td>
                                     </tr>
                                 }
+
                             }
                         }
                     </tbody>
