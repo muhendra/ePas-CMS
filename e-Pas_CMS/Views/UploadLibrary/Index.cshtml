@@ -255,6 +255,13 @@
                                         <td class="text-muted">@(item.ChildCount.HasValue ? $"{item.ChildCount.Value} items" : "-")</td>
                                         <td>@item.LastWriteTime.ToString("yyyy-MM-dd HH:mm")</td>
                                         <td class="text-end">
+                                            <!-- ✅ NEW: Download ZIP per SPBU/folder -->
+                                            <a class="btn btn-sm btn-outline-primary me-1"
+                                               href="@Url.Action("DownloadSpbu", "UploadLibrary", new { path = item.RelPath, month = Model.Month })"
+                                               title="Download ZIP untuk SPBU ini">
+                                                Download
+                                            </a>
+
                                             <form method="post" action="/UploadLibrary/DeleteFolder" class="d-inline"
                                                   onsubmit="return confirm('Hapus folder kosong (Audit ID): @item.Name ?');">
                                                 @Html.AntiForgeryToken()
@@ -321,7 +328,6 @@
                                         </td>
                                     </tr>
                                 }
-
                             }
                         }
                     </tbody>
@@ -417,12 +423,11 @@
             const downloadUrl = '/UploadLibrary/Download?path=' + encodeURIComponent(relPath);
             dlBtn.href = downloadUrl;
 
-            // clear old
             body.innerHTML = '';
 
             if (type === 'image') {
                 const img = document.createElement('img');
-                img.src = downloadUrl; // will work if Download serves file stream
+                img.src = downloadUrl;
                 img.alt = fileName || 'image';
                 body.appendChild(img);
             } else if (type === 'video') {
@@ -430,8 +435,6 @@
                 video.src = downloadUrl;
                 video.controls = true;
                 video.playsInline = true;
-                // optional auto play when opened:
-                // video.autoplay = true;
                 body.appendChild(video);
             } else {
                 body.innerHTML = '<div class="text-muted">Preview tidak didukung untuk tipe ini.</div>';
@@ -444,7 +447,6 @@
         }
 
         function closePreview() {
-            // stop video if any
             const vid = body.querySelector('video');
             if (vid) {
                 try { vid.pause(); vid.src = ''; } catch (e) { }
