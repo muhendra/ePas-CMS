@@ -49,7 +49,6 @@ namespace YourApp.Controllers
             return Path.GetFullPath(Path.Combine(baseFull, rel ?? ""));
         }
 
-        // ✅ count item langsung di folder tsb (tidak recursive) - ringan
         private static int? SafeCountEntries(string dirPath)
         {
             try { return Directory.EnumerateFileSystemEntries(dirPath).Count(); }
@@ -61,7 +60,6 @@ namespace YourApp.Controllers
             year = 0; month = 0;
             if (string.IsNullOrWhiteSpace(ym)) return false;
 
-            // expected: yyyy-MM
             var parts = ym.Trim().Split('-', StringSplitOptions.RemoveEmptyEntries);
             if (parts.Length != 2) return false;
             if (!int.TryParse(parts[0], out year)) return false;
@@ -78,7 +76,6 @@ namespace YourApp.Controllers
             public DateTime AuditDate { get; set; }
         }
 
-        // ✅ mapping auditId(uuid folder) -> {spbu_no, audit_date} dalam 1 query
         private async Task<Dictionary<string, AuditMeta>> GetAuditMetaMapAsync(List<string> auditIds)
         {
             var rows = await (
@@ -107,19 +104,16 @@ namespace YourApp.Controllers
 
         public class LibraryItemVm
         {
-            public string Name { get; set; } = "";          // original file/folder name
-            public string DisplayName { get; set; } = "";   // shown name (SPBU no)
+            public string Name { get; set; } = "";
+            public string DisplayName { get; set; } = "";
             public bool IsMappedFromAudit { get; set; }
 
             public string RelPath { get; set; } = "";
             public bool IsDir { get; set; }
 
-            public long? SizeBytes { get; set; }            // file size
-            public int? ChildCount { get; set; }            // folder item count
-            public DateTime LastWriteTime { get; set; }     // fs time
-
-            // ✅ date used for month filter:
-            // audit folder -> audit_date from DB; non-audit -> LastWriteTime
+            public long? SizeBytes { get; set; }
+            public int? ChildCount { get; set; }
+            public DateTime LastWriteTime { get; set; }
             public DateTime FilterDate { get; set; }
         }
 
@@ -128,9 +122,8 @@ namespace YourApp.Controllers
             public string CurrentRel { get; set; } = "";
             public string? Query { get; set; }
 
-            // ✅ month filter: "yyyy-MM"
             public string? Month { get; set; }
-            public List<string> AvailableMonths { get; set; } = new(); // from current folder listing
+            public List<string> AvailableMonths { get; set; } = new();
 
             public List<(string name, string rel)> Breadcrumbs { get; set; } = new();
             public List<LibraryItemVm> Items { get; set; } = new();
@@ -172,7 +165,7 @@ namespace YourApp.Controllers
 
             q = (q ?? "").Trim();
             month = (month ?? "").Trim();
-            if (!TryParseMonthKey(month, out _, out _)) month = ""; // invalid -> reset
+            if (!TryParseMonthKey(month, out _, out _)) month = "";
 
             var vm = new LibraryVm
             {
@@ -184,7 +177,6 @@ namespace YourApp.Controllers
                 AllowedPageSizes = allowedSizes
             };
 
-            // breadcrumbs
             vm.Breadcrumbs.Add(("uploads", ""));
             if (!string.IsNullOrEmpty(rel))
             {
@@ -211,12 +203,7 @@ namespace YourApp.Controllers
             var dirList = dirs.OrderBy(d => d.Name).ToList();
             var fileList = files.OrderBy(f => f.Name).ToList();
 
-            // audit folder IDs (valid GUID)
-            var auditIds = dirList
-                .Select(d => d.Name)
-                .Where(n => Guid.TryParse(n, out _))
-                .ToList();
-
+            var auditIds = dirList.Select(d => d.Name).Where(n => Guid.TryParse(n, out _)).ToList();
             var auditMetaMap = auditIds.Any()
                 ? await GetAuditMetaMapAsync(auditIds)
                 : new Dictionary<string, AuditMeta>();
@@ -261,14 +248,12 @@ namespace YourApp.Controllers
 
             var allItems = folderItems.Concat(fileItems).ToList();
 
-            // Available month options from listing (BEFORE filter)
             vm.AvailableMonths = allItems
                 .Select(x => MonthKey(x.FilterDate))
                 .Distinct()
                 .OrderByDescending(x => x)
                 .ToList();
 
-            // Apply month filter
             if (!string.IsNullOrEmpty(month) && TryParseMonthKey(month, out int y, out int m))
             {
                 allItems = allItems
@@ -276,7 +261,6 @@ namespace YourApp.Controllers
                     .ToList();
             }
 
-            // Pagination
             vm.TotalItems = allItems.Count;
             vm.TotalPages = Math.Max(1, (int)Math.Ceiling(vm.TotalItems / (double)vm.PageSize));
             if (vm.Page > vm.TotalPages) vm.Page = vm.TotalPages;
@@ -304,8 +288,8 @@ namespace YourApp.Controllers
             return File(stream, "application/octet-stream", fileName);
         }
 
-        // ✅ Download ZIP per bulan (streaming biar gak timeout)
-        // /UploadLibrary/DownloadMonth?folder=&q=&month=2025-11
+        // ✅ Download ZIP per bulan
+        // NOTE: folder di dalam zip untuk audit folder = trx_audit.id (GUID folder), BUKAN spbu_no
         [HttpGet("DownloadMonth")]
         public async Task<IActionResult> DownloadMonth(string? folder = "", string? q = "", string? month = "")
         {
@@ -348,7 +332,9 @@ namespace YourApp.Controllers
                 if (filterDate.Year != y || filterDate.Month != m)
                     continue;
 
-                var top = mapped ? meta!.SpbuNo : d.Name;
+                // ✅ FIX: top folder dalam ZIP harus tetap nama folder asli => trx_audit.id (GUID)
+                var top = d.Name;
+
                 var baseDir = d.FullName.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
                 var baseLen = baseDir.Length + 1;
 
@@ -377,8 +363,10 @@ namespace YourApp.Controllers
             return await StreamZipToResponseAsync(downloadName, zipFiles, HttpContext.RequestAborted);
         }
 
-        // ✅ Download ZIP per SPBU/folder (FIX: no IOPath, + streaming-ish via temp zip)
-        // /UploadLibrary/DownloadSpbu?path=xxxx&month=2026-01 (month optional)
+        // ✅ Download ZIP per SPBU/folder
+        // NOTE:
+        // - nama file zip boleh pakai spbu_no
+        // - tapi folder di dalam zip harus tetap trx_audit.id (GUID folder)
         [HttpGet("DownloadSpbu")]
         public async Task<IActionResult> DownloadSpbu(string path, string? month = "")
         {
@@ -392,32 +380,33 @@ namespace YourApp.Controllers
             if (!Directory.Exists(physical))
                 return NotFound("Folder not found.");
 
-            // ✅ FIX: pakai Path (bukan IOPath)
             var folderName = Path.GetFileName(
                 physical.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
             );
             if (string.IsNullOrWhiteSpace(folderName))
                 folderName = "folder";
 
-            // kalau foldernya auditId GUID -> ambil spbu_no buat nama zip
-            string displayTopFolder = folderName;
+            // ✅ ini hanya untuk NAMA FILE ZIP (biar user enak)
+            string zipFileDisplay = folderName;
             if (Guid.TryParse(folderName, out _))
             {
                 try
                 {
                     var metaMap = await GetAuditMetaMapAsync(new List<string> { folderName });
                     if (metaMap.TryGetValue(folderName, out var meta) && !string.IsNullOrWhiteSpace(meta.SpbuNo))
-                        displayTopFolder = meta.SpbuNo;
+                        zipFileDisplay = meta.SpbuNo;
                 }
                 catch { /* ignore */ }
             }
 
-            // create temp zip (lebih aman untuk browser) - tetap dihapus setelah selesai
+            // ✅ create temp zip
             var tmp = Path.Combine(Path.GetTempPath(), $"spbu_{folderName}_{Guid.NewGuid():N}.zip");
 
             using (var zip = ZipFile.Open(tmp, ZipArchiveMode.Create))
             {
-                AddDirectoryToZipFiltered(zip, physical, displayTopFolder, folderName, useMonthFilter, y, m);
+                // ✅ FIX: top folder dalam ZIP harus trx_audit.id => folderName
+                // Jadi param displayTopFolder kita set folderName juga
+                AddDirectoryToZipFiltered(zip, physical, folderName, folderName, useMonthFilter, y, m);
             }
 
             HttpContext.Response.OnCompleted(() =>
@@ -427,12 +416,11 @@ namespace YourApp.Controllers
             });
 
             var monthSuffix = useMonthFilter ? $"_{month}" : "";
-            var downloadName = $"spbu_{displayTopFolder}{monthSuffix}.zip";
+            var downloadName = $"spbu_{zipFileDisplay}{monthSuffix}.zip";
 
             return PhysicalFile(tmp, "application/zip", downloadName);
         }
 
-        // ✅ helper: zip folder recursive + optional filter by file LastWriteTime
         private static void AddDirectoryToZipFiltered(
             ZipArchive zip,
             string sourceDir,
@@ -464,12 +452,11 @@ namespace YourApp.Controllers
                 }
                 catch
                 {
-                    // skip file yang sedang dipakai/locked
+                    // skip file locked
                 }
             }
         }
 
-        // ✅ Delete per bulan (recursive untuk folder)
         [HttpPost("DeleteMonth")]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> DeleteMonth(string? folder = "", string? q = "", string? month = "", int page = 1, int pageSize = 50)
@@ -509,7 +496,6 @@ namespace YourApp.Controllers
 
             int deletedCount = 0;
 
-            // delete folders
             foreach (var d in dirList)
             {
                 var mapped = auditMetaMap.TryGetValue(d.Name, out var meta);
@@ -530,7 +516,6 @@ namespace YourApp.Controllers
                 }
             }
 
-            // delete files
             foreach (var f in fileList)
             {
                 var filterDate = f.LastWriteTime;
@@ -609,7 +594,6 @@ namespace YourApp.Controllers
             IEnumerable<(string FullPath, string EntryName)> files,
             CancellationToken ct)
         {
-            // Disable buffering supaya response bisa langsung mengalir (penting kalau di-reverse proxy)
             HttpContext.Features.Get<IHttpResponseBodyFeature>()?.DisableBuffering();
 
             Response.StatusCode = 200;
@@ -617,7 +601,6 @@ namespace YourApp.Controllers
             Response.Headers[HeaderNames.ContentDisposition] = $"attachment; filename=\"{downloadName}\"";
             Response.Headers[HeaderNames.CacheControl] = "no-store";
 
-            // ZipArchive bisa nulis incremental ke response stream
             using (var zip = new ZipArchive(Response.Body, ZipArchiveMode.Create, leaveOpen: true))
             {
                 foreach (var (fullPath, entryName) in files)
@@ -633,7 +616,6 @@ namespace YourApp.Controllers
                     await using var fs = new FileStream(fullPath, FileMode.Open, FileAccess.Read, FileShare.Read, 1024 * 128, useAsync: true);
                     await fs.CopyToAsync(entryStream, 1024 * 128, ct);
 
-                    // flush berkala agar koneksi tetap aktif (dan progress download terasa)
                     await Response.Body.FlushAsync(ct);
                 }
             }
