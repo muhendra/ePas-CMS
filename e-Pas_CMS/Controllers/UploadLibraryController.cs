@@ -4,7 +4,9 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
+using System.IO.Compression;
 using System.Linq;
 using System.Threading.Tasks;
 
@@ -15,8 +17,7 @@ namespace YourApp.Controllers
     public class UploadLibraryController : Controller
     {
         private const string BasePath = "/var/www/epas-asset/wwwroot/uploads";
-
-        private readonly EpasDbContext _context; // 🔁 ganti sesuai DbContext kamu
+        private readonly EpasDbContext _context;
 
         public UploadLibraryController(EpasDbContext context)
         {
@@ -49,50 +50,85 @@ namespace YourApp.Controllers
         // ✅ count item langsung di folder tsb (tidak recursive) - ringan
         private static int? SafeCountEntries(string dirPath)
         {
-            try
-            {
-                return Directory.EnumerateFileSystemEntries(dirPath).Count();
-            }
-            catch
-            {
-                return null;
-            }
+            try { return Directory.EnumerateFileSystemEntries(dirPath).Count(); }
+            catch { return null; }
         }
 
-        // ✅ ambil mapping auditId(uuid folder) -> spbu_no dalam 1 query
-        private async Task<Dictionary<string, string>> GetAuditIdToSpbuNoMapAsync(List<string> auditIds)
+        private static bool TryParseMonthKey(string? ym, out int year, out int month)
         {
-            // auditIds is folder names that are valid GUIDs
-            // join trx_audit -> spbu
+            year = 0; month = 0;
+            if (string.IsNullOrWhiteSpace(ym)) return false;
+
+            // expected: yyyy-MM
+            var parts = ym.Trim().Split('-', StringSplitOptions.RemoveEmptyEntries);
+            if (parts.Length != 2) return false;
+            if (!int.TryParse(parts[0], out year)) return false;
+            if (!int.TryParse(parts[1], out month)) return false;
+            if (month < 1 || month > 12) return false;
+            return true;
+        }
+
+        private static string MonthKey(DateTime dt) => dt.ToString("yyyy-MM");
+
+        private sealed class AuditMeta
+        {
+            public string SpbuNo { get; set; } = "";
+            public DateTime AuditDate { get; set; }
+        }
+
+        // ✅ mapping auditId(uuid folder) -> {spbu_no, audit_date} dalam 1 query
+        private async Task<Dictionary<string, AuditMeta>> GetAuditMetaMapAsync(List<string> auditIds)
+        {
             var rows = await (
                 from a in _context.trx_audits
                 join s in _context.spbus on a.spbu_id equals s.id
                 where auditIds.Contains(a.id)
-                select new { a.id, s.spbu_no }
+                select new
+                {
+                    AuditId = a.id,
+                    SpbuNo = s.spbu_no,
+                    AuditDate = (a.audit_execution_time ?? a.created_date)
+                }
             ).ToListAsync();
 
-            // kalau ada duplikat (harusnya tidak), ambil first
             return rows
-                .GroupBy(x => x.id)
-                .ToDictionary(g => g.Key, g => g.First().spbu_no);
+                .GroupBy(x => x.AuditId)
+                .ToDictionary(
+                    g => g.Key,
+                    g => new AuditMeta
+                    {
+                        SpbuNo = g.First().SpbuNo,
+                        AuditDate = g.First().AuditDate
+                    }
+                );
         }
 
         public class LibraryItemVm
         {
-            public string Name { get; set; } = "";          // folder/file name asli
-            public string DisplayName { get; set; } = "";   // ✅ yang ditampilkan di UI
-            public bool IsMappedFromAudit { get; set; }     // ✅ badge/info
+            public string Name { get; set; } = "";          // original file/folder name
+            public string DisplayName { get; set; } = "";   // shown name (SPBU no)
+            public bool IsMappedFromAudit { get; set; }
+
             public string RelPath { get; set; } = "";
             public bool IsDir { get; set; }
+
             public long? SizeBytes { get; set; }            // file size
-            public int? ChildCount { get; set; }            // folder: item count (non-recursive)
-            public DateTime LastWriteTime { get; set; }
+            public int? ChildCount { get; set; }            // folder item count
+            public DateTime LastWriteTime { get; set; }     // fs time
+
+            // ✅ date used for month filter:
+            // audit folder -> audit_date from DB; non-audit -> LastWriteTime
+            public DateTime FilterDate { get; set; }
         }
 
         public class LibraryVm
         {
             public string CurrentRel { get; set; } = "";
             public string? Query { get; set; }
+
+            // ✅ month filter: "yyyy-MM"
+            public string? Month { get; set; }
+            public List<string> AvailableMonths { get; set; } = new(); // from current folder listing
 
             public List<(string name, string rel)> Breadcrumbs { get; set; } = new();
             public List<LibraryItemVm> Items { get; set; } = new();
@@ -107,7 +143,13 @@ namespace YourApp.Controllers
 
         [HttpGet("")]
         [HttpGet("Index")]
-        public async Task<IActionResult> Index(string? folder = "", string? q = "", int page = 1, int pageSize = 50)
+        public async Task<IActionResult> Index(
+            string? folder = "",
+            string? q = "",
+            string? month = "",
+            int page = 1,
+            int pageSize = 50
+        )
         {
             if (!Directory.Exists(BasePath))
                 return Problem($"BasePath not found: {BasePath}", statusCode: 500);
@@ -127,11 +169,14 @@ namespace YourApp.Controllers
             }
 
             q = (q ?? "").Trim();
+            month = (month ?? "").Trim();
+            if (!TryParseMonthKey(month, out _, out _)) month = ""; // invalid -> reset
 
             var vm = new LibraryVm
             {
                 CurrentRel = rel,
                 Query = q,
+                Month = string.IsNullOrEmpty(month) ? null : month,
                 Page = page,
                 PageSize = pageSize,
                 AllowedPageSizes = allowedSizes
@@ -161,51 +206,75 @@ namespace YourApp.Controllers
                 files = files.Where(f => f.Name.Contains(q, StringComparison.OrdinalIgnoreCase));
             }
 
-            // materialize dulu supaya bisa ambil list audit IDs dan hitung count folder
             var dirList = dirs.OrderBy(d => d.Name).ToList();
             var fileList = files.OrderBy(f => f.Name).ToList();
 
-            // ambil folder yang valid GUID (audit id)
+            // audit folder IDs (valid GUID)
             var auditIds = dirList
                 .Select(d => d.Name)
                 .Where(n => Guid.TryParse(n, out _))
                 .ToList();
 
-            var auditMap = auditIds.Any()
-                ? await GetAuditIdToSpbuNoMapAsync(auditIds)
-                : new Dictionary<string, string>();
+            var auditMetaMap = auditIds.Any()
+                ? await GetAuditMetaMapAsync(auditIds)
+                : new Dictionary<string, AuditMeta>();
 
             var folderItems = dirList.Select(d =>
             {
-                var mapped = auditMap.TryGetValue(d.Name, out var spbuNo);
+                var mapped = auditMetaMap.TryGetValue(d.Name, out var meta);
+
+                var fsTime = d.LastWriteTime;
+                var filterDate = mapped ? meta!.AuditDate : fsTime;
 
                 return new LibraryItemVm
                 {
                     Name = d.Name,
-                    DisplayName = mapped ? spbuNo : d.Name, // ✅ tampil spbu_no kalau ada mapping
+                    DisplayName = mapped ? meta!.SpbuNo : d.Name,
                     IsMappedFromAudit = mapped,
                     IsDir = true,
                     RelPath = string.IsNullOrEmpty(rel) ? d.Name : $"{rel}/{d.Name}",
-                    LastWriteTime = d.LastWriteTime,
+                    LastWriteTime = fsTime,
                     SizeBytes = null,
-                    ChildCount = SafeCountEntries(d.FullName)
+                    ChildCount = SafeCountEntries(d.FullName),
+                    FilterDate = filterDate
                 };
             });
 
-            var fileItems = fileList.Select(f => new LibraryItemVm
+            var fileItems = fileList.Select(f =>
             {
-                Name = f.Name,
-                DisplayName = f.Name,
-                IsMappedFromAudit = false,
-                IsDir = false,
-                RelPath = string.IsNullOrEmpty(rel) ? f.Name : $"{rel}/{f.Name}",
-                LastWriteTime = f.LastWriteTime,
-                SizeBytes = f.Length,
-                ChildCount = null
+                var fsTime = f.LastWriteTime;
+                return new LibraryItemVm
+                {
+                    Name = f.Name,
+                    DisplayName = f.Name,
+                    IsMappedFromAudit = false,
+                    IsDir = false,
+                    RelPath = string.IsNullOrEmpty(rel) ? f.Name : $"{rel}/{f.Name}",
+                    LastWriteTime = fsTime,
+                    SizeBytes = f.Length,
+                    ChildCount = null,
+                    FilterDate = fsTime
+                };
             });
 
             var allItems = folderItems.Concat(fileItems).ToList();
 
+            // Available month options from listing (BEFORE filter)
+            vm.AvailableMonths = allItems
+                .Select(x => MonthKey(x.FilterDate))
+                .Distinct()
+                .OrderByDescending(x => x)
+                .ToList();
+
+            // Apply month filter
+            if (!string.IsNullOrEmpty(month) && TryParseMonthKey(month, out int y, out int m))
+            {
+                allItems = allItems
+                    .Where(x => x.FilterDate.Year == y && x.FilterDate.Month == m)
+                    .ToList();
+            }
+
+            // Pagination
             vm.TotalItems = allItems.Count;
             vm.TotalPages = Math.Max(1, (int)Math.Ceiling(vm.TotalItems / (double)vm.PageSize));
             if (vm.Page > vm.TotalPages) vm.Page = vm.TotalPages;
@@ -233,15 +302,223 @@ namespace YourApp.Controllers
             return File(stream, "application/octet-stream", fileName);
         }
 
+        // ✅ Download ZIP per bulan (berdasarkan filter month di UI)
+        // /UploadLibrary/DownloadMonth?folder=&q=&month=2025-11
+        [HttpGet("DownloadMonth")]
+        public async Task<IActionResult> DownloadMonth(string? folder = "", string? q = "", string? month = "")
+        {
+            month = (month ?? "").Trim();
+            if (!TryParseMonthKey(month, out int y, out int m))
+                return BadRequest("Invalid month format. Use yyyy-MM.");
+
+            var rel = NormalizeAndValidateRelative(folder);
+            var physical = ToPhysicalPathFromRel(rel);
+            if (!Directory.Exists(physical)) return NotFound("Folder not found.");
+
+            q = (q ?? "").Trim();
+
+            // Build listing sama seperti Index (tanpa pagination)
+            var dirInfo = new DirectoryInfo(physical);
+
+            IEnumerable<DirectoryInfo> dirs = dirInfo.EnumerateDirectories();
+            IEnumerable<FileInfo> files = dirInfo.EnumerateFiles();
+
+            if (!string.IsNullOrEmpty(q))
+            {
+                dirs = dirs.Where(d => d.Name.Contains(q, StringComparison.OrdinalIgnoreCase));
+                files = files.Where(f => f.Name.Contains(q, StringComparison.OrdinalIgnoreCase));
+            }
+
+            var dirList = dirs.OrderBy(d => d.Name).ToList();
+            var fileList = files.OrderBy(f => f.Name).ToList();
+
+            var auditIds = dirList.Select(d => d.Name).Where(n => Guid.TryParse(n, out _)).ToList();
+            var auditMetaMap = auditIds.Any() ? await GetAuditMetaMapAsync(auditIds) : new Dictionary<string, AuditMeta>();
+
+            var items = new List<LibraryItemVm>();
+
+            foreach (var d in dirList)
+            {
+                var mapped = auditMetaMap.TryGetValue(d.Name, out var meta);
+                var filterDate = mapped ? meta!.AuditDate : d.LastWriteTime;
+
+                if (filterDate.Year == y && filterDate.Month == m)
+                {
+                    items.Add(new LibraryItemVm
+                    {
+                        Name = d.Name,
+                        DisplayName = mapped ? meta!.SpbuNo : d.Name,
+                        IsMappedFromAudit = mapped,
+                        IsDir = true,
+                        RelPath = string.IsNullOrEmpty(rel) ? d.Name : $"{rel}/{d.Name}",
+                        FilterDate = filterDate
+                    });
+                }
+            }
+
+            foreach (var f in fileList)
+            {
+                var filterDate = f.LastWriteTime;
+                if (filterDate.Year == y && filterDate.Month == m)
+                {
+                    items.Add(new LibraryItemVm
+                    {
+                        Name = f.Name,
+                        DisplayName = f.Name,
+                        IsMappedFromAudit = false,
+                        IsDir = false,
+                        RelPath = string.IsNullOrEmpty(rel) ? f.Name : $"{rel}/{f.Name}",
+                        FilterDate = filterDate
+                    });
+                }
+            }
+
+            if (!items.Any())
+                return NotFound("No items in selected month.");
+
+            // Create temp zip file (streaming-friendly)
+            var tmp = Path.Combine(Path.GetTempPath(), $"uploads_{rel.Replace('/', '_')}_{month}_{Guid.NewGuid():N}.zip");
+
+            using (var zip = ZipFile.Open(tmp, ZipArchiveMode.Create))
+            {
+                foreach (var it in items)
+                {
+                    var full = ToPhysicalPathFromRel(it.RelPath);
+
+                    if (it.IsDir)
+                    {
+                        // add directory recursively
+                        AddDirectoryToZip(zip, full, it.DisplayName, it.Name); // display name as top folder
+                    }
+                    else
+                    {
+                        if (System.IO.File.Exists(full))
+                        {
+                            var entryName = it.DisplayName;
+                            zip.CreateEntryFromFile(full, entryName);
+                        }
+                    }
+                }
+            }
+
+            HttpContext.Response.OnCompleted(() =>
+            {
+                try { System.IO.File.Delete(tmp); } catch { }
+                return Task.CompletedTask;
+            });
+
+            var downloadName = $"uploads_{(string.IsNullOrEmpty(rel) ? "root" : rel.Replace('/', '_'))}_{month}.zip";
+            return PhysicalFile(tmp, "application/zip", downloadName);
+        }
+
+        // ✅ Delete per bulan (recursive untuk folder)
+        [HttpPost("DeleteMonth")]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> DeleteMonth(string? folder = "", string? q = "", string? month = "", int page = 1, int pageSize = 50)
+        {
+            month = (month ?? "").Trim();
+            if (!TryParseMonthKey(month, out int y, out int m))
+            {
+                TempData["Error"] = "Invalid month format. Use yyyy-MM.";
+                return RedirectToAction(nameof(Index), new { folder, q, month = "", page, pageSize });
+            }
+
+            var rel = NormalizeAndValidateRelative(folder);
+            var physical = ToPhysicalPathFromRel(rel);
+            if (!Directory.Exists(physical))
+            {
+                TempData["Error"] = "Folder tidak ditemukan.";
+                return RedirectToAction(nameof(Index), new { folder = "", q, month, page, pageSize });
+            }
+
+            q = (q ?? "").Trim();
+
+            var dirInfo = new DirectoryInfo(physical);
+            IEnumerable<DirectoryInfo> dirs = dirInfo.EnumerateDirectories();
+            IEnumerable<FileInfo> files = dirInfo.EnumerateFiles();
+
+            if (!string.IsNullOrEmpty(q))
+            {
+                dirs = dirs.Where(d => d.Name.Contains(q, StringComparison.OrdinalIgnoreCase));
+                files = files.Where(f => f.Name.Contains(q, StringComparison.OrdinalIgnoreCase));
+            }
+
+            var dirList = dirs.ToList();
+            var fileList = files.ToList();
+
+            var auditIds = dirList.Select(d => d.Name).Where(n => Guid.TryParse(n, out _)).ToList();
+            var auditMetaMap = auditIds.Any() ? await GetAuditMetaMapAsync(auditIds) : new Dictionary<string, AuditMeta>();
+
+            int deletedCount = 0;
+
+            // delete folders
+            foreach (var d in dirList)
+            {
+                var mapped = auditMetaMap.TryGetValue(d.Name, out var meta);
+                var filterDate = mapped ? meta!.AuditDate : d.LastWriteTime;
+
+                if (filterDate.Year == y && filterDate.Month == m)
+                {
+                    try
+                    {
+                        Directory.Delete(d.FullName, recursive: true);
+                        deletedCount++;
+                    }
+                    catch (Exception ex)
+                    {
+                        TempData["Error"] = $"Gagal hapus folder {d.Name}: {ex.Message}";
+                        break;
+                    }
+                }
+            }
+
+            // delete files
+            foreach (var f in fileList)
+            {
+                var filterDate = f.LastWriteTime;
+                if (filterDate.Year == y && filterDate.Month == m)
+                {
+                    try
+                    {
+                        System.IO.File.Delete(f.FullName);
+                        deletedCount++;
+                    }
+                    catch (Exception ex)
+                    {
+                        TempData["Error"] = $"Gagal hapus file {f.Name}: {ex.Message}";
+                        break;
+                    }
+                }
+            }
+
+            TempData["Error"] = deletedCount > 0
+                ? $"Berhasil delete {deletedCount} item untuk bulan {month}."
+                : $"Tidak ada item untuk bulan {month}.";
+
+            return RedirectToAction(nameof(Index), new { folder, q, month, page = 1, pageSize });
+        }
+
+        private static void AddDirectoryToZip(ZipArchive zip, string sourceDir, string displayTopFolder, string fallbackFolderName)
+        {
+            if (!Directory.Exists(sourceDir)) return;
+
+            // top folder name inside zip:
+            // use displayTopFolder (spbu_no) if not empty, else fallback
+            var top = string.IsNullOrWhiteSpace(displayTopFolder) ? fallbackFolderName : displayTopFolder;
+
+            var baseLen = sourceDir.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar).Length + 1;
+
+            foreach (var file in Directory.EnumerateFiles(sourceDir, "*", SearchOption.AllDirectories))
+            {
+                var relPath = file.Substring(baseLen).Replace('\\', '/');
+                var entryName = $"{top}/{relPath}";
+                zip.CreateEntryFromFile(file, entryName);
+            }
+        }
+
         [HttpPost("DeleteFile")]
         [ValidateAntiForgeryToken]
-        public IActionResult DeleteFile(
-            string path,
-            string? returnFolder = "",
-            string? q = "",
-            int page = 1,
-            int pageSize = 50
-        )
+        public IActionResult DeleteFile(string path, string? returnFolder = "", string? q = "", string? month = "", int page = 1, int pageSize = 50)
         {
             var rel = NormalizeAndValidateRelative(path);
             var physical = ToPhysicalPathFromRel(rel);
@@ -249,18 +526,12 @@ namespace YourApp.Controllers
             if (System.IO.File.Exists(physical))
                 System.IO.File.Delete(physical);
 
-            return RedirectToAction(nameof(Index), new { folder = returnFolder, q, page, pageSize });
+            return RedirectToAction(nameof(Index), new { folder = returnFolder, q, month, page, pageSize });
         }
 
         [HttpPost("DeleteFolder")]
         [ValidateAntiForgeryToken]
-        public IActionResult DeleteFolder(
-            string path,
-            string? returnFolder = "",
-            string? q = "",
-            int page = 1,
-            int pageSize = 50
-        )
+        public IActionResult DeleteFolder(string path, string? returnFolder = "", string? q = "", string? month = "", int page = 1, int pageSize = 50)
         {
             var rel = NormalizeAndValidateRelative(path);
             var physical = ToPhysicalPathFromRel(rel);
@@ -277,7 +548,7 @@ namespace YourApp.Controllers
                 }
             }
 
-            return RedirectToAction(nameof(Index), new { folder = returnFolder, q, page, pageSize });
+            return RedirectToAction(nameof(Index), new { folder = returnFolder, q, month, page, pageSize });
         }
 
         public static string HumanSize(long bytes)

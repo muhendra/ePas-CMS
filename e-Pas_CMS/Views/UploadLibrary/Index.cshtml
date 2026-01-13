@@ -1,6 +1,7 @@
 ﻿@model YourApp.Controllers.UploadLibraryController.LibraryVm
 @using static YourApp.Controllers.UploadLibraryController
 @using System
+@using System.IO
 
 @{
     ViewData["Title"] = "Upload Library";
@@ -40,6 +41,75 @@
         font-size: 11px;
         padding: .2rem .45rem;
     }
+
+    /* ✅ modal preview */
+    .preview-modal-backdrop {
+        position: fixed;
+        inset: 0;
+        background: rgba(0,0,0,.6);
+        display: none;
+        z-index: 1055; /* bootstrap modal range */
+    }
+
+    .preview-modal {
+        position: fixed;
+        inset: 0;
+        display: none;
+        z-index: 1060;
+        overflow: auto;
+        padding: 2rem 1rem;
+    }
+
+    .preview-card {
+        max-width: 980px;
+        margin: 0 auto;
+        background: #fff;
+        border-radius: .5rem;
+        box-shadow: 0 12px 30px rgba(0,0,0,.25);
+    }
+
+    .preview-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: .75rem 1rem;
+        border-bottom: 1px solid #eee;
+        gap: .75rem;
+    }
+
+    .preview-title {
+        font-weight: 600;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        max-width: 75%;
+    }
+
+    .preview-body {
+        padding: 1rem;
+    }
+
+        .preview-body img {
+            max-width: 100%;
+            height: auto;
+            display: block;
+            margin: 0 auto;
+        }
+
+        .preview-body video {
+            width: 100%;
+            max-height: 70vh;
+            display: block;
+            margin: 0 auto;
+        }
+
+    .btn-icon {
+        border: 0;
+        background: transparent;
+        font-size: 1.25rem;
+        line-height: 1;
+        padding: .25rem .5rem;
+    }
 </style>
 
 <div class="container mt-4">
@@ -70,25 +140,37 @@
                 else
                 {
                     <li class="breadcrumb-item">
-                        <a href="@Url.Action("Index", "UploadLibrary", new { folder = rel, q = Model.Query, page = 1, pageSize = Model.PageSize })">@name</a>
+                        <a href="@Url.Action("Index", "UploadLibrary", new { folder = rel, q = Model.Query, month = Model.Month, page = 1, pageSize = Model.PageSize })">@name</a>
                     </li>
                 }
             }
         </ol>
     </nav>
 
-    <!-- Search -->
-    <form method="get" action="/UploadLibrary" class="row g-2 mb-3">
+    <!-- Filter: Search + Month -->
+    <form method="get" action="/UploadLibrary" class="row g-2 mb-2">
         <input type="hidden" name="folder" value="@Model.CurrentRel" />
         <input type="hidden" name="page" value="1" />
         <input type="hidden" name="pageSize" value="@Model.PageSize" />
 
-        <div class="col-md-6">
+        <div class="col-md-5">
             <input class="form-control" name="q" value="@Model.Query" placeholder="Search nama file/folder..." />
         </div>
-        <div class="col-md-2">
-            <button class="btn btn-primary w-100" type="submit">Search</button>
+
+        <div class="col-md-3">
+            <select class="form-select" id="monthSelect" name="month" onchange="this.form.submit()">
+                <option value="">-- Semua Bulan --</option>
+                @foreach (var ym in Model.AvailableMonths)
+                {
+                    <option value="@ym" selected="@(Model.Month == ym)">@ym</option>
+                }
+            </select>
         </div>
+
+        <div class="col-md-2">
+            <button class="btn btn-primary w-100" type="submit">Filter</button>
+        </div>
+
         <div class="col-md-2">
             <a class="btn btn-outline-secondary w-100"
                href="@Url.Action("Index", "UploadLibrary", new { folder = Model.CurrentRel, page = 1, pageSize = Model.PageSize })">
@@ -97,12 +179,33 @@
         </div>
     </form>
 
+    <!-- Actions: Download/Delete for Selected Month -->
+    <div class="d-flex flex-wrap gap-2 mb-3">
+        <a class="btn btn-outline-primary @(string.IsNullOrEmpty(Model.Month) ? "disabled" : "")"
+           href="@Url.Action("DownloadMonth", "UploadLibrary", new { folder = Model.CurrentRel, q = Model.Query, month = Model.Month })">
+            Download ZIP (Selected Month)
+        </a>
+
+        <form method="post" action="/UploadLibrary/DeleteMonth"
+              onsubmit="return confirm('Yakin DELETE semua asset untuk bulan ' + document.getElementById('monthSelect').value + ' ? Ini akan hapus folder/file (folder recursive).');">
+            @Html.AntiForgeryToken()
+            <input type="hidden" name="folder" value="@Model.CurrentRel" />
+            <input type="hidden" name="q" value="@Model.Query" />
+            <input type="hidden" name="month" value="@Model.Month" />
+            <input type="hidden" name="page" value="@Model.Page" />
+            <input type="hidden" name="pageSize" value="@Model.PageSize" />
+
+            <button type="submit" class="btn btn-outline-danger" @(string.IsNullOrEmpty(Model.Month) ? "disabled" : "")>
+                Delete All Assets (Selected Month)
+            </button>
+        </form>
+    </div>
+
     <div class="card">
         <div class="card-body">
 
             <div class="table-responsive">
                 <table class="table table-hover align-middle uploadlib-table">
-                    <!-- ✅ enforce width kolom biar Size tetap terlihat -->
                     <colgroup>
                         <col style="width:40%">
                         <col style="width:15%">
@@ -137,13 +240,10 @@
                                     <tr>
                                         <td>
                                             <a class="uploadlib-name-link"
-                                               href="@Url.Action("Index", "UploadLibrary", new { folder = item.RelPath, q = Model.Query, page = 1, pageSize = Model.PageSize })"
+                                               href="@Url.Action("Index", "UploadLibrary", new { folder = item.RelPath, q = Model.Query, month = Model.Month, page = 1, pageSize = Model.PageSize })"
                                                title="Audit ID: @item.Name">
                                                 <span>📁</span>
-
-                                                <!-- ✅ tampilkan spbu_no (DisplayName) -->
                                                 <span class="uploadlib-name">@item.DisplayName</span>
-
                                                 @if (item.IsMappedFromAudit)
                                                 {
                                                     <span class="badge bg-info uploadlib-badge">SPBU</span>
@@ -151,9 +251,7 @@
                                             </a>
                                         </td>
                                         <td>Folder</td>
-                                        <td class="text-muted">
-                                            @(item.ChildCount.HasValue ? $"{item.ChildCount.Value} items" : "-")
-                                        </td>
+                                        <td class="text-muted">@(item.ChildCount.HasValue ? $"{item.ChildCount.Value} items" : "-")</td>
                                         <td>@item.LastWriteTime.ToString("yyyy-MM-dd HH:mm")</td>
                                         <td class="text-end">
                                             <form method="post" action="/UploadLibrary/DeleteFolder" class="d-inline"
@@ -162,6 +260,7 @@
                                                 <input type="hidden" name="path" value="@item.RelPath" />
                                                 <input type="hidden" name="returnFolder" value="@Model.CurrentRel" />
                                                 <input type="hidden" name="q" value="@Model.Query" />
+                                                <input type="hidden" name="month" value="@Model.Month" />
                                                 <input type="hidden" name="page" value="@Model.Page" />
                                                 <input type="hidden" name="pageSize" value="@Model.PageSize" />
                                                 <button class="btn btn-sm btn-outline-danger">Delete</button>
@@ -171,11 +270,31 @@
                                 }
                                 else
                                 {
+                                    var ext = (Path.GetExtension(item.Name ?? "") ?? "").ToLowerInvariant();
+                                    var isImg = ext == ".jpg" || ext == ".jpeg" || ext == ".png" || ext == ".gif" || ext == ".webp";
+                                    var isVid = ext == ".mp4" || ext == ".webm" || ext == ".ogg" || ext == ".mov" || ext == ".m4v";
+
                                     <tr>
                                         <td title="@item.Name">
                                             <span class="uploadlib-name-link">
                                                 <span>📄</span>
-                                                <span class="uploadlib-name">@item.DisplayName</span>
+
+                                                @if (isImg || isVid)
+                                                {
+                                                    <!-- ✅ klik nama file => preview modal -->
+                                                    <a href="javascript:void(0)"
+                                                       class="uploadlib-name js-preview"
+                                                       data-rel="@item.RelPath"
+                                                       data-name="@item.DisplayName"
+                                                       data-type="@(isImg ? "image" : "video")"
+                                                       style="text-decoration: underline;">
+                                                        @item.DisplayName
+                                                    </a>
+                                                }
+                                                else
+                                                {
+                                                    <span class="uploadlib-name">@item.DisplayName</span>
+                                                }
                                             </span>
                                         </td>
                                         <td>File</td>
@@ -193,6 +312,7 @@
                                                 <input type="hidden" name="path" value="@item.RelPath" />
                                                 <input type="hidden" name="returnFolder" value="@Model.CurrentRel" />
                                                 <input type="hidden" name="q" value="@Model.Query" />
+                                                <input type="hidden" name="month" value="@Model.Month" />
                                                 <input type="hidden" name="page" value="@Model.Page" />
                                                 <input type="hidden" name="pageSize" value="@Model.PageSize" />
                                                 <button class="btn btn-sm btn-outline-danger">Delete</button>
@@ -215,6 +335,7 @@
                 <form method="get" action="/UploadLibrary" class="d-flex align-items-center gap-2">
                     <input type="hidden" name="folder" value="@Model.CurrentRel" />
                     <input type="hidden" name="q" value="@Model.Query" />
+                    <input type="hidden" name="month" value="@Model.Month" />
                     <input type="hidden" name="page" value="1" />
                     <label class="text-muted mb-0">Page size</label>
                     <select class="form-select form-select-sm" name="pageSize" onchange="this.form.submit()">
@@ -229,30 +350,30 @@
                     <ul class="pagination pagination-sm mb-0">
                         <li class="page-item @(Model.Page <= 1 ? "disabled" : "")">
                             <a class="page-link"
-                               href="@Url.Action("Index", "UploadLibrary", new { folder = Model.CurrentRel, q = Model.Query, page = 1, pageSize = Model.PageSize })">«</a>
+                               href="@Url.Action("Index", "UploadLibrary", new { folder = Model.CurrentRel, q = Model.Query, month = Model.Month, page = 1, pageSize = Model.PageSize })">«</a>
                         </li>
 
                         <li class="page-item @(Model.Page <= 1 ? "disabled" : "")">
                             <a class="page-link"
-                               href="@Url.Action("Index", "UploadLibrary", new { folder = Model.CurrentRel, q = Model.Query, page = Model.Page - 1, pageSize = Model.PageSize })">‹</a>
+                               href="@Url.Action("Index", "UploadLibrary", new { folder = Model.CurrentRel, q = Model.Query, month = Model.Month, page = Model.Page - 1, pageSize = Model.PageSize })">‹</a>
                         </li>
 
                         @for (int p = startPage; p <= endPage; p++)
                         {
                             <li class="page-item @(p == Model.Page ? "active" : "")">
                                 <a class="page-link"
-                                   href="@Url.Action("Index", "UploadLibrary", new { folder = Model.CurrentRel, q = Model.Query, page = p, pageSize = Model.PageSize })">@p</a>
+                                   href="@Url.Action("Index", "UploadLibrary", new { folder = Model.CurrentRel, q = Model.Query, month = Model.Month, page = p, pageSize = Model.PageSize })">@p</a>
                             </li>
                         }
 
                         <li class="page-item @(Model.Page >= Model.TotalPages ? "disabled" : "")">
                             <a class="page-link"
-                               href="@Url.Action("Index", "UploadLibrary", new { folder = Model.CurrentRel, q = Model.Query, page = Model.Page + 1, pageSize = Model.PageSize })">›</a>
+                               href="@Url.Action("Index", "UploadLibrary", new { folder = Model.CurrentRel, q = Model.Query, month = Model.Month, page = Model.Page + 1, pageSize = Model.PageSize })">›</a>
                         </li>
 
                         <li class="page-item @(Model.Page >= Model.TotalPages ? "disabled" : "")">
                             <a class="page-link"
-                               href="@Url.Action("Index", "UploadLibrary", new { folder = Model.CurrentRel, q = Model.Query, page = Model.TotalPages, pageSize = Model.PageSize })">»</a>
+                               href="@Url.Action("Index", "UploadLibrary", new { folder = Model.CurrentRel, q = Model.Query, month = Model.Month, page = Model.TotalPages, pageSize = Model.PageSize })">»</a>
                         </li>
                     </ul>
                 </nav>
@@ -261,3 +382,93 @@
         </div>
     </div>
 </div>
+
+<!-- ✅ Preview Modal (pure HTML + JS, no dependency) -->
+<div id="previewBackdrop" class="preview-modal-backdrop"></div>
+<div id="previewModal" class="preview-modal" role="dialog" aria-modal="true" aria-hidden="true">
+    <div class="preview-card">
+        <div class="preview-header">
+            <div class="preview-title" id="previewTitle">Preview</div>
+            <div class="d-flex gap-2">
+                <a id="previewDownloadBtn" class="btn btn-sm btn-outline-primary" href="#" target="_blank" rel="noopener">Download</a>
+                <button type="button" class="btn-icon" id="previewCloseBtn" aria-label="Close">✕</button>
+            </div>
+        </div>
+        <div class="preview-body" id="previewBody">
+            <!-- injected -->
+        </div>
+    </div>
+</div>
+
+<script>
+    (function () {
+        const backdrop = document.getElementById('previewBackdrop');
+        const modal = document.getElementById('previewModal');
+        const body = document.getElementById('previewBody');
+        const title = document.getElementById('previewTitle');
+        const closeBtn = document.getElementById('previewCloseBtn');
+        const dlBtn = document.getElementById('previewDownloadBtn');
+
+        function openPreview(fileName, relPath, type) {
+            title.textContent = fileName || 'Preview';
+
+            const downloadUrl = '/UploadLibrary/Download?path=' + encodeURIComponent(relPath);
+            dlBtn.href = downloadUrl;
+
+            // clear old
+            body.innerHTML = '';
+
+            if (type === 'image') {
+                const img = document.createElement('img');
+                img.src = downloadUrl; // will work if Download serves file stream
+                img.alt = fileName || 'image';
+                body.appendChild(img);
+            } else if (type === 'video') {
+                const video = document.createElement('video');
+                video.src = downloadUrl;
+                video.controls = true;
+                video.playsInline = true;
+                // optional auto play when opened:
+                // video.autoplay = true;
+                body.appendChild(video);
+            } else {
+                body.innerHTML = '<div class="text-muted">Preview tidak didukung untuk tipe ini.</div>';
+            }
+
+            backdrop.style.display = 'block';
+            modal.style.display = 'block';
+            modal.setAttribute('aria-hidden', 'false');
+            document.body.style.overflow = 'hidden';
+        }
+
+        function closePreview() {
+            // stop video if any
+            const vid = body.querySelector('video');
+            if (vid) {
+                try { vid.pause(); vid.src = ''; } catch (e) { }
+            }
+            body.innerHTML = '';
+            backdrop.style.display = 'none';
+            modal.style.display = 'none';
+            modal.setAttribute('aria-hidden', 'true');
+            document.body.style.overflow = '';
+        }
+
+        document.addEventListener('click', function (e) {
+            const a = e.target.closest('.js-preview');
+            if (!a) return;
+
+            e.preventDefault();
+            const rel = a.getAttribute('data-rel');
+            const name = a.getAttribute('data-name');
+            const type = a.getAttribute('data-type');
+            openPreview(name, rel, type);
+        });
+
+        backdrop.addEventListener('click', closePreview);
+        closeBtn.addEventListener('click', closePreview);
+        document.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape') closePreview();
+        });
+    })();
+</script>
