@@ -70,14 +70,15 @@ namespace e_Pas_CMS.Controllers
     from u2 in aud2.DefaultIfEmpty()
 
     where a.status == "UNDER_REVIEW"
-          && a.audit_type != "Basic Operational"
+    && a.audit_type != "Basic Operational"
     select new
     {
         Audit = a,
         Spbu = s,
-        AuditorName = u.name,          // Auditor 1
+        AuditorName = u.name,                 // Auditor 1
         Auditor2Name = u2 != null ? u2.name : null
     };
+
 
 
                 if (userRegion.Any() || userSbm.Any())
@@ -973,22 +974,25 @@ WHERE
                 : 0m;
 
             var qqSql = @"
-                SELECT nozzle_number AS NozzleNumber,
-                       du_make  AS DuMake,
-                       du_serial_no AS DuSerialNo,
-                       product  AS Product,
-                       mode     AS Mode,
-                       quantity_variation_with_measure AS QuantityVariationWithMeasure,
-                       quantity_variation_in_percentage  AS QuantityVariationInPercentage,
-                       observed_density      AS ObservedDensity,
-                       observed_temp         AS ObservedTemp,
-                       observed_density_15_degree   AS ObservedDensity15Degree,
-                       reference_density_15_degree  AS ReferenceDensity15Degree,
-                       tank_number  AS TankNumber,
-                       density_variation AS DensityVariation
-                FROM trx_audit_qq
-                WHERE trx_audit_id = @id";
+    SELECT 
+       id AS Id,
+       nozzle_number AS NozzleNumber,
+       du_make  AS DuMake,
+       du_serial_no AS DuSerialNo,
+       product  AS Product,
+       mode     AS Mode,
+       quantity_variation_with_measure AS QuantityVariationWithMeasure,
+       quantity_variation_in_percentage  AS QuantityVariationInPercentage,
+       observed_density      AS ObservedDensity,
+       observed_temp         AS ObservedTemp,
+       observed_density_15_degree   AS ObservedDensity15Degree,
+       reference_density_15_degree  AS ReferenceDensity15Degree,
+       tank_number  AS TankNumber,
+       density_variation AS DensityVariation
+    FROM trx_audit_qq
+    WHERE trx_audit_id = @id";
             audit.QqChecks = (await conn.QueryAsync<AuditQqCheckItem>(qqSql, new { id })).ToList();
+
 
             var finalMediaSql = @"
                 SELECT media_type, media_path
