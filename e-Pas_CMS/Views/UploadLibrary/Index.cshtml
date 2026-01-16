@@ -144,6 +144,75 @@
         line-height: 1;
         padding: .25rem .5rem;
     }
+
+    /* ✅ modal download confirm (reuse style mirip preview) */
+    .dl-modal-backdrop {
+        position: fixed;
+        inset: 0;
+        background: rgba(0,0,0,.5);
+        display: none;
+        z-index: 1065;
+    }
+
+    .dl-modal {
+        position: fixed;
+        inset: 0;
+        display: none;
+        z-index: 1070;
+        overflow: auto;
+        padding: 2rem 1rem;
+    }
+
+    .dl-card {
+        max-width: 720px;
+        margin: 0 auto;
+        background: #fff;
+        border-radius: .5rem;
+        box-shadow: 0 12px 30px rgba(0,0,0,.25);
+    }
+
+    .dl-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: .75rem 1rem;
+        border-bottom: 1px solid #eee;
+        gap: .75rem;
+    }
+
+    .dl-title {
+        font-weight: 600;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        max-width: 80%;
+    }
+
+    .dl-body {
+        padding: 1rem;
+    }
+
+    .dl-footer {
+        display: flex;
+        justify-content: flex-end;
+        gap: .5rem;
+        padding: .75rem 1rem;
+        border-top: 1px solid #eee;
+    }
+
+    .dl-note {
+        color: #6c757d;
+        font-size: .9rem;
+        margin-top: .5rem;
+    }
+
+    .dl-box {
+        background: #f8f9fa;
+        border: 1px solid #eee;
+        padding: .75rem 1rem;
+        border-radius: .35rem;
+        font-weight: 600;
+    }
 </style>
 
 <div class="container mt-4">
@@ -215,10 +284,12 @@
 
     <!-- Actions: Download/Delete for Selected Month -->
     <div class="month-toolbar">
-        <a class="btn btn-outline-primary @(string.IsNullOrEmpty(Model.Month) ? "disabled" : "")"
-           href="@Url.Action("DownloadMonth", "UploadLibrary", new { folder = Model.CurrentRel, q = Model.Query, month = Model.Month })">
+        <!-- ✅ CHANGED: bukan link langsung ke DownloadMonth, tapi popup -> open Downloads tab -->
+        <button type="button"
+                class="btn btn-outline-primary @(string.IsNullOrEmpty(Model.Month) ? "disabled" : "")"
+                onclick="openDownloadMonthPopup()">
             Download ZIP (Selected Month)
-        </a>
+        </button>
 
         <form method="post" action="/UploadLibrary/DeleteMonth" class="m-0"
               onsubmit="return confirm('Yakin DELETE semua asset untuk bulan ' + document.getElementById('monthSelect').value + ' ? Ini akan hapus folder/file (folder recursive).');">
@@ -289,11 +360,13 @@
                                         <td>@item.LastWriteTime.ToString("yyyy-MM-dd HH:mm")</td>
                                         <td class="text-end">
                                             <div class="action-cell">
-                                                <a class="btn btn-sm btn-outline-primary btn-action"
-                                                   href="@Url.Action("DownloadSpbu", "UploadLibrary", new { path = item.RelPath, month = Model.Month })"
-                                                   title="Download ZIP untuk folder/SPBU ini">
+                                                <!-- ✅ CHANGED: tombol popup -> open Downloads tab -->
+                                                <button type="button"
+                                                        class="btn btn-sm btn-outline-primary btn-action"
+                                                        onclick="openDownloadFolderPopup('@item.RelPath','@item.DisplayName')"
+                                                        title="Download ZIP untuk folder/SPBU ini">
                                                     Download
-                                                </a>
+                                                </button>
 
                                                 <form method="post" action="/UploadLibrary/DeleteFolder" class="m-0"
                                                       onsubmit="return confirm('Hapus folder (jika kosong): @item.Name ?');">
@@ -441,8 +514,38 @@
     </div>
 </div>
 
+<!-- ✅ Download Confirm Modal -->
+<div id="dlBackdrop" class="dl-modal-backdrop"></div>
+<div id="dlModal" class="dl-modal" role="dialog" aria-modal="true" aria-hidden="true">
+    <div class="dl-card">
+        <div class="dl-header">
+            <div class="dl-title" id="dlTitle">Download</div>
+            <button type="button" class="btn-icon" id="dlCloseBtn" aria-label="Close">✕</button>
+        </div>
+        <div class="dl-body">
+            <div>Download akan diproses di tab <b>Downloads</b>.</div>
+            <div class="dl-note">Di tab Downloads, user harus klik tombol <b>Start Download</b> (user action).</div>
+
+            <div class="mt-3 dl-box" id="dlDesc"></div>
+
+            <input type="hidden" id="dlType" />
+            <input type="hidden" id="dlFolder" />
+            <input type="hidden" id="dlQ" />
+            <input type="hidden" id="dlMonth" />
+            <input type="hidden" id="dlPath" />
+        </div>
+        <div class="dl-footer">
+            <button type="button" class="btn btn-outline-secondary" id="dlCancelBtn">Cancel</button>
+            <button type="button" class="btn btn-primary" id="dlOpenBtn">Open Downloads Tab</button>
+        </div>
+    </div>
+</div>
+
 <script>
     (function () {
+        // ==========================
+        // ✅ Preview (punyamu)
+        // ==========================
         const backdrop = document.getElementById('previewBackdrop');
         const modal = document.getElementById('previewModal');
         const body = document.getElementById('previewBody');
@@ -506,6 +609,96 @@
         closeBtn.addEventListener('click', closePreview);
         document.addEventListener('keydown', function (e) {
             if (e.key === 'Escape') closePreview();
+        });
+
+        // ==========================
+        // ✅ Download Confirm Modal
+        // ==========================
+        const dlBackdrop = document.getElementById('dlBackdrop');
+        const dlModal = document.getElementById('dlModal');
+        const dlTitle = document.getElementById('dlTitle');
+        const dlDesc = document.getElementById('dlDesc');
+        const dlCloseBtn = document.getElementById('dlCloseBtn');
+        const dlCancelBtn = document.getElementById('dlCancelBtn');
+        const dlOpenBtn = document.getElementById('dlOpenBtn');
+
+        const dlType = document.getElementById('dlType');
+        const dlFolder = document.getElementById('dlFolder');
+        const dlQ = document.getElementById('dlQ');
+        const dlMonth = document.getElementById('dlMonth');
+        const dlPath = document.getElementById('dlPath');
+
+        function showDlModal() {
+            dlBackdrop.style.display = 'block';
+            dlModal.style.display = 'block';
+            dlModal.setAttribute('aria-hidden', 'false');
+            document.body.style.overflow = 'hidden';
+        }
+
+        function hideDlModal() {
+            dlBackdrop.style.display = 'none';
+            dlModal.style.display = 'none';
+            dlModal.setAttribute('aria-hidden', 'true');
+            document.body.style.overflow = '';
+        }
+
+        window.openDownloadMonthPopup = function () {
+            const month = document.getElementById('monthSelect').value || '';
+            if (!month) return;
+
+            dlTitle.textContent = 'Download ZIP (Month)';
+            dlDesc.textContent = 'Month: ' + month;
+
+            dlType.value = 'month';
+            dlFolder.value = '@(Model.CurrentRel ?? "")';
+            dlQ.value = '@(Model.Query ?? "")';
+            dlMonth.value = month;
+            dlPath.value = '';
+
+            showDlModal();
+        }
+
+        window.openDownloadFolderPopup = function (relPath, displayName) {
+            dlTitle.textContent = 'Download ZIP (Folder)';
+            dlDesc.textContent = 'Folder: ' + (displayName || relPath);
+
+            dlType.value = 'spbu';
+            dlFolder.value = '';
+            dlQ.value = '';
+            dlMonth.value = '@(Model.Month ?? "")';
+            dlPath.value = relPath || '';
+
+            showDlModal();
+        }
+
+        function buildDownloadsUrl() {
+            const type = dlType.value;
+
+            if (type === 'month') {
+                return '/UploadLibrary/Downloads?type=month'
+                    + '&folder=' + encodeURIComponent(dlFolder.value || '')
+                    + '&q=' + encodeURIComponent(dlQ.value || '')
+                    + '&month=' + encodeURIComponent(dlMonth.value || '');
+            }
+
+            // spbu/folder
+            return '/UploadLibrary/Downloads?type=spbu'
+                + '&path=' + encodeURIComponent(dlPath.value || '')
+                + '&month=' + encodeURIComponent(dlMonth.value || '');
+        }
+
+        dlOpenBtn.addEventListener('click', function () {
+            const url = buildDownloadsUrl();
+            window.open(url, '_blank', 'noopener');
+            hideDlModal();
+        });
+
+        dlBackdrop.addEventListener('click', hideDlModal);
+        dlCloseBtn.addEventListener('click', hideDlModal);
+        dlCancelBtn.addEventListener('click', hideDlModal);
+
+        document.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape') hideDlModal();
         });
     })();
 </script>

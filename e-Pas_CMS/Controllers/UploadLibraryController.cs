@@ -136,6 +136,16 @@ namespace YourApp.Controllers
             public int[] AllowedPageSizes { get; set; } = new[] { 20, 50, 100, 200 };
         }
 
+        // ✅ ViewModel untuk tab Downloads
+        public class DownloadsVm
+        {
+            public string Type { get; set; } = ""; // month / spbu
+            public string Title { get; set; } = "";
+            public string Description { get; set; } = "";
+            public string StartUrl { get; set; } = "";
+            public string BackUrl { get; set; } = "/UploadLibrary";
+        }
+
         [HttpGet("")]
         [HttpGet("Index")]
         public async Task<IActionResult> Index(
@@ -286,6 +296,51 @@ namespace YourApp.Controllers
             return File(stream, "application/octet-stream", fileName);
         }
 
+        // ====================================
+        // ✅ TAB DOWNLOADS (user action page)
+        // ====================================
+        // /UploadLibrary/Downloads?type=month&folder=...&q=...&month=yyyy-MM
+        // /UploadLibrary/Downloads?type=spbu&path=...&month=yyyy-MM(optional)
+        [HttpGet("Downloads")]
+        public IActionResult Downloads(string type, string? folder = "", string? q = "", string? month = "", string? path = "")
+        {
+            type = (type ?? "").Trim().ToLowerInvariant();
+            folder = folder ?? "";
+            q = q ?? "";
+            month = (month ?? "").Trim();
+            path = path ?? "";
+
+            var vm = new DownloadsVm();
+
+            if (type == "month")
+            {
+                if (!TryParseMonthKey(month, out _, out _))
+                    return BadRequest("Invalid month. Use yyyy-MM.");
+
+                vm.Type = "month";
+                vm.Title = "Downloads - Month ZIP";
+                vm.Description = $"Month: {month}";
+                vm.StartUrl = Url.Action(nameof(DownloadMonth), "UploadLibrary", new { folder, q, month }) ?? "/UploadLibrary";
+                vm.BackUrl = Url.Action(nameof(Index), "UploadLibrary", new { folder, q, month, page = 1, pageSize = 50 }) ?? "/UploadLibrary";
+                return View("Downloads", vm);
+            }
+
+            if (type == "spbu")
+            {
+                if (string.IsNullOrWhiteSpace(path))
+                    return BadRequest("Path is required.");
+
+                vm.Type = "spbu";
+                vm.Title = "Downloads - Folder ZIP";
+                vm.Description = $"Path: {path}";
+                vm.StartUrl = Url.Action(nameof(DownloadSpbu), "UploadLibrary", new { path, month }) ?? "/UploadLibrary";
+                vm.BackUrl = Url.Action(nameof(Index), "UploadLibrary", new { folder = "", q = "", month = month, page = 1, pageSize = 50 }) ?? "/UploadLibrary";
+                return View("Downloads", vm);
+            }
+
+            return BadRequest("Invalid type. Use type=month or type=spbu.");
+        }
+
         // =========================
         // ✅ ZIP STREAM HELPERS
         // =========================
@@ -319,7 +374,7 @@ namespace YourApp.Controllers
             }
         }
 
-        // ✅ Download ZIP per bulan (STREAMING, anti 500)
+        // ✅ Download ZIP per bulan (STREAMING, FIX 500)
         // NOTE: folder di dalam zip untuk audit folder = trx_audit.id (GUID folder), BUKAN spbu_no
         [HttpGet("DownloadMonth")]
         public async Task<IActionResult> DownloadMonth(string? folder = "", string? q = "", string? month = "")
@@ -339,16 +394,6 @@ namespace YourApp.Controllers
             q = (q ?? "").Trim();
             var ct = HttpContext.RequestAborted;
 
-            // disable buffering (jangan sampai throw)
-            try { HttpContext.Features.Get<IHttpResponseBodyFeature>()?.DisableBuffering(); } catch { }
-
-            var downloadName = $"uploads_{(string.IsNullOrEmpty(rel) ? "root" : rel.Replace('/', '_'))}_{month}.zip";
-
-            Response.StatusCode = 200;
-            Response.ContentType = "application/zip";
-            Response.Headers[HeaderNames.ContentDisposition] = $"attachment; filename=\"{downloadName}\"";
-            Response.Headers[HeaderNames.CacheControl] = "no-store";
-
             var dirInfo = new DirectoryInfo(physical);
             IEnumerable<DirectoryInfo> dirs = dirInfo.EnumerateDirectories();
             IEnumerable<FileInfo> files = dirInfo.EnumerateFiles();
@@ -362,15 +407,35 @@ namespace YourApp.Controllers
             var dirList = dirs.OrderBy(d => d.Name).ToList();
             var fileList = files.OrderBy(f => f.Name).ToList();
 
-            // ambil audit meta hanya untuk filterDate (bukan untuk nama folder zip)
+            // audit meta hanya untuk filterDate
             var auditIds = dirList.Select(d => d.Name).Where(n => Guid.TryParse(n, out _)).ToList();
             var auditMetaMap = auditIds.Any()
                 ? await GetAuditMetaMapAsync(auditIds)
                 : new Dictionary<string, AuditMeta>();
 
-            bool hasAny = false;
+            // ✅ LAZY START: response/zip baru dimulai saat ada file pertama
+            ZipArchive? zip = null;
+            bool started = false;
 
-            using (var zip = new ZipArchive(Response.Body, ZipArchiveMode.Create, leaveOpen: true))
+            void StartZipIfNeeded()
+            {
+                if (started) return;
+
+                // disable buffering (safe)
+                try { HttpContext.Features.Get<IHttpResponseBodyFeature>()?.DisableBuffering(); } catch { }
+
+                var downloadName = $"uploads_{(string.IsNullOrEmpty(rel) ? "root" : rel.Replace('/', '_'))}_{month}.zip";
+
+                Response.StatusCode = 200;
+                Response.ContentType = "application/zip";
+                Response.Headers[HeaderNames.ContentDisposition] = $"attachment; filename=\"{downloadName}\"";
+                Response.Headers[HeaderNames.CacheControl] = "no-store";
+
+                zip = new ZipArchive(Response.Body, ZipArchiveMode.Create, leaveOpen: true);
+                started = true;
+            }
+
+            try
             {
                 // folders recursive
                 foreach (var d in dirList)
@@ -382,9 +447,6 @@ namespace YourApp.Controllers
 
                     if (filterDate.Year != y || filterDate.Month != m)
                         continue;
-
-                    // ✅ FIX: folder TOP di ZIP = nama folder asli => trx_audit.id (GUID)
-                    var top = d.Name;
 
                     var baseDir = d.FullName.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
                     var baseLen = baseDir.Length + 1;
@@ -402,14 +464,15 @@ namespace YourApp.Controllers
                     foreach (var file in allFiles)
                     {
                         ct.ThrowIfCancellationRequested();
+                        if (!System.IO.File.Exists(file)) continue;
 
-                        var relPath = file.Substring(baseLen).Replace('\\', '/');
-                        var entryName = $"{top}/{relPath}";
+                        // ✅ folder top di zip = trx_audit.id (GUID folder) => d.Name
+                        var relPath = file.Length > baseLen ? file.Substring(baseLen).Replace('\\', '/') : Path.GetFileName(file);
+                        var entryName = $"{d.Name}/{relPath}";
 
-                        await AddFileToZipAsync(zip, file, entryName, ct);
-                        hasAny = true;
+                        StartZipIfNeeded();
+                        await AddFileToZipAsync(zip!, file, entryName, ct);
 
-                        // flush berkala biar koneksi keep-alive
                         try { await Response.Body.FlushAsync(ct); } catch { }
                     }
                 }
@@ -423,13 +486,21 @@ namespace YourApp.Controllers
                     if (dt.Year != y || dt.Month != m)
                         continue;
 
-                    await AddFileToZipAsync(zip, f.FullName, f.Name, ct);
-                    hasAny = true;
+                    if (!System.IO.File.Exists(f.FullName)) continue;
+
+                    StartZipIfNeeded();
+                    await AddFileToZipAsync(zip!, f.FullName, f.Name, ct);
                     try { await Response.Body.FlushAsync(ct); } catch { }
                 }
             }
+            finally
+            {
+                // ✅ kalau started, dispose zip agar central directory ditulis
+                try { zip?.Dispose(); } catch { }
+            }
 
-            if (!hasAny)
+            // ✅ kalau tidak ada file sama sekali, response belum mulai => aman return NotFound
+            if (!started)
                 return NotFound("No items in selected month.");
 
             return new EmptyResult();
@@ -458,7 +529,7 @@ namespace YourApp.Controllers
             if (string.IsNullOrWhiteSpace(folderName))
                 folderName = "folder";
 
-            // ✅ ini hanya untuk NAMA FILE ZIP (biar user enak)
+            // ✅ hanya untuk nama file zip
             string zipFileDisplay = folderName;
             if (Guid.TryParse(folderName, out _))
             {
@@ -471,12 +542,11 @@ namespace YourApp.Controllers
                 catch { }
             }
 
-            // temp zip (aman untuk browser)
             var tmp = Path.Combine(Path.GetTempPath(), $"spbu_{folderName}_{Guid.NewGuid():N}.zip");
 
             using (var zip = ZipFile.Open(tmp, ZipArchiveMode.Create))
             {
-                // ✅ FIX: top folder di ZIP = trx_audit.id => folderName
+                // ✅ top folder di zip = trx_audit.id => folderName
                 AddDirectoryToZipFiltered(zip, physical, folderName, folderName, useMonthFilter, y, m);
             }
 
@@ -495,7 +565,7 @@ namespace YourApp.Controllers
         private static void AddDirectoryToZipFiltered(
             ZipArchive zip,
             string sourceDir,
-            string topFolderInZip,       // ✅ ini yang dipakai jadi folder di dalam zip
+            string topFolderInZip,
             string fallbackFolderName,
             bool useMonthFilter,
             int year,
@@ -523,7 +593,7 @@ namespace YourApp.Controllers
                 }
                 catch
                 {
-                    // skip file locked/permission
+                    // skip
                 }
             }
         }
