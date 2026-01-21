@@ -401,6 +401,9 @@ namespace YourApp.Controllers
             if (!Directory.Exists(BasePath))
                 return Problem($"BasePath not found: {BasePath}", statusCode: 500);
 
+            if (!Directory.Exists(ZipTempPath))
+                Directory.CreateDirectory(ZipTempPath);
+
             month = (month ?? "").Trim();
             if (!TryParseMonthKey(month, out int y, out int m))
                 return BadRequest("Invalid month format. Use yyyy-MM.");
@@ -426,14 +429,10 @@ namespace YourApp.Controllers
             var dirList = dirs.OrderBy(d => d.Name).ToList();
             var fileList = files.OrderBy(f => f.Name).ToList();
 
-            // audit meta hanya untuk filterDate folder audit GUID
             var auditIds = dirList.Select(d => d.Name).Where(n => Guid.TryParse(n, out _)).ToList();
-            var auditMetaMap = auditIds.Any()
-                ? await GetAuditMetaMapAsync(auditIds, ct)
-                : new Dictionary<string, AuditMeta>(StringComparer.OrdinalIgnoreCase);
+            var auditMetaMap = auditIds.Any() ? await GetAuditMetaMapAsync(auditIds) : new Dictionary<string, AuditMeta>();
 
-            var safeRelForFile = string.IsNullOrEmpty(rel) ? "root" : rel.Replace('/', '_');
-            var tmp = Path.Combine(Path.GetTempPath(), $"uploads_{safeRelForFile}_{month}_{Guid.NewGuid():N}.zip");
+            var tmp = Path.Combine(ZipTempPath, $"uploads_{(string.IsNullOrEmpty(rel) ? "root" : rel.Replace('/', '_'))}_{month}_{Guid.NewGuid():N}.zip");
 
             int added = 0;
 
@@ -441,9 +440,7 @@ namespace YourApp.Controllers
             {
                 using (var zip = ZipFile.Open(tmp, ZipArchiveMode.Create))
                 {
-                    // =============================
-                    // 1) folders recursive
-                    // =============================
+                    // folders recursive
                     foreach (var d in dirList)
                     {
                         ct.ThrowIfCancellationRequested();
@@ -458,43 +455,27 @@ namespace YourApp.Controllers
                         var baseLen = baseDir.Length + 1;
 
                         IEnumerable<string> allFiles;
-                        try
-                        {
-                            allFiles = Directory.EnumerateFiles(baseDir, "*", SearchOption.AllDirectories);
-                        }
-                        catch
-                        {
-                            continue;
-                        }
+                        try { allFiles = Directory.EnumerateFiles(baseDir, "*", SearchOption.AllDirectories); }
+                        catch { continue; }
 
                         foreach (var file in allFiles)
                         {
                             ct.ThrowIfCancellationRequested();
-
                             if (!System.IO.File.Exists(file)) continue;
 
-                            // top folder zip = trx_audit.id (GUID) => d.Name
-                            var relPath = file.Length > baseLen
-                                ? file.Substring(baseLen).Replace('\\', '/')
-                                : Path.GetFileName(file);
-
-                            var entryName = $"{d.Name}/{relPath}";
+                            var relPath = file.Length > baseLen ? file.Substring(baseLen).Replace('\\', '/') : Path.GetFileName(file);
+                            var entryName = $"{d.Name}/{relPath}"; // top folder = auditId
 
                             try
                             {
                                 zip.CreateEntryFromFile(file, entryName, CompressionLevel.Fastest);
                                 added++;
                             }
-                            catch
-                            {
-                                // skip file error/locked/permission
-                            }
+                            catch { /* skip */ }
                         }
                     }
 
-                    // =============================
-                    // 2) files di current folder
-                    // =============================
+                    // files di current folder
                     foreach (var f in fileList)
                     {
                         ct.ThrowIfCancellationRequested();
@@ -510,10 +491,7 @@ namespace YourApp.Controllers
                             zip.CreateEntryFromFile(f.FullName, f.Name, CompressionLevel.Fastest);
                             added++;
                         }
-                        catch
-                        {
-                            // skip
-                        }
+                        catch { /* skip */ }
                     }
                 }
 
@@ -523,21 +501,18 @@ namespace YourApp.Controllers
                     return NotFound("No items in selected month.");
                 }
 
-                // auto delete temp after response completed
                 HttpContext.Response.OnCompleted(() =>
                 {
                     try { System.IO.File.Delete(tmp); } catch { }
                     return Task.CompletedTask;
                 });
 
-                var downloadName = $"uploads_{safeRelForFile}_{month}.zip";
-
-                // PhysicalFile => ada Content-Length + range => anti 0KB & anti incomplete chunk
+                var downloadName = $"uploads_{(string.IsNullOrEmpty(rel) ? "root" : rel.Replace('/', '_'))}_{month}.zip";
                 return PhysicalFile(tmp, "application/zip", downloadName, enableRangeProcessing: true);
             }
             catch
             {
-                try { if (System.IO.File.Exists(tmp)) System.IO.File.Delete(tmp); } catch { }
+                try { System.IO.File.Delete(tmp); } catch { }
                 throw;
             }
         }
