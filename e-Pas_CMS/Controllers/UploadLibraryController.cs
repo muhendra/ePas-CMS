@@ -6,6 +6,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Net.Http.Headers;
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
@@ -33,10 +34,15 @@ namespace YourApp.Controllers
 
             if (rel.StartsWith("/")) rel = rel.TrimStart('/');
 
+            // block traversal quickly
+            if (rel.Contains("..", StringComparison.Ordinal))
+                throw new InvalidOperationException("Invalid path.");
+
             var baseFull = Path.GetFullPath(BasePath);
             var combined = Path.GetFullPath(Path.Combine(baseFull, rel));
 
-            if (!combined.StartsWith(baseFull + Path.DirectorySeparatorChar) && combined != baseFull)
+            // allow exactly baseFull or any child under it
+            if (!combined.StartsWith(baseFull + Path.DirectorySeparatorChar, StringComparison.Ordinal) && combined != baseFull)
                 throw new InvalidOperationException("Invalid path.");
 
             var cleanedRel = Path.GetRelativePath(baseFull, combined).Replace('\\', '/');
@@ -60,11 +66,12 @@ namespace YourApp.Controllers
             year = 0; month = 0;
             if (string.IsNullOrWhiteSpace(ym)) return false;
 
-            var parts = ym.Trim().Split('-', StringSplitOptions.RemoveEmptyEntries);
-            if (parts.Length != 2) return false;
-            if (!int.TryParse(parts[0], out year)) return false;
-            if (!int.TryParse(parts[1], out month)) return false;
-            if (month < 1 || month > 12) return false;
+            // strict yyyy-MM
+            if (!DateTime.TryParseExact(ym.Trim(), "yyyy-MM", CultureInfo.InvariantCulture, DateTimeStyles.None, out var dt))
+                return false;
+
+            year = dt.Year;
+            month = dt.Month;
             return true;
         }
 
@@ -76,11 +83,13 @@ namespace YourApp.Controllers
             public DateTime AuditDate { get; set; }
         }
 
-        private async Task<Dictionary<string, AuditMeta>> GetAuditMetaMapAsync(List<string> auditIds)
+        private async Task<Dictionary<string, AuditMeta>> GetAuditMetaMapAsync(List<string> auditIds, CancellationToken ct = default)
         {
+            // NOTE: AuditDate dipakai buat filter bulan.
+            // Prefer audit_execution_time, fallback created_date
             var rows = await (
-                from a in _context.trx_audits
-                join s in _context.spbus on a.spbu_id equals s.id
+                from a in _context.trx_audits.AsNoTracking()
+                join s in _context.spbus.AsNoTracking() on a.spbu_id equals s.id
                 where auditIds.Contains(a.id)
                 select new
                 {
@@ -88,17 +97,19 @@ namespace YourApp.Controllers
                     SpbuNo = s.spbu_no,
                     AuditDate = (a.audit_execution_time ?? a.created_date)
                 }
-            ).ToListAsync();
+            ).ToListAsync(ct);
 
+            // kalau ada duplikat id (harusnya tidak), ambil yang pertama
             return rows
-                .GroupBy(x => x.AuditId)
+                .GroupBy(x => x.AuditId, StringComparer.OrdinalIgnoreCase)
                 .ToDictionary(
                     g => g.Key,
                     g => new AuditMeta
                     {
-                        SpbuNo = g.First().SpbuNo,
+                        SpbuNo = g.First().SpbuNo ?? "",
                         AuditDate = g.First().AuditDate
-                    }
+                    },
+                    StringComparer.OrdinalIgnoreCase
                 );
         }
 
@@ -136,7 +147,6 @@ namespace YourApp.Controllers
             public int[] AllowedPageSizes { get; set; } = new[] { 20, 50, 100, 200 };
         }
 
-        // ✅ ViewModel untuk tab Downloads
         public class DownloadsVm
         {
             public string Type { get; set; } = ""; // month / spbu
@@ -215,8 +225,8 @@ namespace YourApp.Controllers
 
             var auditIds = dirList.Select(d => d.Name).Where(n => Guid.TryParse(n, out _)).ToList();
             var auditMetaMap = auditIds.Any()
-                ? await GetAuditMetaMapAsync(auditIds)
-                : new Dictionary<string, AuditMeta>();
+                ? await GetAuditMetaMapAsync(auditIds, HttpContext.RequestAborted)
+                : new Dictionary<string, AuditMeta>(StringComparer.OrdinalIgnoreCase);
 
             var folderItems = dirList.Select(d =>
             {
@@ -291,16 +301,16 @@ namespace YourApp.Controllers
                 return NotFound();
 
             var fileName = Path.GetFileName(physical);
-            var stream = new FileStream(physical, FileMode.Open, FileAccess.Read, FileShare.Read);
 
-            return File(stream, "application/octet-stream", fileName);
+            // lebih stabil + support resume/range
+            return PhysicalFile(
+                physical,
+                "application/octet-stream",
+                fileName,
+                enableRangeProcessing: true
+            );
         }
 
-        // ====================================
-        // ✅ TAB DOWNLOADS (user action page)
-        // ====================================
-        // /UploadLibrary/Downloads?type=month&folder=...&q=...&month=yyyy-MM
-        // /UploadLibrary/Downloads?type=spbu&path=...&month=yyyy-MM(optional)
         [HttpGet("Downloads")]
         public IActionResult Downloads(string type, string? folder = "", string? q = "", string? month = "", string? path = "")
         {
@@ -342,7 +352,7 @@ namespace YourApp.Controllers
         }
 
         // =========================
-        // ✅ ZIP STREAM HELPERS
+        // ZIP STREAM HELPERS
         // =========================
         private static async Task AddFileToZipAsync(
             ZipArchive zip,
@@ -352,21 +362,31 @@ namespace YourApp.Controllers
         {
             if (!System.IO.File.Exists(fullPath)) return;
 
+            entryName = (entryName ?? "").Replace('\\', '/').TrimStart('/');
+            if (string.IsNullOrWhiteSpace(entryName))
+                entryName = Path.GetFileName(fullPath);
+
             try
             {
-                var entry = zip.CreateEntry(entryName.Replace('\\', '/'), CompressionLevel.Fastest);
+                var entry = zip.CreateEntry(entryName, CompressionLevel.Fastest);
+                try
+                {
+                    var fi = new FileInfo(fullPath);
+                    entry.LastWriteTime = fi.LastWriteTime;
+                }
+                catch { }
 
                 await using var entryStream = entry.Open();
                 await using var fs = new FileStream(
                     fullPath,
                     FileMode.Open,
                     FileAccess.Read,
-                    FileShare.ReadWrite,   // ✅ lebih aman kalau file sedang dipakai
-                    1024 * 128,
+                    FileShare.ReadWrite,
+                    bufferSize: 1024 * 256,
                     useAsync: true
                 );
 
-                await fs.CopyToAsync(entryStream, 1024 * 128, ct);
+                await fs.CopyToAsync(entryStream, 1024 * 256, ct);
             }
             catch
             {
@@ -374,8 +394,7 @@ namespace YourApp.Controllers
             }
         }
 
-        // ✅ Download ZIP per bulan (STREAMING, FIX 500)
-        // NOTE: folder di dalam zip untuk audit folder = trx_audit.id (GUID folder), BUKAN spbu_no
+        // ✅ Download ZIP per bulan (STREAMING, tahan proxy)
         [HttpGet("DownloadMonth")]
         public async Task<IActionResult> DownloadMonth(string? folder = "", string? q = "", string? month = "")
         {
@@ -407,109 +426,123 @@ namespace YourApp.Controllers
             var dirList = dirs.OrderBy(d => d.Name).ToList();
             var fileList = files.OrderBy(f => f.Name).ToList();
 
-            // audit meta hanya untuk filterDate
+            // audit meta hanya untuk filterDate folder audit GUID
             var auditIds = dirList.Select(d => d.Name).Where(n => Guid.TryParse(n, out _)).ToList();
             var auditMetaMap = auditIds.Any()
-                ? await GetAuditMetaMapAsync(auditIds)
-                : new Dictionary<string, AuditMeta>();
+                ? await GetAuditMetaMapAsync(auditIds, ct)
+                : new Dictionary<string, AuditMeta>(StringComparer.OrdinalIgnoreCase);
 
-            // ✅ LAZY START: response/zip baru dimulai saat ada file pertama
-            ZipArchive? zip = null;
-            bool started = false;
+            var safeRelForFile = string.IsNullOrEmpty(rel) ? "root" : rel.Replace('/', '_');
+            var tmp = Path.Combine(Path.GetTempPath(), $"uploads_{safeRelForFile}_{month}_{Guid.NewGuid():N}.zip");
 
-            void StartZipIfNeeded()
-            {
-                if (started) return;
-
-                // disable buffering (safe)
-                try { HttpContext.Features.Get<IHttpResponseBodyFeature>()?.DisableBuffering(); } catch { }
-
-                var downloadName = $"uploads_{(string.IsNullOrEmpty(rel) ? "root" : rel.Replace('/', '_'))}_{month}.zip";
-
-                Response.StatusCode = 200;
-                Response.ContentType = "application/zip";
-                Response.Headers[HeaderNames.ContentDisposition] = $"attachment; filename=\"{downloadName}\"";
-                Response.Headers[HeaderNames.CacheControl] = "no-store";
-
-                zip = new ZipArchive(Response.Body, ZipArchiveMode.Create, leaveOpen: true);
-                started = true;
-            }
+            int added = 0;
 
             try
             {
-                // folders recursive
-                foreach (var d in dirList)
+                using (var zip = ZipFile.Open(tmp, ZipArchiveMode.Create))
                 {
-                    ct.ThrowIfCancellationRequested();
-
-                    var mapped = auditMetaMap.TryGetValue(d.Name, out var meta);
-                    var filterDate = mapped ? meta!.AuditDate : d.LastWriteTime;
-
-                    if (filterDate.Year != y || filterDate.Month != m)
-                        continue;
-
-                    var baseDir = d.FullName.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-                    var baseLen = baseDir.Length + 1;
-
-                    IEnumerable<string> allFiles;
-                    try
-                    {
-                        allFiles = Directory.EnumerateFiles(baseDir, "*", SearchOption.AllDirectories);
-                    }
-                    catch
-                    {
-                        continue;
-                    }
-
-                    foreach (var file in allFiles)
+                    // =============================
+                    // 1) folders recursive
+                    // =============================
+                    foreach (var d in dirList)
                     {
                         ct.ThrowIfCancellationRequested();
-                        if (!System.IO.File.Exists(file)) continue;
 
-                        // ✅ folder top di zip = trx_audit.id (GUID folder) => d.Name
-                        var relPath = file.Length > baseLen ? file.Substring(baseLen).Replace('\\', '/') : Path.GetFileName(file);
-                        var entryName = $"{d.Name}/{relPath}";
+                        var mapped = auditMetaMap.TryGetValue(d.Name, out var meta);
+                        var filterDate = mapped ? meta!.AuditDate : d.LastWriteTime;
 
-                        StartZipIfNeeded();
-                        await AddFileToZipAsync(zip!, file, entryName, ct);
+                        if (filterDate.Year != y || filterDate.Month != m)
+                            continue;
 
-                        try { await Response.Body.FlushAsync(ct); } catch { }
+                        var baseDir = d.FullName.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+                        var baseLen = baseDir.Length + 1;
+
+                        IEnumerable<string> allFiles;
+                        try
+                        {
+                            allFiles = Directory.EnumerateFiles(baseDir, "*", SearchOption.AllDirectories);
+                        }
+                        catch
+                        {
+                            continue;
+                        }
+
+                        foreach (var file in allFiles)
+                        {
+                            ct.ThrowIfCancellationRequested();
+
+                            if (!System.IO.File.Exists(file)) continue;
+
+                            // top folder zip = trx_audit.id (GUID) => d.Name
+                            var relPath = file.Length > baseLen
+                                ? file.Substring(baseLen).Replace('\\', '/')
+                                : Path.GetFileName(file);
+
+                            var entryName = $"{d.Name}/{relPath}";
+
+                            try
+                            {
+                                zip.CreateEntryFromFile(file, entryName, CompressionLevel.Fastest);
+                                added++;
+                            }
+                            catch
+                            {
+                                // skip file error/locked/permission
+                            }
+                        }
+                    }
+
+                    // =============================
+                    // 2) files di current folder
+                    // =============================
+                    foreach (var f in fileList)
+                    {
+                        ct.ThrowIfCancellationRequested();
+
+                        var dt = f.LastWriteTime;
+                        if (dt.Year != y || dt.Month != m)
+                            continue;
+
+                        if (!System.IO.File.Exists(f.FullName)) continue;
+
+                        try
+                        {
+                            zip.CreateEntryFromFile(f.FullName, f.Name, CompressionLevel.Fastest);
+                            added++;
+                        }
+                        catch
+                        {
+                            // skip
+                        }
                     }
                 }
 
-                // files di current folder
-                foreach (var f in fileList)
+                if (added == 0)
                 {
-                    ct.ThrowIfCancellationRequested();
-
-                    var dt = f.LastWriteTime;
-                    if (dt.Year != y || dt.Month != m)
-                        continue;
-
-                    if (!System.IO.File.Exists(f.FullName)) continue;
-
-                    StartZipIfNeeded();
-                    await AddFileToZipAsync(zip!, f.FullName, f.Name, ct);
-                    try { await Response.Body.FlushAsync(ct); } catch { }
+                    try { System.IO.File.Delete(tmp); } catch { }
+                    return NotFound("No items in selected month.");
                 }
+
+                // auto delete temp after response completed
+                HttpContext.Response.OnCompleted(() =>
+                {
+                    try { System.IO.File.Delete(tmp); } catch { }
+                    return Task.CompletedTask;
+                });
+
+                var downloadName = $"uploads_{safeRelForFile}_{month}.zip";
+
+                // PhysicalFile => ada Content-Length + range => anti 0KB & anti incomplete chunk
+                return PhysicalFile(tmp, "application/zip", downloadName, enableRangeProcessing: true);
             }
-            finally
+            catch
             {
-                // ✅ kalau started, dispose zip agar central directory ditulis
-                try { zip?.Dispose(); } catch { }
+                try { if (System.IO.File.Exists(tmp)) System.IO.File.Delete(tmp); } catch { }
+                throw;
             }
-
-            // ✅ kalau tidak ada file sama sekali, response belum mulai => aman return NotFound
-            if (!started)
-                return NotFound("No items in selected month.");
-
-            return new EmptyResult();
         }
 
-        // ✅ Download ZIP per SPBU/folder
-        // NOTE:
-        // - nama file zip boleh pakai spbu_no
-        // - tapi folder di dalam zip harus tetap trx_audit.id (GUID folder)
+        // ✅ Download ZIP per SPBU/folder (temp zip file -> paling stabil)
         [HttpGet("DownloadSpbu")]
         public async Task<IActionResult> DownloadSpbu(string path, string? month = "")
         {
@@ -529,13 +562,13 @@ namespace YourApp.Controllers
             if (string.IsNullOrWhiteSpace(folderName))
                 folderName = "folder";
 
-            // ✅ hanya untuk nama file zip
+            // nama zip saja (boleh spbu_no)
             string zipFileDisplay = folderName;
             if (Guid.TryParse(folderName, out _))
             {
                 try
                 {
-                    var metaMap = await GetAuditMetaMapAsync(new List<string> { folderName });
+                    var metaMap = await GetAuditMetaMapAsync(new List<string> { folderName }, HttpContext.RequestAborted);
                     if (metaMap.TryGetValue(folderName, out var meta) && !string.IsNullOrWhiteSpace(meta.SpbuNo))
                         zipFileDisplay = meta.SpbuNo;
                 }
@@ -546,7 +579,7 @@ namespace YourApp.Controllers
 
             using (var zip = ZipFile.Open(tmp, ZipArchiveMode.Create))
             {
-                // ✅ top folder di zip = trx_audit.id => folderName
+                // top folder di zip = trx_audit.id => folderName
                 AddDirectoryToZipFiltered(zip, physical, folderName, folderName, useMonthFilter, y, m);
             }
 
@@ -559,7 +592,8 @@ namespace YourApp.Controllers
             var monthSuffix = useMonthFilter ? $"_{month}" : "";
             var downloadName = $"spbu_{zipFileDisplay}{monthSuffix}.zip";
 
-            return PhysicalFile(tmp, "application/zip", downloadName);
+            // enableRangeProcessing biar stable
+            return PhysicalFile(tmp, "application/zip", downloadName, enableRangeProcessing: true);
         }
 
         private static void AddDirectoryToZipFiltered(
@@ -633,9 +667,12 @@ namespace YourApp.Controllers
             var fileList = files.ToList();
 
             var auditIds = dirList.Select(d => d.Name).Where(n => Guid.TryParse(n, out _)).ToList();
-            var auditMetaMap = auditIds.Any() ? await GetAuditMetaMapAsync(auditIds) : new Dictionary<string, AuditMeta>();
+            var auditMetaMap = auditIds.Any()
+                ? await GetAuditMetaMapAsync(auditIds, HttpContext.RequestAborted)
+                : new Dictionary<string, AuditMeta>(StringComparer.OrdinalIgnoreCase);
 
             int deletedCount = 0;
+            string? error = null;
 
             foreach (var d in dirList)
             {
@@ -651,33 +688,43 @@ namespace YourApp.Controllers
                     }
                     catch (Exception ex)
                     {
-                        TempData["Error"] = $"Gagal hapus folder {d.Name}: {ex.Message}";
+                        error = $"Gagal hapus folder {d.Name}: {ex.Message}";
                         break;
                     }
                 }
             }
 
-            foreach (var f in fileList)
+            if (error == null)
             {
-                var filterDate = f.LastWriteTime;
-                if (filterDate.Year == y && filterDate.Month == m)
+                foreach (var f in fileList)
                 {
-                    try
+                    var filterDate = f.LastWriteTime;
+                    if (filterDate.Year == y && filterDate.Month == m)
                     {
-                        System.IO.File.Delete(f.FullName);
-                        deletedCount++;
-                    }
-                    catch (Exception ex)
-                    {
-                        TempData["Error"] = $"Gagal hapus file {f.Name}: {ex.Message}";
-                        break;
+                        try
+                        {
+                            System.IO.File.Delete(f.FullName);
+                            deletedCount++;
+                        }
+                        catch (Exception ex)
+                        {
+                            error = $"Gagal hapus file {f.Name}: {ex.Message}";
+                            break;
+                        }
                     }
                 }
             }
 
-            TempData["Error"] = deletedCount > 0
-                ? $"Berhasil delete {deletedCount} item untuk bulan {month}."
-                : $"Tidak ada item untuk bulan {month}.";
+            if (error != null)
+            {
+                TempData["Error"] = error;
+            }
+            else
+            {
+                TempData["Success"] = deletedCount > 0
+                    ? $"Berhasil delete {deletedCount} item untuk bulan {month}."
+                    : $"Tidak ada item untuk bulan {month}.";
+            }
 
             return RedirectToAction(nameof(Index), new { folder, q, month, page = 1, pageSize });
         }
