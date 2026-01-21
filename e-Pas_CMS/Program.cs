@@ -1,18 +1,27 @@
 using e_Pas_CMS.Data;
 using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.Server.Kestrel.Core;
 using Microsoft.EntityFrameworkCore;
 using QuestPDF.Infrastructure;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Set Kestrel to listen on 5050 (atau port bebas)
+// Kestrel config (port + timeout) + allow sync IO (untuk ZipArchive.Dispose central directory)
 builder.WebHost.ConfigureKestrel(serverOptions =>
 {
-    serverOptions.ListenAnyIP(5050); // Ganti dari 5000 ke 5050
-    serverOptions.Limits.KeepAliveTimeout = TimeSpan.FromHours(6);
-    serverOptions.Limits.RequestHeadersTimeout = TimeSpan.FromMinutes(5);
+    serverOptions.ListenAnyIP(5050);
+
+    // timeout "max" (realistis) untuk request panjang / download zip besar
+    serverOptions.Limits.KeepAliveTimeout = TimeSpan.FromHours(12);
+    serverOptions.Limits.RequestHeadersTimeout = TimeSpan.FromMinutes(10);
+
+    serverOptions.AllowSynchronousIO = true;
 });
 
+builder.Services.Configure<IISServerOptions>(o =>
+{
+    o.AllowSynchronousIO = true;
+});
 
 QuestPDF.Settings.License = LicenseType.Community;
 
