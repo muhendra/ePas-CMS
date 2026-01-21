@@ -217,9 +217,9 @@
 
 <div class="container mt-4">
     <div class="d-flex justify-content-between align-items-center mb-3">
-        <div>
-            <h4 class="mb-1">Upload Library</h4>
-            <div class="text-muted">Base: /var/www/epas-asset/wwwroot/uploads</div>
+        <div class="text-muted">
+            Base: /var/www/epas-asset/wwwroot/uploads
+            <span class="ms-2" id="diskInfo" style="font-weight:600;">(loading disk...)</span>
         </div>
     </div>
 
@@ -349,10 +349,21 @@
                                                title="Audit ID: @item.Name">
                                                 <span>📁</span>
                                                 <span class="uploadlib-name">@item.DisplayName</span>
+                                                <span class="uploadlib-name">@item.DisplayName</span>
+
                                                 @if (item.IsMappedFromAudit)
                                                 {
                                                     <span class="badge bg-info uploadlib-badge">SPBU</span>
+
+                                                    @* ✅ NEW: report_no *@
+                                                    if (!string.IsNullOrWhiteSpace(item.ReportNo))
+                                                    {
+                                                        <span class="badge bg-secondary uploadlib-badge" title="trx_audit.report_no">
+                                                            @item.ReportNo
+                                                        </span>
+                                                    }
                                                 }
+
                                             </a>
                                         </td>
                                         <td>Folder</td>
@@ -700,5 +711,38 @@
         document.addEventListener('keydown', function (e) {
             if (e.key === 'Escape') hideDlModal();
         });
+
+        // ==========================
+        // ✅ Disk Space Realtime (df -h /dev/sda2 equivalent)
+        // Requires endpoint: GET /UploadLibrary/Disk returning JSON:
+        // { total, used, avail, usePercent, sourceHint }
+        // ==========================
+        const diskEl = document.getElementById('diskInfo');
+        let diskTimer = null;
+        let diskInFlight = false;
+
+        async function refreshDisk() {
+            if (!diskEl) return;
+            if (diskInFlight) return;
+
+            diskInFlight = true;
+            try {
+                const r = await fetch('/UploadLibrary/Disk', { cache: 'no-store' });
+                if (!r.ok) throw new Error('disk fetch failed');
+                const d = await r.json();
+
+                // (Used 12.3 GB / 50 GB • Avail 37.7 GB • 25% • df -h /dev/sda2)
+                diskEl.textContent =
+                    `(Used ${d.used} / ${d.total} • Avail ${d.avail} • ${d.usePercent}% • ${d.sourceHint || 'df -h /dev/sda2'})`;
+            } catch (err) {
+                diskEl.textContent = '(disk info unavailable)';
+            } finally {
+                diskInFlight = false;
+            }
+        }
+
+        // Start polling (5 detik)
+        refreshDisk();
+        diskTimer = setInterval(refreshDisk, 5000);
     })();
 </script>

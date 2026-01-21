@@ -80,13 +80,12 @@ namespace YourApp.Controllers
         private sealed class AuditMeta
         {
             public string SpbuNo { get; set; } = "";
+            public string ReportNo { get; set; } = "";
             public DateTime AuditDate { get; set; }
         }
 
         private async Task<Dictionary<string, AuditMeta>> GetAuditMetaMapAsync(List<string> auditIds, CancellationToken ct = default)
         {
-            // NOTE: AuditDate dipakai buat filter bulan.
-            // Prefer audit_execution_time, fallback created_date
             var rows = await (
                 from a in _context.trx_audits.AsNoTracking()
                 join s in _context.spbus.AsNoTracking() on a.spbu_id equals s.id
@@ -95,11 +94,11 @@ namespace YourApp.Controllers
                 {
                     AuditId = a.id,
                     SpbuNo = s.spbu_no,
+                    ReportNo = a.report_no, // ✅ NEW
                     AuditDate = (a.audit_execution_time ?? a.created_date)
                 }
             ).ToListAsync(ct);
 
-            // kalau ada duplikat id (harusnya tidak), ambil yang pertama
             return rows
                 .GroupBy(x => x.AuditId, StringComparer.OrdinalIgnoreCase)
                 .ToDictionary(
@@ -107,18 +106,18 @@ namespace YourApp.Controllers
                     g => new AuditMeta
                     {
                         SpbuNo = g.First().SpbuNo ?? "",
+                        ReportNo = g.First().ReportNo ?? "", // ✅ NEW
                         AuditDate = g.First().AuditDate
                     },
                     StringComparer.OrdinalIgnoreCase
                 );
         }
-
         public class LibraryItemVm
         {
             public string Name { get; set; } = "";
             public string DisplayName { get; set; } = "";
             public bool IsMappedFromAudit { get; set; }
-
+            public string ReportNo { get; set; } = "";
             public string RelPath { get; set; } = "";
             public bool IsDir { get; set; }
 
@@ -240,6 +239,7 @@ namespace YourApp.Controllers
                     Name = d.Name,
                     DisplayName = mapped ? meta!.SpbuNo : d.Name,
                     IsMappedFromAudit = mapped,
+                    ReportNo = mapped ? (meta!.ReportNo ?? "") : "",
                     IsDir = true,
                     RelPath = string.IsNullOrEmpty(rel) ? d.Name : $"{rel}/{d.Name}",
                     LastWriteTime = fsTime,
@@ -290,6 +290,53 @@ namespace YourApp.Controllers
 
             return View(vm);
         }
+
+        public class DiskVm
+        {
+            public string Mount { get; set; } = "/";
+            public string Total { get; set; } = "-";
+            public string Used { get; set; } = "-";
+            public string Avail { get; set; } = "-";
+            public int UsePercent { get; set; }
+            public string SourceHint { get; set; } = "df -h /dev/sda2";
+        }
+
+        private static DiskVm GetDiskForRoot()
+        {
+            try
+            {
+                // root mount biasanya yang sama dengan /dev/sda2 (sesuai server kamu)
+                var di = new DriveInfo("/");
+
+                long total = di.TotalSize;
+                long free = di.AvailableFreeSpace;
+                long used = total - free;
+
+                int pct = total > 0 ? (int)Math.Round((used * 100.0) / total) : 0;
+
+                return new DiskVm
+                {
+                    Mount = "/",
+                    Total = HumanSize(total),
+                    Used = HumanSize(used),
+                    Avail = HumanSize(free),
+                    UsePercent = pct,
+                    SourceHint = "df -h /dev/sda2"
+                };
+            }
+            catch
+            {
+                return new DiskVm();
+            }
+        }
+
+        [HttpGet("Disk")]
+        public IActionResult Disk()
+        {
+            var d = GetDiskForRoot();
+            return Json(d);
+        }
+
 
         [HttpGet("Download")]
         public IActionResult Download(string path)
