@@ -284,7 +284,6 @@
 
     <!-- Actions: Download/Delete for Selected Month -->
     <div class="month-toolbar">
-        <!-- ✅ CHANGED: bukan link langsung ke DownloadMonth, tapi popup -> open Downloads tab -->
         <button type="button"
                 class="btn btn-outline-primary @(string.IsNullOrEmpty(Model.Month) ? "disabled" : "")"
                 onclick="openDownloadMonthPopup()">
@@ -312,16 +311,18 @@
             <div class="table-responsive">
                 <table class="table table-hover align-middle uploadlib-table">
                     <colgroup>
-                        <col style="width:40%">
+                        <col style="width:32%">
+                        <col style="width:16%"> @* ✅ Report No *@
+                        <col style="width:12%">
                         <col style="width:15%">
                         <col style="width:15%">
-                        <col style="width:20%">
                         <col style="width:10%">
                     </colgroup>
 
                     <thead>
                         <tr>
                             <th>Name</th>
+                            <th>Report No</th>
                             <th>Type</th>
                             <th>Size</th>
                             <th>Modified</th>
@@ -333,7 +334,7 @@
                         @if (Model.Items == null || !Model.Items.Any())
                         {
                             <tr>
-                                <td colspan="5" class="text-muted">Tidak ada data.</td>
+                                <td colspan="6" class="text-muted">Tidak ada data.</td>
                             </tr>
                         }
                         else
@@ -349,29 +350,30 @@
                                                title="Audit ID: @item.Name">
                                                 <span>📁</span>
                                                 <span class="uploadlib-name">@item.DisplayName</span>
-                                                <span class="uploadlib-name">@item.DisplayName</span>
 
                                                 @if (item.IsMappedFromAudit)
                                                 {
                                                     <span class="badge bg-info uploadlib-badge">SPBU</span>
-
-                                                    @* ✅ NEW: report_no *@
-                                                    if (!string.IsNullOrWhiteSpace(item.ReportNo))
-                                                    {
-                                                        <span class="badge bg-secondary uploadlib-badge" title="trx_audit.report_no">
-                                                            @item.ReportNo
-                                                        </span>
-                                                    }
                                                 }
-
                                             </a>
                                         </td>
+
+                                        <td>
+                                            @if (item.IsMappedFromAudit && !string.IsNullOrWhiteSpace(item.ReportNo))
+                                            {
+                                                <span class="badge bg-secondary uploadlib-badge" title="trx_audit.report_no">@item.ReportNo</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="text-muted">-</span>
+                                            }
+                                        </td>
+
                                         <td>Folder</td>
                                         <td class="text-muted">@(item.ChildCount.HasValue ? $"{item.ChildCount.Value} items" : "-")</td>
                                         <td>@item.LastWriteTime.ToString("yyyy-MM-dd HH:mm")</td>
                                         <td class="text-end">
                                             <div class="action-cell">
-                                                <!-- ✅ CHANGED: tombol popup -> open Downloads tab -->
                                                 <button type="button"
                                                         class="btn btn-sm btn-outline-primary btn-action"
                                                         onclick="openDownloadFolderPopup('@item.RelPath','@item.DisplayName')"
@@ -422,6 +424,9 @@
                                                 }
                                             </span>
                                         </td>
+
+                                        <td><span class="text-muted">-</span></td>
+
                                         <td>File</td>
                                         <td>@(item.SizeBytes.HasValue ? HumanSize(item.SizeBytes.Value) : "-")</td>
                                         <td>@item.LastWriteTime.ToString("yyyy-MM-dd HH:mm")</td>
@@ -713,12 +718,11 @@
         });
 
         // ==========================
-        // ✅ Disk Space Realtime (df -h /dev/sda2 equivalent)
-        // Requires endpoint: GET /UploadLibrary/Disk returning JSON:
-        // { total, used, avail, usePercent, sourceHint }
+        // ✅ Disk Space Realtime (tanpa tulisan df -h)
+        // Endpoint: GET /UploadLibrary/Disk -> JSON:
+        // { total, used, avail, usePercent }
         // ==========================
         const diskEl = document.getElementById('diskInfo');
-        let diskTimer = null;
         let diskInFlight = false;
 
         async function refreshDisk() {
@@ -731,9 +735,7 @@
                 if (!r.ok) throw new Error('disk fetch failed');
                 const d = await r.json();
 
-                // (Used 12.3 GB / 50 GB • Avail 37.7 GB • 25% • df -h /dev/sda2)
-                diskEl.textContent =
-                    `(Used ${d.used} / ${d.total} • Avail ${d.avail} • ${d.usePercent}% • ${d.sourceHint || 'df -h /dev/sda2'})`;
+                diskEl.textContent = `(Used ${d.used} / ${d.total} • Avail ${d.avail} • ${d.usePercent}%)`;
             } catch (err) {
                 diskEl.textContent = '(disk info unavailable)';
             } finally {
@@ -741,8 +743,7 @@
             }
         }
 
-        // Start polling (5 detik)
         refreshDisk();
-        diskTimer = setInterval(refreshDisk, 5000);
+        setInterval(refreshDisk, 5000);
     })();
 </script>

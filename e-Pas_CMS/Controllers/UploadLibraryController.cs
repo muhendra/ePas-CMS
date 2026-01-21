@@ -80,8 +80,8 @@ namespace YourApp.Controllers
         private sealed class AuditMeta
         {
             public string SpbuNo { get; set; } = "";
-            public string ReportNo { get; set; } = "";
             public DateTime AuditDate { get; set; }
+            public string? ReportNo { get; set; } // ✅ NEW
         }
 
         private async Task<Dictionary<string, AuditMeta>> GetAuditMetaMapAsync(List<string> auditIds, CancellationToken ct = default)
@@ -94,8 +94,8 @@ namespace YourApp.Controllers
                 {
                     AuditId = a.id,
                     SpbuNo = s.spbu_no,
-                    ReportNo = a.report_no, // ✅ NEW
-                    AuditDate = (a.audit_execution_time ?? a.created_date)
+                    AuditDate = (a.audit_execution_time ?? a.created_date),
+                    ReportNo = a.report_no // ✅ NEW
                 }
             ).ToListAsync(ct);
 
@@ -106,18 +106,19 @@ namespace YourApp.Controllers
                     g => new AuditMeta
                     {
                         SpbuNo = g.First().SpbuNo ?? "",
-                        ReportNo = g.First().ReportNo ?? "", // ✅ NEW
-                        AuditDate = g.First().AuditDate
+                        AuditDate = g.First().AuditDate,
+                        ReportNo = g.First().ReportNo
                     },
                     StringComparer.OrdinalIgnoreCase
                 );
         }
+
         public class LibraryItemVm
         {
             public string Name { get; set; } = "";
             public string DisplayName { get; set; } = "";
             public bool IsMappedFromAudit { get; set; }
-            public string ReportNo { get; set; } = "";
+            public string? ReportNo { get; set; }
             public string RelPath { get; set; } = "";
             public bool IsDir { get; set; }
 
