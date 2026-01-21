@@ -401,9 +401,6 @@ namespace YourApp.Controllers
             if (!Directory.Exists(BasePath))
                 return Problem($"BasePath not found: {BasePath}", statusCode: 500);
 
-            if (!Directory.Exists(ZipTempPath))
-                Directory.CreateDirectory(ZipTempPath);
-
             month = (month ?? "").Trim();
             if (!TryParseMonthKey(month, out int y, out int m))
                 return BadRequest("Invalid month format. Use yyyy-MM.");
@@ -430,91 +427,88 @@ namespace YourApp.Controllers
             var fileList = files.OrderBy(f => f.Name).ToList();
 
             var auditIds = dirList.Select(d => d.Name).Where(n => Guid.TryParse(n, out _)).ToList();
-            var auditMetaMap = auditIds.Any() ? await GetAuditMetaMapAsync(auditIds) : new Dictionary<string, AuditMeta>();
+            var auditMetaMap = auditIds.Any()
+                ? await GetAuditMetaMapAsync(auditIds)
+                : new Dictionary<string, AuditMeta>();
 
-            var tmp = Path.Combine(ZipTempPath, $"uploads_{(string.IsNullOrEmpty(rel) ? "root" : rel.Replace('/', '_'))}_{month}_{Guid.NewGuid():N}.zip");
+            ZipArchive? zip = null;
+            bool started = false;
 
-            int added = 0;
+            void StartZipIfNeeded()
+            {
+                if (started) return;
+
+                try { HttpContext.Features.Get<IHttpResponseBodyFeature>()?.DisableBuffering(); } catch { }
+
+                var downloadName = $"uploads_{(string.IsNullOrEmpty(rel) ? "root" : rel.Replace('/', '_'))}_{month}.zip";
+
+                Response.StatusCode = 200;
+                Response.ContentType = "application/zip";
+                Response.Headers[HeaderNames.ContentDisposition] = $"attachment; filename=\"{downloadName}\"";
+                Response.Headers[HeaderNames.CacheControl] = "no-store";
+
+                zip = new ZipArchive(Response.Body, ZipArchiveMode.Create, leaveOpen: true);
+                started = true;
+            }
 
             try
             {
-                using (var zip = ZipFile.Open(tmp, ZipArchiveMode.Create))
+                foreach (var d in dirList)
                 {
-                    // folders recursive
-                    foreach (var d in dirList)
+                    ct.ThrowIfCancellationRequested();
+
+                    var mapped = auditMetaMap.TryGetValue(d.Name, out var meta);
+                    var filterDate = mapped ? meta!.AuditDate : d.LastWriteTime;
+
+                    if (filterDate.Year != y || filterDate.Month != m)
+                        continue;
+
+                    var baseDir = d.FullName.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+                    var baseLen = baseDir.Length + 1;
+
+                    IEnumerable<string> allFiles;
+                    try { allFiles = Directory.EnumerateFiles(baseDir, "*", SearchOption.AllDirectories); }
+                    catch { continue; }
+
+                    foreach (var file in allFiles)
                     {
                         ct.ThrowIfCancellationRequested();
+                        if (!System.IO.File.Exists(file)) continue;
 
-                        var mapped = auditMetaMap.TryGetValue(d.Name, out var meta);
-                        var filterDate = mapped ? meta!.AuditDate : d.LastWriteTime;
+                        var relPath = file.Length > baseLen ? file.Substring(baseLen).Replace('\\', '/') : Path.GetFileName(file);
+                        var entryName = $"{d.Name}/{relPath}";
 
-                        if (filterDate.Year != y || filterDate.Month != m)
-                            continue;
+                        StartZipIfNeeded();
+                        await AddFileToZipAsync(zip!, file, entryName, ct);
 
-                        var baseDir = d.FullName.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-                        var baseLen = baseDir.Length + 1;
-
-                        IEnumerable<string> allFiles;
-                        try { allFiles = Directory.EnumerateFiles(baseDir, "*", SearchOption.AllDirectories); }
-                        catch { continue; }
-
-                        foreach (var file in allFiles)
-                        {
-                            ct.ThrowIfCancellationRequested();
-                            if (!System.IO.File.Exists(file)) continue;
-
-                            var relPath = file.Length > baseLen ? file.Substring(baseLen).Replace('\\', '/') : Path.GetFileName(file);
-                            var entryName = $"{d.Name}/{relPath}"; // top folder = auditId
-
-                            try
-                            {
-                                zip.CreateEntryFromFile(file, entryName, CompressionLevel.Fastest);
-                                added++;
-                            }
-                            catch { /* skip */ }
-                        }
-                    }
-
-                    // files di current folder
-                    foreach (var f in fileList)
-                    {
-                        ct.ThrowIfCancellationRequested();
-
-                        var dt = f.LastWriteTime;
-                        if (dt.Year != y || dt.Month != m)
-                            continue;
-
-                        if (!System.IO.File.Exists(f.FullName)) continue;
-
-                        try
-                        {
-                            zip.CreateEntryFromFile(f.FullName, f.Name, CompressionLevel.Fastest);
-                            added++;
-                        }
-                        catch { /* skip */ }
+                        try { await Response.Body.FlushAsync(ct); } catch { }
                     }
                 }
 
-                if (added == 0)
+                foreach (var f in fileList)
                 {
-                    try { System.IO.File.Delete(tmp); } catch { }
-                    return NotFound("No items in selected month.");
+                    ct.ThrowIfCancellationRequested();
+
+                    var dt = f.LastWriteTime;
+                    if (dt.Year != y || dt.Month != m)
+                        continue;
+
+                    if (!System.IO.File.Exists(f.FullName)) continue;
+
+                    StartZipIfNeeded();
+                    await AddFileToZipAsync(zip!, f.FullName, f.Name, ct);
+                    try { await Response.Body.FlushAsync(ct); } catch { }
                 }
-
-                HttpContext.Response.OnCompleted(() =>
-                {
-                    try { System.IO.File.Delete(tmp); } catch { }
-                    return Task.CompletedTask;
-                });
-
-                var downloadName = $"uploads_{(string.IsNullOrEmpty(rel) ? "root" : rel.Replace('/', '_'))}_{month}.zip";
-                return PhysicalFile(tmp, "application/zip", downloadName, enableRangeProcessing: true);
             }
-            catch
+            finally
             {
-                try { System.IO.File.Delete(tmp); } catch { }
-                throw;
+                try { zip?.Dispose(); } catch { }
             }
+
+            if (!started)
+                return NotFound("No items in selected month.");
+
+            return new EmptyResult();
         }
 
         // ✅ Download ZIP per SPBU/folder (temp zip file -> paling stabil)
