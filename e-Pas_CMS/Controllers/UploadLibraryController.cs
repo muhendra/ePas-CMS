@@ -83,22 +83,15 @@ namespace YourApp.Controllers
                 foreach (var f in files)
                 {
                     cnt++;
-                    if (cnt > maxFiles) return null; // ✅ stop biar ga ngehang
+                    if (cnt > maxFiles) return null; // biar ga ngunci server
 
-                    try
-                    {
-                        // FileInfo.Length bisa throw kalau permission/locked
-                        total += new FileInfo(f).Length;
-                    }
-                    catch { /* skip */ }
+                    try { total += new FileInfo(f).Length; }
+                    catch { }
                 }
 
                 return total;
             }
-            catch
-            {
-                return null;
-            }
+            catch { return null; }
         }
 
 
@@ -374,7 +367,7 @@ namespace YourApp.Controllers
             }
 
             vm.FilteredTotalSizeBytes = anySize ? totalFiltered : (long?)null;
-
+ 
 
             vm.TotalItems = allItems.Count;
             vm.TotalPages = Math.Max(1, (int)Math.Ceiling(vm.TotalItems / (double)vm.PageSize));
@@ -387,6 +380,104 @@ namespace YourApp.Controllers
 
             return View(vm);
         }
+
+        [HttpGet("Sizes")]
+        public async Task<IActionResult> Sizes(string? folder = "", string? q = "", string? month = "")
+        {
+            if (!Directory.Exists(BasePath))
+                return Json(new { ok = false, error = $"BasePath not found: {BasePath}" });
+
+            var rel = NormalizeAndValidateRelative(folder);
+            var physical = ToPhysicalPathFromRel(rel);
+            if (!Directory.Exists(physical))
+                return Json(new { ok = false, error = "Folder not found." });
+
+            q = (q ?? "").Trim();
+            month = (month ?? "").Trim();
+
+            int y = 0, m = 0;
+            var useMonthFilter = TryParseMonthKey(month, out y, out m);
+
+            // detect audit folder (last segment GUID)
+            bool isAuditFolder = false;
+            if (!string.IsNullOrEmpty(rel))
+            {
+                var last = rel.Split('/', StringSplitOptions.RemoveEmptyEntries).LastOrDefault() ?? "";
+                isAuditFolder = Guid.TryParse(last, out _);
+            }
+
+            // ====== total size folder ini (recursive) ======
+            long? currentFolderTotal = SafeDirectorySizeBytes(physical);
+
+            // ====== total size hasil filter (q + month) di folder ini ======
+            long? filteredTotal = 0;
+            bool any = false;
+
+            // kalau month invalid tapi user isi -> anggap tidak filter month
+            // (atau kamu bisa return error)
+            var dirInfo = new DirectoryInfo(physical);
+
+            IEnumerable<DirectoryInfo> dirs = dirInfo.EnumerateDirectories();
+            IEnumerable<FileInfo> files = dirInfo.EnumerateFiles();
+
+            if (!string.IsNullOrEmpty(q))
+            {
+                dirs = dirs.Where(d => d.Name.Contains(q, StringComparison.OrdinalIgnoreCase));
+                files = files.Where(f => f.Name.Contains(q, StringComparison.OrdinalIgnoreCase));
+            }
+
+            var dirList = dirs.OrderBy(d => d.Name).ToList();
+            var fileList = files.OrderBy(f => f.Name).ToList();
+
+            // map audit meta utk filterDate (auditdate)
+            var auditIds = dirList.Select(d => d.Name).Where(n => Guid.TryParse(n, out _)).ToList();
+            var auditMetaMap = auditIds.Any()
+                ? await GetAuditMetaMapAsync(auditIds, HttpContext.RequestAborted)
+                : new Dictionary<string, AuditMeta>(StringComparer.OrdinalIgnoreCase);
+
+            // folder items
+            foreach (var d in dirList)
+            {
+                var mapped = auditMetaMap.TryGetValue(d.Name, out var meta);
+                var filterDate = mapped ? meta!.AuditDate : d.LastWriteTime;
+
+                if (useMonthFilter && (filterDate.Year != y || filterDate.Month != m))
+                    continue;
+
+                var sz = SafeDirectorySizeBytes(d.FullName);
+                if (sz.HasValue)
+                {
+                    filteredTotal += sz.Value;
+                    any = true;
+                }
+            }
+
+            // file items
+            foreach (var f in fileList)
+            {
+                var dt = f.LastWriteTime;
+                if (useMonthFilter && (dt.Year != y || dt.Month != m))
+                    continue;
+
+                try
+                {
+                    filteredTotal += f.Length;
+                    any = true;
+                }
+                catch { }
+            }
+
+            if (!any) filteredTotal = null;
+
+            return Json(new
+            {
+                ok = true,
+                isAuditFolder,
+                currentFolderTotalSizeBytes = currentFolderTotal,
+                filteredTotalSizeBytes = filteredTotal
+            });
+        }
+
 
         public class DiskVm
         {

@@ -314,20 +314,15 @@
         </form>
     </div>
 
-    <!-- ✅ Total Size Badges -->
+    <!-- ✅ Total Size Badges (AJAX - biar render cepat) -->
     <div class="size-badges">
-        <span class="badge bg-light text-dark" style="border:1px solid #eee;">
-            Total size (hasil filter):
-            <b>@(Model.FilteredTotalSizeBytes.HasValue? HumanSize(Model.FilteredTotalSizeBytes.Value) : "-")</b>
+        <span class="badge bg-light text-dark" style="border:1px solid #eee;" id="badgeFilteredTotal">
+            Total size (hasil filter): <b>Calculating...</b>
         </span>
 
-        @if (Model.IsAuditFolder)
-        {
-            <span class="badge bg-info text-dark">
-                Total size audit (folder ini):
-                <b>@(Model.CurrentFolderTotalSizeBytes.HasValue? HumanSize(Model.CurrentFolderTotalSizeBytes.Value) : "-")</b>
-            </span>
-        }
+        <span class="badge bg-info text-dark" id="badgeAuditTotal" style="display:none;">
+            Total size audit (folder ini): <b>Calculating...</b>
+        </span>
     </div>
 
     <div class="card">
@@ -337,7 +332,7 @@
                 <table class="table table-hover align-middle uploadlib-table">
                     <colgroup>
                         <col style="width:32%">
-                        <col style="width:16%"> @* ✅ Report No *@
+                        <col style="width:16%">
                         <col style="width:12%">
                         <col style="width:15%">
                         <col style="width:15%">
@@ -722,7 +717,6 @@
                     + '&month=' + encodeURIComponent(dlMonth.value || '');
             }
 
-            // spbu/folder
             return '/UploadLibrary/Downloads?type=spbu'
                 + '&path=' + encodeURIComponent(dlPath.value || '')
                 + '&month=' + encodeURIComponent(dlMonth.value || '');
@@ -743,9 +737,7 @@
         });
 
         // ==========================
-        // ✅ Disk Space Realtime (tanpa tulisan df -h)
-        // Endpoint: GET /UploadLibrary/Disk -> JSON:
-        // { total, used, avail, usePercent }
+        // ✅ Disk Space Realtime
         // ==========================
         const diskEl = document.getElementById('diskInfo');
         let diskInFlight = false;
@@ -770,5 +762,64 @@
 
         refreshDisk();
         setInterval(refreshDisk, 5000);
+
+        // ==========================
+        // ✅ Total Size Badges (AJAX)
+        // Endpoint: GET /UploadLibrary/Sizes?folder=...&q=...&month=...
+        // ==========================
+        const badgeFiltered = document.getElementById('badgeFilteredTotal');
+        const badgeAudit = document.getElementById('badgeAuditTotal');
+
+        function humanSize(bytes) {
+            try {
+                let b = Number(bytes || 0);
+                const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+                let u = 0;
+                while (b >= 1024 && u < units.length - 1) { b /= 1024; u++; }
+                return (Math.round(b * 100) / 100) + ' ' + units[u];
+            } catch {
+                return bytes + ' B';
+            }
+        }
+
+        async function refreshSizes() {
+            try {
+                const folder = '@(Model.CurrentRel ?? "")';
+                const q = '@(Model.Query ?? "")';
+                const month = '@(Model.Month ?? "")';
+
+                const url = '/UploadLibrary/Sizes?folder=' + encodeURIComponent(folder)
+                    + '&q=' + encodeURIComponent(q)
+                    + '&month=' + encodeURIComponent(month);
+
+                const r = await fetch(url, { cache: 'no-store' });
+                if (!r.ok) throw new Error('sizes fetch failed');
+                const d = await r.json();
+                if (!d || d.ok !== true) throw new Error((d && d.error) ? d.error : 'sizes error');
+
+                if (d.filteredTotalSizeBytes == null) {
+                    badgeFiltered.innerHTML = 'Total size (hasil filter): <b>-</b>';
+                } else {
+                    badgeFiltered.innerHTML = 'Total size (hasil filter): <b>' + humanSize(d.filteredTotalSizeBytes) + '</b>';
+                }
+
+                if (d.isAuditFolder) {
+                    badgeAudit.style.display = '';
+                    if (d.currentFolderTotalSizeBytes == null) {
+                        badgeAudit.innerHTML = 'Total size audit (folder ini): <b>-</b>';
+                    } else {
+                        badgeAudit.innerHTML = 'Total size audit (folder ini): <b>' + humanSize(d.currentFolderTotalSizeBytes) + '</b>';
+                    }
+                } else {
+                    badgeAudit.style.display = 'none';
+                }
+            } catch (e) {
+                if (badgeFiltered) badgeFiltered.innerHTML = 'Total size (hasil filter): <b>-</b>';
+                if (badgeAudit) badgeAudit.style.display = 'none';
+            }
+        }
+
+        // run once after render
+        refreshSizes();
     })();
 </script>
