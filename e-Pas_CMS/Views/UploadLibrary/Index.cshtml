@@ -782,42 +782,50 @@
             }
         }
 
-        async function refreshSizes() {
-            try {
-                const folder = '@(Model.CurrentRel ?? "")';
-                const q = '@(Model.Query ?? "")';
-                const month = '@(Model.Month ?? "")';
+            async function refreshSizes() {
+        try {
+            const folder = '@(Model.CurrentRel ?? "")';
+            const q = '@(Model.Query ?? "")';
+            const month = '@(Model.Month ?? "")';
 
-                const url = '/UploadLibrary/Sizes?folder=' + encodeURIComponent(folder)
-                    + '&q=' + encodeURIComponent(q)
-                    + '&month=' + encodeURIComponent(month);
-
-                const r = await fetch(url, { cache: 'no-store' });
-                if (!r.ok) throw new Error('sizes fetch failed');
-                const d = await r.json();
-                if (!d || d.ok !== true) throw new Error((d && d.error) ? d.error : 'sizes error');
-
-                if (d.filteredTotalSizeBytes == null) {
-                    badgeFiltered.innerHTML = 'Total size (hasil filter): <b>-</b>';
-                } else {
-                    badgeFiltered.innerHTML = 'Total size (hasil filter): <b>' + humanSize(d.filteredTotalSizeBytes) + '</b>';
-                }
-
-                if (d.isAuditFolder) {
-                    badgeAudit.style.display = '';
-                    if (d.currentFolderTotalSizeBytes == null) {
-                        badgeAudit.innerHTML = 'Total size audit (folder ini): <b>-</b>';
-                    } else {
-                        badgeAudit.innerHTML = 'Total size audit (folder ini): <b>' + humanSize(d.currentFolderTotalSizeBytes) + '</b>';
-                    }
-                } else {
-                    badgeAudit.style.display = 'none';
-                }
-            } catch (e) {
+            // ✅ ONLY run kalau month dipilih
+            if (!month) {
                 if (badgeFiltered) badgeFiltered.innerHTML = 'Total size (hasil filter): <b>-</b>';
                 if (badgeAudit) badgeAudit.style.display = 'none';
+                return;
             }
+
+            const url = '/UploadLibrary/Sizes?folder=' + encodeURIComponent(folder)
+                + '&q=' + encodeURIComponent(q)
+                + '&month=' + encodeURIComponent(month);
+
+            const r = await fetch(url, { cache: 'no-store' });
+            if (!r.ok) throw new Error('sizes fetch failed');
+            const d = await r.json();
+            if (!d || d.ok !== true) throw new Error((d && d.error) ? d.error : 'sizes error');
+
+            if (d.filteredTotalSizeBytes == null) {
+                badgeFiltered.innerHTML = 'Total size (hasil filter): <b>-</b>';
+            } else {
+                badgeFiltered.innerHTML = 'Total size (hasil filter): <b>' + humanSize(d.filteredTotalSizeBytes) + '</b>';
+            }
+
+            if (d.isAuditFolder) {
+                badgeAudit.style.display = '';
+                if (d.currentFolderTotalSizeBytes == null) {
+                    badgeAudit.innerHTML = 'Total size audit (folder ini): <b>-</b>';
+                } else {
+                    badgeAudit.innerHTML = 'Total size audit (folder ini): <b>' + humanSize(d.currentFolderTotalSizeBytes) + '</b>';
+                }
+            } else {
+                badgeAudit.style.display = 'none';
+            }
+        } catch (e) {
+            if (badgeFiltered) badgeFiltered.innerHTML = 'Total size (hasil filter): <b>-</b>';
+            if (badgeAudit) badgeAudit.style.display = 'none';
         }
+    }
+
 
         // run once after render
         refreshSizes();
