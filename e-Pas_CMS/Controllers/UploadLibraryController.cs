@@ -61,6 +61,47 @@ namespace YourApp.Controllers
             catch { return null; }
         }
 
+        private static long? SafeDirectorySizeBytes(string dirPath, int maxFiles = 200_000)
+        {
+            try
+            {
+                if (!Directory.Exists(dirPath)) return 0;
+
+                long total = 0;
+                int cnt = 0;
+
+                IEnumerable<string> files;
+                try
+                {
+                    files = Directory.EnumerateFiles(dirPath, "*", SearchOption.AllDirectories);
+                }
+                catch
+                {
+                    return null;
+                }
+
+                foreach (var f in files)
+                {
+                    cnt++;
+                    if (cnt > maxFiles) return null; // ✅ stop biar ga ngehang
+
+                    try
+                    {
+                        // FileInfo.Length bisa throw kalau permission/locked
+                        total += new FileInfo(f).Length;
+                    }
+                    catch { /* skip */ }
+                }
+
+                return total;
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+
         private static bool TryParseMonthKey(string? ym, out int year, out int month)
         {
             year = 0; month = 0;
@@ -145,6 +186,9 @@ namespace YourApp.Controllers
             public int TotalPages { get; set; }
 
             public int[] AllowedPageSizes { get; set; } = new[] { 20, 50, 100, 200 };
+            public long? FilteredTotalSizeBytes { get; set; }
+            public long? CurrentFolderTotalSizeBytes { get; set; }
+            public bool IsAuditFolder { get; set; }
         }
 
         public class DownloadsVm
@@ -279,6 +323,58 @@ namespace YourApp.Controllers
             {
                 allItems = allItems.Where(x => x.FilterDate.Year == y && x.FilterDate.Month == m).ToList();
             }
+
+            // ✅ detect audit folder (detail view) = last segment GUID
+            vm.IsAuditFolder = false;
+            if (!string.IsNullOrEmpty(rel))
+            {
+                var last = rel.Split('/', StringSplitOptions.RemoveEmptyEntries).LastOrDefault() ?? "";
+                vm.IsAuditFolder = Guid.TryParse(last, out _);
+            }
+
+            // ✅ Total size folder saat ini (recursive) -> terutama untuk detail audit
+            vm.CurrentFolderTotalSizeBytes = SafeDirectorySizeBytes(physical);
+
+            // ✅ Total size hasil filter (month + q + folder scope)
+            // Untuk file: pakai SizeBytes langsung
+            // Untuk folder: hitung size recursive per folder yang lolos filter (best-effort)
+            long totalFiltered = 0;
+            bool anySize = false;
+            var dirSizeCache = new Dictionary<string, long?>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var it in allItems)
+            {
+                if (!it.IsDir)
+                {
+                    if (it.SizeBytes.HasValue)
+                    {
+                        totalFiltered += it.SizeBytes.Value;
+                        anySize = true;
+                    }
+                    continue;
+                }
+
+                // folder size (recursive)
+                try
+                {
+                    var fullDir = ToPhysicalPathFromRel(it.RelPath);
+                    if (!dirSizeCache.TryGetValue(fullDir, out var sz))
+                    {
+                        sz = SafeDirectorySizeBytes(fullDir);
+                        dirSizeCache[fullDir] = sz;
+                    }
+
+                    if (sz.HasValue)
+                    {
+                        totalFiltered += sz.Value;
+                        anySize = true;
+                    }
+                }
+                catch { }
+            }
+
+            vm.FilteredTotalSizeBytes = anySize ? totalFiltered : (long?)null;
+
 
             vm.TotalItems = allItems.Count;
             vm.TotalPages = Math.Max(1, (int)Math.Ceiling(vm.TotalItems / (double)vm.PageSize));

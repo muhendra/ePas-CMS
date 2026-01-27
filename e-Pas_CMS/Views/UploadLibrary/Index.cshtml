@@ -69,12 +69,21 @@
         flex-wrap: wrap;
         gap: .5rem;
         align-items: center;
-        margin-bottom: 1rem;
+        margin-bottom: .5rem;
     }
 
         .month-toolbar .btn {
             border-radius: .45rem;
         }
+
+    /* ✅ total size badges */
+    .size-badges {
+        display: flex;
+        flex-wrap: wrap;
+        gap: .5rem;
+        margin-bottom: 1rem;
+        align-items: center;
+    }
 
     /* ✅ modal preview */
     .preview-modal-backdrop {
@@ -305,6 +314,22 @@
         </form>
     </div>
 
+    <!-- ✅ Total Size Badges -->
+    <div class="size-badges">
+        <span class="badge bg-light text-dark" style="border:1px solid #eee;">
+            Total size (hasil filter):
+            <b>@(Model.FilteredTotalSizeBytes.HasValue? HumanSize(Model.FilteredTotalSizeBytes.Value) : "-")</b>
+        </span>
+
+        @if (Model.IsAuditFolder)
+        {
+            <span class="badge bg-info text-dark">
+                Total size audit (folder ini):
+                <b>@(Model.CurrentFolderTotalSizeBytes.HasValue? HumanSize(Model.CurrentFolderTotalSizeBytes.Value) : "-")</b>
+            </span>
+        }
+    </div>
+
     <div class="card">
         <div class="card-body">
 
@@ -428,7 +453,7 @@
                                         <td><span class="text-muted">-</span></td>
 
                                         <td>File</td>
-                                        <td>@(item.SizeBytes.HasValue ? HumanSize(item.SizeBytes.Value) : "-")</td>
+                                        <td>@(item.SizeBytes.HasValue? HumanSize(item.SizeBytes.Value) : "-")</td>
                                         <td>@item.LastWriteTime.ToString("yyyy-MM-dd HH:mm")</td>
                                         <td class="text-end">
                                             <div class="action-cell">
