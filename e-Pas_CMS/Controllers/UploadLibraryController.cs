@@ -1,5 +1,6 @@
 ﻿using e_Pas_CMS.Data;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -10,6 +11,7 @@ using System.Globalization;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -93,7 +95,6 @@ namespace YourApp.Controllers
             }
             catch { return null; }
         }
-
 
         private static bool TryParseMonthKey(string? ym, out int year, out int month)
         {
@@ -181,7 +182,12 @@ namespace YourApp.Controllers
             public int[] AllowedPageSizes { get; set; } = new[] { 20, 50, 100, 200 };
             public long? FilteredTotalSizeBytes { get; set; }
             public long? CurrentFolderTotalSizeBytes { get; set; }
+
+            // ✅ Audit detail
             public bool IsAuditFolder { get; set; }
+            public string? AuditId { get; set; }
+            public string? AuditSpbuNo { get; set; }
+            public string? AuditReportNo { get; set; }
         }
 
         public class DownloadsVm
@@ -191,6 +197,170 @@ namespace YourApp.Controllers
             public string Description { get; set; } = "";
             public string StartUrl { get; set; } = "";
             public string BackUrl { get; set; } = "/UploadLibrary";
+        }
+
+        // ============================================================
+        // ✅ UPLOAD 1 FILE PER AUDIT (folder = audit GUID)
+        // POST /UploadLibrary/UploadAuditFile
+        // fields: auditId, file, label(optional), returnFolder/q/month/page/pageSize(optional)
+        // ============================================================
+        [HttpPost("UploadAuditFile")]
+        [ValidateAntiForgeryToken]
+        [RequestSizeLimit(100_000_000)] // 100MB
+        [RequestFormLimits(MultipartBodyLengthLimit = 100_000_000)]
+        public async Task<IActionResult> UploadAuditFile(
+            string auditId,
+            IFormFile file,
+            string? label = "",
+            string? returnFolder = "",
+            string? q = "",
+            string? month = "",
+            int page = 1,
+            int pageSize = 50
+        )
+        {
+            if (string.IsNullOrWhiteSpace(auditId) || !Guid.TryParse(auditId, out _))
+            {
+                TempData["Error"] = "AuditId tidak valid.";
+                return RedirectToAction(nameof(Index), new { folder = returnFolder, q, month, page, pageSize });
+            }
+
+            if (file == null || file.Length <= 0)
+            {
+                TempData["Error"] = "File kosong.";
+                return RedirectToAction(nameof(Index), new { folder = returnFolder, q, month, page, pageSize });
+            }
+
+            // ✅ allowlist extension (sesuaikan kebutuhan)
+            var allowedExt = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ".jpg",".jpeg",".png",".gif",".webp",
+                ".mp4",".webm",".ogg",".mov",".m4v",
+                ".pdf"
+            };
+
+            var originalName = file.FileName ?? "file";
+            var ext = Path.GetExtension(originalName);
+            if (string.IsNullOrWhiteSpace(ext) || !allowedExt.Contains(ext))
+            {
+                TempData["Error"] = $"Ekstensi tidak diizinkan: {ext}";
+                return RedirectToAction(nameof(Index), new { folder = returnFolder, q, month, page, pageSize });
+            }
+
+            // target folder: /uploads/<auditId>/
+            var auditRel = NormalizeAndValidateRelative(auditId.Trim());
+            var auditPhysical = ToPhysicalPathFromRel(auditRel);
+
+            try
+            {
+                Directory.CreateDirectory(auditPhysical);
+            }
+            catch (Exception ex)
+            {
+                TempData["Error"] = $"Gagal membuat folder audit: {ex.Message}";
+                return RedirectToAction(nameof(Index), new { folder = returnFolder, q, month, page, pageSize });
+            }
+
+            var ct = HttpContext.RequestAborted;
+
+            // generate filename: ReportNo_SpbuNo_Label_yyyyMMdd_HHmmss_original.ext
+            var baseName = await BuildAuditFileNameAsync(auditId.Trim(), originalName, label, ct);
+            baseName = MakeSafeFileName(baseName);
+
+            var finalFileName = baseName + ext.ToLowerInvariant();
+            var finalPath = ResolveUniqueFilePath(auditPhysical, finalFileName);
+
+            try
+            {
+                await using var fs = new FileStream(
+                    finalPath,
+                    FileMode.CreateNew,
+                    FileAccess.Write,
+                    FileShare.None,
+                    bufferSize: 1024 * 256,
+                    useAsync: true
+                );
+
+                await file.CopyToAsync(fs, ct);
+            }
+            catch (Exception ex)
+            {
+                TempData["Error"] = $"Gagal upload: {ex.Message}";
+                return RedirectToAction(nameof(Index), new { folder = returnFolder, q, month, page, pageSize });
+            }
+
+            TempData["Success"] = $"Upload berhasil: {Path.GetFileName(finalPath)}";
+
+            // balik ke folder audit (biar user langsung lihat filenya masuk)
+            var backFolder = string.IsNullOrWhiteSpace(returnFolder) ? auditId.Trim() : returnFolder;
+            return RedirectToAction(nameof(Index), new { folder = backFolder, q, month, page = 1, pageSize });
+        }
+
+        private async Task<string> BuildAuditFileNameAsync(string auditId, string originalFileName, string? label, CancellationToken ct)
+        {
+            string reportNo = "";
+            string spbuNo = "";
+
+            try
+            {
+                var metaMap = await GetAuditMetaMapAsync(new List<string> { auditId }, ct);
+                if (metaMap.TryGetValue(auditId, out var meta))
+                {
+                    reportNo = meta.ReportNo ?? "";
+                    spbuNo = meta.SpbuNo ?? "";
+                }
+            }
+            catch { }
+
+            var origBase = Path.GetFileNameWithoutExtension(originalFileName) ?? "file";
+            origBase = MakeSafeFileName(origBase);
+
+            label = (label ?? "").Trim();
+            label = MakeSafeFileName(label);
+
+            var ts = DateTime.Now.ToString("yyyyMMdd_HHmmss");
+
+            var parts = new List<string>();
+            if (!string.IsNullOrWhiteSpace(reportNo)) parts.Add(reportNo);
+            if (!string.IsNullOrWhiteSpace(spbuNo)) parts.Add(spbuNo);
+            if (!string.IsNullOrWhiteSpace(label)) parts.Add(label);
+
+            parts.Add(ts);
+            parts.Add(origBase);
+
+            return string.Join("_", parts.Where(x => !string.IsNullOrWhiteSpace(x)));
+        }
+
+        private static string MakeSafeFileName(string input)
+        {
+            input ??= "";
+            input = input.Trim();
+            if (string.IsNullOrWhiteSpace(input)) return "file";
+
+            input = Regex.Replace(input, @"\s+", "_");
+            input = Regex.Replace(input, @"[^a-zA-Z0-9_\-\.]+", "");
+            input = Regex.Replace(input, @"_+", "_").Trim('_');
+
+            if (input.Length > 120) input = input.Substring(0, 120);
+            return string.IsNullOrWhiteSpace(input) ? "file" : input;
+        }
+
+        private static string ResolveUniqueFilePath(string folderPhysical, string fileName)
+        {
+            var full = Path.Combine(folderPhysical, fileName);
+            if (!System.IO.File.Exists(full)) return full;
+
+            var baseName = Path.GetFileNameWithoutExtension(fileName);
+            var ext = Path.GetExtension(fileName);
+
+            for (int i = 1; i <= 10_000; i++)
+            {
+                var alt = Path.Combine(folderPhysical, $"{baseName}_{i}{ext}");
+                if (!System.IO.File.Exists(alt)) return alt;
+            }
+
+            var rnd = Guid.NewGuid().ToString("N").Substring(0, 8);
+            return Path.Combine(folderPhysical, $"{baseName}_{rnd}{ext}");
         }
 
         [HttpGet("")]
@@ -243,6 +413,30 @@ namespace YourApp.Controllers
                 {
                     acc.Add(p);
                     vm.Breadcrumbs.Add((p, string.Join('/', acc)));
+                }
+            }
+
+            // ✅ detect audit folder (detail view) = last segment GUID + ambil meta utk UI
+            vm.IsAuditFolder = false;
+            vm.AuditId = null;
+            if (!string.IsNullOrEmpty(rel))
+            {
+                var last = rel.Split('/', StringSplitOptions.RemoveEmptyEntries).LastOrDefault() ?? "";
+                if (Guid.TryParse(last, out _))
+                {
+                    vm.IsAuditFolder = true;
+                    vm.AuditId = last;
+
+                    try
+                    {
+                        var metaMap = await GetAuditMetaMapAsync(new List<string> { last }, HttpContext.RequestAborted);
+                        if (metaMap.TryGetValue(last, out var meta))
+                        {
+                            vm.AuditSpbuNo = meta.SpbuNo;
+                            vm.AuditReportNo = meta.ReportNo;
+                        }
+                    }
+                    catch { }
                 }
             }
 
@@ -317,20 +511,8 @@ namespace YourApp.Controllers
                 allItems = allItems.Where(x => x.FilterDate.Year == y && x.FilterDate.Month == m).ToList();
             }
 
-            // ✅ detect audit folder (detail view) = last segment GUID
-            vm.IsAuditFolder = false;
-            if (!string.IsNullOrEmpty(rel))
-            {
-                var last = rel.Split('/', StringSplitOptions.RemoveEmptyEntries).LastOrDefault() ?? "";
-                vm.IsAuditFolder = Guid.TryParse(last, out _);
-            }
-
-            // ✅ Total size folder saat ini (recursive) -> terutama untuk detail audit
             vm.CurrentFolderTotalSizeBytes = SafeDirectorySizeBytes(physical);
 
-            // ✅ Total size hasil filter (month + q + folder scope)
-            // Untuk file: pakai SizeBytes langsung
-            // Untuk folder: hitung size recursive per folder yang lolos filter (best-effort)
             long totalFiltered = 0;
             bool anySize = false;
             var dirSizeCache = new Dictionary<string, long?>(StringComparer.OrdinalIgnoreCase);
@@ -347,7 +529,6 @@ namespace YourApp.Controllers
                     continue;
                 }
 
-                // folder size (recursive)
                 try
                 {
                     var fullDir = ToPhysicalPathFromRel(it.RelPath);
@@ -367,7 +548,6 @@ namespace YourApp.Controllers
             }
 
             vm.FilteredTotalSizeBytes = anySize ? totalFiltered : (long?)null;
- 
 
             vm.TotalItems = allItems.Count;
             vm.TotalPages = Math.Max(1, (int)Math.Ceiling(vm.TotalItems / (double)vm.PageSize));
@@ -398,7 +578,6 @@ namespace YourApp.Controllers
             int y = 0, m = 0;
             var useMonthFilter = TryParseMonthKey(month, out y, out m);
 
-            // detect audit folder (last segment GUID)
             bool isAuditFolder = false;
             if (!string.IsNullOrEmpty(rel))
             {
@@ -406,15 +585,11 @@ namespace YourApp.Controllers
                 isAuditFolder = Guid.TryParse(last, out _);
             }
 
-            // ====== total size folder ini (recursive) ======
             long? currentFolderTotal = SafeDirectorySizeBytes(physical);
 
-            // ====== total size hasil filter (q + month) di folder ini ======
             long? filteredTotal = 0;
             bool any = false;
 
-            // kalau month invalid tapi user isi -> anggap tidak filter month
-            // (atau kamu bisa return error)
             var dirInfo = new DirectoryInfo(physical);
 
             IEnumerable<DirectoryInfo> dirs = dirInfo.EnumerateDirectories();
@@ -429,13 +604,11 @@ namespace YourApp.Controllers
             var dirList = dirs.OrderBy(d => d.Name).ToList();
             var fileList = files.OrderBy(f => f.Name).ToList();
 
-            // map audit meta utk filterDate (auditdate)
             var auditIds = dirList.Select(d => d.Name).Where(n => Guid.TryParse(n, out _)).ToList();
             var auditMetaMap = auditIds.Any()
                 ? await GetAuditMetaMapAsync(auditIds, HttpContext.RequestAborted)
                 : new Dictionary<string, AuditMeta>(StringComparer.OrdinalIgnoreCase);
 
-            // folder items
             foreach (var d in dirList)
             {
                 var mapped = auditMetaMap.TryGetValue(d.Name, out var meta);
@@ -452,7 +625,6 @@ namespace YourApp.Controllers
                 }
             }
 
-            // file items
             foreach (var f in fileList)
             {
                 var dt = f.LastWriteTime;
@@ -478,7 +650,6 @@ namespace YourApp.Controllers
             });
         }
 
-
         public class DiskVm
         {
             public string Mount { get; set; } = "/";
@@ -493,7 +664,6 @@ namespace YourApp.Controllers
         {
             try
             {
-                // root mount biasanya yang sama dengan /dev/sda2 (sesuai server kamu)
                 var di = new DriveInfo("/");
 
                 long total = di.TotalSize;
@@ -525,7 +695,6 @@ namespace YourApp.Controllers
             return Json(d);
         }
 
-
         [HttpGet("Download")]
         public IActionResult Download(string path)
         {
@@ -537,7 +706,6 @@ namespace YourApp.Controllers
 
             var fileName = Path.GetFileName(physical);
 
-            // lebih stabil + support resume/range
             return PhysicalFile(
                 physical,
                 "application/octet-stream",
@@ -766,7 +934,6 @@ namespace YourApp.Controllers
             if (string.IsNullOrWhiteSpace(folderName))
                 folderName = "folder";
 
-            // nama zip saja (boleh spbu_no)
             string zipFileDisplay = folderName;
             if (Guid.TryParse(folderName, out _))
             {
@@ -783,7 +950,6 @@ namespace YourApp.Controllers
 
             using (var zip = ZipFile.Open(tmp, ZipArchiveMode.Create))
             {
-                // top folder di zip = trx_audit.id => folderName
                 AddDirectoryToZipFiltered(zip, physical, folderName, folderName, useMonthFilter, y, m);
             }
 
@@ -796,7 +962,6 @@ namespace YourApp.Controllers
             var monthSuffix = useMonthFilter ? $"_{month}" : "";
             var downloadName = $"spbu_{zipFileDisplay}{monthSuffix}.zip";
 
-            // enableRangeProcessing biar stable
             return PhysicalFile(tmp, "application/zip", downloadName, enableRangeProcessing: true);
         }
 

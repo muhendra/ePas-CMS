@@ -10,6 +10,15 @@
     int window = 5; // jumlah tombol halaman di sekitar current
     int startPage = Math.Max(1, Model.Page - window);
     int endPage = Math.Min(Model.TotalPages, Model.Page + window);
+
+    // ✅ helper untuk prefill upload (kalau di folder audit)
+    var auditTitle = Model.IsAuditFolder
+        ? $"{(Model.AuditSpbuNo ?? Model.AuditId)}"
+        : null;
+
+    var auditSub = Model.IsAuditFolder
+        ? $"{(string.IsNullOrWhiteSpace(Model.AuditReportNo) ? "" : ("ReportNo: " + Model.AuditReportNo))}"
+        : null;
 }
 
 <style>
@@ -84,6 +93,42 @@
         margin-bottom: 1rem;
         align-items: center;
     }
+
+    /* ✅ Upload panel */
+    .audit-upload-card {
+        border: 1px solid #eee;
+        border-radius: .5rem;
+        padding: .85rem 1rem;
+        margin-bottom: 1rem;
+        background: #fafafa;
+    }
+
+    .audit-upload-title {
+        font-weight: 700;
+        margin-bottom: .15rem;
+        display: flex;
+        gap: .5rem;
+        align-items: center;
+        flex-wrap: wrap;
+    }
+
+    .audit-upload-sub {
+        color: #6c757d;
+        font-size: .9rem;
+        margin-bottom: .75rem;
+    }
+
+    .audit-upload-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: .5rem;
+        align-items: center;
+    }
+
+        .audit-upload-row .form-control,
+        .audit-upload-row .form-select {
+            min-width: 220px;
+        }
 
     /* ✅ modal preview */
     .preview-modal-backdrop {
@@ -235,6 +280,57 @@
     @if (TempData["Error"] != null)
     {
         <div class="alert alert-warning">@TempData["Error"]</div>
+    }
+    @if (TempData["Success"] != null)
+    {
+        <div class="alert alert-success">@TempData["Success"]</div>
+    }
+
+    <!-- ✅ Upload per 1 audit (muncul hanya kalau folder audit) -->
+    @if (Model.IsAuditFolder && !string.IsNullOrWhiteSpace(Model.AuditId))
+    {
+        <div class="audit-upload-card">
+            <div class="audit-upload-title">
+                <span>⬆️ Upload 1 file untuk audit</span>
+                <span class="badge bg-secondary uploadlib-badge" title="AuditId">@Model.AuditId</span>
+                @if (!string.IsNullOrWhiteSpace(Model.AuditReportNo))
+                {
+                    <span class="badge bg-info text-dark uploadlib-badge" title="trx_audit.report_no">@Model.AuditReportNo</span>
+                }
+            </div>
+            <div class="audit-upload-sub">
+                Target folder: <b>@Model.CurrentRel</b>
+                @if (!string.IsNullOrWhiteSpace(Model.AuditSpbuNo))
+                {
+                    <span class="ms-2">• SPBU: <b>@Model.AuditSpbuNo</b></span>
+                }
+            </div>
+
+            <form method="post" action="/UploadLibrary/UploadAuditFile" enctype="multipart/form-data" class="m-0">
+                @Html.AntiForgeryToken()
+
+                <input type="hidden" name="auditId" value="@Model.AuditId" />
+                <input type="hidden" name="returnFolder" value="@Model.CurrentRel" />
+                <input type="hidden" name="q" value="@Model.Query" />
+                <input type="hidden" name="month" value="@Model.Month" />
+                <input type="hidden" name="page" value="@Model.Page" />
+                <input type="hidden" name="pageSize" value="@Model.PageSize" />
+
+                <div class="audit-upload-row">
+                    <input class="form-control" type="file" name="file" required
+                           accept=".jpg,.jpeg,.png,.gif,.webp,.mp4,.webm,.ogg,.mov,.m4v,.pdf" />
+
+                    <input class="form-control" type="text" name="label" maxlength="60"
+                           placeholder="Label (opsional) mis: nozzle, dispenser, form, before" />
+
+                    <button class="btn btn-primary" type="submit">Upload</button>
+                </div>
+
+                <div class="text-muted mt-2" style="font-size:.9rem;">
+                    Filename akan otomatis jadi: <b>ReportNo_SPBUNo_Label_yyyyMMdd_HHmmss_original.ext</b> (jika ReportNo/SPBUNo tersedia).
+                </div>
+            </form>
+        </div>
     }
 
     <!-- Breadcrumb -->
@@ -782,52 +878,50 @@
             }
         }
 
-            async function refreshSizes() {
-        try {
-            const folder = '@(Model.CurrentRel ?? "")';
-            const q = '@(Model.Query ?? "")';
-            const month = '@(Model.Month ?? "")';
+        async function refreshSizes() {
+            try {
+                const folder = '@(Model.CurrentRel ?? "")';
+                const q = '@(Model.Query ?? "")';
+                const month = '@(Model.Month ?? "")';
 
-            // ✅ ONLY run kalau month dipilih
-            if (!month) {
+                // ✅ ONLY run kalau month dipilih
+                if (!month) {
+                    if (badgeFiltered) badgeFiltered.innerHTML = 'Total size (hasil filter): <b>-</b>';
+                    if (badgeAudit) badgeAudit.style.display = 'none';
+                    return;
+                }
+
+                const url = '/UploadLibrary/Sizes?folder=' + encodeURIComponent(folder)
+                    + '&q=' + encodeURIComponent(q)
+                    + '&month=' + encodeURIComponent(month);
+
+                const r = await fetch(url, { cache: 'no-store' });
+                if (!r.ok) throw new Error('sizes fetch failed');
+                const d = await r.json();
+                if (!d || d.ok !== true) throw new Error((d && d.error) ? d.error : 'sizes error');
+
+                if (d.filteredTotalSizeBytes == null) {
+                    badgeFiltered.innerHTML = 'Total size (hasil filter): <b>-</b>';
+                } else {
+                    badgeFiltered.innerHTML = 'Total size (hasil filter): <b>' + humanSize(d.filteredTotalSizeBytes) + '</b>';
+                }
+
+                if (d.isAuditFolder) {
+                    badgeAudit.style.display = '';
+                    if (d.currentFolderTotalSizeBytes == null) {
+                        badgeAudit.innerHTML = 'Total size audit (folder ini): <b>-</b>';
+                    } else {
+                        badgeAudit.innerHTML = 'Total size audit (folder ini): <b>' + humanSize(d.currentFolderTotalSizeBytes) + '</b>';
+                    }
+                } else {
+                    badgeAudit.style.display = 'none';
+                }
+            } catch (e) {
                 if (badgeFiltered) badgeFiltered.innerHTML = 'Total size (hasil filter): <b>-</b>';
                 if (badgeAudit) badgeAudit.style.display = 'none';
-                return;
             }
-
-            const url = '/UploadLibrary/Sizes?folder=' + encodeURIComponent(folder)
-                + '&q=' + encodeURIComponent(q)
-                + '&month=' + encodeURIComponent(month);
-
-            const r = await fetch(url, { cache: 'no-store' });
-            if (!r.ok) throw new Error('sizes fetch failed');
-            const d = await r.json();
-            if (!d || d.ok !== true) throw new Error((d && d.error) ? d.error : 'sizes error');
-
-            if (d.filteredTotalSizeBytes == null) {
-                badgeFiltered.innerHTML = 'Total size (hasil filter): <b>-</b>';
-            } else {
-                badgeFiltered.innerHTML = 'Total size (hasil filter): <b>' + humanSize(d.filteredTotalSizeBytes) + '</b>';
-            }
-
-            if (d.isAuditFolder) {
-                badgeAudit.style.display = '';
-                if (d.currentFolderTotalSizeBytes == null) {
-                    badgeAudit.innerHTML = 'Total size audit (folder ini): <b>-</b>';
-                } else {
-                    badgeAudit.innerHTML = 'Total size audit (folder ini): <b>' + humanSize(d.currentFolderTotalSizeBytes) + '</b>';
-                }
-            } else {
-                badgeAudit.style.display = 'none';
-            }
-        } catch (e) {
-            if (badgeFiltered) badgeFiltered.innerHTML = 'Total size (hasil filter): <b>-</b>';
-            if (badgeAudit) badgeAudit.style.display = 'none';
         }
-    }
 
-
-        // run once after render
         refreshSizes();
     })();
 </script>
