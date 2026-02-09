@@ -400,6 +400,11 @@ namespace e_Pas_CMS.Controllers
                 });
             }
 
+            result = result
+                .OrderByDescending(x => x.AuditDate ?? DateTime.MinValue)
+                .ThenByDescending(x => x.TrxAuditId)
+                .ToList();
+
             var model = new PaginationModel<AuditReportListViewModel>
             {
                 Items = result,
