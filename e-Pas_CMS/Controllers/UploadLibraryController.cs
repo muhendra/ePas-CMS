@@ -171,7 +171,7 @@ namespace YourApp.Controllers
             public int TotalItems { get; set; }
             public int TotalPages { get; set; }
 
-            public int[] AllowedPageSizes { get; set; } = new[] { 10, 20, 50, 100, 200 };
+            public int[] AllowedPageSizes { get; set; } = new[] { 20, 50, 100, 200 };
             public long? FilteredTotalSizeBytes { get; set; }
             public long? CurrentFolderTotalSizeBytes { get; set; }
 
@@ -192,24 +192,23 @@ namespace YourApp.Controllers
         }
 
         // ============================================================
-        // ✅ UPLOAD FOLDER (multi files) PER AUDIT (folder = trx_audit.id)
-        // ✅ NAMA FILE TIDAK DIUBAH (original), kalau bentrok -> _1, _2
-        // ✅ Struktur subfolder ikut kebawa
-        // POST /UploadLibrary/UploadAuditFile
-        // fields: auditId, files (IFormFileCollection), returnFolder/q/month/page/pageSize
+        // ✅ UPLOAD 1 FOLDER PER AUDIT (folder = trx_audit.id)
+        // ✅ KEEP NAMA FILE (original) + keep struktur folder (subfolder)
+        // POST /UploadLibrary/UploadAuditFolder
+        // fields: auditId, files (webkitdirectory multiple)
         // ============================================================
-        [HttpPost("UploadAuditFile")]
+        [HttpPost("UploadAuditFolder")]
         [ValidateAntiForgeryToken]
-        [RequestSizeLimit(200_000_000)] // 200MB (adjust)
-        [RequestFormLimits(MultipartBodyLengthLimit = 200_000_000)]
-        public async Task<IActionResult> UploadAuditFile(
+        [RequestSizeLimit(500_000_000)] // 500MB (adjust)
+        [RequestFormLimits(MultipartBodyLengthLimit = 500_000_000)]
+        public async Task<IActionResult> UploadAuditFolder(
             string auditId,
             List<IFormFile> files,
             string? returnFolder = "",
             string? q = "",
             string? month = "",
             int page = 1,
-            int pageSize = 10
+            int pageSize = 50
         )
         {
             auditId = (auditId ?? "").Trim();
@@ -222,17 +221,9 @@ namespace YourApp.Controllers
 
             if (files == null || files.Count == 0)
             {
-                TempData["Error"] = "Tidak ada file yang dipilih.";
+                TempData["Error"] = "Tidak ada file pada folder yang dipilih.";
                 return RedirectToAction(nameof(Index), new { folder = returnFolder, q, month, page, pageSize });
             }
-
-            // allowlist extension (sesuaikan)
-            var allowedExt = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-            {
-                ".jpg",".jpeg",".png",".gif",".webp",
-                ".mp4",".webm",".ogg",".mov",".m4v",
-                ".pdf"
-            };
 
             // ✅ target folder: BasePath/<auditId>/
             var auditRel = NormalizeAndValidateRelative(auditId);
@@ -245,62 +236,89 @@ namespace YourApp.Controllers
                 return RedirectToAction(nameof(Index), new { folder = returnFolder, q, month, page, pageSize });
             }
 
+            // allowlist ext (samain seperti kamu)
+            var allowedExt = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ".jpg",".jpeg",".png",".gif",".webp",
+                ".mp4",".webm",".ogg",".mov",".m4v",
+                ".pdf",".zip" // zip boleh kalau ada file zip di folder
+            };
+
+            var ct = HttpContext.RequestAborted;
+
             int saved = 0;
             int skipped = 0;
-            string? firstError = null;
 
-            foreach (var file in files)
+            foreach (var f in files)
             {
-                if (file == null || file.Length <= 0) { skipped++; continue; }
+                ct.ThrowIfCancellationRequested();
+                if (f == null || f.Length <= 0) { skipped++; continue; }
 
-                // untuk folder upload, FileName biasanya berisi relative path: "Folder/Sub/file.jpg"
-                var rawName = file.FileName ?? "file";
-                rawName = rawName.Replace('\\', '/');
+                // Browser webkitdirectory biasanya kirim FileName berupa "folder/sub/file.ext"
+                // Kita simpan struktur subfoldernya DI BAWAH auditId.
+                var rawName = (f.FileName ?? "").Replace('\\', '/').Trim();
 
-                // protect traversal
+                // remove leading slash
+                while (rawName.StartsWith("/")) rawName = rawName.TrimStart('/');
+
+                // hard block traversal
                 if (rawName.Contains("..", StringComparison.Ordinal))
                 {
                     skipped++;
                     continue;
                 }
 
-                // ambil relative path (boleh ada subfolder), sanitize tiap segmen
-                var safeRelFile = MakeSafeRelativeFilePath(rawName);
-                if (string.IsNullOrWhiteSpace(safeRelFile))
-                {
-                    skipped++;
-                    continue;
-                }
-
-                var ext = Path.GetExtension(safeRelFile);
+                var ext = Path.GetExtension(rawName);
                 if (string.IsNullOrWhiteSpace(ext) || !allowedExt.Contains(ext))
                 {
                     skipped++;
                     continue;
                 }
 
-                // full target path di bawah auditPhysical + subfolders
-                var targetFull = Path.GetFullPath(Path.Combine(auditPhysical, safeRelFile));
+                // kalau rawName diawali auditId/..., buang prefix auditId biar tidak double folder
+                // contoh: "010e.../IMG.jpg" -> "IMG.jpg"
+                var rawLower = rawName.ToLowerInvariant();
+                var idLower = auditId.ToLowerInvariant();
 
-                // pastikan masih di bawah auditPhysical
-                var auditFull = Path.GetFullPath(auditPhysical);
-                if (!targetFull.StartsWith(auditFull + Path.DirectorySeparatorChar, StringComparison.Ordinal) && targetFull != auditFull)
+                string relInsideAudit = rawName;
+                if (rawLower.StartsWith(idLower + "/", StringComparison.Ordinal))
+                    relInsideAudit = rawName.Substring(auditId.Length + 1);
+
+                // normalize relInsideAudit lagi
+                relInsideAudit = relInsideAudit.Replace('\\', '/').Trim();
+                while (relInsideAudit.StartsWith("/")) relInsideAudit = relInsideAudit.TrimStart('/');
+
+                if (string.IsNullOrWhiteSpace(relInsideAudit))
                 {
                     skipped++;
                     continue;
                 }
 
+                // sanitize tiap segment folder & filename (tetap “nama file” tapi aman)
+                relInsideAudit = SanitizeRelativePath(relInsideAudit);
+
+                var finalFullPath = Path.GetFullPath(Path.Combine(auditPhysical, relInsideAudit));
+                if (!finalFullPath.StartsWith(Path.GetFullPath(auditPhysical) + Path.DirectorySeparatorChar, StringComparison.Ordinal))
+                {
+                    skipped++;
+                    continue;
+                }
+
+                // ensure folder exists
+                var dir = Path.GetDirectoryName(finalFullPath);
+                if (!string.IsNullOrWhiteSpace(dir))
+                {
+                    try { Directory.CreateDirectory(dir); }
+                    catch { skipped++; continue; }
+                }
+
+                // kalau file sudah ada, bikin _1, _2 dst
+                finalFullPath = ResolveUniqueFullFilePath(finalFullPath);
+
                 try
                 {
-                    var targetDir = Path.GetDirectoryName(targetFull);
-                    if (!string.IsNullOrWhiteSpace(targetDir))
-                        Directory.CreateDirectory(targetDir);
-
-                    // keep original filename; kalau file exist -> resolve unique
-                    var finalFull = ResolveUniqueFilePath(Path.GetDirectoryName(targetFull)!, Path.GetFileName(targetFull));
-
                     await using var fs = new FileStream(
-                        finalFull,
+                        finalFullPath,
                         FileMode.CreateNew,
                         FileAccess.Write,
                         FileShare.None,
@@ -308,43 +326,31 @@ namespace YourApp.Controllers
                         useAsync: true
                     );
 
-                    await file.CopyToAsync(fs, HttpContext.RequestAborted);
+                    await f.CopyToAsync(fs, ct);
                     saved++;
                 }
-                catch (Exception ex)
+                catch
                 {
-                    firstError ??= ex.Message;
                     skipped++;
                 }
             }
 
-            if (saved > 0)
-                TempData["Success"] = $"Upload selesai. Saved: {saved}, Skipped: {skipped}" + (firstError != null ? $" (First error: {firstError})" : "");
-            else
-                TempData["Error"] = $"Tidak ada file yang berhasil diupload. Skipped: {skipped}" + (firstError != null ? $" (First error: {firstError})" : "");
+            TempData["Success"] = $"Upload folder audit selesai. Saved: {saved}, Skipped: {skipped}";
 
             // balik ke folder audit biar langsung kelihatan
             return RedirectToAction(nameof(Index), new { folder = auditId, q, month, page = 1, pageSize });
         }
 
-        // sanitize relative file path untuk folder upload
-        private static string MakeSafeRelativeFilePath(string raw)
+        private static string SanitizeRelativePath(string rel)
         {
-            raw ??= "";
-            raw = raw.Replace('\\', '/').Trim();
-            raw = raw.TrimStart('/');
+            rel = (rel ?? "").Replace('\\', '/').Trim();
+            while (rel.StartsWith("/")) rel = rel.TrimStart('/');
 
-            if (string.IsNullOrWhiteSpace(raw)) return "";
-
-            var parts = raw.Split('/', StringSplitOptions.RemoveEmptyEntries)
+            var parts = rel.Split('/', StringSplitOptions.RemoveEmptyEntries)
                            .Select(p => MakeSafeFileName(p))
                            .Where(p => !string.IsNullOrWhiteSpace(p))
                            .ToList();
 
-            // minimal harus ada file
-            if (parts.Count == 0) return "";
-
-            // NOTE: MakeSafeFileName menjaga ext juga (karena nama file segmen terakhir mengandung ext)
             return string.Join("/", parts);
         }
 
@@ -354,36 +360,35 @@ namespace YourApp.Controllers
             input = input.Trim();
             if (string.IsNullOrWhiteSpace(input)) return "file";
 
-            // hapus karakter aneh, keep underscore/dash/dot
             input = Regex.Replace(input, @"\s+", "_");
             input = Regex.Replace(input, @"[^a-zA-Z0-9_\-\.]+", "");
             input = Regex.Replace(input, @"_+", "_").Trim('_');
 
-            // cegah nama kosong / hidden file aneh
-            if (string.IsNullOrWhiteSpace(input)) input = "file";
-
-            if (input.Length > 160) input = input.Substring(0, 160);
-            return input;
+            if (input.Length > 150) input = input.Substring(0, 150);
+            return string.IsNullOrWhiteSpace(input) ? "file" : input;
         }
 
-        private static string ResolveUniqueFilePath(string folderPhysical, string fileName)
+        private static string ResolveUniqueFullFilePath(string fullPath)
         {
-            var full = Path.Combine(folderPhysical, fileName);
-            if (!System.IO.File.Exists(full)) return full;
+            if (!System.IO.File.Exists(fullPath)) return fullPath;
 
-            var baseName = Path.GetFileNameWithoutExtension(fileName);
-            var ext = Path.GetExtension(fileName);
+            var dir = Path.GetDirectoryName(fullPath) ?? "";
+            var name = Path.GetFileNameWithoutExtension(fullPath);
+            var ext = Path.GetExtension(fullPath);
 
             for (int i = 1; i <= 10_000; i++)
             {
-                var alt = Path.Combine(folderPhysical, $"{baseName}_{i}{ext}");
+                var alt = Path.Combine(dir, $"{name}_{i}{ext}");
                 if (!System.IO.File.Exists(alt)) return alt;
             }
 
             var rnd = Guid.NewGuid().ToString("N").Substring(0, 8);
-            return Path.Combine(folderPhysical, $"{baseName}_{rnd}{ext}");
+            return Path.Combine(dir, $"{name}_{rnd}{ext}");
         }
 
+        // ============================================================
+        // INDEX
+        // ============================================================
         [HttpGet("")]
         [HttpGet("Index")]
         public async Task<IActionResult> Index(
@@ -391,7 +396,7 @@ namespace YourApp.Controllers
             string? q = "",
             string? month = "",
             int page = 1,
-            int pageSize = 10
+            int pageSize = 50
         )
         {
             if (!Directory.Exists(BasePath))
@@ -399,8 +404,8 @@ namespace YourApp.Controllers
 
             if (page < 1) page = 1;
 
-            var allowedSizes = new[] { 10, 20, 50, 100, 200 };
-            if (!allowedSizes.Contains(pageSize)) pageSize = 10;
+            var allowedSizes = new[] { 20, 50, 100, 200 };
+            if (!allowedSizes.Contains(pageSize)) pageSize = 50;
 
             var rel = NormalizeAndValidateRelative(folder);
             var physical = ToPhysicalPathFromRel(rel);
@@ -583,6 +588,9 @@ namespace YourApp.Controllers
             return View(vm);
         }
 
+        // ============================================================
+        // SIZES + DISK + DOWNLOADS (UNCHANGED)
+        // ============================================================
         [HttpGet("Sizes")]
         public async Task<IActionResult> Sizes(string? folder = "", string? q = "", string? month = "")
         {
@@ -756,7 +764,7 @@ namespace YourApp.Controllers
                 vm.Title = "Downloads - Month ZIP";
                 vm.Description = $"Month: {month}";
                 vm.StartUrl = Url.Action(nameof(DownloadMonth), "UploadLibrary", new { folder, q, month }) ?? "/UploadLibrary";
-                vm.BackUrl = Url.Action(nameof(Index), "UploadLibrary", new { folder, q, month, page = 1, pageSize = 10 }) ?? "/UploadLibrary";
+                vm.BackUrl = Url.Action(nameof(Index), "UploadLibrary", new { folder, q, month, page = 1, pageSize = 50 }) ?? "/UploadLibrary";
                 return View("Downloads", vm);
             }
 
@@ -769,7 +777,7 @@ namespace YourApp.Controllers
                 vm.Title = "Downloads - Folder ZIP";
                 vm.Description = $"Path: {path}";
                 vm.StartUrl = Url.Action(nameof(DownloadSpbu), "UploadLibrary", new { path, month }) ?? "/UploadLibrary";
-                vm.BackUrl = Url.Action(nameof(Index), "UploadLibrary", new { folder = "", q = "", month = month, page = 1, pageSize = 10 }) ?? "/UploadLibrary";
+                vm.BackUrl = Url.Action(nameof(Index), "UploadLibrary", new { folder = "", q = "", month = month, page = 1, pageSize = 50 }) ?? "/UploadLibrary";
                 return View("Downloads", vm);
             }
 
@@ -1016,7 +1024,7 @@ namespace YourApp.Controllers
 
         [HttpPost("DeleteMonth")]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> DeleteMonth(string? folder = "", string? q = "", string? month = "", int page = 1, int pageSize = 10)
+        public async Task<IActionResult> DeleteMonth(string? folder = "", string? q = "", string? month = "", int page = 1, int pageSize = 50)
         {
             month = (month ?? "").Trim();
             if (!TryParseMonthKey(month, out int y, out int m))
@@ -1109,7 +1117,7 @@ namespace YourApp.Controllers
 
         [HttpPost("DeleteFile")]
         [ValidateAntiForgeryToken]
-        public IActionResult DeleteFile(string path, string? returnFolder = "", string? q = "", string? month = "", int page = 1, int pageSize = 10)
+        public IActionResult DeleteFile(string path, string? returnFolder = "", string? q = "", string? month = "", int page = 1, int pageSize = 50)
         {
             var rel = NormalizeAndValidateRelative(path);
             var physical = ToPhysicalPathFromRel(rel);
@@ -1120,25 +1128,22 @@ namespace YourApp.Controllers
             return RedirectToAction(nameof(Index), new { folder = returnFolder, q, month, page, pageSize });
         }
 
-        // ✅ DELETE FOLDER LANGSUNG RECURSIVE (tanpa validasi "folder tidak kosong")
+        // ✅ CHANGE: DELETE FOLDER LANGSUNG RECURSIVE (tanpa validasi kosong)
         [HttpPost("DeleteFolder")]
         [ValidateAntiForgeryToken]
-        public IActionResult DeleteFolder(string path, string? returnFolder = "", string? q = "", string? month = "", int page = 1, int pageSize = 10)
+        public IActionResult DeleteFolder(string path, string? returnFolder = "", string? q = "", string? month = "", int page = 1, int pageSize = 50)
         {
             var rel = NormalizeAndValidateRelative(path);
             var physical = ToPhysicalPathFromRel(rel);
 
-            if (Directory.Exists(physical))
+            try
             {
-                try
-                {
+                if (Directory.Exists(physical))
                     Directory.Delete(physical, recursive: true);
-                    TempData["Success"] = $"Folder berhasil dihapus: {Path.GetFileName(physical)}";
-                }
-                catch (Exception ex)
-                {
-                    TempData["Error"] = $"Gagal hapus folder: {ex.Message}";
-                }
+            }
+            catch (Exception ex)
+            {
+                TempData["Error"] = $"Gagal hapus folder: {ex.Message}";
             }
 
             return RedirectToAction(nameof(Index), new { folder = returnFolder, q, month, page, pageSize });

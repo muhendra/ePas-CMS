@@ -1,8 +1,6 @@
 ﻿@model YourApp.Controllers.UploadLibraryController.LibraryVm
 @using static YourApp.Controllers.UploadLibraryController
 @using System
-@using System.IO
-@using IOPath = System.IO.Path
 
 @{
     ViewData["Title"] = "Upload Library";
@@ -40,9 +38,8 @@
         padding: .2rem .45rem;
     }
 
-    /* ✅ Action buttons rapi */
     .action-cell {
-        display: inline-flex;
+        display: flex;
         justify-content: flex-end;
         gap: .5rem;
         flex-wrap: nowrap;
@@ -60,30 +57,16 @@
             border-radius: .35rem;
         }
 
-    /* ✅ toolbar */
     .month-toolbar {
         display: flex;
         flex-wrap: wrap;
         gap: .5rem;
         align-items: center;
-        margin: .5rem 0 1rem 0;
+        margin-bottom: .5rem;
     }
 
         .month-toolbar .btn {
             border-radius: .45rem;
-        }
-
-    /* ✅ Upload inline (sejajar toolbar) */
-    .upload-inline-form {
-        display: flex;
-        flex-wrap: wrap;
-        gap: .5rem;
-        align-items: center;
-        margin-left: auto; /* dorong ke kanan biar rapi */
-    }
-
-        .upload-inline-form input[type="file"] {
-            max-width: 360px;
         }
 
     .size-badges {
@@ -94,143 +77,18 @@
         align-items: center;
     }
 
-    /* ✅ Preview modal */
-    .preview-modal-backdrop {
-        position: fixed;
-        inset: 0;
-        background: rgba(0,0,0,.6);
-        display: none;
-        z-index: 1055;
-    }
-
-    .preview-modal {
-        position: fixed;
-        inset: 0;
-        display: none;
-        z-index: 1060;
-        overflow: auto;
-        padding: 2rem 1rem;
-    }
-
-    .preview-card {
-        max-width: 980px;
-        margin: 0 auto;
-        background: #fff;
-        border-radius: .5rem;
-        box-shadow: 0 12px 30px rgba(0,0,0,.25);
-    }
-
-    .preview-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        padding: .75rem 1rem;
-        border-bottom: 1px solid #eee;
-        gap: .75rem;
-    }
-
-    .preview-title {
-        font-weight: 600;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-        max-width: 75%;
-    }
-
-    .preview-body {
-        padding: 1rem;
-    }
-
-        .preview-body img {
-            max-width: 100%;
-            height: auto;
-            display: block;
-            margin: 0 auto;
-        }
-
-        .preview-body video {
-            width: 100%;
-            max-height: 70vh;
-            display: block;
-            margin: 0 auto;
-        }
-
-    .btn-icon {
-        border: 0;
-        background: transparent;
-        font-size: 1.25rem;
-        line-height: 1;
-        padding: .25rem .5rem;
-    }
-
-    /* ✅ modal download confirm */
-    .dl-modal-backdrop {
-        position: fixed;
-        inset: 0;
-        background: rgba(0,0,0,.5);
-        display: none;
-        z-index: 1065;
-    }
-
-    .dl-modal {
-        position: fixed;
-        inset: 0;
-        display: none;
-        z-index: 1070;
-        overflow: auto;
-        padding: 2rem 1rem;
-    }
-
-    .dl-card {
-        max-width: 720px;
-        margin: 0 auto;
-        background: #fff;
-        border-radius: .5rem;
-        box-shadow: 0 12px 30px rgba(0,0,0,.25);
-    }
-
-    .dl-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        padding: .75rem 1rem;
-        border-bottom: 1px solid #eee;
-        gap: .75rem;
-    }
-
-    .dl-title {
-        font-weight: 600;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-        max-width: 80%;
-    }
-
-    .dl-body {
-        padding: 1rem;
-    }
-
-    .dl-footer {
-        display: flex;
-        justify-content: flex-end;
+    /* ✅ upload folder inline (sejajar delete all) */
+    .upload-inline {
+        display: inline-flex;
         gap: .5rem;
-        padding: .75rem 1rem;
-        border-top: 1px solid #eee;
+        align-items: center;
+        flex-wrap: wrap;
+        margin: 0;
     }
 
-    .dl-note {
-        color: #6c757d;
-        font-size: .9rem;
-        margin-top: .5rem;
-    }
-
-    .dl-box {
-        background: #f8f9fa;
-        border: 1px solid #eee;
-        padding: .75rem 1rem;
-        border-radius: .35rem;
-        font-weight: 600;
-    }
+        .upload-inline input[type="file"] {
+            max-width: 280px;
+        }
 </style>
 
 <div class="container mt-4">
@@ -304,7 +162,7 @@
         </div>
     </form>
 
-    <!-- ✅ Actions + Upload inline (di bawah Reset, sejajar dengan Delete All) -->
+    <!-- Actions: Download/Delete for Selected Month + ✅ Upload Folder sejajar DeleteAll -->
     <div class="month-toolbar">
         <button type="button"
                 class="btn btn-outline-primary @(string.IsNullOrEmpty(Model.Month) ? "disabled" : "")"
@@ -326,10 +184,10 @@
             </button>
         </form>
 
-        <!-- ✅ Upload folder/file (hanya kalau sedang di folder auditId) -->
+        <!-- ✅ Upload folder audit (muncul hanya kalau sedang di folder audit GUID) -->
         @if (Model.IsAuditFolder && !string.IsNullOrWhiteSpace(Model.AuditId))
         {
-            <form method="post" action="/UploadLibrary/UploadAuditFile" enctype="multipart/form-data" class="upload-inline-form">
+            <form method="post" action="/UploadLibrary/UploadAuditFolder" enctype="multipart/form-data" class="upload-inline">
                 @Html.AntiForgeryToken()
                 <input type="hidden" name="auditId" value="@Model.AuditId" />
                 <input type="hidden" name="returnFolder" value="@Model.CurrentRel" />
@@ -338,22 +196,18 @@
                 <input type="hidden" name="page" value="@Model.Page" />
                 <input type="hidden" name="pageSize" value="@Model.PageSize" />
 
-                <span class="badge bg-secondary uploadlib-badge" title="trx_audit.id">@Model.AuditId</span>
-                @if (!string.IsNullOrWhiteSpace(Model.AuditReportNo))
-                {
-                    <span class="badge bg-info text-dark uploadlib-badge" title="trx_audit.report_no">@Model.AuditReportNo</span>
-                }
-
-                <!-- ✅ folder upload -->
+                <!-- folder picker -->
                 <input class="form-control form-control-sm"
                        type="file"
                        name="files"
                        multiple
                        webkitdirectory
                        directory
-                       accept=".jpg,.jpeg,.png,.gif,.webp,.mp4,.webm,.ogg,.mov,.m4v,.pdf" />
+                       required />
 
-                <button class="btn btn-sm btn-primary" type="submit">Upload (Folder/File)</button>
+                <button class="btn btn-outline-success btn-sm" type="submit">
+                    Upload Folder (Audit)
+                </button>
             </form>
         }
     </div>
@@ -371,7 +225,6 @@
 
     <div class="card">
         <div class="card-body">
-
             <div class="table-responsive">
                 <table class="table table-hover align-middle uploadlib-table">
                     <colgroup>
@@ -407,6 +260,8 @@
                             {
                                 if (item.IsDir)
                                 {
+                                    var isAuditGuid = Guid.TryParse(item.Name, out _);
+
                                     <tr>
                                         <td>
                                             <a class="uploadlib-name-link"
@@ -436,14 +291,45 @@
                                         <td>Folder</td>
                                         <td class="text-muted">@(item.ChildCount.HasValue ? $"{item.ChildCount.Value} items" : "-")</td>
                                         <td>@item.LastWriteTime.ToString("yyyy-MM-dd HH:mm")</td>
+
                                         <td class="text-end">
                                             <div class="action-cell">
                                                 <button type="button"
                                                         class="btn btn-sm btn-outline-primary btn-action"
-                                                        onclick="openDownloadFolderPopup('@item.RelPath','@item.DisplayName')"
-                                                        title="Download ZIP untuk folder/SPBU ini">
+                                                        onclick="openDownloadFolderPopup('@item.RelPath','@item.DisplayName')">
                                                     Download
                                                 </button>
+
+                                                <!-- ✅ Upload per row (khusus folder audit GUID) -->
+                                                @if (isAuditGuid)
+                                                {
+                                                    <form method="post" action="/UploadLibrary/UploadAuditFolder" enctype="multipart/form-data" class="m-0">
+                                                        @Html.AntiForgeryToken()
+                                                        <input type="hidden" name="auditId" value="@item.Name" />
+                                                        <input type="hidden" name="returnFolder" value="@Model.CurrentRel" />
+                                                        <input type="hidden" name="q" value="@Model.Query" />
+                                                        <input type="hidden" name="month" value="@Model.Month" />
+                                                        <input type="hidden" name="page" value="@Model.Page" />
+                                                        <input type="hidden" name="pageSize" value="@Model.PageSize" />
+
+                                                        <input type="file"
+                                                               name="files"
+                                                               multiple
+                                                               webkitdirectory
+                                                               directory
+                                                               required
+                                                               style="display:none"
+                                                               class="js-folder-input" />
+
+                                                        <button type="button"
+                                                                class="btn btn-sm btn-outline-success btn-action"
+                                                                onclick="triggerRowFolderUpload(this)">
+                                                            Upload
+                                                        </button>
+
+                                                        <button type="submit" style="display:none" class="js-submit"></button>
+                                                    </form>
+                                                }
 
                                                 <form method="post" action="/UploadLibrary/DeleteFolder" class="m-0"
                                                       onsubmit="return confirm('Hapus folder (recursive): @item.Name ?');">
@@ -462,35 +348,15 @@
                                 }
                                 else
                                 {
-                                    var ext = (System.IO.Path.GetExtension(item.Name ?? "") ?? "").ToLowerInvariant();
-                                    var isImg = ext == ".jpg" || ext == ".jpeg" || ext == ".png" || ext == ".gif" || ext == ".webp";
-                                    var isVid = ext == ".mp4" || ext == ".webm" || ext == ".ogg" || ext == ".mov" || ext == ".m4v";
-
                                     <tr>
                                         <td title="@item.Name">
                                             <span class="uploadlib-name-link">
                                                 <span>📄</span>
-
-                                                @if (isImg || isVid)
-                                                {
-                                                    <a href="javascript:void(0)"
-                                                       class="uploadlib-name js-preview"
-                                                       data-rel="@item.RelPath"
-                                                       data-name="@item.DisplayName"
-                                                       data-type="@(isImg ? "image" : "video")"
-                                                       style="text-decoration: underline;">
-                                                        @item.DisplayName
-                                                    </a>
-                                                }
-                                                else
-                                                {
-                                                    <span class="uploadlib-name">@item.DisplayName</span>
-                                                }
+                                                <span class="uploadlib-name">@item.DisplayName</span>
                                             </span>
                                         </td>
 
                                         <td><span class="text-muted">-</span></td>
-
                                         <td>File</td>
                                         <td>@(item.SizeBytes.HasValue? HumanSize(item.SizeBytes.Value) : "-")</td>
                                         <td>@item.LastWriteTime.ToString("yyyy-MM-dd HH:mm")</td>
@@ -579,202 +445,36 @@
     </div>
 </div>
 
-<!-- ✅ Preview Modal -->
-<div id="previewBackdrop" class="preview-modal-backdrop"></div>
-<div id="previewModal" class="preview-modal" role="dialog" aria-modal="true" aria-hidden="true">
-    <div class="preview-card">
-        <div class="preview-header">
-            <div class="preview-title" id="previewTitle">Preview</div>
-            <div class="d-flex gap-2">
-                <a id="previewDownloadBtn" class="btn btn-sm btn-outline-primary" href="#" target="_blank" rel="noopener">Download</a>
-                <button type="button" class="btn-icon" id="previewCloseBtn" aria-label="Close">✕</button>
-            </div>
-        </div>
-        <div class="preview-body" id="previewBody"></div>
-    </div>
-</div>
-
-<!-- ✅ Download Confirm Modal -->
-<div id="dlBackdrop" class="dl-modal-backdrop"></div>
-<div id="dlModal" class="dl-modal" role="dialog" aria-modal="true" aria-hidden="true">
-    <div class="dl-card">
-        <div class="dl-header">
-            <div class="dl-title" id="dlTitle">Download</div>
-            <button type="button" class="btn-icon" id="dlCloseBtn" aria-label="Close">✕</button>
-        </div>
-        <div class="dl-body">
-            <div>Download akan diproses di tab <b>Downloads</b>.</div>
-            <div class="dl-note">Di tab Downloads, user harus klik tombol <b>Start Download</b> (user action).</div>
-
-            <div class="mt-3 dl-box" id="dlDesc"></div>
-
-            <input type="hidden" id="dlType" />
-            <input type="hidden" id="dlFolder" />
-            <input type="hidden" id="dlQ" />
-            <input type="hidden" id="dlMonth" />
-            <input type="hidden" id="dlPath" />
-        </div>
-        <div class="dl-footer">
-            <button type="button" class="btn btn-outline-secondary" id="dlCancelBtn">Cancel</button>
-            <button type="button" class="btn btn-primary" id="dlOpenBtn">Open Downloads Tab</button>
-        </div>
-    </div>
-</div>
-
 <script>
+    // ✅ per-row folder upload: klik tombol Upload -> buka folder picker -> auto submit
+    function triggerRowFolderUpload(btn) {
+        const form = btn.closest('form');
+        const input = form.querySelector('.js-folder-input');
+        const submit = form.querySelector('.js-submit');
+
+        input.onchange = function () {
+            if (input.files && input.files.length > 0) submit.click();
+        };
+        input.click();
+    }
+
+    // Disk info
     (function () {
-        // Preview
-        const backdrop = document.getElementById('previewBackdrop');
-        const modal = document.getElementById('previewModal');
-        const body = document.getElementById('previewBody');
-        const title = document.getElementById('previewTitle');
-        const closeBtn = document.getElementById('previewCloseBtn');
-        const dlBtn = document.getElementById('previewDownloadBtn');
-
-        function openPreview(fileName, relPath, type) {
-            title.textContent = fileName || 'Preview';
-            const downloadUrl = '/UploadLibrary/Download?path=' + encodeURIComponent(relPath);
-            dlBtn.href = downloadUrl;
-            body.innerHTML = '';
-
-            if (type === 'image') {
-                const img = document.createElement('img');
-                img.src = downloadUrl;
-                img.alt = fileName || 'image';
-                body.appendChild(img);
-            } else if (type === 'video') {
-                const video = document.createElement('video');
-                video.src = downloadUrl;
-                video.controls = true;
-                video.playsInline = true;
-                body.appendChild(video);
-            } else {
-                body.innerHTML = '<div class="text-muted">Preview tidak didukung untuk tipe ini.</div>';
-            }
-
-            backdrop.style.display = 'block';
-            modal.style.display = 'block';
-            modal.setAttribute('aria-hidden', 'false');
-            document.body.style.overflow = 'hidden';
-        }
-
-        function closePreview() {
-            const vid = body.querySelector('video');
-            if (vid) { try { vid.pause(); vid.src = ''; } catch (e) { } }
-            body.innerHTML = '';
-            backdrop.style.display = 'none';
-            modal.style.display = 'none';
-            modal.setAttribute('aria-hidden', 'true');
-            document.body.style.overflow = '';
-        }
-
-        document.addEventListener('click', function (e) {
-            const a = e.target.closest('.js-preview');
-            if (!a) return;
-            e.preventDefault();
-            openPreview(a.getAttribute('data-name'), a.getAttribute('data-rel'), a.getAttribute('data-type'));
-        });
-
-        backdrop.addEventListener('click', closePreview);
-        closeBtn.addEventListener('click', closePreview);
-        document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closePreview(); });
-
-        // Download Confirm Modal
-        const dlBackdrop = document.getElementById('dlBackdrop');
-        const dlModal = document.getElementById('dlModal');
-        const dlTitle = document.getElementById('dlTitle');
-        const dlDesc = document.getElementById('dlDesc');
-        const dlCloseBtn = document.getElementById('dlCloseBtn');
-        const dlCancelBtn = document.getElementById('dlCancelBtn');
-        const dlOpenBtn = document.getElementById('dlOpenBtn');
-
-        const dlType = document.getElementById('dlType');
-        const dlFolder = document.getElementById('dlFolder');
-        const dlQ = document.getElementById('dlQ');
-        const dlMonth = document.getElementById('dlMonth');
-        const dlPath = document.getElementById('dlPath');
-
-        function showDlModal() {
-            dlBackdrop.style.display = 'block';
-            dlModal.style.display = 'block';
-            dlModal.setAttribute('aria-hidden', 'false');
-            document.body.style.overflow = 'hidden';
-        }
-        function hideDlModal() {
-            dlBackdrop.style.display = 'none';
-            dlModal.style.display = 'none';
-            dlModal.setAttribute('aria-hidden', 'true');
-            document.body.style.overflow = '';
-        }
-
-        window.openDownloadMonthPopup = function () {
-            const month = document.getElementById('monthSelect').value || '';
-            if (!month) return;
-
-            dlTitle.textContent = 'Download ZIP (Month)';
-            dlDesc.textContent = 'Month: ' + month;
-
-            dlType.value = 'month';
-            dlFolder.value = '@(Model.CurrentRel ?? "")';
-            dlQ.value = '@(Model.Query ?? "")';
-            dlMonth.value = month;
-            dlPath.value = '';
-
-            showDlModal();
-        }
-
-        window.openDownloadFolderPopup = function (relPath, displayName) {
-            dlTitle.textContent = 'Download ZIP (Folder)';
-            dlDesc.textContent = 'Folder: ' + (displayName || relPath);
-
-            dlType.value = 'spbu';
-            dlFolder.value = '';
-            dlQ.value = '';
-            dlMonth.value = '@(Model.Month ?? "")';
-            dlPath.value = relPath || '';
-
-            showDlModal();
-        }
-
-        function buildDownloadsUrl() {
-            const type = dlType.value;
-
-            if (type === 'month') {
-                return '/UploadLibrary/Downloads?type=month'
-                    + '&folder=' + encodeURIComponent(dlFolder.value || '')
-                    + '&q=' + encodeURIComponent(dlQ.value || '')
-                    + '&month=' + encodeURIComponent(dlMonth.value || '');
-            }
-
-            return '/UploadLibrary/Downloads?type=spbu'
-                + '&path=' + encodeURIComponent(dlPath.value || '')
-                + '&month=' + encodeURIComponent(dlMonth.value || '');
-        }
-
-        dlOpenBtn.addEventListener('click', function () {
-            const url = buildDownloadsUrl();
-            window.open(url, '_blank', 'noopener');
-            hideDlModal();
-        });
-
-        dlBackdrop.addEventListener('click', hideDlModal);
-        dlCloseBtn.addEventListener('click', hideDlModal);
-        dlCancelBtn.addEventListener('click', hideDlModal);
-        document.addEventListener('keydown', function (e) { if (e.key === 'Escape') hideDlModal(); });
-
-        // Disk Space
         const diskEl = document.getElementById('diskInfo');
         let diskInFlight = false;
 
         async function refreshDisk() {
-            if (!diskEl || diskInFlight) return;
+            if (!diskEl) return;
+            if (diskInFlight) return;
+
             diskInFlight = true;
             try {
                 const r = await fetch('/UploadLibrary/Disk', { cache: 'no-store' });
                 if (!r.ok) throw new Error('disk fetch failed');
                 const d = await r.json();
+
                 diskEl.textContent = `(Used ${d.used} / ${d.total} • Avail ${d.avail} • ${d.usePercent}%)`;
-            } catch {
+            } catch (err) {
                 diskEl.textContent = '(disk info unavailable)';
             } finally {
                 diskInFlight = false;
@@ -783,58 +483,5 @@
 
         refreshDisk();
         setInterval(refreshDisk, 5000);
-
-        // Total Size Badges
-        const badgeFiltered = document.getElementById('badgeFilteredTotal');
-        const badgeAudit = document.getElementById('badgeAuditTotal');
-
-        function humanSize(bytes) {
-            try {
-                let b = Number(bytes || 0);
-                const units = ['B', 'KB', 'MB', 'GB', 'TB'];
-                let u = 0;
-                while (b >= 1024 && u < units.length - 1) { b /= 1024; u++; }
-                return (Math.round(b * 100) / 100) + ' ' + units[u];
-            } catch {
-                return bytes + ' B';
-            }
-        }
-
-        async function refreshSizes() {
-            try {
-                const folder = '@(Model.CurrentRel ?? "")';
-                const q = '@(Model.Query ?? "")';
-                const month = '@(Model.Month ?? "")';
-
-                if (!month) {
-                    if (badgeFiltered) badgeFiltered.innerHTML = 'Total size (hasil filter): <b>-</b>';
-                    if (badgeAudit) badgeAudit.style.display = 'none';
-                    return;
-                }
-
-                const url = '/UploadLibrary/Sizes?folder=' + encodeURIComponent(folder)
-                    + '&q=' + encodeURIComponent(q)
-                    + '&month=' + encodeURIComponent(month);
-
-                const r = await fetch(url, { cache: 'no-store' });
-                if (!r.ok) throw new Error('sizes fetch failed');
-                const d = await r.json();
-                if (!d || d.ok !== true) throw new Error((d && d.error) ? d.error : 'sizes error');
-
-                badgeFiltered.innerHTML = 'Total size (hasil filter): <b>' + (d.filteredTotalSizeBytes == null ? '-' : humanSize(d.filteredTotalSizeBytes)) + '</b>';
-
-                if (d.isAuditFolder) {
-                    badgeAudit.style.display = '';
-                    badgeAudit.innerHTML = 'Total size audit (folder ini): <b>' + (d.currentFolderTotalSizeBytes == null ? '-' : humanSize(d.currentFolderTotalSizeBytes)) + '</b>';
-                } else {
-                    badgeAudit.style.display = 'none';
-                }
-            } catch {
-                if (badgeFiltered) badgeFiltered.innerHTML = 'Total size (hasil filter): <b>-</b>';
-                if (badgeAudit) badgeAudit.style.display = 'none';
-            }
-        }
-
-        refreshSizes();
     })();
 </script>
