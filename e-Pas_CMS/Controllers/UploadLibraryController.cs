@@ -73,22 +73,15 @@ namespace YourApp.Controllers
                 int cnt = 0;
 
                 IEnumerable<string> files;
-                try
-                {
-                    files = Directory.EnumerateFiles(dirPath, "*", SearchOption.AllDirectories);
-                }
-                catch
-                {
-                    return null;
-                }
+                try { files = Directory.EnumerateFiles(dirPath, "*", SearchOption.AllDirectories); }
+                catch { return null; }
 
                 foreach (var f in files)
                 {
                     cnt++;
-                    if (cnt > maxFiles) return null; // biar ga ngunci server
+                    if (cnt > maxFiles) return null;
 
-                    try { total += new FileInfo(f).Length; }
-                    catch { }
+                    try { total += new FileInfo(f).Length; } catch { }
                 }
 
                 return total;
@@ -179,12 +172,10 @@ namespace YourApp.Controllers
             public int TotalPages { get; set; }
 
             public int[] AllowedPageSizes { get; set; } = new[] { 20, 50, 100, 200 };
-
-            // (biar view ga berat: size dihitung via AJAX /Sizes)
             public long? FilteredTotalSizeBytes { get; set; }
             public long? CurrentFolderTotalSizeBytes { get; set; }
 
-            // audit detail (kalau user sedang buka folder audit guid)
+            // audit detail
             public bool IsAuditFolder { get; set; }
             public string? AuditId { get; set; }
             public string? AuditSpbuNo { get; set; }
@@ -193,7 +184,7 @@ namespace YourApp.Controllers
 
         public class DownloadsVm
         {
-            public string Type { get; set; } = ""; // month / spbu
+            public string Type { get; set; } = "";
             public string Title { get; set; } = "";
             public string Description { get; set; } = "";
             public string StartUrl { get; set; } = "";
@@ -201,9 +192,10 @@ namespace YourApp.Controllers
         }
 
         // ============================================================
-        // ✅ UPLOAD 1 FILE PER AUDIT (folder = trx_audit.id / GUID)
-        // ✅ filename TIDAK DIUBAH (tetap original name)
+        // ✅ UPLOAD 1 FILE PER AUDIT (folder = trx_audit.id)
+        // ✅ NAMA FILE TIDAK DIUBAH (pakai original name)
         // POST /UploadLibrary/UploadAuditFile
+        // fields: auditId, file, returnFolder/q/month/page/pageSize
         // ============================================================
         [HttpPost("UploadAuditFile")]
         [ValidateAntiForgeryToken]
@@ -219,9 +211,11 @@ namespace YourApp.Controllers
             int pageSize = 50
         )
         {
+            auditId = (auditId ?? "").Trim();
+
             if (string.IsNullOrWhiteSpace(auditId) || !Guid.TryParse(auditId, out _))
             {
-                TempData["Error"] = "AuditId tidak valid.";
+                TempData["Error"] = "AuditId tidak valid (trx_audit.id).";
                 return RedirectToAction(nameof(Index), new { folder = returnFolder, q, month, page, pageSize });
             }
 
@@ -231,7 +225,7 @@ namespace YourApp.Controllers
                 return RedirectToAction(nameof(Index), new { folder = returnFolder, q, month, page, pageSize });
             }
 
-            // allowlist extension
+            // allowlist extension (sesuaikan)
             var allowedExt = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
             {
                 ".jpg",".jpeg",".png",".gif",".webp",
@@ -239,8 +233,8 @@ namespace YourApp.Controllers
                 ".pdf"
             };
 
-            var originalName = (file.FileName ?? "file").Trim();
-            originalName = Path.GetFileName(originalName); // strip path from client
+            var originalName = file.FileName ?? "file";
+            originalName = Path.GetFileName(originalName); // prevent path injection
             var ext = Path.GetExtension(originalName);
 
             if (string.IsNullOrWhiteSpace(ext) || !allowedExt.Contains(ext))
@@ -249,25 +243,20 @@ namespace YourApp.Controllers
                 return RedirectToAction(nameof(Index), new { folder = returnFolder, q, month, page, pageSize });
             }
 
-            // ✅ folder audit = trx_audit.id (GUID) => jangan diubah
-            var auditRel = NormalizeAndValidateRelative(auditId.Trim());
+            // ✅ target folder: BasePath/<auditId>/
+            var auditRel = NormalizeAndValidateRelative(auditId);
             var auditPhysical = ToPhysicalPathFromRel(auditRel);
 
-            try
-            {
-                Directory.CreateDirectory(auditPhysical);
-            }
+            try { Directory.CreateDirectory(auditPhysical); }
             catch (Exception ex)
             {
                 TempData["Error"] = $"Gagal membuat folder audit: {ex.Message}";
                 return RedirectToAction(nameof(Index), new { folder = returnFolder, q, month, page, pageSize });
             }
 
-            // ✅ filename tetap (hanya disanitize agar aman di Linux)
-            var safeFileName = MakeSafeFileName(Path.GetFileNameWithoutExtension(originalName)) + ext.ToLowerInvariant();
-            var finalPath = ResolveUniqueFilePath(auditPhysical, safeFileName);
-
-            var ct = HttpContext.RequestAborted;
+            // ✅ keep original filename, but sanitize minimal
+            var safeName = MakeSafeFileName(Path.GetFileNameWithoutExtension(originalName)) + ext.ToLowerInvariant();
+            var finalPath = ResolveUniqueFilePath(auditPhysical, safeName);
 
             try
             {
@@ -280,7 +269,7 @@ namespace YourApp.Controllers
                     useAsync: true
                 );
 
-                await file.CopyToAsync(fs, ct);
+                await file.CopyToAsync(fs, HttpContext.RequestAborted);
             }
             catch (Exception ex)
             {
@@ -290,9 +279,9 @@ namespace YourApp.Controllers
 
             TempData["Success"] = $"Upload berhasil: {Path.GetFileName(finalPath)}";
 
-            // balik ke folder tempat user sekarang (list/root) atau folder audit kalau dia sedang di audit
-            var backFolder = string.IsNullOrWhiteSpace(returnFolder) ? "" : returnFolder;
-            return RedirectToAction(nameof(Index), new { folder = backFolder, q, month, page, pageSize });
+            // balik ke folder audit biar langsung kelihatan
+            var backFolder = auditId;
+            return RedirectToAction(nameof(Index), new { folder = backFolder, q, month, page = 1, pageSize });
         }
 
         private static string MakeSafeFileName(string input)
@@ -305,7 +294,7 @@ namespace YourApp.Controllers
             input = Regex.Replace(input, @"[^a-zA-Z0-9_\-\.]+", "");
             input = Regex.Replace(input, @"_+", "_").Trim('_');
 
-            if (input.Length > 120) input = input.Substring(0, 120);
+            if (input.Length > 150) input = input.Substring(0, 150);
             return string.IsNullOrWhiteSpace(input) ? "file" : input;
         }
 
@@ -368,7 +357,6 @@ namespace YourApp.Controllers
                 AllowedPageSizes = allowedSizes
             };
 
-            // breadcrumbs
             vm.Breadcrumbs.Add(("uploads", ""));
             if (!string.IsNullOrEmpty(rel))
             {
@@ -381,9 +369,10 @@ namespace YourApp.Controllers
                 }
             }
 
-            // detect audit folder (last segment GUID)
+            // detect audit folder
             vm.IsAuditFolder = false;
             vm.AuditId = null;
+
             if (!string.IsNullOrEmpty(rel))
             {
                 var last = rel.Split('/', StringSplitOptions.RemoveEmptyEntries).LastOrDefault() ?? "";
@@ -433,8 +422,8 @@ namespace YourApp.Controllers
 
                 return new LibraryItemVm
                 {
-                    Name = d.Name, // ✅ tetap GUID (trx_audit.id)
-                    DisplayName = mapped ? meta!.SpbuNo : d.Name, // UI saja
+                    Name = d.Name,
+                    DisplayName = mapped ? meta!.SpbuNo : d.Name,
                     IsMappedFromAudit = mapped,
                     ReportNo = mapped ? (meta!.ReportNo ?? "") : "",
                     IsDir = true,
@@ -476,7 +465,44 @@ namespace YourApp.Controllers
                 allItems = allItems.Where(x => x.FilterDate.Year == y && x.FilterDate.Month == m).ToList();
             }
 
-            // total items paging (size badges dihitung via AJAX endpoint)
+            vm.CurrentFolderTotalSizeBytes = SafeDirectorySizeBytes(physical);
+
+            long totalFiltered = 0;
+            bool anySize = false;
+            var dirSizeCache = new Dictionary<string, long?>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var it in allItems)
+            {
+                if (!it.IsDir)
+                {
+                    if (it.SizeBytes.HasValue)
+                    {
+                        totalFiltered += it.SizeBytes.Value;
+                        anySize = true;
+                    }
+                    continue;
+                }
+
+                try
+                {
+                    var fullDir = ToPhysicalPathFromRel(it.RelPath);
+                    if (!dirSizeCache.TryGetValue(fullDir, out var sz))
+                    {
+                        sz = SafeDirectorySizeBytes(fullDir);
+                        dirSizeCache[fullDir] = sz;
+                    }
+
+                    if (sz.HasValue)
+                    {
+                        totalFiltered += sz.Value;
+                        anySize = true;
+                    }
+                }
+                catch { }
+            }
+
+            vm.FilteredTotalSizeBytes = anySize ? totalFiltered : (long?)null;
+
             vm.TotalItems = allItems.Count;
             vm.TotalPages = Math.Max(1, (int)Math.Ceiling(vm.TotalItems / (double)vm.PageSize));
             if (vm.Page > vm.TotalPages) vm.Page = vm.TotalPages;
@@ -489,9 +515,6 @@ namespace YourApp.Controllers
             return View(vm);
         }
 
-        // =========================
-        // ✅ Sizes (AJAX)
-        // =========================
         [HttpGet("Sizes")]
         public async Task<IActionResult> Sizes(string? folder = "", string? q = "", string? month = "")
         {
@@ -581,9 +604,6 @@ namespace YourApp.Controllers
             });
         }
 
-        // =========================
-        // ✅ Disk
-        // =========================
         public class DiskVm
         {
             public string Mount { get; set; } = "/";
@@ -629,9 +649,6 @@ namespace YourApp.Controllers
             return Json(d);
         }
 
-        // =========================
-        // Download single file
-        // =========================
         [HttpGet("Download")]
         public IActionResult Download(string path)
         {
@@ -691,14 +708,7 @@ namespace YourApp.Controllers
             return BadRequest("Invalid type. Use type=month or type=spbu.");
         }
 
-        // =========================
-        // ZIP HELPERS
-        // =========================
-        private static async Task AddFileToZipAsync(
-            ZipArchive zip,
-            string fullPath,
-            string entryName,
-            CancellationToken ct)
+        private static async Task AddFileToZipAsync(ZipArchive zip, string fullPath, string entryName, CancellationToken ct)
         {
             if (!System.IO.File.Exists(fullPath)) return;
 
@@ -730,7 +740,7 @@ namespace YourApp.Controllers
             }
             catch
             {
-                // skip
+                // skip file error/locked/permission
             }
         }
 
@@ -815,7 +825,7 @@ namespace YourApp.Controllers
                         if (!System.IO.File.Exists(file)) continue;
 
                         var relPath = file.Length > baseLen ? file.Substring(baseLen).Replace('\\', '/') : Path.GetFileName(file);
-                        var entryName = $"{d.Name}/{relPath}"; // folder tetap GUID auditId
+                        var entryName = $"{d.Name}/{relPath}";
 
                         StartZipIfNeeded();
                         await AddFileToZipAsync(zip!, file, entryName, ct);
@@ -1019,13 +1029,12 @@ namespace YourApp.Controllers
                 }
             }
 
-            if (error != null) TempData["Error"] = error;
+            if (error != null)
+                TempData["Error"] = error;
             else
-            {
                 TempData["Success"] = deletedCount > 0
                     ? $"Berhasil delete {deletedCount} item untuk bulan {month}."
                     : $"Tidak ada item untuk bulan {month}.";
-            }
 
             return RedirectToAction(nameof(Index), new { folder, q, month, page = 1, pageSize });
         }
@@ -1053,13 +1062,9 @@ namespace YourApp.Controllers
             if (Directory.Exists(physical))
             {
                 if (Directory.EnumerateFileSystemEntries(physical).Any())
-                {
                     TempData["Error"] = "Folder tidak kosong. Hapus isi folder dulu.";
-                }
                 else
-                {
                     Directory.Delete(physical);
-                }
             }
 
             return RedirectToAction(nameof(Index), new { folder = returnFolder, q, month, page, pageSize });
