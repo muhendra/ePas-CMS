@@ -323,7 +323,7 @@ namespace YourApp.Controllers
             string? q = "",
             string? month = "",
             int page = 1,
-            int pageSize = 50
+            int pageSize = 10
         )
         {
             if (!Directory.Exists(BasePath))
