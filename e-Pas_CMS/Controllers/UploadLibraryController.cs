@@ -101,7 +101,6 @@ namespace YourApp.Controllers
             year = 0; month = 0;
             if (string.IsNullOrWhiteSpace(ym)) return false;
 
-            // strict yyyy-MM
             if (!DateTime.TryParseExact(ym.Trim(), "yyyy-MM", CultureInfo.InvariantCulture, DateTimeStyles.None, out var dt))
                 return false;
 
@@ -116,7 +115,7 @@ namespace YourApp.Controllers
         {
             public string SpbuNo { get; set; } = "";
             public DateTime AuditDate { get; set; }
-            public string? ReportNo { get; set; } // ✅ NEW
+            public string? ReportNo { get; set; }
         }
 
         private async Task<Dictionary<string, AuditMeta>> GetAuditMetaMapAsync(List<string> auditIds, CancellationToken ct = default)
@@ -130,7 +129,7 @@ namespace YourApp.Controllers
                     AuditId = a.id,
                     SpbuNo = s.spbu_no,
                     AuditDate = (a.audit_execution_time ?? a.created_date),
-                    ReportNo = a.report_no // ✅ NEW
+                    ReportNo = a.report_no
                 }
             ).ToListAsync(ct);
 
@@ -180,10 +179,12 @@ namespace YourApp.Controllers
             public int TotalPages { get; set; }
 
             public int[] AllowedPageSizes { get; set; } = new[] { 20, 50, 100, 200 };
+
+            // (biar view ga berat: size dihitung via AJAX /Sizes)
             public long? FilteredTotalSizeBytes { get; set; }
             public long? CurrentFolderTotalSizeBytes { get; set; }
 
-            // ✅ Audit detail
+            // audit detail (kalau user sedang buka folder audit guid)
             public bool IsAuditFolder { get; set; }
             public string? AuditId { get; set; }
             public string? AuditSpbuNo { get; set; }
@@ -200,18 +201,17 @@ namespace YourApp.Controllers
         }
 
         // ============================================================
-        // ✅ UPLOAD 1 FILE PER AUDIT (folder = audit GUID)
+        // ✅ UPLOAD 1 FILE PER AUDIT (folder = trx_audit.id / GUID)
+        // ✅ filename TIDAK DIUBAH (tetap original name)
         // POST /UploadLibrary/UploadAuditFile
-        // fields: auditId, file, label(optional), returnFolder/q/month/page/pageSize(optional)
         // ============================================================
         [HttpPost("UploadAuditFile")]
         [ValidateAntiForgeryToken]
-        [RequestSizeLimit(100_000_000)] // 100MB
+        [RequestSizeLimit(100_000_000)]
         [RequestFormLimits(MultipartBodyLengthLimit = 100_000_000)]
         public async Task<IActionResult> UploadAuditFile(
             string auditId,
             IFormFile file,
-            string? label = "",
             string? returnFolder = "",
             string? q = "",
             string? month = "",
@@ -231,7 +231,7 @@ namespace YourApp.Controllers
                 return RedirectToAction(nameof(Index), new { folder = returnFolder, q, month, page, pageSize });
             }
 
-            // ✅ allowlist extension (sesuaikan kebutuhan)
+            // allowlist extension
             var allowedExt = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
             {
                 ".jpg",".jpeg",".png",".gif",".webp",
@@ -239,15 +239,17 @@ namespace YourApp.Controllers
                 ".pdf"
             };
 
-            var originalName = file.FileName ?? "file";
+            var originalName = (file.FileName ?? "file").Trim();
+            originalName = Path.GetFileName(originalName); // strip path from client
             var ext = Path.GetExtension(originalName);
+
             if (string.IsNullOrWhiteSpace(ext) || !allowedExt.Contains(ext))
             {
                 TempData["Error"] = $"Ekstensi tidak diizinkan: {ext}";
                 return RedirectToAction(nameof(Index), new { folder = returnFolder, q, month, page, pageSize });
             }
 
-            // target folder: /uploads/<auditId>/
+            // ✅ folder audit = trx_audit.id (GUID) => jangan diubah
             var auditRel = NormalizeAndValidateRelative(auditId.Trim());
             var auditPhysical = ToPhysicalPathFromRel(auditRel);
 
@@ -261,14 +263,11 @@ namespace YourApp.Controllers
                 return RedirectToAction(nameof(Index), new { folder = returnFolder, q, month, page, pageSize });
             }
 
+            // ✅ filename tetap (hanya disanitize agar aman di Linux)
+            var safeFileName = MakeSafeFileName(Path.GetFileNameWithoutExtension(originalName)) + ext.ToLowerInvariant();
+            var finalPath = ResolveUniqueFilePath(auditPhysical, safeFileName);
+
             var ct = HttpContext.RequestAborted;
-
-            // generate filename: ReportNo_SpbuNo_Label_yyyyMMdd_HHmmss_original.ext
-            var baseName = await BuildAuditFileNameAsync(auditId.Trim(), originalName, label, ct);
-            baseName = MakeSafeFileName(baseName);
-
-            var finalFileName = baseName + ext.ToLowerInvariant();
-            var finalPath = ResolveUniqueFilePath(auditPhysical, finalFileName);
 
             try
             {
@@ -291,44 +290,9 @@ namespace YourApp.Controllers
 
             TempData["Success"] = $"Upload berhasil: {Path.GetFileName(finalPath)}";
 
-            // balik ke folder audit (biar user langsung lihat filenya masuk)
-            var backFolder = string.IsNullOrWhiteSpace(returnFolder) ? auditId.Trim() : returnFolder;
-            return RedirectToAction(nameof(Index), new { folder = backFolder, q, month, page = 1, pageSize });
-        }
-
-        private async Task<string> BuildAuditFileNameAsync(string auditId, string originalFileName, string? label, CancellationToken ct)
-        {
-            string reportNo = "";
-            string spbuNo = "";
-
-            try
-            {
-                var metaMap = await GetAuditMetaMapAsync(new List<string> { auditId }, ct);
-                if (metaMap.TryGetValue(auditId, out var meta))
-                {
-                    reportNo = meta.ReportNo ?? "";
-                    spbuNo = meta.SpbuNo ?? "";
-                }
-            }
-            catch { }
-
-            var origBase = Path.GetFileNameWithoutExtension(originalFileName) ?? "file";
-            origBase = MakeSafeFileName(origBase);
-
-            label = (label ?? "").Trim();
-            label = MakeSafeFileName(label);
-
-            var ts = DateTime.Now.ToString("yyyyMMdd_HHmmss");
-
-            var parts = new List<string>();
-            if (!string.IsNullOrWhiteSpace(reportNo)) parts.Add(reportNo);
-            if (!string.IsNullOrWhiteSpace(spbuNo)) parts.Add(spbuNo);
-            if (!string.IsNullOrWhiteSpace(label)) parts.Add(label);
-
-            parts.Add(ts);
-            parts.Add(origBase);
-
-            return string.Join("_", parts.Where(x => !string.IsNullOrWhiteSpace(x)));
+            // balik ke folder tempat user sekarang (list/root) atau folder audit kalau dia sedang di audit
+            var backFolder = string.IsNullOrWhiteSpace(returnFolder) ? "" : returnFolder;
+            return RedirectToAction(nameof(Index), new { folder = backFolder, q, month, page, pageSize });
         }
 
         private static string MakeSafeFileName(string input)
@@ -404,6 +368,7 @@ namespace YourApp.Controllers
                 AllowedPageSizes = allowedSizes
             };
 
+            // breadcrumbs
             vm.Breadcrumbs.Add(("uploads", ""));
             if (!string.IsNullOrEmpty(rel))
             {
@@ -416,7 +381,7 @@ namespace YourApp.Controllers
                 }
             }
 
-            // ✅ detect audit folder (detail view) = last segment GUID + ambil meta utk UI
+            // detect audit folder (last segment GUID)
             vm.IsAuditFolder = false;
             vm.AuditId = null;
             if (!string.IsNullOrEmpty(rel))
@@ -468,8 +433,8 @@ namespace YourApp.Controllers
 
                 return new LibraryItemVm
                 {
-                    Name = d.Name,
-                    DisplayName = mapped ? meta!.SpbuNo : d.Name,
+                    Name = d.Name, // ✅ tetap GUID (trx_audit.id)
+                    DisplayName = mapped ? meta!.SpbuNo : d.Name, // UI saja
                     IsMappedFromAudit = mapped,
                     ReportNo = mapped ? (meta!.ReportNo ?? "") : "",
                     IsDir = true,
@@ -511,44 +476,7 @@ namespace YourApp.Controllers
                 allItems = allItems.Where(x => x.FilterDate.Year == y && x.FilterDate.Month == m).ToList();
             }
 
-            vm.CurrentFolderTotalSizeBytes = SafeDirectorySizeBytes(physical);
-
-            long totalFiltered = 0;
-            bool anySize = false;
-            var dirSizeCache = new Dictionary<string, long?>(StringComparer.OrdinalIgnoreCase);
-
-            foreach (var it in allItems)
-            {
-                if (!it.IsDir)
-                {
-                    if (it.SizeBytes.HasValue)
-                    {
-                        totalFiltered += it.SizeBytes.Value;
-                        anySize = true;
-                    }
-                    continue;
-                }
-
-                try
-                {
-                    var fullDir = ToPhysicalPathFromRel(it.RelPath);
-                    if (!dirSizeCache.TryGetValue(fullDir, out var sz))
-                    {
-                        sz = SafeDirectorySizeBytes(fullDir);
-                        dirSizeCache[fullDir] = sz;
-                    }
-
-                    if (sz.HasValue)
-                    {
-                        totalFiltered += sz.Value;
-                        anySize = true;
-                    }
-                }
-                catch { }
-            }
-
-            vm.FilteredTotalSizeBytes = anySize ? totalFiltered : (long?)null;
-
+            // total items paging (size badges dihitung via AJAX endpoint)
             vm.TotalItems = allItems.Count;
             vm.TotalPages = Math.Max(1, (int)Math.Ceiling(vm.TotalItems / (double)vm.PageSize));
             if (vm.Page > vm.TotalPages) vm.Page = vm.TotalPages;
@@ -561,6 +489,9 @@ namespace YourApp.Controllers
             return View(vm);
         }
 
+        // =========================
+        // ✅ Sizes (AJAX)
+        // =========================
         [HttpGet("Sizes")]
         public async Task<IActionResult> Sizes(string? folder = "", string? q = "", string? month = "")
         {
@@ -650,6 +581,9 @@ namespace YourApp.Controllers
             });
         }
 
+        // =========================
+        // ✅ Disk
+        // =========================
         public class DiskVm
         {
             public string Mount { get; set; } = "/";
@@ -695,6 +629,9 @@ namespace YourApp.Controllers
             return Json(d);
         }
 
+        // =========================
+        // Download single file
+        // =========================
         [HttpGet("Download")]
         public IActionResult Download(string path)
         {
@@ -755,7 +692,7 @@ namespace YourApp.Controllers
         }
 
         // =========================
-        // ZIP STREAM HELPERS
+        // ZIP HELPERS
         // =========================
         private static async Task AddFileToZipAsync(
             ZipArchive zip,
@@ -793,11 +730,10 @@ namespace YourApp.Controllers
             }
             catch
             {
-                // skip file error/locked/permission
+                // skip
             }
         }
 
-        // ✅ Download ZIP per bulan (STREAMING, tahan proxy)
         [HttpGet("DownloadMonth")]
         public async Task<IActionResult> DownloadMonth(string? folder = "", string? q = "", string? month = "")
         {
@@ -831,8 +767,8 @@ namespace YourApp.Controllers
 
             var auditIds = dirList.Select(d => d.Name).Where(n => Guid.TryParse(n, out _)).ToList();
             var auditMetaMap = auditIds.Any()
-                ? await GetAuditMetaMapAsync(auditIds)
-                : new Dictionary<string, AuditMeta>();
+                ? await GetAuditMetaMapAsync(auditIds, ct)
+                : new Dictionary<string, AuditMeta>(StringComparer.OrdinalIgnoreCase);
 
             ZipArchive? zip = null;
             bool started = false;
@@ -879,7 +815,7 @@ namespace YourApp.Controllers
                         if (!System.IO.File.Exists(file)) continue;
 
                         var relPath = file.Length > baseLen ? file.Substring(baseLen).Replace('\\', '/') : Path.GetFileName(file);
-                        var entryName = $"{d.Name}/{relPath}";
+                        var entryName = $"{d.Name}/{relPath}"; // folder tetap GUID auditId
 
                         StartZipIfNeeded();
                         await AddFileToZipAsync(zip!, file, entryName, ct);
@@ -914,7 +850,6 @@ namespace YourApp.Controllers
             return new EmptyResult();
         }
 
-        // ✅ Download ZIP per SPBU/folder (temp zip file -> paling stabil)
         [HttpGet("DownloadSpbu")]
         public async Task<IActionResult> DownloadSpbu(string path, string? month = "")
         {
@@ -1084,10 +1019,7 @@ namespace YourApp.Controllers
                 }
             }
 
-            if (error != null)
-            {
-                TempData["Error"] = error;
-            }
+            if (error != null) TempData["Error"] = error;
             else
             {
                 TempData["Success"] = deletedCount > 0

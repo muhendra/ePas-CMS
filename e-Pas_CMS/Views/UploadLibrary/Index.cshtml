@@ -7,28 +7,17 @@
 @{
     ViewData["Title"] = "Upload Library";
 
-    int window = 5; // jumlah tombol halaman di sekitar current
+    int window = 5;
     int startPage = Math.Max(1, Model.Page - window);
     int endPage = Math.Min(Model.TotalPages, Model.Page + window);
-
-    // ✅ helper untuk prefill upload (kalau di folder audit)
-    var auditTitle = Model.IsAuditFolder
-        ? $"{(Model.AuditSpbuNo ?? Model.AuditId)}"
-        : null;
-
-    var auditSub = Model.IsAuditFolder
-        ? $"{(string.IsNullOrWhiteSpace(Model.AuditReportNo) ? "" : ("ReportNo: " + Model.AuditReportNo))}"
-        : null;
 }
 
 <style>
-    /* ✅ bikin kolom fixed biar Size tidak ketutup */
     .uploadlib-table {
         table-layout: fixed;
         width: 100%;
     }
 
-    /* ✅ truncate text panjang */
     .uploadlib-name {
         max-width: 100%;
         overflow: hidden;
@@ -38,7 +27,6 @@
         vertical-align: bottom;
     }
 
-    /* biar link juga ikut truncate */
     .uploadlib-name-link {
         display: inline-flex;
         gap: .35rem;
@@ -52,27 +40,33 @@
         padding: .2rem .45rem;
     }
 
-    /* ✅ Action buttons rapi */
+    /* ✅ FIX OVERLAP: buat Modified & Action aman */
+    .uploadlib-table th:nth-child(5),
+    .uploadlib-table td:nth-child(5) {
+        white-space: nowrap;
+    }
+
+    .uploadlib-table th:last-child,
+    .uploadlib-table td:last-child {
+        min-width: 220px;
+    }
+
     .action-cell {
         display: flex;
         justify-content: flex-end;
-        gap: .5rem;
+        gap: .35rem;
         flex-wrap: nowrap;
         align-items: center;
         white-space: nowrap;
     }
 
     .btn-action {
-        min-width: 86px;
-        padding: .25rem .55rem;
-        line-height: 1.15;
+        min-width: 78px;
+        padding: .22rem .5rem;
+        line-height: 1.1;
+        border-radius: .35rem;
     }
 
-        .btn-action.btn-sm {
-            border-radius: .35rem;
-        }
-
-    /* ✅ toolbar (download/delete bulan) */
     .month-toolbar {
         display: flex;
         flex-wrap: wrap;
@@ -85,7 +79,6 @@
             border-radius: .45rem;
         }
 
-    /* ✅ total size badges */
     .size-badges {
         display: flex;
         flex-wrap: wrap;
@@ -93,42 +86,6 @@
         margin-bottom: 1rem;
         align-items: center;
     }
-
-    /* ✅ Upload panel */
-    .audit-upload-card {
-        border: 1px solid #eee;
-        border-radius: .5rem;
-        padding: .85rem 1rem;
-        margin-bottom: 1rem;
-        background: #fafafa;
-    }
-
-    .audit-upload-title {
-        font-weight: 700;
-        margin-bottom: .15rem;
-        display: flex;
-        gap: .5rem;
-        align-items: center;
-        flex-wrap: wrap;
-    }
-
-    .audit-upload-sub {
-        color: #6c757d;
-        font-size: .9rem;
-        margin-bottom: .75rem;
-    }
-
-    .audit-upload-row {
-        display: flex;
-        flex-wrap: wrap;
-        gap: .5rem;
-        align-items: center;
-    }
-
-        .audit-upload-row .form-control,
-        .audit-upload-row .form-select {
-            min-width: 220px;
-        }
 
     /* ✅ modal preview */
     .preview-modal-backdrop {
@@ -199,7 +156,7 @@
         padding: .25rem .5rem;
     }
 
-    /* ✅ modal download confirm (reuse style mirip preview) */
+    /* ✅ modal download confirm */
     .dl-modal-backdrop {
         position: fixed;
         inset: 0;
@@ -267,6 +224,61 @@
         border-radius: .35rem;
         font-weight: 600;
     }
+
+    /* ✅ modal upload */
+    .up-modal-backdrop {
+        position: fixed;
+        inset: 0;
+        background: rgba(0,0,0,.5);
+        display: none;
+        z-index: 1085;
+    }
+
+    .up-modal {
+        position: fixed;
+        inset: 0;
+        display: none;
+        z-index: 1090;
+        overflow: auto;
+        padding: 2rem 1rem;
+    }
+
+    .up-card {
+        max-width: 720px;
+        margin: 0 auto;
+        background: #fff;
+        border-radius: .5rem;
+        box-shadow: 0 12px 30px rgba(0,0,0,.25);
+    }
+
+    .up-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: .75rem 1rem;
+        border-bottom: 1px solid #eee;
+        gap: .75rem;
+    }
+
+    .up-title {
+        font-weight: 700;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        max-width: 80%;
+    }
+
+    .up-body {
+        padding: 1rem;
+    }
+
+    .up-footer {
+        display: flex;
+        justify-content: flex-end;
+        gap: .5rem;
+        padding: .75rem 1rem;
+        border-top: 1px solid #eee;
+    }
 </style>
 
 <div class="container mt-4">
@@ -284,53 +296,6 @@
     @if (TempData["Success"] != null)
     {
         <div class="alert alert-success">@TempData["Success"]</div>
-    }
-
-    <!-- ✅ Upload per 1 audit (muncul hanya kalau folder audit) -->
-    @if (Model.IsAuditFolder && !string.IsNullOrWhiteSpace(Model.AuditId))
-    {
-        <div class="audit-upload-card">
-            <div class="audit-upload-title">
-                <span>⬆️ Upload 1 file untuk audit</span>
-                <span class="badge bg-secondary uploadlib-badge" title="AuditId">@Model.AuditId</span>
-                @if (!string.IsNullOrWhiteSpace(Model.AuditReportNo))
-                {
-                    <span class="badge bg-info text-dark uploadlib-badge" title="trx_audit.report_no">@Model.AuditReportNo</span>
-                }
-            </div>
-            <div class="audit-upload-sub">
-                Target folder: <b>@Model.CurrentRel</b>
-                @if (!string.IsNullOrWhiteSpace(Model.AuditSpbuNo))
-                {
-                    <span class="ms-2">• SPBU: <b>@Model.AuditSpbuNo</b></span>
-                }
-            </div>
-
-            <form method="post" action="/UploadLibrary/UploadAuditFile" enctype="multipart/form-data" class="m-0">
-                @Html.AntiForgeryToken()
-
-                <input type="hidden" name="auditId" value="@Model.AuditId" />
-                <input type="hidden" name="returnFolder" value="@Model.CurrentRel" />
-                <input type="hidden" name="q" value="@Model.Query" />
-                <input type="hidden" name="month" value="@Model.Month" />
-                <input type="hidden" name="page" value="@Model.Page" />
-                <input type="hidden" name="pageSize" value="@Model.PageSize" />
-
-                <div class="audit-upload-row">
-                    <input class="form-control" type="file" name="file" required
-                           accept=".jpg,.jpeg,.png,.gif,.webp,.mp4,.webm,.ogg,.mov,.m4v,.pdf" />
-
-                    <input class="form-control" type="text" name="label" maxlength="60"
-                           placeholder="Label (opsional) mis: nozzle, dispenser, form, before" />
-
-                    <button class="btn btn-primary" type="submit">Upload</button>
-                </div>
-
-                <div class="text-muted mt-2" style="font-size:.9rem;">
-                    Filename akan otomatis jadi: <b>ReportNo_SPBUNo_Label_yyyyMMdd_HHmmss_original.ext</b> (jika ReportNo/SPBUNo tersedia).
-                </div>
-            </form>
-        </div>
     }
 
     <!-- Breadcrumb -->
@@ -355,7 +320,7 @@
         </ol>
     </nav>
 
-    <!-- Filter: Search + Month -->
+    <!-- Filter -->
     <form method="get" action="/UploadLibrary" class="row g-2 mb-2">
         <input type="hidden" name="folder" value="@Model.CurrentRel" />
         <input type="hidden" name="page" value="1" />
@@ -387,7 +352,7 @@
         </div>
     </form>
 
-    <!-- Actions: Download/Delete for Selected Month -->
+    <!-- Actions month -->
     <div class="month-toolbar">
         <button type="button"
                 class="btn btn-outline-primary @(string.IsNullOrEmpty(Model.Month) ? "disabled" : "")"
@@ -410,7 +375,7 @@
         </form>
     </div>
 
-    <!-- ✅ Total Size Badges (AJAX - biar render cepat) -->
+    <!-- size badges -->
     <div class="size-badges">
         <span class="badge bg-light text-dark" style="border:1px solid #eee;" id="badgeFilteredTotal">
             Total size (hasil filter): <b>Calculating...</b>
@@ -427,12 +392,12 @@
             <div class="table-responsive">
                 <table class="table table-hover align-middle uploadlib-table">
                     <colgroup>
-                        <col style="width:32%">
+                        <col style="width:30%">
                         <col style="width:16%">
-                        <col style="width:12%">
-                        <col style="width:15%">
-                        <col style="width:15%">
                         <col style="width:10%">
+                        <col style="width:14%">
+                        <col style="width:14%">
+                        <col style="width:16%"> @* ✅ action dibesarin *@
                     </colgroup>
 
                     <thead>
@@ -488,8 +453,20 @@
                                         <td>Folder</td>
                                         <td class="text-muted">@(item.ChildCount.HasValue ? $"{item.ChildCount.Value} items" : "-")</td>
                                         <td>@item.LastWriteTime.ToString("yyyy-MM-dd HH:mm")</td>
+
                                         <td class="text-end">
                                             <div class="action-cell">
+                                                @* ✅ Upload langsung dari list *@
+                                                @if (Guid.TryParse(item.Name, out _))
+                                                {
+                                                    <button type="button"
+                                                            class="btn btn-sm btn-outline-success btn-action"
+                                                            onclick="openUploadPopup('@item.Name','@item.DisplayName','@item.RelPath')"
+                                                            title="Upload file ke folder audit ini (folder = trx_audit.id)">
+                                                        Upload
+                                                    </button>
+                                                }
+
                                                 <button type="button"
                                                         class="btn btn-sm btn-outline-primary btn-action"
                                                         onclick="openDownloadFolderPopup('@item.RelPath','@item.DisplayName')"
@@ -673,10 +650,47 @@
     </div>
 </div>
 
+<!-- ✅ Upload Modal (baru) -->
+<div id="upBackdrop" class="up-modal-backdrop"></div>
+<div id="upModal" class="up-modal" role="dialog" aria-modal="true" aria-hidden="true">
+    <div class="up-card">
+        <div class="up-header">
+            <div class="up-title" id="upTitle">Upload</div>
+            <button type="button" class="btn-icon" id="upCloseBtn" aria-label="Close">✕</button>
+        </div>
+        <div class="up-body">
+            <form method="post" action="/UploadLibrary/UploadAuditFile" enctype="multipart/form-data" id="upForm" class="m-0">
+                @Html.AntiForgeryToken()
+
+                <input type="hidden" name="auditId" id="upAuditId" />
+                <input type="hidden" name="returnFolder" value="@Model.CurrentRel" />
+                <input type="hidden" name="q" value="@Model.Query" />
+                <input type="hidden" name="month" value="@Model.Month" />
+                <input type="hidden" name="page" value="@Model.Page" />
+                <input type="hidden" name="pageSize" value="@Model.PageSize" />
+
+                <div class="mb-2 text-muted" id="upDesc"></div>
+
+                <input class="form-control" type="file" name="file" required
+                       accept=".jpg,.jpeg,.png,.gif,.webp,.mp4,.webm,.ogg,.mov,.m4v,.pdf" />
+
+                <div class="text-muted mt-2" style="font-size:.9rem;">
+                    ✅ Nama file <b>tidak diubah</b> (tetap original). Folder target = <b>trx_audit.id (GUID)</b>.
+                </div>
+
+                <div class="up-footer p-0 pt-3" style="border-top:0;">
+                    <button type="button" class="btn btn-outline-secondary" id="upCancelBtn">Cancel</button>
+                    <button type="submit" class="btn btn-success">Upload</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 <script>
     (function () {
         // ==========================
-        // ✅ Preview (punyamu)
+        // ✅ Preview
         // ==========================
         const backdrop = document.getElementById('previewBackdrop');
         const modal = document.getElementById('previewModal');
@@ -716,9 +730,7 @@
 
         function closePreview() {
             const vid = body.querySelector('video');
-            if (vid) {
-                try { vid.pause(); vid.src = ''; } catch (e) { }
-            }
+            if (vid) { try { vid.pause(); vid.src = ''; } catch (e) { } }
             body.innerHTML = '';
             backdrop.style.display = 'none';
             modal.style.display = 'none';
@@ -739,9 +751,7 @@
 
         backdrop.addEventListener('click', closePreview);
         closeBtn.addEventListener('click', closePreview);
-        document.addEventListener('keydown', function (e) {
-            if (e.key === 'Escape') closePreview();
-        });
+        document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closePreview(); });
 
         // ==========================
         // ✅ Download Confirm Modal
@@ -766,7 +776,6 @@
             dlModal.setAttribute('aria-hidden', 'false');
             document.body.style.overflow = 'hidden';
         }
-
         function hideDlModal() {
             dlBackdrop.style.display = 'none';
             dlModal.style.display = 'none';
@@ -827,13 +836,47 @@
         dlBackdrop.addEventListener('click', hideDlModal);
         dlCloseBtn.addEventListener('click', hideDlModal);
         dlCancelBtn.addEventListener('click', hideDlModal);
-
-        document.addEventListener('keydown', function (e) {
-            if (e.key === 'Escape') hideDlModal();
-        });
+        document.addEventListener('keydown', function (e) { if (e.key === 'Escape') hideDlModal(); });
 
         // ==========================
-        // ✅ Disk Space Realtime
+        // ✅ Upload Modal (baru)
+        // ==========================
+        const upBackdrop = document.getElementById('upBackdrop');
+        const upModal = document.getElementById('upModal');
+        const upTitle = document.getElementById('upTitle');
+        const upDesc = document.getElementById('upDesc');
+        const upCloseBtn = document.getElementById('upCloseBtn');
+        const upCancelBtn = document.getElementById('upCancelBtn');
+        const upAuditId = document.getElementById('upAuditId');
+
+        function showUpModal() {
+            upBackdrop.style.display = 'block';
+            upModal.style.display = 'block';
+            upModal.setAttribute('aria-hidden', 'false');
+            document.body.style.overflow = 'hidden';
+        }
+        function hideUpModal() {
+            upBackdrop.style.display = 'none';
+            upModal.style.display = 'none';
+            upModal.setAttribute('aria-hidden', 'true');
+            document.body.style.overflow = '';
+        }
+
+        window.openUploadPopup = function (auditId, displayName, relPath) {
+            upTitle.textContent = 'Upload File (Audit Folder)';
+            upDesc.textContent = 'Target: ' + (displayName || relPath) + ' | AuditId: ' + auditId;
+
+            upAuditId.value = auditId || '';
+            showUpModal();
+        }
+
+        upBackdrop.addEventListener('click', hideUpModal);
+        upCloseBtn.addEventListener('click', hideUpModal);
+        upCancelBtn.addEventListener('click', hideUpModal);
+        document.addEventListener('keydown', function (e) { if (e.key === 'Escape') hideUpModal(); });
+
+        // ==========================
+        // ✅ Disk Space
         // ==========================
         const diskEl = document.getElementById('diskInfo');
         let diskInFlight = false;
@@ -847,7 +890,6 @@
                 const r = await fetch('/UploadLibrary/Disk', { cache: 'no-store' });
                 if (!r.ok) throw new Error('disk fetch failed');
                 const d = await r.json();
-
                 diskEl.textContent = `(Used ${d.used} / ${d.total} • Avail ${d.avail} • ${d.usePercent}%)`;
             } catch (err) {
                 diskEl.textContent = '(disk info unavailable)';
@@ -861,7 +903,6 @@
 
         // ==========================
         // ✅ Total Size Badges (AJAX)
-        // Endpoint: GET /UploadLibrary/Sizes?folder=...&q=...&month=...
         // ==========================
         const badgeFiltered = document.getElementById('badgeFilteredTotal');
         const badgeAudit = document.getElementById('badgeAuditTotal');
@@ -884,7 +925,6 @@
                 const q = '@(Model.Query ?? "")';
                 const month = '@(Model.Month ?? "")';
 
-                // ✅ ONLY run kalau month dipilih
                 if (!month) {
                     if (badgeFiltered) badgeFiltered.innerHTML = 'Total size (hasil filter): <b>-</b>';
                     if (badgeAudit) badgeAudit.style.display = 'none';
