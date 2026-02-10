@@ -10,11 +10,6 @@
     int window = 5;
     int startPage = Math.Max(1, Model.Page - window);
     int endPage = Math.Min(Model.TotalPages, Model.Page + window);
-
-    var auditTitle = Model.IsAuditFolder ? $"{(Model.AuditSpbuNo ?? Model.AuditId)}" : null;
-    var auditSub = Model.IsAuditFolder
-        ? $"{(string.IsNullOrWhiteSpace(Model.AuditReportNo) ? "" : ("ReportNo: " + Model.AuditReportNo))}"
-        : null;
 }
 
 <style>
@@ -45,9 +40,9 @@
         padding: .2rem .45rem;
     }
 
-    /* ✅ Action buttons rapi + ga numpuk ke kolom Modified */
+    /* ✅ Action buttons rapi */
     .action-cell {
-        display: flex;
+        display: inline-flex;
         justify-content: flex-end;
         gap: .5rem;
         flex-wrap: nowrap;
@@ -65,37 +60,30 @@
             border-radius: .35rem;
         }
 
-    /* ✅ toolbar (download/delete/upload) */
+    /* ✅ toolbar */
     .month-toolbar {
         display: flex;
         flex-wrap: wrap;
         gap: .5rem;
         align-items: center;
-        margin: .25rem 0 .75rem 0;
+        margin: .5rem 0 1rem 0;
     }
 
         .month-toolbar .btn {
             border-radius: .45rem;
         }
 
-    /* ✅ upload inline */
+    /* ✅ Upload inline (sejajar toolbar) */
     .upload-inline-form {
         display: flex;
         flex-wrap: wrap;
         gap: .5rem;
         align-items: center;
-        margin: 0;
-        padding-left: .25rem;
-        border-left: 1px dashed #ddd;
+        margin-left: auto; /* dorong ke kanan biar rapi */
     }
 
-        .upload-inline-form .form-control {
-            min-width: 240px;
-        }
-
-        .upload-inline-form .auditid {
-            width: 260px;
-            min-width: 220px;
+        .upload-inline-form input[type="file"] {
+            max-width: 360px;
         }
 
     .size-badges {
@@ -106,7 +94,7 @@
         align-items: center;
     }
 
-    /* preview modal */
+    /* ✅ Preview modal */
     .preview-modal-backdrop {
         position: fixed;
         inset: 0;
@@ -175,7 +163,7 @@
         padding: .25rem .5rem;
     }
 
-    /* download confirm modal */
+    /* ✅ modal download confirm */
     .dl-modal-backdrop {
         position: fixed;
         inset: 0;
@@ -316,7 +304,7 @@
         </div>
     </form>
 
-    <!-- ✅ Toolbar bawah Reset: Download Month + Delete Month + Upload (sejajar) -->
+    <!-- ✅ Actions + Upload inline (di bawah Reset, sejajar dengan Delete All) -->
     <div class="month-toolbar">
         <button type="button"
                 class="btn btn-outline-primary @(string.IsNullOrEmpty(Model.Month) ? "disabled" : "")"
@@ -338,46 +326,39 @@
             </button>
         </form>
 
-        <!-- ✅ Upload di sini (sejajar Delete All) -->
-        <form method="post" action="/UploadLibrary/UploadAuditFile" enctype="multipart/form-data" class="upload-inline-form">
-            @Html.AntiForgeryToken()
-
-            <!-- kalau sedang di folder audit, AuditId auto -->
-            @if (Model.IsAuditFolder && !string.IsNullOrWhiteSpace(Model.AuditId))
-            {
+        <!-- ✅ Upload folder/file (hanya kalau sedang di folder auditId) -->
+        @if (Model.IsAuditFolder && !string.IsNullOrWhiteSpace(Model.AuditId))
+        {
+            <form method="post" action="/UploadLibrary/UploadAuditFile" enctype="multipart/form-data" class="upload-inline-form">
+                @Html.AntiForgeryToken()
                 <input type="hidden" name="auditId" value="@Model.AuditId" />
-            }
-            else
-            {
-                <input class="form-control auditid" type="text" name="auditId" required
-                       placeholder="AuditId (trx_audit.id) e.g. GUID" />
-            }
+                <input type="hidden" name="returnFolder" value="@Model.CurrentRel" />
+                <input type="hidden" name="q" value="@Model.Query" />
+                <input type="hidden" name="month" value="@Model.Month" />
+                <input type="hidden" name="page" value="@Model.Page" />
+                <input type="hidden" name="pageSize" value="@Model.PageSize" />
 
-            <input class="form-control" type="file" name="file" required
-                   accept=".jpg,.jpeg,.png,.gif,.webp,.mp4,.webm,.ogg,.mov,.m4v,.pdf" />
-
-            <input type="hidden" name="returnFolder" value="@Model.CurrentRel" />
-            <input type="hidden" name="q" value="@Model.Query" />
-            <input type="hidden" name="month" value="@Model.Month" />
-            <input type="hidden" name="page" value="@Model.Page" />
-            <input type="hidden" name="pageSize" value="@Model.PageSize" />
-
-            <button class="btn btn-success" type="submit" title="Upload ke /uploads/{auditId}/ dengan nama file asli">
-                Upload
-            </button>
-
-            @if (Model.IsAuditFolder && !string.IsNullOrWhiteSpace(Model.AuditId))
-            {
-                <span class="badge bg-secondary uploadlib-badge" title="AuditId">@Model.AuditId</span>
+                <span class="badge bg-secondary uploadlib-badge" title="trx_audit.id">@Model.AuditId</span>
                 @if (!string.IsNullOrWhiteSpace(Model.AuditReportNo))
                 {
                     <span class="badge bg-info text-dark uploadlib-badge" title="trx_audit.report_no">@Model.AuditReportNo</span>
                 }
-            }
-        </form>
+
+                <!-- ✅ folder upload -->
+                <input class="form-control form-control-sm"
+                       type="file"
+                       name="files"
+                       multiple
+                       webkitdirectory
+                       directory
+                       accept=".jpg,.jpeg,.png,.gif,.webp,.mp4,.webm,.ogg,.mov,.m4v,.pdf" />
+
+                <button class="btn btn-sm btn-primary" type="submit">Upload (Folder/File)</button>
+            </form>
+        }
     </div>
 
-    <!-- Total Size Badges (AJAX) -->
+    <!-- Total Size Badges -->
     <div class="size-badges">
         <span class="badge bg-light text-dark" style="border:1px solid #eee;" id="badgeFilteredTotal">
             Total size (hasil filter): <b>Calculating...</b>
@@ -465,7 +446,7 @@
                                                 </button>
 
                                                 <form method="post" action="/UploadLibrary/DeleteFolder" class="m-0"
-                                                      onsubmit="return confirm('Hapus folder (jika kosong): @item.Name ?');">
+                                                      onsubmit="return confirm('Hapus folder (recursive): @item.Name ?');">
                                                     @Html.AntiForgeryToken()
                                                     <input type="hidden" name="path" value="@item.RelPath" />
                                                     <input type="hidden" name="returnFolder" value="@Model.CurrentRel" />
@@ -509,6 +490,7 @@
                                         </td>
 
                                         <td><span class="text-muted">-</span></td>
+
                                         <td>File</td>
                                         <td>@(item.SizeBytes.HasValue? HumanSize(item.SizeBytes.Value) : "-")</td>
                                         <td>@item.LastWriteTime.ToString("yyyy-MM-dd HH:mm")</td>
@@ -597,7 +579,7 @@
     </div>
 </div>
 
-<!-- Preview Modal -->
+<!-- ✅ Preview Modal -->
 <div id="previewBackdrop" class="preview-modal-backdrop"></div>
 <div id="previewModal" class="preview-modal" role="dialog" aria-modal="true" aria-hidden="true">
     <div class="preview-card">
@@ -612,7 +594,7 @@
     </div>
 </div>
 
-<!-- Download Confirm Modal -->
+<!-- ✅ Download Confirm Modal -->
 <div id="dlBackdrop" class="dl-modal-backdrop"></div>
 <div id="dlModal" class="dl-modal" role="dialog" aria-modal="true" aria-hidden="true">
     <div class="dl-card">
@@ -697,7 +679,7 @@
         closeBtn.addEventListener('click', closePreview);
         document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closePreview(); });
 
-        // Download confirm
+        // Download Confirm Modal
         const dlBackdrop = document.getElementById('dlBackdrop');
         const dlModal = document.getElementById('dlModal');
         const dlTitle = document.getElementById('dlTitle');
@@ -718,7 +700,6 @@
             dlModal.setAttribute('aria-hidden', 'false');
             document.body.style.overflow = 'hidden';
         }
-
         function hideDlModal() {
             dlBackdrop.style.display = 'none';
             dlModal.style.display = 'none';
@@ -771,7 +752,8 @@
         }
 
         dlOpenBtn.addEventListener('click', function () {
-            window.open(buildDownloadsUrl(), '_blank', 'noopener');
+            const url = buildDownloadsUrl();
+            window.open(url, '_blank', 'noopener');
             hideDlModal();
         });
 
@@ -780,20 +762,19 @@
         dlCancelBtn.addEventListener('click', hideDlModal);
         document.addEventListener('keydown', function (e) { if (e.key === 'Escape') hideDlModal(); });
 
-        // Disk info
+        // Disk Space
         const diskEl = document.getElementById('diskInfo');
         let diskInFlight = false;
 
         async function refreshDisk() {
             if (!diskEl || diskInFlight) return;
             diskInFlight = true;
-
             try {
                 const r = await fetch('/UploadLibrary/Disk', { cache: 'no-store' });
                 if (!r.ok) throw new Error('disk fetch failed');
                 const d = await r.json();
                 diskEl.textContent = `(Used ${d.used} / ${d.total} • Avail ${d.avail} • ${d.usePercent}%)`;
-            } catch (err) {
+            } catch {
                 diskEl.textContent = '(disk info unavailable)';
             } finally {
                 diskInFlight = false;
@@ -803,7 +784,7 @@
         refreshDisk();
         setInterval(refreshDisk, 5000);
 
-        // Sizes
+        // Total Size Badges
         const badgeFiltered = document.getElementById('badgeFilteredTotal');
         const badgeAudit = document.getElementById('badgeAuditTotal');
 
@@ -814,7 +795,9 @@
                 let u = 0;
                 while (b >= 1024 && u < units.length - 1) { b /= 1024; u++; }
                 return (Math.round(b * 100) / 100) + ' ' + units[u];
-            } catch { return bytes + ' B'; }
+            } catch {
+                return bytes + ' B';
+            }
         }
 
         async function refreshSizes() {
@@ -846,7 +829,7 @@
                 } else {
                     badgeAudit.style.display = 'none';
                 }
-            } catch (e) {
+            } catch {
                 if (badgeFiltered) badgeFiltered.innerHTML = 'Total size (hasil filter): <b>-</b>';
                 if (badgeAudit) badgeAudit.style.display = 'none';
             }
