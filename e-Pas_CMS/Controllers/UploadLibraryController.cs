@@ -220,7 +220,7 @@ namespace YourApp.Controllers
             public int TotalItems { get; set; }
             public int TotalPages { get; set; }
 
-            public int[] AllowedPageSizes { get; set; } = new[] { 20, 50, 100, 200 };
+            public int[] AllowedPageSizes { get; set; } = new[] { 20, 50, 100, 200, 3000 };
             public long? FilteredTotalSizeBytes { get; set; }
             public long? CurrentFolderTotalSizeBytes { get; set; }
 
@@ -413,7 +413,7 @@ namespace YourApp.Controllers
 
             if (page < 1) page = 1;
 
-            var allowedSizes = new[] { 20, 50, 100, 200 };
+            var allowedSizes = new[] { 20, 50, 100, 200, 3000 };
             if (!allowedSizes.Contains(pageSize)) pageSize = 10;
 
             var rel = NormalizeAndValidateRelative(folder);
