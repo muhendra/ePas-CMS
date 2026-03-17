@@ -379,8 +379,8 @@ namespace e_Pas_CMS.Controllers
 
             var allowedStatuses = new[] { "VERIFIED" };
 
-            var start = new DateTime(2025, 11, 1);
-            var end = new DateTime(2025, 12, 1);
+            var start = new DateTime(2026, 02, 1);
+            var end = new DateTime(2026, 02, 28);
 
             var query = _context.trx_audits
                 .Include(a => a.spbu)

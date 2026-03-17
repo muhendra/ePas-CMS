@@ -830,8 +830,8 @@ namespace e_Pas_CMS.Controllers
 
                 var allowedStatuses = new[] { "VERIFIED", "UNDER_REVIEW" };
 
-                var start = new DateTime(2025, 11, 1);
-                var end = new DateTime(2025, 12, 1);
+                var start = new DateTime(2026, 02, 1);
+                var end = new DateTime(2026, 02, 28);
 
                 var baseQuery = _context.trx_audits
                 .Where(a =>
@@ -2362,7 +2362,7 @@ namespace e_Pas_CMS.Controllers
                 await using var conn = new Npgsql.NpgsqlConnection(cs);
                 await conn.OpenAsync(token);
 
-                const int dapperCmdTimeout = 3000;
+                const int dapperCmdTimeout = 60000;
 
                 // 3) Proses per-batch (sekuensial)
                 for (int i = 0; i < ids.Count; i += batchSize)
@@ -3822,7 +3822,6 @@ SELECT
                 EPO: Ambil("Elemen 5")
             );
         }
-
 
         private void AssignWeightRecursive(AuditChecklistNode node)
         {
