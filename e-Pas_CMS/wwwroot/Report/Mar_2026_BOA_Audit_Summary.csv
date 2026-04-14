@@ -1,11 +1,32 @@
 send_date,Audit Date,spbu_no,region,year,address,city_name,tipe_spbu,rayon,audit_level,audit_next,result,Total Score,SSS,EQnQ,RFS,kelas_spbu,penalty_alerts
+2026-03-28,2026-03-28,54-80329,V,2026,"JL. BY PASS NGURAH RAI - NUSA DUA, Kab. Badung",Kab Badung,,SBM Bali II Fuel,BOA1,BOA2,NOT CERTIFIED,"75,66",72,"86,28","69,25",Basic,"Izin Prinsip, APAR, APAB"
+2026-03-28,2026-03-28,54-80806,V,2026,"DS. DATAH KEC. ABANG, Kab. Karangasem",Kab. Karangasem,,SBM Bali I Fuel,BOA1,BOA2,NOT CERTIFIED,"77,72","65,67","93,68","74,21",Basic,"Izin Prinsip, APAR"
+2026-03-27,2026-03-27,64-71405,VI,2026,"Jl. A. Yani KM 196,Â  Batu Mandi",Kab Balangan,,SBM Kalsel II Fuel,BOA1,CA,CERTIFIED,"93,35","86,33","96,17","96,5",Basic,
+2026-03-28,2026-03-27,54-82108,V,2026,JL. RAYA PENEBEL - DS. WANASARI,Kab. Tabanan,,SBM Bali I Fuel,BOA1,BOA2,NOT CERTIFIED,"52,93","45,33","52,73","57,99",Basic,"Pelumas, Salam, HP, APAR, APAB"
+2026-03-28,2026-03-27,54-80604,V,2026,"DS. PENGOTAN, KEC. BANGLI, Kab. Bangli",Kab. Bangli,,SBM Bali I Fuel,BOA1,BOA2,NOT CERTIFIED,"76,09","66,33","91,76","71,18",Basic,"HP, APAR, Masa Berlaku APAR"
+2026-03-28,2026-03-27,14-284606,I,2026,Jl. Lintas Pekanbaru - Kuansing No.11 Ds. Lubuk Sakat Kec. Perhentian Raja,Kab.Kampar,DODO,SBM Riau I Fuel,BOA1,CA,CERTIFIED,"94,61","88,33","97,08","97,55",Basic,
+2026-03-28,2026-03-27,24-38338,II,2026,"Desa Arah Tiga, Kecamatan Lubuk Pinang, Kabupaten Mukomuko, Provinsi Bengkulu",MUKO-MUKO,,SBM Bengkulu I Fuel,BOA1,BOA2,NOT CERTIFIED,"51,55","69,67","23,07","59,51",Basic,"Izin Prinsip, APAR, Masa Berlaku APAR"
+2026-03-28,2026-03-27,34-17201,III,2026,PANTAI MAKMUR KEC.TARUNAJAYA,Kabupaten Bekasi,,SBM Karawang I Fuel,BOA1,CA,CERTIFIED,"95,63",93,100,"94,37",Basic,
+2026-03-27,2026-03-27,64-71303,VI,2026,"Jl. A. Yani KM 152, Haruyan",Kab Hulu Sungai Teng,,SBM Kalsel II Fuel,BOA1,CA,CERTIFIED,"93,1",82,100,"96,25",Basic,
+2026-03-28,2026-03-26,23-31519,II,2026,"Jl.Air Perikanan Kel.Nendagung, Kec.Pagar Alam Selatan, Kab.Pagar Alam, Propinsi Sumatera Selata.",KODYA PAGAR ALAM,,SBM Sumsel II Fuel,BOA1,BOA2,NOT CERTIFIED,"87,41","84,67","81,6","93,78",Basic,
+2026-03-28,2026-03-26,34-17604,III,2026,"JL.RY.KEBALEN, BABELAN, KAB. BEKASI",Kabupaten Bekasi,,SBM Karawang I Fuel,BOA1,CA,CERTIFIED,"92,66","88,33",100,"90,11",Basic,
+2026-03-28,2026-03-26,54-80501,V,2026,"DS. BATUAN, KECAMATAN SUKOWATI, Kab. Gianyar",Kab. Gianyar,,SBM Bali I Fuel,BOA1,CA,CERTIFIED,"94,57","91,33",100,"92,98",Basic,
+2026-03-28,2026-03-26,54-82109,V,2026,JL. RAYA BATUNGSEL - DS. PUPUAN,Kab. Tabanan,,SBM Bali II Fuel,BOA1,BOA2,NOT CERTIFIED,"65,1","49,33","94,68","54,34",Basic,"Izin Prinsip, CCTV, APAR"
+2026-03-28,2026-03-26,24-38331,II,2026,"Desa Mekar Mulya, Muko Muko",MUKO-MUKO,,SBM Bengkulu I Fuel,BOA1,BOA2,NOT CERTIFIED,"62,86",59,"64,92","64,48",Basic,"Izin Prinsip, CCTV, HP, APAR, Masa Berlaku APAR"
+2026-03-28,2026-03-26,54-80509,V,2026,"DESA PELIATAN, KECAMATAN UBUD, Kab. Gianyar",Kab. Gianyar,,SBM Bali I Fuel,BOA1,CA,CERTIFIED,"90,72",88,"98,99","86,83",Basic,
 2026-03-26,2026-03-26,34-16705,III,2026,JL Cipayung Raya Pd Rajeg,Kab Bogor,DODO,SBM Jabode V Fuel,BOA1,BOA2,NOT CERTIFIED,"91,44",88,"95,74","90,83",Basic,Masa Berlaku APAR
+2026-03-28,2026-03-26,54-80318,V,2026,"LOKASI DESA MAMBAL, Kab. Badung",Kab. Badung,,SBM Bali I Fuel,BOA1,BOA2,NOT CERTIFIED,"77,63","61,67","86,88","82,96",Basic,
 2026-03-26,2026-03-25,54-82111,V,2026,"DS. LALANG LINGAH - KEC.SELEMADEG, Kab. Tabanan",Kab. Tabanan,,SBM Bali II Fuel,BOA1,BOA2,NOT CERTIFIED,"61,04","53,67","70,54","59,73",Basic,"APAR, APAB, Grounding"
 2026-03-26,2026-03-25,54-80332,V,2026,"JL. RAYA LUKLUK KEC. MENGWI, Kab. Badung",Kab. Badung,,SBM Bali II Fuel,BOA1,BOA2,NOT CERTIFIED,"72,43","62,33","80,26","74,05",Basic,APAR
+2026-03-28,2026-03-25,13-214104,I,2026,"Jl. Lintas Sumatera, Damuli",Kab Labuhan Bt Utara,,SBM Sibolga III Fuel,BOA1,BOA2,NOT CERTIFIED,"52,3","34,67","41,29","73,7",Basic,"Izin Prinsip, Trims, CCTV, Masa Berlaku APAR"
+2026-03-28,2026-03-25,24-38610,II,2026,"Desa Dala Ruyung Arga Makmur, Bengkulu Utara",BENGKULU UTARA,,SBM Bengkulu I Fuel,BOA1,BOA2,NOT CERTIFIED,"64,14","51,67","72,21","67,6",Basic,"Izin Prinsip, Pelumas, HP, APAR, Masa Berlaku APAR, DU Dispenser"
 2026-03-26,2026-03-25,63-70601,VI,2026,"JL. AHMAD YANI KM.49, KEL.SUNGAI ALAT, KEC.ASTAMBUL",KAB. BANJAR,CODO,SBM Kalsel I Fuel,BOA1,BOA2,NOT CERTIFIED,68,"49,67","82,18","71,12",Basic,"Izin Prinsip, HP, APAR"
 2026-03-26,2026-03-25,54-80314,V,2026,"DESA DENKAYU, KECAMATAN MENGWI, Kab. Badung",Kab. Badung,,SBM Bali I Fuel,BOA1,BOA2,NOT CERTIFIED,"67,66","62,33","69,14","70,28",Basic,"Izin Prinsip, Pelumas, CCTV, APAR, Masa Berlaku APAR"
 2026-03-26,2026-03-25,54-80324,V,2026,"DS. GERANA KECAMATAN ABIANSEMAL, Kab. Badung",Kab. Badung,,SBM Bali I Fuel,BOA1,BOA2,NOT CERTIFIED,"80,42",73,"86,89","81,31",Basic,APAR
+2026-03-27,2026-03-18,24-38327,II,2026,"Desa Giri Kencana D1 Ketahun, Bengkulu Utara",BENGKULU UTARA,,SBM Bengkulu I Fuel,BOA1,BOA2,NOT CERTIFIED,"65,46","73,33","61,67","62,73",Basic,"Izin Prinsip, Pelumas, APAR"
+2026-03-27,2026-03-18,24-38321,II,2026,"Jl. Raya Kota Bani Lintas Sumatera, Bengkulu Utara",BENGKULU UTARA,,SBM Bengkulu I Fuel,BOA1,BOA2,NOT CERTIFIED,"78,48","76,33","80,26","78,75",Basic,"Izin Prinsip, Pelumas, HP, APAR, Masa Berlaku APAR"
 2026-03-24,2026-03-17,54-80706,V,2026,"JL. RAYA SEMARA PUTA KLOG KANGIN, Kab. Klungkung",Kab. Klungkung,,SBM Bali I Fuel,BOA1,BOA2,NOT CERTIFIED,"66,12","53,67","67,92","73,71",Basic,"Izin Prinsip, Pelumas, APAR"
+2026-03-27,2026-03-17,13-203111,I,2026,"Tuntungan I, Pancur Batu, Deli Serdang",Kab. Deli Serdang,CODO I,SBM Medan II Fuel,BOA1,CA,CERTIFIED,"96,48","96,33","96,17","96,76",Basic,
 2026-03-24,2026-03-17,54-80707,V,2026,"DS. SAMPALAN KEL. DAWAN KAB. KLUNGK, Kab. Klungkung",Kab. Klungkung,,SBM Bali I Fuel,BOA1,BOA2,NOT CERTIFIED,"68,25",70,"88,71","50,57",Basic,"APAR, Masa Berlaku APAR"
 2026-03-24,2026-03-17,54-80328,V,2026,"JL.BY PASS NGURAH RAI - JIMBARAN, Kab. Badung",Kab. Badung,,SBM Bali II Fuel,BOA1,BOA2,NOT CERTIFIED,"65,37",69,"67,32","60,73",Basic,"Izin Prinsip, Pelumas, CCTV, APAR"
 2026-03-25,2026-03-17,24-38635,II,2026,"Jl. Raya Bengkulu Padang Ds. Pal 30 , Bengkulu utara",BENGKULU UTARA,,SBM Bengkulu I Fuel,BOA1,BOA2,NOT CERTIFIED,"87,69","86,33","99,04","80,2",Basic,"CCTV, APAR"
@@ -24,7 +45,9 @@ send_date,Audit Date,spbu_no,region,year,address,city_name,tipe_spbu,rayon,audit
 2026-03-16,2026-03-15,64-73802,VI,2026,JL. PAHLAWAN RT.39 KEL.BUNTOK KOTA KEC.DUSUN SELATAN,Kab. Barito Selatan,,SBM Kalteng III Fuel,BOA1,BOA2,NOT CERTIFIED,"73,42","66,67","91,38","64,97",Basic,"Izin Prinsip, Pelumas, APAR"
 2026-03-16,2026-03-14,24-341152,II,2026,"Jl. Raya Bangun Rejo, Desa Sido Rejo Kec. Bangun Rejo Kab. Lampung Tengah  ",Kab Lampung Tengah,DODO,SBM Lampung II Fuel,BOA1,BOA2,NOT CERTIFIED,"88,91","96,33","92,33","80,7",Basic,Masa Berlaku APAR
 2026-03-16,2026-03-14,64-73702,VI,2026,JL. A. YANI DUSUN LUNGKANG JAAER DUSUN TIMUR,Kab. Barito Timur,,SBM Kalteng III Fuel,BOA1,BOA2,NOT CERTIFIED,"62,17","42,33","83,04","60,95",Basic,"Izin Prinsip, Pelumas, CCTV, HP, APAR"
+2026-03-27,2026-03-14,54-69103,V,2026,Jl. Pemuda Kaffa Bangkalan,Kab Bangkalan,DODO,SBM Surabaya IV Fuel,BOA1,CA,CERTIFIED,"92,93",87,100,"92,05",Basic,
 2026-03-25,2026-03-14,24-38216,II,2026,"Betungan - Bengkulu, Kota Bengkulu",KODYA BENGKULU,,SBM Bengkulu I Fuel,BOA1,BOA2,NOT CERTIFIED,"84,53","89,67","87,54","78,96",Basic,"Izin Prinsip, Pelumas, APAR"
+2026-03-28,2026-03-14,54-61315,V,2026,"JL. JAYA NEGARA 30, Kab. Mojokerto",Kodya Mojokerto,,SBM Surabaya I Fuel,BOA1,BOA2,NOT CERTIFIED,"42,96",50,"18,42","55,87",Basic,"Izin Prinsip, Pelumas, CCTV, APAR, Masa Berlaku APAR"
 2026-03-16,2026-03-14,54-67131,V,2026,"JL. RAYA BANGIL SIDOWAYAH, Kab. Pasuruan",Kab. Pasuruan,,SBM Malang I Fuel,BOA1,BOA2,NOT CERTIFIED,"69,46",63,"76,04","69,38",Basic,"Izin Prinsip, Pelumas, CCTV, APAR, Masa Berlaku APAR"
 2026-03-16,2026-03-14,64-73701,VI,2026,Jl. Negara RT 39,Kab Barito Timur,,SBM Kalteng III Fuel,BOA1,BOA2,NOT CERTIFIED,"63,48","55,67","52,54","77,11",Basic,"Izin Prinsip, Pelumas, APAR"
 2026-03-25,2026-03-13,14-2886101,I,2026,Jl.Lintas Riau,Kab Rokan Hilir,DODO,SBM Riau II Fuel,BOA1,CA,CERTIFIED,"94,7",88,100,"95,9",Basic,
