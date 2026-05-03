@@ -503,7 +503,9 @@
                             var statusText = GetStatusText(status);
                             var statusClass = GetStatusClass(status);
 
-                            var canProcess = status == "IN_PROGRESS";
+                            // item.Status dari controller adalah trx_claim.status.
+                            // Tombol Proses hanya muncul saat claim UNDER_REVIEW.
+                            var canProcess = status == "UNDER_REVIEW";
 
                             <tr>
                                 <td>
