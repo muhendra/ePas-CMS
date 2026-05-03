@@ -6,28 +6,31 @@
     var claimStatus = ViewBag.ClaimStatus as string ?? "";
     var claimStatusLabel = ViewBag.ClaimStatusLabel as string ?? "";
 
+    var invoiceStatus = ViewBag.InvoiceStatus as string ?? "";
+    var invoiceStatusLabel = ViewBag.InvoiceStatusLabel as string ?? "";
+
     var isWait = claimStatus == "UNDER_REVIEW";
     var isPendingApproval = claimStatus == "PENDING_APPROVAL";
     var isDone = claimStatus == "APPROVED";
     var isRejected = claimStatus == "REJECTED";
 
-    var isProcess = isWait || isPendingApproval;
+    var isEditableView = isWait || isPendingApproval;
 
-    var statusText = isWait
-        ? "UNDER_REVIEW"
-        : isPendingApproval
-            ? "PENDING_APPROVAL"
-            : isDone
-                ? "APPROVED"
-                : isRejected
-                    ? "REJECTED"
-                    : claimStatus;
+    var statusText = claimStatus switch
+    {
+        "UNDER_REVIEW" => "UNDER_REVIEW",
+        "PENDING_APPROVAL" => "PENDING_APPROVAL",
+        "APPROVED" => "APPROVED",
+        "REJECTED" => "REJECTED",
+        _ => string.IsNullOrWhiteSpace(claimStatus) ? "-" : claimStatus
+    };
 
-    var statusClass = isDone
-        ? "done"
-        : isRejected
-            ? "rejected"
-            : "warning";
+    var statusClass = claimStatus switch
+    {
+        "APPROVED" => "done",
+        "REJECTED" => "rejected",
+        _ => "warning"
+    };
 
     var amountDue = Model.TotalExpense - Model.LessDirectCharges - Model.LessAdvances;
 
@@ -707,7 +710,6 @@
 }
 
 <div class="invoice-detail-page">
-
     <div class="invoice-top-row">
         <h1 class="invoice-title">Detail Invoice</h1>
 
@@ -744,7 +746,7 @@
         <div class="info-grid">
             <div>
                 <label class="field-label">Invoice Number</label>
-                @if (isProcess)
+                @if (isEditableView)
                 {
                     <input class="form-control invoice-input" value="@Model.InvoiceNo" readonly />
                 }
@@ -756,7 +758,7 @@
 
             <div>
                 <label class="field-label">Name</label>
-                @if (isProcess)
+                @if (isEditableView)
                 {
                     <input class="form-control invoice-input" value="@Model.EmployeeName" readonly />
                 }
@@ -768,7 +770,7 @@
 
             <div>
                 <label class="field-label">Period</label>
-                @if (isProcess)
+                @if (isEditableView)
                 {
                     <div class="position-relative">
                         <input class="form-control invoice-input" value="@Model.Period" readonly />
@@ -784,7 +786,7 @@
 
             <div>
                 <label class="field-label">Kind of Job</label>
-                @if (isProcess)
+                @if (isEditableView)
                 {
                     <select class="form-select invoice-input" disabled>
                         <option selected>@Model.Job</option>
@@ -798,7 +800,7 @@
 
             <div>
                 <label class="field-label">Homebase</label>
-                @if (isProcess)
+                @if (isEditableView)
                 {
                     <input class="form-control invoice-input" value="@Model.Homebase" readonly />
                 }
@@ -838,7 +840,7 @@
                                 <td class="no-col">@(i + 1)</td>
 
                                 <td class="date-col">
-                                    @if (isProcess)
+                                    @if (isEditableView)
                                     {
                                         <div class="position-relative">
                                             <input class="cell-input" value="@item.Date.ToString("dd/MM/yyyy")" readonly />
@@ -854,7 +856,7 @@
                                 </td>
 
                                 <td class="expense-col">
-                                    @if (isProcess)
+                                    @if (isEditableView)
                                     {
                                         <input class="cell-input" value="@item.Description" readonly />
                                     }
@@ -865,7 +867,7 @@
                                 </td>
 
                                 <td class="center-col">
-                                    @if (isProcess)
+                                    @if (isEditableView)
                                     {
                                         <input class="cell-input" value="102" readonly />
                                     }
@@ -1009,7 +1011,7 @@
         <div class="attachment-grid">
             <div>
                 <div class="attachment-title">BPJS Kesehatan</div>
-                @if (isProcess)
+                @if (isEditableView)
                 {
                     <div class="upload-box"><span>Pilih file</span><i class="bi bi-upload"></i></div>
                 }
@@ -1026,7 +1028,7 @@
 
             <div>
                 <div class="attachment-title">BPJS Ketenagakerjaan</div>
-                @if (isProcess)
+                @if (isEditableView)
                 {
                     <div class="upload-box"><span>Pilih file</span><i class="bi bi-upload"></i></div>
                 }
@@ -1043,7 +1045,7 @@
 
             <div>
                 <div class="attachment-title">Vehicle maintenance</div>
-                @if (isProcess)
+                @if (isEditableView)
                 {
                     <div class="upload-box"><span>Pilih file</span><i class="bi bi-upload"></i></div>
                 }
@@ -1060,7 +1062,7 @@
 
             <div>
                 <div class="attachment-title">Internet data</div>
-                @if (isProcess)
+                @if (isEditableView)
                 {
                     <div class="upload-box"><span>Pilih file</span><i class="bi bi-upload"></i></div>
                 }
@@ -1077,7 +1079,7 @@
 
             <div>
                 <div class="attachment-title">Others</div>
-                @if (isProcess)
+                @if (isEditableView)
                 {
                     <div class="upload-box"><span>Pilih file</span><i class="bi bi-upload"></i></div>
                     <input class="cell-input" value="Biaya makan" readonly style="max-width:180px;margin-bottom:6px;" />
@@ -1242,7 +1244,7 @@
                 }
                 else
                 {
-                    <div class="approval-wait">Menunggu Persetujuan</div>
+                    <div class="approval-wait">Menunggu proses finance</div>
                 }
             </div>
         </div>
@@ -1256,7 +1258,11 @@
           asp-route-id="@Model.Id"
           class="bottom-action-bar">
         @Html.AntiForgeryToken()
-        <button type="submit" class="btn-process">Proses</button>
+        <button type="submit"
+                class="btn-process"
+                onclick="return confirmStartProcess();">
+            Proses
+        </button>
     </form>
 }
 else if (isPendingApproval)
@@ -1393,6 +1399,10 @@ else if (isPendingApproval)
 
         function confirmApprove() {
             return confirm('Yakin ingin menyetujui invoice ini?');
+        }
+
+        function confirmStartProcess() {
+            return confirm('Yakin ingin memproses invoice ini ke pending approval finance?');
         }
 
         document.addEventListener('DOMContentLoaded', function () {
