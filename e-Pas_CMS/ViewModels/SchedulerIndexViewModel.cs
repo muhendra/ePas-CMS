@@ -10,6 +10,12 @@
         public int TotalItems { get; set; }
     }
 
+    public class UpdateNoteRequest
+    {
+        public string Id { get; set; }
+        public string Note { get; set; }
+    }
+
     public class SchedulerItemViewModel
     {
         public string Id { get; set; }
@@ -21,6 +27,14 @@
         public string SpbuNo { get; set; }
         public string ReportNo { get; set; }
         public string SBM { get; set; }
+        public string Note { get; set; }
+    }
+
+    public class BulkInlineUpdateRequest
+    {
+        public string Id { get; set; }
+        public string Status { get; set; }
+        public string Note { get; set; }
     }
 
     public class TrxAuditNotStartedLogViewModel

@@ -68,6 +68,11 @@ public partial class trx_audit
     public string? report_file_excellent { get; set; }
 
     public string? report_file_boa { get; set; }
+    //public string? report_file_mg { get; set; }
+
+    //public bool? is_lumpsum { get; set; }
+
+    public string? note { get; set; }
 
     public virtual app_user? app_user { get; set; }
 

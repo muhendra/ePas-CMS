@@ -26,6 +26,304 @@ namespace e_Pas_CMS.Controllers
             return View();
         }
 
+        public IActionResult DashboardAnalytics()
+        {
+            return View();
+        }
+
+        [HttpGet]
+        public IActionResult AuditorPerformance()
+        {
+            return View();
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> AuditorPerformanceSummary(
+            string region = "",
+            int? month = null,
+            int? year = null)
+        {
+            var conn = _context.Database.GetDbConnection();
+
+            if (conn.State != ConnectionState.Open)
+                await conn.OpenAsync();
+
+            year ??= DateTime.Now.Year;
+
+            var monthly = await conn.QueryFirstOrDefaultAsync(@"
+        SELECT
+            ARRAY_AGG(total_audit ORDER BY bulan) AS total_audit,
+            ARRAY_AGG(verified_audit ORDER BY bulan) AS verified_audit
+        FROM (
+            SELECT
+                m.bulan,
+                COUNT(ta.id) AS total_audit,
+                COUNT(ta.id) FILTER (WHERE ta.status = 'VERIFIED') AS verified_audit
+            FROM generate_series(1, 12) m(bulan)
+            LEFT JOIN trx_audit ta 
+                ON EXTRACT(MONTH FROM COALESCE(ta.audit_execution_time, ta.created_date)) = m.bulan
+               AND EXTRACT(YEAR FROM COALESCE(ta.audit_execution_time, ta.created_date)) = @year
+            LEFT JOIN spbu s ON s.id = ta.spbu_id
+            WHERE (@region = '' OR s.region = @region)
+            GROUP BY m.bulan
+        ) x;
+    ", new { region = region ?? "", year });
+
+            var status = await conn.QueryFirstOrDefaultAsync(@"
+        SELECT
+            COUNT(*) FILTER (WHERE ta.status = 'VERIFIED') AS verified,
+            COUNT(*) FILTER (WHERE ta.status IN ('UNDER_REVIEW', 'IN_PROGRESS_SUBMIT', 'IN_PROGRESS_INPUT')) AS review,
+            COUNT(*) FILTER (WHERE COALESCE(ta.is_revision, false) = true) AS revision,
+            COUNT(*) AS total
+        FROM trx_audit ta
+        LEFT JOIN spbu s ON s.id = ta.spbu_id
+        WHERE EXTRACT(YEAR FROM COALESCE(ta.audit_execution_time, ta.created_date)) = @year
+          AND (@month IS NULL OR EXTRACT(MONTH FROM COALESCE(ta.audit_execution_time, ta.created_date)) = @month)
+          AND (@region = '' OR s.region = @region);
+    ", new { region = region ?? "", month, year });
+
+            var ranking = (await conn.QueryAsync(@"
+        SELECT
+            ROW_NUMBER() OVER (
+                ORDER BY 
+                    COUNT(ta.id) FILTER (WHERE ta.status = 'VERIFIED') DESC,
+                    COALESCE(SUM(tid.amount), 0) DESC
+            ) AS rank,
+            au.name AS auditor,
+            ROUND(
+                AVG(
+                    EXTRACT(EPOCH FROM (ta.approval_date - ta.audit_execution_time)) / 60
+                ) FILTER (
+                    WHERE ta.approval_date IS NOT NULL 
+                      AND ta.audit_execution_time IS NOT NULL
+                      AND ta.approval_date > ta.audit_execution_time
+                )
+            ) AS avg_minutes,
+            COUNT(ta.id) AS total_audit,
+            COALESCE(SUM(tid.amount), 0) AS total_commission,
+            COUNT(ta.id) FILTER (
+                WHERE ta.status = 'NOT_STARTED'
+                  AND ta.audit_schedule_date < CURRENT_DATE
+            ) AS missed_audit,
+            COUNT(ta.id) FILTER (
+                WHERE ta.status IN ('CANCELLED', 'CANCELED', 'DIBATALKAN')
+            ) AS cancelled_audit
+        FROM app_user au
+        LEFT JOIN trx_audit ta ON ta.app_user_id = au.id
+        LEFT JOIN spbu s ON s.id = ta.spbu_id
+        LEFT JOIN trx_invoice_detail tid ON tid.trx_audit_id = ta.id
+        WHERE au.status = 'ACTIVE'
+          AND (@region = '' OR s.region = @region)
+          AND (
+                ta.id IS NULL
+                OR EXTRACT(YEAR FROM COALESCE(ta.audit_execution_time, ta.created_date)) = @year
+              )
+          AND (
+                @month IS NULL
+                OR ta.id IS NULL
+                OR EXTRACT(MONTH FROM COALESCE(ta.audit_execution_time, ta.created_date)) = @month
+              )
+        GROUP BY au.id, au.name
+        ORDER BY rank
+        LIMIT 20;
+    ", new { region = region ?? "", month, year })).ToList();
+
+            return Json(new
+            {
+                monthly = new
+                {
+                    totalAudit = monthly?.total_audit ?? new int[12],
+                    verifiedAudit = monthly?.verified_audit ?? new int[12]
+                },
+                status = new
+                {
+                    verified = status?.verified ?? 0,
+                    review = status?.review ?? 0,
+                    revision = status?.revision ?? 0,
+                    total = status?.total ?? 0
+                },
+                ranking = ranking.Select(x => new
+                {
+                    rank = x.rank,
+                    auditor = x.auditor,
+                    speed = FormatMinutes(x.avg_minutes),
+                    totalAudit = x.total_audit,
+                    totalCommission = x.total_commission,
+                    missedAudit = x.missed_audit,
+                    cancelledAudit = x.cancelled_audit
+                })
+            });
+        }
+
+        [HttpGet]
+        public IActionResult VerifierPerformance()
+        {
+            return View();
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> VerifierPerformanceSummary(
+            string region = "",
+            int? month = null,
+            int? year = null)
+        {
+            var conn = _context.Database.GetDbConnection();
+
+            if (conn.State != System.Data.ConnectionState.Open)
+                await conn.OpenAsync();
+
+            year ??= DateTime.Now.Year;
+
+            var monthly = await conn.QueryFirstOrDefaultAsync(@"
+        SELECT
+            ARRAY_AGG(total_audit ORDER BY bulan) AS total_audit,
+            ARRAY_AGG(verified_audit ORDER BY bulan) AS verified_audit,
+            ARRAY_AGG(appeal_audit ORDER BY bulan) AS appeal_audit
+        FROM (
+            SELECT
+                m.bulan,
+                COUNT(ta.id) AS total_audit,
+                COUNT(ta.id) FILTER (WHERE ta.status = 'VERIFIED') AS verified_audit,
+                COUNT(tf.id) FILTER (WHERE tf.feedback_type = 'BANDING') AS appeal_audit
+            FROM generate_series(1, 12) m(bulan)
+            LEFT JOIN trx_audit ta 
+                ON EXTRACT(MONTH FROM COALESCE(ta.approval_date, ta.audit_execution_time, ta.created_date)) = m.bulan
+               AND EXTRACT(YEAR FROM COALESCE(ta.approval_date, ta.audit_execution_time, ta.created_date)) = @year
+            LEFT JOIN spbu s ON s.id = ta.spbu_id
+            LEFT JOIN trx_feedback tf ON tf.trx_audit_id = ta.id
+            WHERE (@region = '' OR s.region = @region)
+            GROUP BY m.bulan
+        ) x;
+    ", new { region = region ?? "", year });
+
+            var status = await conn.QueryFirstOrDefaultAsync(@"
+        SELECT
+            COUNT(*) FILTER (WHERE ta.status = 'VERIFIED') AS verified,
+            COUNT(*) FILTER (WHERE ta.status IN ('UNDER_REVIEW', 'IN_PROGRESS_SUBMIT', 'IN_PROGRESS_INPUT')) AS review,
+            COUNT(tf.id) FILTER (WHERE tf.feedback_type = 'BANDING') AS appeal,
+            COUNT(*) AS total
+        FROM trx_audit ta
+        LEFT JOIN spbu s ON s.id = ta.spbu_id
+        LEFT JOIN trx_feedback tf ON tf.trx_audit_id = ta.id
+        WHERE EXTRACT(YEAR FROM COALESCE(ta.approval_date, ta.audit_execution_time, ta.created_date)) = @year
+          AND (@month IS NULL OR EXTRACT(MONTH FROM COALESCE(ta.approval_date, ta.audit_execution_time, ta.created_date)) = @month)
+          AND (@region = '' OR s.region = @region);
+    ", new { region = region ?? "", month, year });
+
+            var ranking = (await conn.QueryAsync(@"
+        SELECT
+            ROW_NUMBER() OVER (
+                ORDER BY COUNT(ta.id) FILTER (WHERE ta.status = 'VERIFIED') DESC
+            ) AS rank,
+            COALESCE(NULLIF(ta.approval_by, ''), 'Unknown') AS verifier,
+            ROUND(
+                AVG(EXTRACT(EPOCH FROM (ta.approval_date - ta.audit_execution_time)) / 60)
+            ) FILTER (
+                WHERE ta.approval_date IS NOT NULL
+                  AND ta.audit_execution_time IS NOT NULL
+                  AND ta.approval_date > ta.audit_execution_time
+            ) AS avg_minutes,
+            COUNT(ta.id) FILTER (WHERE ta.status = 'VERIFIED') AS verified_audit,
+            COUNT(ta.id) FILTER (
+                WHERE ta.status = 'UNDER_REVIEW'
+            ) AS missed_audit,
+            COUNT(ta.id) FILTER (
+                WHERE ta.status IN ('CANCELLED', 'CANCELED', 'DIBATALKAN')
+            ) AS cancelled_audit,
+            MAX(ta.approval_date) AS last_verified_date
+        FROM trx_audit ta
+        LEFT JOIN spbu s ON s.id = ta.spbu_id
+        WHERE ta.approval_by IS NOT NULL
+          AND ta.approval_by <> ''
+          AND EXTRACT(YEAR FROM COALESCE(ta.approval_date, ta.audit_execution_time, ta.created_date)) = @year
+          AND (@month IS NULL OR EXTRACT(MONTH FROM COALESCE(ta.approval_date, ta.audit_execution_time, ta.created_date)) = @month)
+          AND (@region = '' OR s.region = @region)
+        GROUP BY ta.approval_by
+        ORDER BY verified_audit DESC
+        LIMIT 20;
+    ", new { region = region ?? "", month, year })).ToList();
+
+            var performance = (await conn.QueryAsync(@"
+        SELECT
+            COALESCE(NULLIF(ta.approval_by, ''), 'Unknown') AS verifier,
+            COUNT(ta.id) AS total_audited,
+            COUNT(ta.id) FILTER (WHERE ta.status = 'UNDER_REVIEW') AS under_verified,
+            COUNT(ta.id) FILTER (WHERE ta.status = 'VERIFIED') AS done_verified,
+            CASE 
+                WHEN COUNT(ta.id) = 0 THEN 0
+                ELSE ROUND((COUNT(ta.id) FILTER (WHERE ta.status = 'VERIFIED')::numeric / COUNT(ta.id)::numeric) * 100)
+            END AS verified_percent,
+            CASE 
+                WHEN COUNT(DISTINCT DATE(ta.approval_date)) = 0 THEN 0
+                ELSE ROUND(COUNT(ta.id) FILTER (WHERE ta.status = 'VERIFIED')::numeric / COUNT(DISTINCT DATE(ta.approval_date))::numeric)
+            END AS perday,
+            COUNT(DISTINCT ta.spbu_id) AS total_spbu,
+            GREATEST(COUNT(DISTINCT ta.spbu_id) - COUNT(DISTINCT ta.spbu_id) FILTER (WHERE ta.status = 'VERIFIED'), 0) AS remaining_spbu
+        FROM trx_audit ta
+        LEFT JOIN spbu s ON s.id = ta.spbu_id
+        WHERE ta.approval_by IS NOT NULL
+          AND ta.approval_by <> ''
+          AND EXTRACT(YEAR FROM COALESCE(ta.approval_date, ta.audit_execution_time, ta.created_date)) = @year
+          AND (@month IS NULL OR EXTRACT(MONTH FROM COALESCE(ta.approval_date, ta.audit_execution_time, ta.created_date)) = @month)
+          AND (@region = '' OR s.region = @region)
+        GROUP BY ta.approval_by
+        ORDER BY done_verified DESC
+        LIMIT 20;
+    ", new { region = region ?? "", month, year })).ToList();
+
+            return Json(new
+            {
+                monthly = new
+                {
+                    totalAudit = monthly?.total_audit ?? new int[12],
+                    verifiedAudit = monthly?.verified_audit ?? new int[12],
+                    appealAudit = monthly?.appeal_audit ?? new int[12]
+                },
+                status = new
+                {
+                    verified = status?.verified ?? 0,
+                    review = status?.review ?? 0,
+                    appeal = status?.appeal ?? 0,
+                    total = status?.total ?? 0
+                },
+                ranking = ranking.Select(x => new
+                {
+                    rank = x.rank,
+                    verifier = x.verifier,
+                    speed = FormatMinutes(x.avg_minutes),
+                    verifiedAudit = x.verified_audit,
+                    missedAudit = x.missed_audit,
+                    cancelledAudit = x.cancelled_audit,
+                    lastVerifiedDate = x.last_verified_date
+                }),
+                performance = performance.Select(x => new
+                {
+                    verifier = x.verifier,
+                    totalAudited = x.total_audited,
+                    underVerified = x.under_verified,
+                    doneVerified = x.done_verified,
+                    verifiedPercent = x.verified_percent,
+                    perday = x.perday,
+                    totalSpbu = x.total_spbu,
+                    remainingSpbu = x.remaining_spbu
+                })
+            });
+        }
+
+        private static string FormatMinutes(dynamic minutesObj)
+        {
+            if (minutesObj == null)
+                return "-";
+
+            int minutes = Convert.ToInt32(minutesObj);
+            int jam = minutes / 60;
+            int menit = minutes % 60;
+
+            if (jam > 0)
+                return $"{jam} Jam {menit} Menit";
+
+            return $"{menit} Menit";
+        }
 
         public async Task<IActionResult> Nasional(int pageNumber = 1, int pageSize = 10, string searchTerm = "", int? filterMonth = null, int? filterYear = null)
         {
@@ -2444,6 +2742,248 @@ WHERE ta.id = @id;
             );
         }
 
+        [HttpGet]
+        public async Task<IActionResult> Summary(int? month, int? year)
+        {
+            var query = _context.trx_audits
+                .Include(x => x.spbu)
+                .Where(x => x.status == "VERIFIED");
+
+            if (month.HasValue && year.HasValue)
+            {
+                query = query.Where(a =>
+                    (a.audit_execution_time ?? a.created_date).Month == month &&
+                    (a.audit_execution_time ?? a.created_date).Year == year);
+            }
+
+            var data = await query.ToListAsync();
+
+            var total = data.Count;
+
+            var good = data.Count(x => x.good_status == "CERTIFIED");
+            var excellent = data.Count(x => x.excellent_status == "CERTIFIED");
+            var basic = total - good - excellent;
+
+            // === STACKED BAR ===
+            var monthly = data
+                .GroupBy(x => (x.audit_execution_time ?? x.created_date).Month)
+                .Select(g => new {
+                    month = g.Key,
+                    regular = g.Count(x => x.audit_type == "Regular Audit"),
+                    boa = g.Count(x => x.audit_type == "BOA")
+                })
+                .ToList();
+
+            // === PROGRESS GLOBAL ===
+            var pass = data.Count(x => (x.score ?? 0) >= 75);
+            var fail = total - pass;
+
+            // === MAP ===
+            var map = data
+                .GroupBy(x => x.spbu.province_name)
+                .Select(g => new {
+                    province = g.Key,
+                    total = g.Count()
+                })
+                .ToList();
+
+            return Json(new
+            {
+                total,
+                good,
+                excellent,
+                basic,
+                monthly,
+                pass,
+                fail,
+                map
+            });
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> SummaryFull()
+        {
+            try
+            {
+                var conn = _context.Database.GetDbConnection();
+                if (conn.State != System.Data.ConnectionState.Open)
+                    await conn.OpenAsync();
+
+                // ================= STATUS =================
+                var status = await conn.QueryFirstOrDefaultAsync(@"
+            SELECT 
+                COUNT(*) FILTER (WHERE good_status = 'CERTIFIED') as good,
+                COUNT(*) FILTER (WHERE excellent_status = 'CERTIFIED') as excellent,
+                COUNT(*) FILTER (WHERE good_status != 'CERTIFIED') as basic,
+                COUNT(*) as total
+            FROM trx_audit
+            WHERE status = 'VERIFIED'
+        ");
+
+                // ================= PENCAPAIAN =================
+                var monthly = (await conn.QueryAsync(@"
+            SELECT 
+                EXTRACT(MONTH FROM audit_execution_time) as month,
+                COUNT(*) FILTER (WHERE audit_type = 'Mystery Audit') as regular,
+                COUNT(*) FILTER (WHERE audit_type = 'Basic Operational') as boa
+            FROM trx_audit
+            WHERE status = 'VERIFIED'
+            AND audit_execution_time IS NOT NULL
+            GROUP BY month
+            ORDER BY month
+        ")).ToList();
+
+                int[] regular = new int[12];
+                int[] boa = new int[12];
+
+                foreach (var m in monthly)
+                {
+                    if (m.month == null) continue;
+
+                    int monthVal = Convert.ToInt32(m.month);
+                    if (monthVal < 1 || monthVal > 12) continue;
+
+                    int idx = monthVal - 1;
+
+                    regular[idx] = Convert.ToInt32(m.regular ?? 0);
+                    boa[idx] = Convert.ToInt32(m.boa ?? 0);
+                }
+
+                // ================= MAP =================
+                var map = await conn.QueryAsync(@"
+            SELECT s.province_name as province, COUNT(*) as total
+            FROM trx_audit ta
+            JOIN spbu s ON s.id = ta.spbu_id
+            WHERE ta.status = 'VERIFIED'
+            GROUP BY s.province_name
+        ");
+
+                // ================= DA / TA / CA =================
+                var flowSummary = (await conn.QueryAsync(@"
+            SELECT 
+                COALESCE(maf.audit_level_class,'UNKNOWN') as cls,
+                COUNT(*) as total
+            FROM trx_audit ta
+            JOIN master_audit_flow maf 
+                ON maf.audit_level = ta.audit_level
+            WHERE ta.status = 'VERIFIED'
+            GROUP BY maf.audit_level_class
+        ")).ToList();
+
+                int da_pass = 0, da_fail = 0;
+                int ta_pass = 0, ta_fail = 0;
+                int ca_pass = 0, ca_fail = 0;
+
+                foreach (var f in flowSummary)
+                {
+                    string cls = (f.cls ?? "").ToString().ToUpper();
+                    int total = Convert.ToInt32(f.total ?? 0);
+
+                    if (cls.Contains("DA"))
+                        da_pass += total;
+
+                    else if (cls.Contains("TA"))
+                        ta_pass += total;
+
+                    else if (cls.Contains("CA"))
+                        ca_pass += total;
+                }
+
+                // ================= PROGRESS REGULER =================
+                var progressReguler = await conn.QueryFirstOrDefaultAsync(@"
+            SELECT
+                COUNT(*) FILTER (WHERE maf.audit_level_class ILIKE '%EXCELLENT%') as cert,
+                COUNT(*) FILTER (WHERE maf.audit_level_class ILIKE '%GOOD%') as trans,
+                COUNT(*) FILTER (WHERE maf.audit_level_class ILIKE '%BASIC%') as direct
+            FROM trx_audit ta
+            JOIN master_audit_flow maf 
+                ON maf.audit_level = ta.audit_level
+            WHERE ta.status = 'VERIFIED'
+        ");
+
+                // ================= PROGRESS BOA =================
+                var progressBoa = await conn.QueryFirstOrDefaultAsync(@"
+            SELECT
+    COUNT(*) FILTER (WHERE ta.audit_type = 'Basic Operational' AND ta.boa_status = 'CERTIFIED') as pass,
+    COUNT(*) FILTER (WHERE ta.audit_type = 'Basic Operational' AND ta.boa_status = 'NOT CERTIFIED') as fail
+FROM trx_audit ta
+JOIN master_audit_flow maf 
+    ON maf.audit_level = ta.audit_level
+WHERE ta.status = 'VERIFIED'
+        ");
+
+                // ================= RETURN =================
+                return Json(new
+                {
+                    // STATUS
+                    good = Convert.ToInt32(status?.good ?? 0),
+                    excellent = Convert.ToInt32(status?.excellent ?? 0),
+                    basic = Convert.ToInt32(status?.basic ?? 0),
+                    total = Convert.ToInt32(status?.total ?? 0),
+
+                    // PENCAPAIAN
+                    regular,
+                    boa,
+
+                    // MAP
+                    map,
+
+                    // ================= DUMMY DA / TA / CA =================
+                    da_pass = 1313,
+                    da_fail = 205,
+
+                    ta_pass = 574,
+                    ta_fail = 145,
+
+                    ca_pass = 186,
+                    ca_fail = 21,
+
+                    // ================= DUMMY PROGRESS =================
+                    progress_reguler = new
+                    {
+                        cert = 207,
+                        trans = 719,
+                        direct = 1518
+                    },
+
+                    progress_boa = new
+                    {
+                        pass = 122,
+                        fail = 122
+                    },
+
+                    // ================= DUMMY FAILURE =================
+                    failure = new
+                    {
+                        wtms = 70,
+                        qq = 68,
+                        wmef = 60,
+                        cpf = 80,
+                        cpo = 72
+                    },
+
+                    // ================= DUMMY SUB ELEMENT =================
+                    subElement = new Dictionary<string, int>
+    {
+        { "Standar Kebersihan (WTMS)", 25 },
+        { "Prosedur Pelayanan (WTMS)", 40 },
+        { "Penanganan Keluhan Pelanggan", 18 },
+        { "Peralatan (Q&Q)", 15 },
+        { "Prosedur Monitoring (Q&Q)", 22 },
+        { "Kebersihan Harian (WME&F)", 30 },
+        { "Pemeliharaan Berkala (WME&F)", 12 },
+        { "Identitas Visual Retail (CPF)", 20 },
+        { "Dispenser Unit (CPF)", 14 },
+        { "Penawaran BBM (CPO)", 16 },
+        { "Penawaran Non-BBM (CPO)", 10 }
+    }
+                });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, ex.Message);
+            }
+        }
 
         private void AssignWeightRecursive(AuditChecklistNode node)
         {

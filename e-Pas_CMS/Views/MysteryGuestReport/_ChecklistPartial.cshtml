@@ -1,0 +1,21 @@
+﻿@model List<e_Pas_CMS.ViewModels.AuditChecklistNode>
+
+@{
+    int level = ViewData["Level"] as int? ?? 0;
+    bool isVerified = ViewData["IsVerified"] as bool? ?? false;
+    bool isReadonlyUser = ViewData["IsReadonlyUser"] as bool? ?? false;
+    string auditId = ViewData["AuditId"] as string;
+}
+
+<ul id="auditChecklist" class="list-unstyled">
+    @foreach (var node in Model)
+    {
+        var childViewData = new ViewDataDictionary(ViewData);
+        childViewData["Level"] = level + 1;
+        childViewData["IsVerified"] = isVerified;
+        childViewData["IsReadonlyUser"] = isReadonlyUser;
+        childViewData["AuditId"] = auditId;
+
+        @Html.Partial("_ChecklistNode", node, childViewData)
+    }
+</ul>

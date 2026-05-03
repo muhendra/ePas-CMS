@@ -56,7 +56,7 @@ namespace e_Pas_CMS.Controllers
                     .Distinct()
                     .ToListAsync();
 
-            var query = _context.trx_audits
+            var query = _context.trx_audits.AsNoTracking()
                 .Include(a => a.spbu)
                 .Include(a => a.app_user)
                 .Where(a => a.status == "VERIFIED" && a.audit_type == "Basic Operational");
@@ -379,10 +379,10 @@ namespace e_Pas_CMS.Controllers
 
             var allowedStatuses = new[] { "VERIFIED" };
 
-            var start = new DateTime(2026, 02, 1);
-            var end = new DateTime(2026, 02, 28);
+            var start = new DateTime(2026, 04, 01);
+            var end = new DateTime(2026, 05, 01);
 
-            var query = _context.trx_audits
+            var query = _context.trx_audits.AsNoTracking()
                 .Include(a => a.spbu)
                 .Include(a => a.app_user)
                 .Where(a =>
@@ -1391,7 +1391,7 @@ namespace e_Pas_CMS.Controllers
                 if (!Directory.Exists(outputDirectory))
                     Directory.CreateDirectory(outputDirectory);
 
-                var auditIds = await _context.trx_audits
+                var auditIds = await _context.trx_audits.AsNoTracking()
                     .Where(a => a.status == "VERIFIED" && a.audit_type == "Basic Operational" && a.report_file_boa == null)
                     .OrderByDescending(a => a.audit_execution_time)
                     //.Take(10)

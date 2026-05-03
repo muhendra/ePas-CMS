@@ -200,7 +200,7 @@
                                 <td><input type="number" step="0.001" class="form-control form-control-sm qq-obdens15" value="@item.ObservedDensity15Degree" /></td>
                                 <td><input type="number" step="0.001" class="form-control form-control-sm qq-refdens15" value="@item.ReferenceDensity15Degree" /></td>
                                 <td><input type="number" class="form-control form-control-sm qq-tank" value="@item.TankNumber" /></td>
-                                <td><input type="number" step="0.001" class="form-control form-control-sm qq-densvar" value="@item.DensityVariation" /></td>
+                                <td><input type="number" step="0.001" class="form-control form-control-sm qq-densvar" value="@item.DensityVariation" readonly /></td>
 
                                 <td>
                                     <button type="button" class="btn btn-sm btn-success btn-save-qq">Save</button>
@@ -299,7 +299,13 @@
             <form method="post" asp-action="UpdateBeritaAcaraText" asp-route-id="@ViewBag.AuditId">
                 <div class="mb-3">
                     <label for="BeritaAcaraText" class="form-label fw-semibold">Isi Berita Acara</label>
-                    <textarea id="BeritaAcaraText" name="Notes" class="form-control" rows="5" required>@Model.Notes</textarea>
+                    @* <textarea id="BeritaAcaraText" name="Notes" class="form-control" rows="5" required>@Model.Notes</textarea> *@
+                    <textarea id="BeritaAcaraText"
+                      name="Notes"
+                      class="form-control textarea-modern"
+                      rows="4"
+                      placeholder="Tulis komentar / berita acara..."
+                      required>@Model.Notes</textarea>
                 </div>
                 <button type="submit" class="btn btn-primary rounded-pill px-4">Ubah Berita Acara</button>
             </form>
@@ -308,7 +314,7 @@
         {
             <div class="mb-3">
                 <label class="fw-semibold">Isi Catatan</label>
-                <div class="border rounded p-3 bg-light">
+                <div class="border rounded p-3 bg-light" style="white-space: pre-line;">
                     @Model.Notes
                 </div>
             </div>
@@ -377,6 +383,20 @@ else if (!string.IsNullOrEmpty(Model.Notes) || (Model.FinalDocuments != null && 
     </div>
 }
 
+<div class="d-flex align-items-center justify-content-between mb-3 p-3 rounded"
+     style="background: linear-gradient(90deg,#ffb300,#ff9800); color:white;">
+
+    <div class="fw-semibold">
+        ⏱️ Waktu Kecepatan Verifikasi
+    </div>
+
+    <div id="auditTimer"
+         class="bg-white text-danger fw-bold px-3 py-1 rounded"
+         style="font-size:18px;">
+        00 : 00 : 00
+    </div>
+</div>
+
 <div class="text-end mt-5 d-flex justify-content-end gap-2 flex-wrap">
 
     <a href="/Report/PreviewDetail/@ViewBag.AuditId"
@@ -440,6 +460,36 @@ else if (!string.IsNullOrEmpty(Model.Notes) || (Model.FinalDocuments != null && 
     <div class="modal-dialog modal-fullscreen">
         <div class="modal-content">
             <div class="modal-header">
+                <!-- ✅ TOOLBAR (ADD) -->
+                <div class="media-toolbar d-flex gap-2 align-items-center">
+                    <button type="button" class="btn btn-sm btn-light" id="btnZoomOut" title="Zoom Out">
+                        <i class="bi bi-zoom-out"></i>
+                    </button>
+                    <button type="button" class="btn btn-sm btn-light" id="btnZoomIn" title="Zoom In">
+                        <i class="bi bi-zoom-in"></i>
+                    </button>
+
+                    <div class="vr bg-light opacity-75"></div>
+
+                    <button type="button" class="btn btn-sm btn-light" id="btnRotateLeft" title="Rotate Left">
+                        <i class="bi bi-arrow-counterclockwise"></i>
+                    </button>
+                    <button type="button" class="btn btn-sm btn-light" id="btnRotateRight" title="Rotate Right">
+                        <i class="bi bi-arrow-clockwise"></i>
+                    </button>
+
+                    <div class="vr bg-light opacity-75"></div>
+
+                    <button type="button" class="btn btn-sm btn-warning" id="btnResetTransform" title="Reset">
+                        <i class="bi bi-arrow-repeat"></i>
+                    </button>
+                    <button type="button" class="btn btn-sm btn-success" id="btnSaveRotate" title="Save Rotate">
+                        <i class="bi bi-save"></i>
+                    </button>
+
+                </div>
+
+                <!-- ✅ EXISTING (KEEP) -->
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Tutup"></button>
             </div>
             <div class="modal-body p-0 position-relative" id="fullSizeMediaModalBody">
@@ -454,15 +504,16 @@ else if (!string.IsNullOrEmpty(Model.Notes) || (Model.FinalDocuments != null && 
     </div>
 </div>
 
+
 @section Styles {
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css" />
     <style>
         a.btn.btn-outline-dark:hover,
         a.btn.btn-outline-dark:focus,
         a.btn.btn-outline-dark:active {
-            background-color: #f8f9fa !important; /* tetap terang */
-            color: #000 !important; /* teks tetap hitam */
-            border-color: #212529 !important; /* garis tegas saat hover */
+            background-color: #f8f9fa !important;
+            color: #000 !important;
+            border-color: #212529 !important;
         }
 
         .card-header .btn-sm {
@@ -478,9 +529,9 @@ else if (!string.IsNullOrEmpty(Model.Notes) || (Model.FinalDocuments != null && 
             transition: transform .3s ease;
         }
 
-        .rotate-arrow.rotate {
-            transform: rotate(90deg);
-        }
+            .rotate-arrow.rotate {
+                transform: rotate(90deg);
+            }
 
         .option-btn:hover {
             background-color: #e0f2f1 !important;
@@ -493,185 +544,13 @@ else if (!string.IsNullOrEmpty(Model.Notes) || (Model.FinalDocuments != null && 
             color: #fff;
         }
 
-        /* Media fit in modal */
-        .carousel-item img,
-        .carousel-item video,
-        #mediaModalBody img,
-        #mediaModalBody video,
-        #fullSizeMediaModalBody img,
-        #fullSizeMediaModalBody video {
-            max-width: 100%;
-            max-height: 85vh;
-            object-fit: contain;
-            display: block;
-            margin: 0 auto;
-        }
-
         .modal {
             outline: none !important;
         }
 
-        #fullSizeMediaModal .modal-content {
-            background-color: rgba(0, 0, 0, 0.9);
-        }
-
-        #fullSizeMediaModal .modal-header {
-            border-bottom: none;
-            padding: 0.5rem;
-        }
-
-        #fullSizeMediaModal .modal-body {
-            padding: 0;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            min-height: 80vh;
-        }
-
-        #fullSizeMediaModal .btn-close {
-            background-color: white;
-            opacity: 0.8;
-        }
-
-        #fullSizeMediaModal .btn-close:hover {
-            opacity: 1;
-        }
-
-        #fullSizeMediaModal .modal-footer {
-            background-color: rgba(0, 0, 0, 0.9);
-            border-top: none;
-            padding: 1rem;
-        }
-
-        #fullSizeMediaModal .btn-primary {
-            background-color: #0d6efd;
-            border: none;
-            padding: 0.5rem 1.5rem;
-        }
-
-        #fullSizeMediaModal .btn-primary:hover {
-            background-color: #0b5ed7;
-        }
-
-        /* Add these new styles for full screen modal */
-        #fullSizeMediaModal .modal-dialog {
-            max-width: 100%;
-            margin: 0;
-            height: 100vh;
-        }
-
-        #fullSizeMediaModal .modal-content {
-            height: 100vh;
-            background-color: rgba(0, 0, 0, 0.9);
-            border: none;
-            border-radius: 0;
-        }
-
-        #fullSizeMediaModal .modal-body {
-            padding: 0;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        #fullSizeMediaModal .carousel-item {
-            height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        #fullSizeMediaModal .carousel-control-prev,
-        #fullSizeMediaModal .carousel-control-next {
-            width: 10%;
-        }
-
-        #fullSizeMediaModal .carousel-indicators {
-            margin-bottom: 1rem;
-        }
-
-        #fullSizeMediaModal .btn-close {
-            position: absolute;
-            right: 1rem;
-            top: 1rem;
-            z-index: 1050;
-            background-color: white;
-            opacity: 0.8;
-        }
-
-        #fullSizeMediaModal .btn-close:hover {
-            opacity: 1;
-        }
-
-        /* Gallery grid styles */
-        .gallery-grid {
-            display: grid;
-            grid-template-columns: repeat(7, 1fr);
-            grid-auto-rows: min-content; /* Prevent row stretching */
-            gap: 0.3rem;
-            padding: 0.3rem;
-            width: 100%;
-            max-width: 100%;
-            margin: 0;
-        }
-
-        .gallery-grid .col {
-            width: 100%;
-            padding: 0;
-            min-width: 0;
-            height: fit-content; /* Prevent column stretching */
-        }
-
-        .gallery-grid .card {
-            margin: 0;
-            border: 1px solid rgba(0,0,0,0.1);
-            transform: scale(0.97);
-            transform-origin: center;
-            height: fit-content; /* Prevent card stretching */
-            width: 100%;
-            min-width: 0;
-        }
-
-        .gallery-grid .card-body {
-            padding: 0.12rem;
-            display: flex;
-            flex-direction: column;
-            height: fit-content; /* Prevent body stretching */
-            min-width: 0;
-        }
-
-        .gallery-grid .media-container {
-            flex: 0 0 120px; /* Fixed height, don't grow or shrink */
-            min-height: 0;
-            position: relative;
-            width: 100%;
-            height: 120px;
-            min-width: 0;
-        }
-
-        .gallery-grid .media-container img,
-        .gallery-grid .media-container video {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-            border-radius: 0.25rem;
-        }
-
-        .gallery-grid .text-truncate.small {
-            flex: 0 0 auto; /* Don't grow or shrink */
-            font-size: 0.65rem;
-            line-height: 1.1;
-            margin-top: 0.12rem;
-            padding: 0 0.15rem;
-            color: #666;
-            text-align: center;
-            display: block;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
-
-        /* Modal styles */
+        /* ==========================
+                           MEDIA MODAL (Gallery)
+                           ========================== */
         #mediaModal .modal-dialog {
             max-width: 95vw;
             margin: 1.75rem auto;
@@ -693,23 +572,92 @@ else if (!string.IsNullOrEmpty(Model.Notes) || (Model.FinalDocuments != null && 
             max-width: 100%;
         }
 
-        /* Ensure search container doesn't cause horizontal scroll */
         #mediaModal .input-group {
             max-width: 100%;
             margin-bottom: 0.5rem;
         }
 
-        /* Ensure pagination container doesn't cause horizontal scroll */
         #mediaModal .pagination {
             flex-wrap: wrap;
             justify-content: center;
             margin: 0.5rem 0;
         }
 
-        #mediaModal .pagination .page-item {
-            margin: 0.1rem;
+            #mediaModal .pagination .page-item {
+                margin: 0.1rem;
+            }
+
+        /* Gallery grid styles */
+        .gallery-grid {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            grid-auto-rows: min-content;
+            gap: 0.3rem;
+            padding: 0.3rem;
+            width: 100%;
+            max-width: 100%;
+            margin: 0;
         }
 
+            .gallery-grid .col {
+                width: 100%;
+                padding: 0;
+                min-width: 0;
+                height: fit-content;
+            }
+
+            .gallery-grid .card {
+                margin: 0;
+                border: 1px solid rgba(0,0,0,0.1);
+                transform: scale(0.97);
+                transform-origin: center;
+                height: fit-content;
+                width: 100%;
+                min-width: 0;
+            }
+
+            .gallery-grid .card-body {
+                padding: 0.12rem;
+                display: flex;
+                flex-direction: column;
+                height: fit-content;
+                min-width: 0;
+            }
+
+            .gallery-grid .media-container {
+                flex: 0 0 120px;
+                min-height: 0;
+                position: relative;
+                width: 100%;
+                height: 120px;
+                min-width: 0;
+            }
+
+                .gallery-grid .media-container img,
+                .gallery-grid .media-container video {
+                    width: 100%;
+                    height: 100%;
+                    object-fit: cover;
+                    border-radius: 0.25rem;
+                }
+
+            .gallery-grid .text-truncate.small {
+                flex: 0 0 auto;
+                font-size: 0.65rem;
+                line-height: 1.1;
+                margin-top: 0.12rem;
+                padding: 0 0.15rem;
+                color: #666;
+                text-align: center;
+                display: block;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+            }
+
+        /* ==========================
+                           FULLSCREEN MODAL (Viewer)
+                           ========================== */
         #fullSizeMediaModal .modal-dialog {
             margin: 0;
             max-width: 100%;
@@ -723,20 +671,21 @@ else if (!string.IsNullOrEmpty(Model.Notes) || (Model.FinalDocuments != null && 
             border-radius: 0;
         }
 
+        #fullSizeMediaModal .modal-header {
+            position: relative;
+            z-index: 1060;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: .75rem 1rem;
+            border: none;
+        }
+
         #fullSizeMediaModal .modal-body {
+            padding: 0;
             display: flex;
             align-items: center;
             justify-content: center;
-            padding: 0;
-        }
-
-        #fullSizeMediaModal .modal-header {
-            position: absolute;
-            top: 0;
-            right: 0;
-            z-index: 1050;
-            border: none;
-            padding: 1rem;
         }
 
         #fullSizeMediaModal .modal-footer {
@@ -750,13 +699,17 @@ else if (!string.IsNullOrEmpty(Model.Notes) || (Model.FinalDocuments != null && 
         }
 
         #fullSizeMediaModal .btn-close {
+            position: absolute;
+            right: 1rem;
+            top: 1rem;
+            z-index: 1050;
             background-color: white;
             opacity: 0.8;
         }
 
-        #fullSizeMediaModal .btn-close:hover {
-            opacity: 1;
-        }
+            #fullSizeMediaModal .btn-close:hover {
+                opacity: 1;
+            }
 
         #fullSizeMediaModal .btn-primary {
             background-color: #0d6efd;
@@ -764,11 +717,97 @@ else if (!string.IsNullOrEmpty(Model.Notes) || (Model.FinalDocuments != null && 
             padding: 0.5rem 1.5rem;
         }
 
-        #fullSizeMediaModal .btn-primary:hover {
-            background-color: #0b5ed7;
+            #fullSizeMediaModal .btn-primary:hover {
+                background-color: #0b5ed7;
+            }
+
+        /* Toolbar overlay */
+        #fullSizeMediaModal .media-toolbar {
+            position: absolute;
+            left: 1rem;
+            top: 1rem;
+            z-index: 1060;
         }
 
-        /* Custom black arrow style */
+            #fullSizeMediaModal .media-toolbar .btn {
+                border: 1px solid rgba(0,0,0,0.25);
+            }
+
+        /* Viewport fullscreen (PAKAI 1 DEFINISI SAJA - jangan duplikat) */
+        #fullSizeMediaModalBody {
+            width: 100vw;
+            height: calc(100vh - 60px);
+            overflow: auto; /* zoom > 1 bisa scroll */
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 12px; /* biar ga mepet tepi */
+        }
+
+            /* Default media inside fullscreen body (jangan dipaksa 100%) */
+            #fullSizeMediaModalBody .fs-media {
+                width: auto;
+                height: auto;
+                max-width: none;
+                max-height: none;
+                display: block;
+                object-fit: contain;
+                transform-origin: center center;
+                transition: transform .12s ease;
+            }
+
+            /* Media fit in modal (general) */
+            .carousel-item img,
+            .carousel-item video,
+            #mediaModalBody img,
+            #mediaModalBody video,
+            #fullSizeMediaModalBody img,
+            #fullSizeMediaModalBody video {
+                max-width: none;
+                max-height: none;
+                width: auto;
+                height: auto;
+                object-fit: contain;
+                transform-origin: center center;
+            }
+
+            /* ✅ Fullscreen transform helper */
+            #fullSizeMediaModalBody img,
+            #fullSizeMediaModalBody video {
+                transform-origin: center center;
+                transition: transform .12s ease;
+            }
+
+        /* Carousel fullscreen behavior */
+        #fullSizeMediaModal .carousel-item {
+            height: 100vh;
+            align-items: center;
+            justify-content: center;
+        }
+
+            #fullSizeMediaModal .carousel-item.active,
+            #fullSizeMediaModal .carousel-item-next,
+            #fullSizeMediaModal .carousel-item-prev {
+                display: flex;
+            }
+
+        #fullSizeMediaModal .carousel-control-prev,
+        #fullSizeMediaModal .carousel-control-next {
+            width: 10%;
+        }
+
+        #fullSizeMediaModal .carousel-indicators {
+            margin-bottom: 1rem;
+        }
+
+        /* ✅ Jangan clip media yang di-rotate di dalam carousel */
+        #fullSizeMediaModalBody .carousel,
+        #fullSizeMediaModalBody .carousel-inner,
+        #fullSizeMediaModalBody .carousel-item {
+            overflow: visible !important;
+        }
+
+        /* Custom black arrow style (untuk carousel di modal biasa) */
         .carousel-control-prev-icon.custom-arrow,
         .carousel-control-next-icon.custom-arrow {
             background-image: none;
@@ -807,15 +846,115 @@ else if (!string.IsNullOrEmpty(Model.Notes) || (Model.FinalDocuments != null && 
             .carousel-control-next-icon.custom-arrow:hover {
                 background-color: #f8f9fa;
             }
-
     </style>
 }
 
 @section Scripts {
     <script>
-        let currentPage = 1;
-        const pageSize = 35;
-        let selectedMedia = null;
+                let currentPage = 1;
+                const pageSize = 35;
+                let selectedMedia = null;
+
+                        // ✅ Transform state for fullscreen media
+                let fsScale = 1;
+                let fsRotate = 0;
+
+                let fsActiveMediaPath = null;   // mediaPath yang sedang dibuka
+                let fsActiveMediaType = null;   // IMAGE/VIDEO
+
+                function getActiveFullScreenMediaEl() {
+                const activeItem = document.querySelector(
+                        '#fullSizeMediaModalBody .carousel-item.active'
+                    );
+                    return activeItem ? activeItem.querySelector('img, video') : null;
+                }
+
+                function clearAllFullScreenTransforms() {
+                    document
+                        .querySelectorAll('#fullSizeMediaModalBody img, #fullSizeMediaModalBody video')
+                        .forEach(el => el.style.transform = '');
+                }
+
+                                function getNaturalSize(el){
+                  if (!el) return { w: 0, h: 0 };
+                  if (el.tagName === 'IMG') return { w: el.naturalWidth || 0, h: el.naturalHeight || 0 };
+                  if (el.tagName === 'VIDEO') return { w: el.videoWidth || 0, h: el.videoHeight || 0 };
+                  return { w: 0, h: 0 };
+                }
+
+                        function applyFullScreenTransform() {
+                  const el = getActiveFullScreenMediaEl();
+                  const vp = document.getElementById('fullSizeMediaModalBody');
+                  if (!el || !vp) return;
+
+                  clearAllFullScreenTransforms();
+
+                  const { w, h } = getNaturalSize(el);
+                  if (!w || !h) {
+                    setTimeout(applyFullScreenTransform, 50);
+                    return;
+                  }
+
+                  const vw = vp.clientWidth;
+                  const vh = vp.clientHeight;
+
+                  const rot = ((fsRotate % 360) + 360) % 360;
+                  const sideways = rot === 90 || rot === 270;
+
+                  const rw = sideways ? h : w;
+                  const rh = sideways ? w : h;
+
+                  // ✅ fit ke viewport, tapi jangan membesarkan > ukuran asli
+                  const fitScale = Math.min(vw / rw, vh / rh);
+                  const baseFit  = Math.min(fitScale, 1);     // ⬅️ ini bikin "zoom out 1x" = ukuran asli
+                  const totalScale = baseFit * fsScale;
+
+                  el.style.width = w + 'px';
+                  el.style.height = h + 'px';
+                  el.style.transform = `rotate(${fsRotate}deg) scale(${totalScale})`;
+                }
+
+
+
+                //     clearAllFullScreenTransforms();
+
+                //     // 🔥 kalau rotate 90 / 270 → auto fit viewport
+                //     const isSideways = Math.abs(fsRotate) % 180 === 90;
+
+                //     if (isSideways) {
+                //         el.style.maxWidth = '100vh';
+                //         el.style.maxHeight = '100vw';
+                //     } else {
+                //         el.style.maxWidth = '100vw';
+                //         el.style.maxHeight = '100vh';
+                //     }
+
+                //     el.style.transform = `rotate(${fsRotate}deg) scale(${fsScale})`;
+                // }
+
+
+                function resetFullScreenTransform() {
+                    fsScale = 1;
+                    fsRotate = 0;
+                    applyFullScreenTransform();
+                }
+
+
+                function zoomIn() {
+                    fsScale += 0.2;
+                    applyFullScreenTransform();
+                }
+
+
+                function rotateLeft() {
+                    fsRotate -= 90;
+                    applyFullScreenTransform();
+                }
+
+                function rotateRight() {
+                    fsRotate += 90;
+                    applyFullScreenTransform();
+                }
 
         function loadGalleryPage(page) {
             const searchInput = document.getElementById('gallerySearch');
@@ -1576,9 +1715,18 @@ else if (!string.IsNullOrEmpty(Model.Notes) || (Model.FinalDocuments != null && 
 
         $(document).on('click', '.view-media-btn2', function () {
             const mediaItems = $(this).data('media-items');
-            showMediaPopup(mediaItems);
-            console.log(mediaItems);
+            showFullScreenMedia(mediaItems); // ⬅️ buka modal fullscreen yang ada toolbar
         });
+
+                // ✅ bersihin transform dari semua media di fullscreen modal
+        function clearAllFullScreenTransforms() {
+            document
+              .querySelectorAll('#fullSizeMediaModalBody img, #fullSizeMediaModalBody video')
+              .forEach(el => { el.style.transform = ''; });
+        }
+
+        
+
 
 
         // Add this at the beginning of your script section
@@ -1589,84 +1737,176 @@ else if (!string.IsNullOrEmpty(Model.Notes) || (Model.FinalDocuments != null && 
             handleDocumentationClick(mediaItems, nodeId, auditId);
         });
 
-        // Add this new function for viewing media in full screen
+        
+        function getActiveFullScreenMediaEl() {
+          const activeItem = document.querySelector('#fullSizeMediaModalBody .carousel-item.active');
+          return activeItem
+            ? activeItem.querySelector('img, video')
+            : document.querySelector('#fullSizeMediaModalBody img, #fullSizeMediaModalBody video');
+        }
+
+        function clearAllFullScreenTransforms() {
+          document
+            .querySelectorAll('#fullSizeMediaModalBody img, #fullSizeMediaModalBody video')
+            .forEach(el => {
+              el.style.transform = '';
+              el.style.width = '';
+              el.style.height = '';
+            });
+        }
+
+        function getNaturalSize(el) {
+          if (!el) return { w: 0, h: 0 };
+          if (el.tagName === 'IMG') return { w: el.naturalWidth || 0, h: el.naturalHeight || 0 };
+          if (el.tagName === 'VIDEO') return { w: el.videoWidth || 0, h: el.videoHeight || 0 };
+          return { w: 0, h: 0 };
+        }
+
+        function applyFullScreenTransform() {
+          const el = getActiveFullScreenMediaEl();
+          const vp = document.getElementById('fullSizeMediaModalBody');
+          if (!el || !vp) return;
+
+          clearAllFullScreenTransforms();
+
+          const { w, h } = getNaturalSize(el);
+          if (!w || !h) {
+            setTimeout(applyFullScreenTransform, 50);
+            return;
+          }
+
+          const vw = vp.clientWidth;
+          const vh = vp.clientHeight;
+
+          const rot = ((fsRotate % 360) + 360) % 360;
+          const sideways = rot === 90 || rot === 270;
+
+          const rw = sideways ? h : w;
+          const rh = sideways ? w : h;
+
+          const fitScale = Math.min(vw / rw, vh / rh);
+          const totalScale = fitScale * fsScale;
+
+          el.style.width = w + 'px';
+          el.style.height = h + 'px';
+          el.style.transform = `rotate(${fsRotate}deg) scale(${totalScale})`;
+        }
+
+        function resetFullScreenTransform() {
+          fsScale = 1;
+          fsRotate = 0;
+          applyFullScreenTransform();
+        }
+
+        function zoomIn() { fsScale += 0.2; applyFullScreenTransform(); }
+        function zoomOut() { fsScale = Math.max(0.2, fsScale - 0.2); applyFullScreenTransform(); }
+        function rotateLeft() { fsRotate -= 90; applyFullScreenTransform(); }
+        function rotateRight() { fsRotate += 90; applyFullScreenTransform(); }
+
                 function showFullScreenMedia(mediaItems) {
-            const normalizedItems = mediaItems.map(item => ({
-                path: item.mediaPath || item.MediaPath,
-                type: (item.mediaType || item.MediaType)?.toUpperCase()
-            }));
+          const normalizedItems = (mediaItems || []).map(item => ({
+            path: item.mediaPath || item.MediaPath,
+            type: (item.mediaType || item.MediaType || '').toUpperCase()
+          }));
 
-            const modalEl = document.getElementById('fullSizeMediaModal');
-            const container = document.getElementById('fullSizeMediaModalBody');
+          const modalEl = document.getElementById('fullSizeMediaModal');
+          const container = document.getElementById('fullSizeMediaModalBody');
 
-            // Cleanup previously injected content and modal state
-            container.innerHTML = '';
-            document.body.classList.remove('modal-open');
-            document.body.style.overflow = '';
-            document.body.style.paddingRight = '';
-            const backdrop = document.querySelector('.modal-backdrop');
-            if (backdrop) backdrop.remove();
+          container.innerHTML = '';
 
-            if (normalizedItems.length > 1) {
-                const carouselId = 'fullScreenCarousel';
-                const indicators = [];
-                const innerItems = [];
+          // bersihin backdrop lama kalau ada
+          document.body.classList.remove('modal-open');
+          document.body.style.overflow = '';
+          document.body.style.paddingRight = '';
+          document.querySelector('.modal-backdrop')?.remove();
 
-                normalizedItems.forEach((item, index) => {
-                    const isVideo = item.type === 'VIDEO' || item.path.toLowerCase().endsWith('.mp4');
-                    const isActive = index === 0 ? 'active' : '';
-                    const mediaTag = isVideo
-                        ? `<video controls class="w-100 h-100" style="object-fit: contain;"><source src="${item.path}" type="video/mp4"></video>`
-                        : `<img src="${item.path}" class="w-100 h-100" style="object-fit: contain;" alt="Dokumentasi">`;
+          if (normalizedItems.length > 1) {
+            const carouselId = 'fullScreenCarousel';
+            const indicators = [];
+            const innerItems = [];
 
-                    indicators.push(`<button type="button" data-bs-target="#${carouselId}" data-bs-slide-to="${index}" class="${isActive}" aria-current="${isActive}" aria-label="Slide ${index + 1}"></button>`);
-                    innerItems.push(`<div class="carousel-item ${isActive}">${mediaTag}</div>`);
-                });
+            normalizedItems.forEach((item, index) => {
+              const isVideo = item.type === 'VIDEO' || item.path.toLowerCase().endsWith('.mp4');
+              const isActive = index === 0 ? 'active' : '';
+              const mediaTag = isVideo
+                ? `<video controls class="fs-media"><source src="${item.path}" type="video/mp4"></video>`
+                : `<img src="${item.path}" class="fs-media" alt="Dokumentasi">`;
 
-                const carouselHTML = `
-                    <div id="${carouselId}" class="carousel slide" data-bs-ride="false">
-                        <div class="carousel-indicators">${indicators.join('')}</div>
-                        <div class="carousel-inner">${innerItems.join('')}</div>
-                        <button class="carousel-control-prev" type="button" data-bs-target="#${carouselId}" data-bs-slide="prev">
-                            <span class="carousel-control-prev-icon" aria-hidden="true"></span>
-                            <span class="visually-hidden">Previous</span>
-                        </button>
-                        <button class="carousel-control-next" type="button" data-bs-target="#${carouselId}" data-bs-slide="next">
-                            <span class="carousel-control-next-icon" aria-hidden="true"></span>
-                            <span class="visually-hidden">Next</span>
-                        </button>
-                    </div>`;
+              indicators.push(
+                `<button type="button"
+                         data-bs-target="#${carouselId}"
+                         data-bs-slide-to="${index}"
+                         class="${isActive}"
+                         aria-current="${index === 0 ? 'true' : 'false'}"
+                         aria-label="Slide ${index + 1}"></button>`
+              );
 
-                container.innerHTML = carouselHTML;
+              innerItems.push(`<div class="carousel-item ${isActive}">${mediaTag}</div>`);
+            });
 
-                const modal = new bootstrap.Modal(modalEl);
-                modal.show();
+            container.innerHTML = `
+              <div id="${carouselId}" class="carousel slide" data-bs-ride="false">
+                <div class="carousel-indicators">${indicators.join('')}</div>
+                <div class="carousel-inner">${innerItems.join('')}</div>
+                <button class="carousel-control-prev" type="button" data-bs-target="#${carouselId}" data-bs-slide="prev">
+                  <span class="carousel-control-prev-icon" aria-hidden="true"></span>
+                  <span class="visually-hidden">Previous</span>
+                </button>
+                <button class="carousel-control-next" type="button" data-bs-target="#${carouselId}" data-bs-slide="next">
+                  <span class="carousel-control-next-icon" aria-hidden="true"></span>
+                  <span class="visually-hidden">Next</span>
+                </button>
+              </div>`;
 
-                // Delay Carousel Initialization to ensure modal DOM is ready
-                setTimeout(() => {
-                    const carouselEl = document.getElementById(carouselId);
-                    if (carouselEl) {
-                        bootstrap.Carousel.getInstance(carouselEl)?.dispose();
-                        new bootstrap.Carousel(carouselEl, {
-                            interval: false,
-                            ride: false,
-                            wrap: false
-                        });
-                    }
+            const modal = new bootstrap.Modal(modalEl);
+            modal.show();
 
-                    // Debug check
-                    const active = document.querySelectorAll(`#${carouselId} .carousel-item.active`).length;
-                    const all = document.querySelectorAll(`#${carouselId} .carousel-item`).length;
-                    console.log('Active carousel items:', active);
-                    console.log('All carousel items:', all);
-                }, 300);
+            // ✅ INI YANG BENER: baru init carousel + listener setelah DOM siap
+            setTimeout(() => {
+              const carouselEl = document.getElementById(carouselId);
 
-            } else {
+              bootstrap.Carousel.getInstance(carouselEl)?.dispose();
+              window.bsCarousel = new bootstrap.Carousel(carouselEl, {
+                interval: false,
+                ride: false,
+                wrap: false,
+                touch: true
+              });
+
+              clearAllFullScreenTransforms();
+              resetFullScreenTransform();
+
+              carouselEl.removeEventListener('slide.bs.carousel', window.__fsCarouselOnSlide);
+              carouselEl.removeEventListener('slid.bs.carousel', window.__fsCarouselOnSlid);
+
+              window.__fsCarouselOnSlide = function () {
+                clearAllFullScreenTransforms();
+              };
+              carouselEl.addEventListener('slide.bs.carousel', window.__fsCarouselOnSlide);
+
+              window.__fsCarouselOnSlid = function () {
+                resetFullScreenTransform();
+              };
+              carouselEl.addEventListener('slid.bs.carousel', window.__fsCarouselOnSlid);
+
+              document.removeEventListener('keydown', window.__fsCarouselKeydown);
+              window.__fsCarouselKeydown = function (e) {
+                if (!modalEl.classList.contains('show')) return;
+                if (e.key === 'ArrowLeft') window.bsCarousel.prev();
+                if (e.key === 'ArrowRight') window.bsCarousel.next();
+              };
+              document.addEventListener('keydown', window.__fsCarouselKeydown);
+
+            }, 150);
+
+          }
+         else {
                 const item = normalizedItems[0];
                 const isVideo = item.type === 'VIDEO' || item.path.toLowerCase().endsWith('.mp4');
                 container.innerHTML = isVideo
-                    ? `<video controls class="w-100 h-100" style="object-fit: contain;"><source src="${item.path}" type="video/mp4"></video>`
-                    : `<img src="${item.path}" class="w-100 h-100" style="object-fit: contain;" alt="Dokumentasi">`;
+                    ? `<video controls class="fs-media"><source src="${item.path}" type="video/mp4"></video>`
+: `<img src="${item.path}" class="fs-media" alt="Dokumentasi">`;
+
 
                 const modal = new bootstrap.Modal(modalEl);
                 modal.show();
@@ -1680,19 +1920,118 @@ else if (!string.IsNullOrEmpty(Model.Notes) || (Model.FinalDocuments != null && 
             showFullScreenMedia(mediaItems);
         });
 
-                const myCarousel = document.querySelector('#fullScreenCarousel');
-        if (myCarousel) {
-            console.log("Manually initializing carousel...");
-            bootstrap.Carousel.getInstance(myCarousel)?.dispose(); // buang instance lama
-            new bootstrap.Carousel(myCarousel, {
-                interval: false,
-                ride: false
-            });
-        }
+        //         const myCarousel = document.querySelector('#fullScreenCarousel');
+        // if (myCarousel) {
+        //     console.log("Manually initializing carousel...");
+        //     bootstrap.Carousel.getInstance(myCarousel)?.dispose(); // buang instance lama
+        //     new bootstrap.Carousel(myCarousel, {
+        //         interval: false,
+        //         ride: false
+        //     });
+        // }
 
               function getToken() {
           return document.querySelector('input[name="__RequestVerificationToken"]')?.value || '';
         }
+
+                let auditStartTime = null;
+        let auditTimerInterval = null;
+
+        function startAuditTimer() {
+            const key = "audit_start_" + '@ViewBag.AuditId';
+
+            const stored = localStorage.getItem(key);
+
+            if (stored) {
+                auditStartTime = new Date(stored);
+            } else {
+                auditStartTime = new Date();
+                localStorage.setItem(key, auditStartTime.toISOString());
+            }
+
+            auditTimerInterval = setInterval(updateAuditTimer, 1000);
+        }
+
+        function updateAuditTimer() {
+            const now = new Date();
+            const diff = Math.floor((now - auditStartTime) / 1000);
+
+            const hours = String(Math.floor(diff / 3600)).padStart(2, '0');
+            const minutes = String(Math.floor((diff % 3600) / 60)).padStart(2, '0');
+            const seconds = String(diff % 60).padStart(2, '0');
+
+            const el = document.getElementById("auditTimer");
+            if (el) {
+                el.innerText = `${hours} : ${minutes} : ${seconds}`;
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', function () {
+                    startAuditTimer();
+        document.getElementById('btnZoomIn')?.addEventListener('click', zoomIn);
+        document.getElementById('btnZoomOut')?.addEventListener('click', zoomOut);
+        document.getElementById('btnRotateLeft')?.addEventListener('click', rotateLeft);
+        document.getElementById('btnRotateRight')?.addEventListener('click', rotateRight);
+        document.getElementById('btnResetTransform')?.addEventListener('click', resetFullScreenTransform);
+
+                document.getElementById('btnSaveRotate')?.addEventListener('click', saveRotateToServer);
+
+        function normalizeDeg(deg){
+          let d = ((deg % 360) + 360) % 360;
+          // paksa ke kelipatan 90
+          d = Math.round(d / 90) * 90;
+          if (d === 360) d = 0;
+          return d;
+        }
+
+        function saveRotateToServer(){
+          const token = getToken();
+          const deg = normalizeDeg(fsRotate);
+
+          // kalau belum ada media aktif, stop
+          if (!fsActiveMediaPath) {
+            alert('Media tidak ditemukan untuk disimpan rotasinya.');
+            return;
+          }
+
+          fetch('/Audit/SaveMediaRotation', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'RequestVerificationToken': token
+            },
+            body: JSON.stringify({
+              AuditId: selectedMedia?.auditId || null,
+              NodeId: selectedMedia?.nodeId || null,
+              MediaPath: fsActiveMediaPath,
+              MediaType: fsActiveMediaType,
+              RotationDeg: deg
+            })
+          })
+          .then(res => {
+            if (!res.ok) return res.text().then(t => Promise.reject(t));
+            const alertBox = document.createElement('div');
+            alertBox.className = 'alert alert-success alert-dismissible fade show position-fixed top-0 start-50 translate-middle-x mt-3';
+            alertBox.style.zIndex = '9999';
+            alertBox.innerHTML = `Rotate tersimpan (${deg}°) <button type="button" class="btn-close" data-bs-dismiss="alert"></button>`;
+            document.body.appendChild(alertBox);
+            setTimeout(() => alertBox.remove(), 2000);
+          })
+          .catch(err => {
+            console.error(err);
+            alert('Gagal simpan rotate: ' + err);
+          });
+        }
+
+        // Optional: wheel zoom (kalau mau enak)
+        const body = document.getElementById('fullSizeMediaModalBody');
+        body?.addEventListener('wheel', function (e) {
+            // Ctrl + scroll untuk zoom (biar tidak ganggu scroll normal)
+            if (!e.ctrlKey) return;
+            e.preventDefault();
+            if (e.deltaY < 0) zoomIn(); else zoomOut();
+        }, { passive: false });
+        });
 
         // auto hitung percent saat measure berubah
         $(document).on('input', '.qq-qvmeasure', function () {
@@ -1805,6 +2144,30 @@ else if (!string.IsNullOrEmpty(Model.Notes) || (Model.FinalDocuments != null && 
                 console.error(err);
                 alert('Gagal update Q&Q: ' + err);
             });
+        });
+                function recalcDensityVariation($row) {
+    const ob15  = parseFloat($row.find('.qq-obdens15').val());
+    const ref15 = parseFloat($row.find('.qq-refdens15').val());
+
+    if (!isNaN(ob15) && !isNaN(ref15)) {
+        const dv = ref15 - ob15; // ✅ balik biar sama seperti existing
+        $row.find('.qq-densvar').val(dv.toFixed(3));
+    } else {
+        $row.find('.qq-densvar').val('');
+    }
+}
+
+        // 🔽 event input
+        $(document).on('input', '.qq-obdens15, .qq-refdens15', function () {
+            const $row = $(this).closest('tr');
+            recalcDensityVariation($row);
+        });
+
+                document.addEventListener('input', function (e) {
+            if (e.target.classList.contains('textarea-modern')) {
+                e.target.style.height = 'auto';
+                e.target.style.height = e.target.scrollHeight + 'px';
+            }
         });
 
     </script>
@@ -1991,7 +2354,6 @@ else if (!string.IsNullOrEmpty(Model.Notes) || (Model.FinalDocuments != null && 
 
                             }
                         }
-
 
                         @if (node.ScoreInput == "X" && node.ScoreX.HasValue)
                         {

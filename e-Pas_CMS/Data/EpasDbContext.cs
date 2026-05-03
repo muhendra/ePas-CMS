@@ -54,6 +54,13 @@ public partial class EpasDbContext : DbContext
 
     public virtual DbSet<trx_audit_not_started_log> trx_audit_not_started_logs { get; set; }
 
+    public DbSet<TrxInvoice> TrxInvoices { get; set; }
+    public DbSet<TrxInvoiceDetail> TrxInvoiceDetails { get; set; }
+
+    public DbSet<trx_claim> TrxClaims { get; set; }
+    public DbSet<trx_claim_detail> TrxClaimDetails { get; set; }
+    public DbSet<trx_claim_media> TrxClaimMedias { get; set; }
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.HasPostgresExtension("uuid-ossp");
@@ -894,7 +901,289 @@ public partial class EpasDbContext : DbContext
                 .HasColumnType("timestamp without time zone")
                 .HasColumnName("updated_date");
         });
+        modelBuilder.Entity<TrxInvoice>(entity =>
+        {
+            entity.ToTable("trx_invoice");
 
+            entity.HasKey(e => e.Id);
+
+            entity.Property(e => e.Id)
+                .HasColumnName("id")
+                .HasMaxLength(50)
+                .HasDefaultValueSql("uuid_generate_v4()");
+
+            entity.Property(e => e.AppUserId)
+                .HasColumnName("app_user_id")
+                .HasMaxLength(50);
+
+            entity.Property(e => e.InvoicePrefix)
+                .HasColumnName("invoice_prefix")
+                .HasMaxLength(50);
+
+            entity.Property(e => e.InvoiceNo)
+                .HasColumnName("invoice_no")
+                .HasMaxLength(100)
+                .IsRequired();
+
+            entity.Property(e => e.InvoicePeriodStart)
+                .HasColumnName("invoice_period_start")
+                .IsRequired();
+
+            entity.Property(e => e.InvoicePeriodEnd)
+                .HasColumnName("invoice_period_end")
+                .IsRequired();
+
+            entity.Property(e => e.IssuedDate)
+                .HasColumnName("issued_date");
+
+            entity.Property(e => e.DueDate)
+                .HasColumnName("due_date");
+
+            entity.Property(e => e.CompletedDate)
+                .HasColumnName("completed_date");
+
+            entity.Property(e => e.Status)
+                .HasColumnName("status")
+                .HasMaxLength(50)
+                .HasDefaultValue("NOT_CLAIMED")
+                .IsRequired();
+
+            // ✅ FIXED
+            entity.Property(e => e.CreatedBy)
+                .HasColumnName("created_by")
+                .HasMaxLength(50)
+                .IsRequired();
+
+            entity.Property(e => e.CreatedDate)
+                .HasColumnName("created_date")
+                .HasDefaultValueSql("CURRENT_TIMESTAMP")
+                .ValueGeneratedOnAdd();
+
+            entity.Property(e => e.UpdatedBy)
+                .HasColumnName("updated_by")
+                .HasMaxLength(50)
+                .IsRequired();
+
+            entity.Property(e => e.UpdatedDate)
+                .HasColumnName("updated_date")
+                .HasDefaultValueSql("CURRENT_TIMESTAMP")
+                .ValueGeneratedOnAddOrUpdate();
+        });
+        modelBuilder.Entity<TrxInvoiceDetail>(entity =>
+        {
+            entity.ToTable("trx_invoice_detail");
+
+            entity.HasKey(e => e.Id);
+
+            entity.Property(e => e.Id)
+                .HasColumnName("id")
+                .HasMaxLength(50)
+                .HasDefaultValueSql("uuid_generate_v4()");
+
+            entity.Property(e => e.TrxInvoiceId)
+                .HasColumnName("trx_invoice_id")
+                .HasMaxLength(50)
+                .IsRequired();
+
+            entity.Property(e => e.TrxAuditId)
+                .HasColumnName("trx_audit_id")
+                .HasMaxLength(50)
+                .IsRequired();
+
+            entity.Property(e => e.Amount)
+                .HasColumnName("amount")
+                .HasColumnType("numeric(18,2)")
+                .HasDefaultValue(0)
+                .IsRequired();
+
+            entity.Property(e => e.Status)
+                .HasColumnName("status")
+                .HasMaxLength(50)
+                .HasDefaultValue("NOT_CLAIMED")
+                .IsRequired();
+
+            entity.Property(e => e.CreatedBy)
+                .HasColumnName("created_by")
+                .HasMaxLength(50)
+                .IsRequired();
+
+            entity.Property(e => e.CreatedDate)
+                .HasColumnName("created_date")
+                .HasDefaultValueSql("CURRENT_TIMESTAMP")
+                .ValueGeneratedOnAdd();
+
+            entity.Property(e => e.UpdatedBy)
+                .HasColumnName("updated_by")
+                .HasMaxLength(50)
+                .IsRequired();
+
+            entity.Property(e => e.UpdatedDate)
+                .HasColumnName("updated_date")
+                .HasDefaultValueSql("CURRENT_TIMESTAMP")
+                .ValueGeneratedOnAddOrUpdate();
+
+            // RELATIONSHIP
+            entity.HasOne(d => d.Invoice)
+                .WithMany(p => p.Details)
+                .HasForeignKey(d => d.TrxInvoiceId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<trx_claim>(entity =>
+        {
+            entity.ToTable("trx_claim");
+
+            entity.HasKey(e => e.id);
+
+            entity.Property(e => e.id)
+                .HasColumnName("id")
+                .HasMaxLength(50)
+                .HasDefaultValueSql("uuid_generate_v4()");
+
+            entity.Property(e => e.trx_invoice_id)
+                .HasColumnName("trx_invoice_id")
+                .HasMaxLength(50)
+                .IsRequired();
+
+            entity.Property(e => e.app_user_id)
+                .HasColumnName("app_user_id")
+                .HasMaxLength(50);
+
+            entity.Property(e => e.claim_date)
+                .HasColumnName("claim_date")
+                .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+            entity.Property(e => e.completed_date)
+                .HasColumnName("completed_date");
+
+            entity.Property(e => e.claim_media_upload)
+                .HasColumnName("claim_media_upload");
+
+            entity.Property(e => e.claim_media_total)
+                .HasColumnName("claim_media_total");
+
+            entity.Property(e => e.status)
+                .HasColumnName("status")
+                .HasMaxLength(50)
+                .HasDefaultValue("IN_PROGRESS_SUBMIT")
+                .IsRequired();
+
+            entity.Property(e => e.created_by)
+                .HasColumnName("created_by")
+                .HasMaxLength(50)
+                .IsRequired();
+
+            entity.Property(e => e.created_date)
+                .HasColumnName("created_date")
+                .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+            entity.Property(e => e.updated_by)
+                .HasColumnName("updated_by")
+                .HasMaxLength(50)
+                .IsRequired();
+
+            entity.Property(e => e.updated_date)
+                .HasColumnName("updated_date")
+                .HasDefaultValueSql("CURRENT_TIMESTAMP");
+        });
+
+
+        // =========================
+        // trx_claim_detail
+        // =========================
+        modelBuilder.Entity<trx_claim_detail>(entity =>
+        {
+            entity.ToTable("trx_claim_detail");
+
+            entity.HasKey(e => e.id);
+
+            entity.Property(e => e.id)
+                .HasColumnName("id")
+                .HasMaxLength(50)
+                .HasDefaultValueSql("uuid_generate_v4()");
+
+            entity.Property(e => e.trx_claim_id)
+                .HasColumnName("trx_claim_id")
+                .HasMaxLength(50)
+                .IsRequired();
+
+            entity.Property(e => e.claim_item_type)
+                .HasColumnName("claim_item_type")
+                .HasMaxLength(100)
+                .IsRequired();
+
+            entity.Property(e => e.description)
+                .HasColumnName("description");
+
+            entity.Property(e => e.amount)
+                .HasColumnName("amount")
+                .HasColumnType("numeric(18,2)")
+                .HasDefaultValue(0)
+                .IsRequired();
+
+            entity.Property(e => e.created_by)
+                .HasColumnName("created_by")
+                .HasMaxLength(50)
+                .IsRequired();
+
+            entity.Property(e => e.created_date)
+                .HasColumnName("created_date")
+                .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+            entity.Property(e => e.updated_by)
+                .HasColumnName("updated_by")
+                .HasMaxLength(50)
+                .IsRequired();
+
+            entity.Property(e => e.updated_date)
+                .HasColumnName("updated_date")
+                .HasDefaultValueSql("CURRENT_TIMESTAMP");
+        });
+
+
+        // =========================
+        // trx_claim_media
+        // =========================
+        modelBuilder.Entity<trx_claim_media>(entity =>
+        {
+            entity.ToTable("trx_claim_media");
+
+            entity.HasKey(e => e.id);
+
+            entity.Property(e => e.id)
+                .HasColumnName("id")
+                .HasMaxLength(50)
+                .HasDefaultValueSql("uuid_generate_v4()");
+
+            entity.Property(e => e.trx_claim_id)
+                .HasColumnName("trx_claim_id")
+                .HasMaxLength(50)
+                .IsRequired();
+
+            entity.Property(e => e.claim_item_type)
+                .HasColumnName("claim_item_type")
+                .HasMaxLength(100)
+                .IsRequired();
+
+            entity.Property(e => e.media_type)
+                .HasColumnName("media_type")
+                .HasMaxLength(100)
+                .IsRequired();
+
+            entity.Property(e => e.media_path)
+                .HasColumnName("media_path")
+                .HasMaxLength(500)
+                .IsRequired();
+
+            entity.Property(e => e.created_by)
+                .HasColumnName("created_by")
+                .HasMaxLength(50)
+                .IsRequired();
+
+            entity.Property(e => e.created_date)
+                .HasColumnName("created_date")
+                .HasDefaultValueSql("CURRENT_TIMESTAMP");
+        });
         OnModelCreatingPartial(modelBuilder);
     }
 

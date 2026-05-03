@@ -4,286 +4,461 @@
 }
 
 <style>
-    /* gaya ringan agar mirip mockup */
-    .card-soft {
-        border: 1px solid #e9ecef;
-        border-radius: 14px;
+    :root {
+        --primary: #1f3a5f;
+        --primary-dark: #172b46;
+        --accent: #c9a227;
+        --surface: #ffffff;
+        --bg-soft: #f5f7fa;
+        --border: #e5e7eb;
+        --text-main: #111827;
+        --text-muted: #6b7280;
     }
 
-        .card-soft .card-header {
-            background: #fff;
-            border-bottom: 1px solid #f1f3f5;
+    body {
+        background: var(--bg-soft);
+    }
+
+    .page-shell {
+        max-width: 1180px;
+        margin: 0 auto;
+        padding: 8px 4px 32px;
+    }
+
+    .page-header {
+        background: linear-gradient(135deg, #172b46 0%, #1f3a5f 58%, #253f63 100%);
+        border-radius: 22px;
+        padding: 28px 32px;
+        color: #fff;
+        margin-bottom: 24px;
+        box-shadow: 0 18px 40px rgba(31, 58, 95, .18);
+        position: relative;
+        overflow: hidden;
+    }
+
+        .page-header::after {
+            content: "";
+            position: absolute;
+            right: -80px;
+            top: -90px;
+            width: 260px;
+            height: 260px;
+            border-radius: 50%;
+            background: rgba(201, 162, 39, .16);
         }
 
-    .form-control, .form-select {
-        height: 44px;
-        border-radius: 10px;
-        background: #f8f9fa;
+    .page-eyebrow {
+        font-size: .78rem;
+        letter-spacing: .14em;
+        text-transform: uppercase;
+        color: rgba(255,255,255,.72);
+        margin-bottom: 8px;
+        font-weight: 700;
     }
 
-    .input-note {
-        font-size: .8rem;
-        color: #98a2b3;
+    .page-title {
+        font-size: 1.7rem;
+        font-weight: 800;
+        margin-bottom: 6px;
     }
+
+    .page-subtitle {
+        color: rgba(255,255,255,.74);
+        margin: 0;
+        max-width: 620px;
+        font-size: .95rem;
+    }
+
+    .form-card {
+        border: 1px solid var(--border);
+        border-radius: 22px;
+        background: var(--surface);
+        box-shadow: 0 12px 36px rgba(15, 23, 42, .06);
+        overflow: hidden;
+        margin-bottom: 22px;
+    }
+
+    .form-card-header {
+        padding: 22px 28px;
+        border-bottom: 1px solid var(--border);
+        background: linear-gradient(180deg, #fff 0%, #fafafa 100%);
+    }
+
+    .section-title {
+        font-size: 1rem;
+        font-weight: 800;
+        color: var(--text-main);
+        margin: 0;
+    }
+
+    .section-desc {
+        margin-top: 4px;
+        color: var(--text-muted);
+        font-size: .86rem;
+    }
+
+    .form-card-body {
+        padding: 28px;
+    }
+
+    .field-group-title {
+        font-size: .82rem;
+        font-weight: 800;
+        color: var(--primary);
+        letter-spacing: .08em;
+        text-transform: uppercase;
+        margin: 8px 0 14px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+
+        .field-group-title::after {
+            content: "";
+            flex: 1;
+            height: 1px;
+            background: var(--border);
+        }
+
+    .form-label {
+        font-size: .84rem;
+        font-weight: 700;
+        color: #374151;
+        margin-bottom: 7px;
+    }
+
+    .form-control,
+    .form-select {
+        height: 46px;
+        border-radius: 12px;
+        border: 1px solid #dbe1ea;
+        background-color: #fbfcfe;
+        color: var(--text-main);
+        font-size: .92rem;
+        transition: all .18s ease;
+    }
+
+        .form-control:focus,
+        .form-select:focus {
+            border-color: var(--primary);
+            background-color: #fff;
+            box-shadow: 0 0 0 .2rem rgba(31, 58, 95, .11);
+        }
+
+        .form-control::placeholder {
+            color: #a3adbb;
+        }
 
     .icon-end {
         position: absolute;
-        right: 12px;
+        right: 14px;
         top: 50%;
         transform: translateY(-50%);
         pointer-events: none;
-        opacity: .6;
+        color: #8a94a6;
+        font-size: .95rem;
     }
 
-    .btn-primary-soft {
-        background: #0ea5e9;
-        border: none;
-    }
-
-    .btn-round-xl {
-        border-radius: 999px;
-        padding: 12px 18px;
+    .alert-danger {
+        border-radius: 16px;
+        border: 1px solid #fecaca;
+        background: #fff1f2;
+        color: #991b1b;
     }
 
     .sticky-action {
         position: sticky;
-        bottom: 12px;
+        bottom: 16px;
+        z-index: 10;
         display: flex;
-        justify-content: end;
+        justify-content: flex-end;
+        gap: 12px;
+        padding: 12px;
+        border-radius: 18px;
+        background: rgba(245, 247, 250, .78);
+        backdrop-filter: blur(10px);
+    }
+
+    .btn-submit {
+        border: none;
+        border-radius: 999px;
+        padding: 13px 24px;
+        background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+        color: #fff;
+        font-weight: 800;
+        box-shadow: 0 14px 28px rgba(31, 58, 95, .22);
+        transition: all .18s ease;
+    }
+
+        .btn-submit:hover {
+            color: #fff;
+            transform: translateY(-1px);
+            box-shadow: 0 18px 34px rgba(31, 58, 95, .28);
+        }
+
+    .btn-back {
+        border-radius: 999px;
+        padding: 13px 20px;
+        font-weight: 700;
+        border: 1px solid #d1d5db;
+        background: #fff;
+        color: #374151;
+    }
+
+        .btn-back:hover {
+            background: #f9fafb;
+            color: #111827;
+        }
+
+    .text-danger.small {
+        font-size: .78rem;
+        margin-top: 5px;
+        display: block;
     }
 </style>
 
-<h2 class="fw-bold mb-4">@ViewData["Title"]</h2>
-
-<form asp-action="Create" method="post" enctype="multipart/form-data" class="needs-validation" novalidate>
-    @Html.AntiForgeryToken()
-
-    <div asp-validation-summary="ModelOnly" class="alert alert-danger"></div>
-
-    <div class="card card-soft mb-4">
-        <div class="card-header px-4 py-3">
-            <div class="fw-semibold">Informasi SPBU</div>
-            <div class="input-note">Lengkapi detail SPBU sesuai data terbaru.</div>
-        </div>
-
-        <div class="card-body p-4">
-            <div class="row g-3">
-                <!-- kiri -->
-                <div class="col-lg-6">
-                    <label class="form-label">Nomor SPBU</label>
-                    <input asp-for="spbu_no" class="form-control" placeholder="Nomor SPBU" />
-                    <span asp-validation-for="spbu_no" class="text-danger small"></span>
-                </div>
-
-                <div class="col-lg-6">
-                    <label class="form-label">Rayon</label>
-                    <input asp-for="region" class="form-control" placeholder="Masukkan Rayon" />
-                </div>
-
-                <div class="col-lg-6">
-                    <label class="form-label">Provinsi</label>
-                    <input asp-for="province_name" class="form-control" placeholder="Masukkan Provinsi" />
-                </div>
-
-                <div class="col-lg-6">
-                    <label class="form-label">Kota</label>
-                    <input asp-for="city_name" class="form-control" placeholder="Masukkan Kota" />
-                </div>
-
-                <div class="col-lg-6">
-                    <label class="form-label">Alamat</label>
-                    <input asp-for="address" class="form-control" placeholder="Masukkan [Title]" />
-                </div>
-
-                @* <div class="col-lg-6">
-                    <label class="form-label d-block">Foto SPBU</label>
-                    <div class="input-group">
-                        <input type="file" name="spbu_photo" class="form-control" />
-                        <button type="button" class="btn btn-outline-secondary">
-                            <i class="bi bi-upload"></i> Upload Foto
-                        </button>
-                    </div>
-                </div> *@
-
-                <div class="col-lg-6">
-                    <label class="form-label">Pemilik</label>
-                    <input asp-for="owner_name" class="form-control" placeholder="Masukkan nama [Title]" />
-                </div>
-
-                <div class="col-lg-6">
-                    <label class="form-label">Manager</label>
-                    <input asp-for="manager_name" class="form-control" placeholder="Masukkan nama [Title]" />
-                </div>
-
-                <div class="col-lg-6">
-                    <label class="form-label">Tipe Pemilik</label>
-                    <input asp-for="owner_type" class="form-control" placeholder="Masukkan tipe pemilik" />
-                </div>
-
-                <div class="col-lg-6">
-                    <label class="form-label">Kuartal</label>
-                    <div class="position-relative">
-                        <select asp-for="quater" class="form-select">
-                            <option value="">Pilih [Title]</option>
-                            <option>1</option>
-                            <option>2</option>
-                            <option>3</option>
-                            <option>4</option>
-                        </select>
-                        <i class="bi bi-chevron-down icon-end"></i>
-                    </div>
-                </div>
-
-                <div class="col-lg-6">
-                    <label class="form-label">Tahun</label>
-                    <input asp-for="year"
-                           class="form-control"
-                           type="number"
-                           step="1"
-                           min="1900"
-                           max="@(DateTime.Now.Year + 1)"
-                           inputmode="numeric"
-                           placeholder="Masukkan Tahun (angka)" />
-                    <span asp-validation-for="year" class="text-danger small"></span>
-                </div>
-
-
-                <div class="col-lg-6">
-                    <label class="form-label">MOR</label>
-                    <input asp-for="mor" class="form-control" placeholder="Masukkan [Title]" />
-                </div>
-
-                <div class="col-lg-6">
-                    <label class="form-label">Sales Area</label>
-
-                    <input asp-for="sales_area" class="form-control" placeholder="Masukkan [Title]" />
-                </div>
-
-                <div class="col-lg-6">
-                    <label class="form-label">SBM</label>
-                    <input asp-for="sbm" class="form-control" placeholder="Masukkan [Title]" />
-                </div>
-
-                <div class="col-lg-6">
-                    <label class="form-label">SAM</label>
-                    <input asp-for="sam" class="form-control" placeholder="Masukkan [Title]" />
-                </div>
-
-                <div class="col-lg-6">
-                    <label class="form-label">Type</label>
-
-                    <input asp-for="type" class="form-control" placeholder="Masukkan Type" />
-                </div>
-
-                <div class="col-lg-6">
-                    <label class="form-label">Nomor Telepon 1</label>
-                    <input asp-for="phone_number_1" class="form-control" placeholder="Masukkan [Title]" />
-                </div>
-
-                <div class="col-lg-6">
-                    <label class="form-label">Nomor Telepon 2</label>
-                    <input asp-for="phone_number_2" class="form-control" placeholder="Masukkan [Title]" />
-                </div>
-
-                <div class="col-lg-6">
-                    <label class="form-label">Level</label>
-                    <input asp-for="level" class="form-control" placeholder="Masukkan [Title]" />
-                </div>
-
-                <div class="col-lg-6">
-                    <label class="form-label">Longitude</label>
-                    <input asp-for="longitude" class="form-control" type="number" step="any" placeholder="Masukkan [Title]" />
-                </div>
-
-                <div class="col-lg-6">
-                    <label class="form-label">Latitude</label>
-                    <input asp-for="latitude" class="form-control" type="number" step="any" placeholder="Masukkan [Title]" />
-                </div>
-
-                <div class="col-lg-6">
-                    <label class="form-label">Audit Saat Ini</label>
-                    <input asp-for="audit_current" class="form-control" placeholder="Masukkan [Title]" />
-                </div>
-
-                <div class="col-lg-6">
-                    <label class="form-label">Audit Berikutnya</label>
-
-                    <input asp-for="audit_next" class="form-control" placeholder="Masukkan [Title]" />
-                </div>
-
-                <div class="col-lg-6">
-                    <label class="form-label">Skor Saat Ini</label>
-                    <input asp-for="audit_current_score" class="form-control" type="number" step="0.01" placeholder="0.00" />
-                </div>
-
-                <div class="col-lg-6">
-                    <label class="form-label">Status</label>
-                    <input asp-for="status" class="form-control" placeholder="Masukkan [Title]" />
-                </div>
-
-                <div class="col-lg-6">
-                    <label class="form-label">Audit Time</label>
-                    <div class="position-relative">
-                        <input asp-for="audit_current_time" class="form-control" type="datetime-local" />
-                        <i class="bi bi-calendar3 icon-end"></i>
-                    </div>
-                </div>
-
-                <div class="col-lg-6">
-                    <label class="form-label">WTMS</label>
-                    <input asp-for="wtms" class="form-control" type="number" step="0.01" placeholder="0.00" />
-                </div>
-
-                <div class="col-lg-6">
-                    <label class="form-label">QQ</label>
-                    <input asp-for="qq" class="form-control" type="number" step="0.01" placeholder="0.00" />
-                </div>
-
-                <div class="col-lg-6">
-                    <label class="form-label">WMEF</label>
-                    <input asp-for="wmef" class="form-control" type="number" step="0.01" placeholder="0.00" />
-                </div>
-
-                <div class="col-lg-6">
-                    <label class="form-label">Format Fisik</label>
-                    <input asp-for="format_fisik" class="form-control" type="number" step="0.01" placeholder="0.00" />
-                </div>
-
-                <div class="col-lg-6">
-                    <label class="form-label">CPO</label>
-                    <input asp-for="cpo" class="form-control" type="number" step="0.01" placeholder="0.00" />
-                </div>
-            </div>
-        </div>
+<div class="page-shell">
+    <div class="page-header">
+        <div class="page-eyebrow">Master Data SPBU</div>
+        <h2 class="page-title">@ViewData["Title"]</h2>
+        <p class="page-subtitle">
+            Lengkapi informasi SPBU dengan data yang valid untuk kebutuhan audit, monitoring, dan reporting.
+        </p>
     </div>
 
-    @* <div class="card card-soft mb-4">
-        <div class="card-header px-4 py-3">
-            <div class="fw-semibold">Informasi User Aplikasi SPBU</div>
-        </div>
-        <div class="card-body p-4">
-            <div class="row g-3">
-                <div class="col-lg-6">
-                    <label class="form-label">Pilih User SPBU</label>
-                    <div class="position-relative">
-                        <select class="form-select" name="user_spbu_id">
-                            <option value="">Pilih [Title]</option>
-                            @* ganti dengan asp-items bila tersedia *@
-                            @* </select>
-                        <i class="bi bi-chevron-down icon-end"></i>
+    <form asp-action="Create" method="post" enctype="multipart/form-data" class="needs-validation" novalidate>
+        @Html.AntiForgeryToken()
+
+        <div asp-validation-summary="ModelOnly" class="alert alert-danger mb-4"></div>
+
+        <div class="form-card">
+            <div class="form-card-header">
+                <h5 class="section-title">Informasi Utama</h5>
+                <div class="section-desc">Data identitas, lokasi, dan penanggung jawab SPBU.</div>
+            </div>
+
+            <div class="form-card-body">
+                <div class="field-group-title">Identitas SPBU</div>
+
+                <div class="row g-4">
+                    <div class="col-lg-6">
+                        <label class="form-label">Nomor SPBU</label>
+                        <input asp-for="spbu_no" class="form-control" placeholder="Contoh: 34.12345" />
+                        <span asp-validation-for="spbu_no" class="text-danger small"></span>
+                    </div>
+
+                    <div class="col-lg-6">
+                        <label class="form-label">Rayon</label>
+                        <input asp-for="region" class="form-control" placeholder="Masukkan rayon" />
+                    </div>
+
+                    <div class="col-lg-6">
+                        <label class="form-label">Provinsi</label>
+                        <input asp-for="province_name" class="form-control" placeholder="Masukkan provinsi" />
+                    </div>
+
+                    <div class="col-lg-6">
+                        <label class="form-label">Kota</label>
+                        <input asp-for="city_name" class="form-control" placeholder="Masukkan kota" />
+                    </div>
+
+                    <div class="col-lg-12">
+                        <label class="form-label">Alamat</label>
+                        <input asp-for="address" class="form-control" placeholder="Masukkan alamat lengkap SPBU" />
+                    </div>
+                </div>
+
+                <div class="field-group-title mt-4">Penanggung Jawab</div>
+
+                <div class="row g-4">
+                    <div class="col-lg-6">
+                        <label class="form-label">Pemilik</label>
+                        <input asp-for="owner_name" class="form-control" placeholder="Masukkan nama pemilik" />
+                    </div>
+
+                    <div class="col-lg-6">
+                        <label class="form-label">Manager</label>
+                        <input asp-for="manager_name" class="form-control" placeholder="Masukkan nama manager" />
+                    </div>
+
+                    <div class="col-lg-6">
+                        <label class="form-label">Tipe Pemilik</label>
+                        <input asp-for="owner_type" class="form-control" placeholder="Masukkan tipe pemilik" />
+                    </div>
+
+                    <div class="col-lg-6">
+                        <label class="form-label">Status</label>
+                        <input asp-for="status" class="form-control" placeholder="Masukkan status" />
+                    </div>
+                </div>
+
+                <div class="field-group-title mt-4">Periode & Area</div>
+
+                <div class="row g-4">
+                    <div class="col-lg-6">
+                        <label class="form-label">Kuartal</label>
+                        <div class="position-relative">
+                            <select asp-for="quater" class="form-select">
+                                <option value="">Pilih kuartal</option>
+                                <option>1</option>
+                                <option>2</option>
+                                <option>3</option>
+                                <option>4</option>
+                            </select>
+                            <i class="bi bi-chevron-down icon-end"></i>
+                        </div>
+                    </div>
+
+                    <div class="col-lg-6">
+                        <label class="form-label">Tahun</label>
+                        <input asp-for="year"
+                               class="form-control"
+                               type="number"
+                               step="1"
+                               min="1900"
+                               max="@(DateTime.Now.Year + 1)"
+                               inputmode="numeric"
+                               placeholder="Masukkan tahun" />
+                        <span asp-validation-for="year" class="text-danger small"></span>
+                    </div>
+
+                    <div class="col-lg-6">
+                        <label class="form-label">MOR</label>
+                        <input asp-for="mor" class="form-control" placeholder="Masukkan MOR" />
+                    </div>
+
+                    <div class="col-lg-6">
+                        <label class="form-label">Sales Area</label>
+                        <input asp-for="sales_area" class="form-control" placeholder="Masukkan sales area" />
+                    </div>
+
+                    <div class="col-lg-6">
+                        <label class="form-label">SBM</label>
+                        <input asp-for="sbm" class="form-control" placeholder="Masukkan SBM" />
+                    </div>
+
+                    <div class="col-lg-6">
+                        <label class="form-label">SAM</label>
+                        <input asp-for="sam" class="form-control" placeholder="Masukkan SAM" />
+                    </div>
+                </div>
+
+                <div class="field-group-title mt-4">Kontak & Klasifikasi</div>
+
+                <div class="row g-4">
+                    <div class="col-lg-6">
+                        <label class="form-label">Type</label>
+                        <input asp-for="type" class="form-control" placeholder="Masukkan type" />
+                    </div>
+
+                    <div class="col-lg-6">
+                        <label class="form-label">Level</label>
+                        <input asp-for="level" class="form-control" placeholder="Masukkan level" />
+                    </div>
+
+                    <div class="col-lg-6">
+                        <label class="form-label">Nomor Telepon 1</label>
+                        <input asp-for="phone_number_1" class="form-control" placeholder="Masukkan nomor telepon utama" />
+                    </div>
+
+                    <div class="col-lg-6">
+                        <label class="form-label">Nomor Telepon 2</label>
+                        <input asp-for="phone_number_2" class="form-control" placeholder="Masukkan nomor telepon alternatif" />
                     </div>
                 </div>
             </div>
         </div>
-    </div> *@
 
-    <!-- actions -->
-    <div class="sticky-action my-3">
-        <button type="submit" class="btn btn-primary-soft btn-round-xl">
-            <i class="bi bi-plus-lg me-2"></i> Tambah SPBU Baru
-        </button>
-    </div>
-</form>
+        <div class="form-card">
+            <div class="form-card-header">
+                <h5 class="section-title">Informasi Audit & Koordinat</h5>
+                <div class="section-desc">Data lokasi, jadwal audit, skor, dan komponen penilaian.</div>
+            </div>
+
+            <div class="form-card-body">
+                <div class="field-group-title">Koordinat Lokasi</div>
+
+                <div class="row g-4">
+                    <div class="col-lg-6">
+                        <label class="form-label">Longitude</label>
+                        <input asp-for="longitude" class="form-control" type="number" step="any" placeholder="Contoh: 106.7477171" />
+                    </div>
+
+                    <div class="col-lg-6">
+                        <label class="form-label">Latitude</label>
+                        <input asp-for="latitude" class="form-control" type="number" step="any" placeholder="Contoh: -6.326809225" />
+                    </div>
+                </div>
+
+                <div class="field-group-title mt-4">Audit</div>
+
+                <div class="row g-4">
+                    <div class="col-lg-6">
+                        <label class="form-label">Audit Saat Ini</label>
+                        <input asp-for="audit_current" class="form-control" placeholder="Masukkan audit saat ini" />
+                    </div>
+
+                    <div class="col-lg-6">
+                        <label class="form-label">Audit Berikutnya</label>
+                        <input asp-for="audit_next" class="form-control" placeholder="Masukkan audit berikutnya" />
+                    </div>
+
+                    <div class="col-lg-6">
+                        <label class="form-label">Skor Saat Ini</label>
+                        <input asp-for="audit_current_score" class="form-control" type="number" step="0.01" placeholder="0.00" />
+                    </div>
+
+                    <div class="col-lg-6">
+                        <label class="form-label">Audit Time</label>
+                        <div class="position-relative">
+                            <input asp-for="audit_current_time" class="form-control" type="datetime-local" />
+                            <i class="bi bi-calendar3 icon-end"></i>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="field-group-title mt-4">Komponen Penilaian</div>
+
+                <div class="row g-4">
+                    <div class="col-lg-6">
+                        <label class="form-label">WTMS</label>
+                        <input asp-for="wtms" class="form-control" type="number" step="0.01" placeholder="0.00" />
+                    </div>
+
+                    <div class="col-lg-6">
+                        <label class="form-label">QQ</label>
+                        <input asp-for="qq" class="form-control" type="number" step="0.01" placeholder="0.00" />
+                    </div>
+
+                    <div class="col-lg-6">
+                        <label class="form-label">WMEF</label>
+                        <input asp-for="wmef" class="form-control" type="number" step="0.01" placeholder="0.00" />
+                    </div>
+
+                    <div class="col-lg-6">
+                        <label class="form-label">Format Fisik</label>
+                        <input asp-for="format_fisik" class="form-control" type="number" step="0.01" placeholder="0.00" />
+                    </div>
+
+                    <div class="col-lg-6">
+                        <label class="form-label">CPO</label>
+                        <input asp-for="cpo" class="form-control" type="number" step="0.01" placeholder="0.00" />
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="sticky-action">
+            <a asp-action="Index" class="btn btn-back">
+                <i class="bi bi-arrow-left me-2"></i> Kembali
+            </a>
+
+            <button type="submit" class="btn btn-submit">
+                <i class="bi bi-plus-lg me-2"></i> Tambah SPBU Baru
+            </button>
+        </div>
+    </form>
+</div>
 
 @section Scripts {
     <partial name="_ValidationScriptsPartial" />

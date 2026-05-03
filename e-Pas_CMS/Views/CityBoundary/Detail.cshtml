@@ -1,0 +1,193 @@
+﻿@model e_Pas_CMS.ViewModels.CityBoundaryDetailVm
+
+@{
+    ViewData["Title"] = "Detail Batas Kota";
+}
+
+@section Styles {
+    <style>
+        .detail-page {
+            background: #f4f5f8;
+            min-height: calc(100vh - 120px);
+            padding: 28px 22px;
+        }
+
+        .page-title {
+            font-size: 28px;
+            font-weight: 900;
+            color: #111827;
+        }
+
+        .breadcrumbx {
+            color: #9ca3af;
+            font-size: 13px;
+            font-weight: 700;
+            margin: 20px 0 28px;
+        }
+
+            .breadcrumbx span {
+                color: #21B6D7;
+            }
+
+        .info-card {
+            background: #fff;
+            border: 1px solid #e5e7eb;
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 28px;
+        }
+
+        .info-label {
+            font-weight: 900;
+            color: #111827;
+            margin-bottom: 8px;
+        }
+
+        .info-value {
+            color: #111827;
+            margin-bottom: 22px;
+        }
+
+        .status-active {
+            color: #16a34a;
+            font-weight: 900;
+        }
+
+        .section-title {
+            font-size: 24px;
+            font-weight: 900;
+            margin-bottom: 16px;
+        }
+
+        .history-card {
+            background: #fff;
+            border-radius: 12px;
+            border: 1px solid #e5e7eb;
+            overflow: hidden;
+        }
+
+        .table {
+            margin: 0;
+        }
+
+            .table thead th {
+                background: #eaeaea;
+                border: none;
+                padding: 16px 22px;
+                font-weight: 900;
+                color: #111827;
+                white-space: nowrap;
+            }
+
+            .table tbody td {
+                border: none;
+                padding: 16px 22px;
+                vertical-align: top;
+            }
+
+        .total-row td {
+            background: #f5ffbd;
+            font-weight: 900;
+        }
+
+        .table-wrap {
+            overflow-x: auto;
+        }
+    </style>
+}
+
+<div class="detail-page">
+    <h3 class="page-title">Detail Batas Kota</h3>
+
+    <div class="breadcrumbx">
+        Batas Kota / <span>Detail Batas Kota</span>
+    </div>
+
+    <div class="info-card">
+        <div class="row">
+            <div class="col-md-6">
+                <div class="info-label">Nama Auditor</div>
+                <div class="info-value">@Model.AuditorName</div>
+
+                <div class="info-label">Batas Kota 1</div>
+                <div class="info-value">@(Model.BoundaryCity1 ?? "-")</div>
+
+                <div class="info-label">Batas Kota 3</div>
+                <div class="info-value">@(Model.BoundaryCity3 ?? "-")</div>
+
+                <div class="info-label">Tanggal Audit Terakhir</div>
+                <div class="info-value">@(Model.LastAuditDate?.ToString("dd/MM/yyyy") ?? "-")</div>
+            </div>
+
+            <div class="col-md-6">
+                <div class="info-label">Status Auditor</div>
+                <div class="info-value status-active">@Model.AuditorStatus</div>
+
+                <div class="info-label">Batas Kota 2</div>
+                <div class="info-value">@(Model.BoundaryCity2 ?? "-")</div>
+
+                <div class="info-label">Batas Kota 4</div>
+                <div class="info-value">@(Model.BoundaryCity4 ?? "-")</div>
+
+                <div class="info-label">Status Approval</div>
+                <div class="info-value">@Model.Status</div>
+            </div>
+        </div>
+    </div>
+
+    <h3 class="section-title">Riwayat Audit</h3>
+
+    <div class="history-card">
+        <div class="table-wrap">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>No.</th>
+                        <th>No. Report</th>
+                        <th>Tanggal Audit<br />Terakhir</th>
+                        <th>Jenis Audit</th>
+                        <th>Alamat SPBU</th>
+                        <th>Pendapatan<br />Audit</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+                    @if (Model.AuditHistories != null && Model.AuditHistories.Any())
+                    {
+                        var no = 1;
+                        foreach (var item in Model.AuditHistories)
+                        {
+                            <tr>
+                                <td>@no</td>
+                                <td>@(item.ReportNo ?? "-")</td>
+                                <td>
+                                    @(item.AuditDate?.ToString("dd/MM/yyyy") ?? "-")
+                                    <br />
+                                    <small class="text-muted">@(item.AuditDate?.ToString("HH:mm") ?? "") WIB</small>
+                                </td>
+                                <td>@item.AuditType</td>
+                                <td>@item.SpbuAddress</td>
+                                <td>@item.Amount.ToString("C0", new System.Globalization.CultureInfo("id-ID"))</td>
+                            </tr>
+
+                            <tr class="total-row">
+                                <td colspan="5" class="text-end">Total Pendapatan</td>
+                                <td>@item.Amount.ToString("C0", new System.Globalization.CultureInfo("id-ID"))</td>
+                            </tr>
+
+                            no++;
+                        }
+                    }
+                    else
+                    {
+                        <tr>
+                            <td colspan="6" class="text-center py-5 text-muted">
+                                Riwayat audit tidak ditemukan
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>

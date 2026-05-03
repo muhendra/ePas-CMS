@@ -58,7 +58,7 @@ namespace e_Pas_CMS.Controllers
                     .Distinct()
                     .ToListAsync();
                 var query =
-    from a in _context.trx_audits
+    from a in _context.trx_audits.AsNoTracking()
     join s in _context.spbus on a.spbu_id equals s.id
 
     // Auditor 1 (LEFT JOIN)
@@ -449,7 +449,7 @@ WHERE
                 if (!Directory.Exists(outputDirectory))
                     Directory.CreateDirectory(outputDirectory);
 
-                var auditIds = await _context.trx_audits
+                var auditIds = await _context.trx_audits.AsNoTracking()
                     .Where(a => a.status == "VERIFIED" && a.audit_type != "Basic Operational" && a.report_file_excellent == null && a.id == ids)
                     .OrderByDescending(a => a.audit_execution_time)
                     //.Take(10)
@@ -511,7 +511,7 @@ WHERE
                 if (!Directory.Exists(outputDirectory))
                     Directory.CreateDirectory(outputDirectory);
 
-                var auditIds = await _context.trx_audits
+                var auditIds = await _context.trx_audits.AsNoTracking()
                     .Where(a => a.status == "VERIFIED" && a.audit_type != "Basic Operational" && a.report_file_good == null && a.id == ids)
                     .OrderByDescending(a => a.audit_execution_time)
                     //.Take(10)
@@ -794,7 +794,7 @@ WHERE
 
             // --- EF Core tetap pakai _context untuk data LINQ ---
             var audit = await (
-    from ta in _context.trx_audits
+    from ta in _context.trx_audits.AsNoTracking()
 
         // JOIN auditor utama
     join au in _context.app_users on ta.app_user_id equals au.id into aud1
@@ -1027,6 +1027,14 @@ WHERE
             {
                 // contoh hitungan kamu yang di view: /20000*100
                 req.QuantityVariationInPercentage = (req.QuantityVariationWithMeasure.Value / 20000m) * 100m;
+            }
+
+            // auto hitung Density Variation dari (Observed Density 15° - Reference Density 15°)
+            if (req.ObservedDensity15Degree.HasValue && req.ReferenceDensity15Degree.HasValue)
+            {
+                req.DensityVariation = Math.Round(
+                    req.ObservedDensity15Degree.Value - req.ReferenceDensity15Degree.Value, 3
+                );
             }
 
             var currentUser = User.Identity?.Name ?? "system";
@@ -2025,7 +2033,7 @@ WHERE
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> UpdateBeritaAcaraText(string id, string notes)
         {
-            var audit = await _context.trx_audits.FirstOrDefaultAsync(x => x.id == id);
+            var audit = await _context.trx_audits.AsNoTracking().FirstOrDefaultAsync(x => x.id == id);
             if (audit == null) return NotFound();
 
             audit.audit_mom_final = notes;
@@ -2371,5 +2379,19 @@ VALUES
             return BitConverter.ToString(hash).Replace("-", "").ToLowerInvariant();
         }
 
+        [HttpGet]
+        public async Task<IActionResult> GetScore(string id)
+        {
+            var data = await _context.trx_audits.AsNoTracking()
+                .Where(x => x.id == id)
+                .Select(x => new {
+                    score = x.score,
+                    good = x.good_status,
+                    excellent = x.excellent_status
+                })
+                .FirstOrDefaultAsync();
+
+            return Json(data);
+        }
     }
 }

@@ -1,0 +1,515 @@
+﻿@using e_Pas_CMS.ViewModels
+@model e_Pas_CMS.ViewModels.PaginationModel<InvoiceVM>
+
+@section Styles {
+    <style>
+        :root {
+            --invoice-bg: #f4f5f7;
+            --invoice-card: #ffffff;
+            --invoice-text: #101820;
+            --invoice-muted: #9aa3ad;
+            --invoice-line: #edf0f2;
+            --invoice-head: #eeeeef;
+            --invoice-cyan: #22b8d4;
+            --invoice-yellow: #ffb800;
+            --invoice-green: #12ad66;
+        }
+
+        .invoice-status.rejected {
+    color: #ef4444;
+    font-weight: 700;
+}
+        body {
+            background: var(--invoice-bg);
+            font-family: 'Inter', Arial, Helvetica, sans-serif;
+            color: var(--invoice-text);
+        }
+
+        .invoice-page {
+            padding: 38px 44px 70px;
+        }
+
+        .invoice-title {
+            font-size: 30px;
+            font-weight: 800;
+            letter-spacing: -0.5px;
+            margin-bottom: 28px;
+        }
+
+        .invoice-toolbar {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 26px;
+        }
+
+        .invoice-search-wrap {
+            position: relative;
+            width: 100%;
+            max-width: 520px;
+        }
+
+        .invoice-search-icon {
+            position: absolute;
+            left: 18px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #4b5563;
+            font-size: 18px;
+            z-index: 2;
+        }
+
+        .invoice-search {
+            height: 50px;
+            width: 100%;
+            border-radius: 8px;
+            border: 1px solid #e1e5ea;
+            background: #fff;
+            padding: 0 18px 0 48px;
+            font-size: 15px;
+            color: #111827;
+            outline: none;
+            box-shadow: none;
+        }
+
+        .invoice-search::placeholder {
+            color: #9aa3ad;
+        }
+
+        .invoice-search:focus {
+            border-color: var(--invoice-cyan);
+            box-shadow: 0 0 0 3px rgba(34,184,212,.12);
+        }
+
+        .invoice-card-table {
+            background: var(--invoice-card);
+            border-radius: 8px;
+            overflow: hidden;
+            border: 1px solid #e9ecef;
+        }
+
+        .invoice-table {
+            width: 100%;
+            margin: 0;
+            border-collapse: separate;
+            border-spacing: 0;
+            min-width: 1040px;
+        }
+
+        .invoice-table thead th {
+            background: var(--invoice-head);
+            border: 0;
+            padding: 15px 22px;
+            font-size: 17px;
+            font-weight: 800;
+            color: #111827;
+            vertical-align: middle;
+            white-space: nowrap;
+        }
+
+        .invoice-table tbody td {
+            background: #fff;
+            border-top: 1px dashed #e8ebef;
+            padding: 18px 22px;
+            font-size: 16px;
+            vertical-align: middle;
+            color: #111827;
+        }
+
+        .invoice-table tbody tr:first-child td {
+            border-top: 0;
+        }
+
+        .invoice-table tbody tr:hover td {
+            background: #fcfdff;
+        }
+
+        .invoice-number-link {
+            color: #13b5d1;
+            text-decoration: none;
+            font-weight: 800;
+            white-space: nowrap;
+        }
+
+        .invoice-number-link:hover {
+            color: #0ea5bd;
+            text-decoration: underline;
+        }
+
+        .invoice-date-main {
+            font-weight: 500;
+            line-height: 1.25;
+        }
+
+        .invoice-date-sub {
+            color: #a0a7b0;
+            font-size: 13px;
+            margin-top: 2px;
+        }
+
+        .invoice-status {
+            display: inline-block;
+            font-size: 15px;
+            font-weight: 500;
+            line-height: 1.35;
+        }
+
+        .invoice-status.wait,
+        .invoice-status.process {
+            color: var(--invoice-yellow);
+        }
+
+        .invoice-status.done {
+            color: var(--invoice-green);
+        }
+
+        .invoice-action {
+            text-align: center;
+        }
+
+        .invoice-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 92px;
+            height: 34px;
+            padding: 0 22px;
+            border: 0;
+            border-radius: 999px;
+            background: var(--invoice-cyan);
+            color: #fff;
+            font-size: 14px;
+            font-weight: 800;
+            text-decoration: none;
+            cursor: pointer;
+            transition: all .15s ease;
+        }
+
+        .invoice-btn:hover {
+            background: #19a8c3;
+            color: #fff;
+            transform: translateY(-1px);
+        }
+
+        .invoice-empty {
+            text-align: center;
+            color: #8b95a1;
+            padding: 40px 16px !important;
+            font-weight: 600;
+        }
+
+        .invoice-scrollbar {
+            height: 16px;
+            background: #ffffff;
+            border-radius: 999px;
+            margin: 26px 12px 22px;
+            overflow: hidden;
+        }
+
+        .invoice-scrollbar span {
+            display: block;
+            width: 35%;
+            height: 100%;
+            background: #e9e9ea;
+            border-radius: 999px;
+        }
+
+        .invoice-pagination-wrap {
+            display: flex;
+            justify-content: flex-end;
+            align-items: center;
+            gap: 14px;
+            margin-top: 12px;
+        }
+
+        .invoice-pagination {
+            display: flex;
+            align-items: center;
+            gap: 18px;
+            margin: 0;
+            padding: 0;
+            list-style: none;
+        }
+
+        .invoice-page-link {
+            width: 26px;
+            height: 26px;
+            border-radius: 8px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            color: #111827;
+            text-decoration: none;
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        .invoice-page-link.active {
+            background: var(--invoice-cyan);
+            color: #fff;
+            font-weight: 800;
+        }
+
+        .invoice-page-arrow {
+            color: #a6adb5;
+            text-decoration: none;
+            font-size: 26px;
+            line-height: 1;
+        }
+
+        .invoice-alert {
+            border-radius: 10px;
+            padding: 12px 16px;
+            margin-bottom: 18px;
+            font-weight: 600;
+        }
+
+        .invoice-alert.success {
+            background: #ecfdf5;
+            color: #047857;
+            border: 1px solid #bbf7d0;
+        }
+
+        .invoice-alert.error {
+            background: #fef2f2;
+            color: #b91c1c;
+            border: 1px solid #fecaca;
+        }
+
+        @@media (max-width: 991px) {
+            .invoice-page {
+                padding: 24px 18px 60px;
+            }
+
+            .invoice-title {
+                font-size: 26px;
+            }
+
+            .invoice-table thead th,
+            .invoice-table tbody td {
+                padding: 15px 16px;
+                font-size: 14px;
+            }
+        }
+    </style>
+}
+
+@{
+    var totalPages = Model.TotalPages;
+    var prevPage = Model.PageNumber > 1 ? Model.PageNumber - 1 : 1;
+    var nextPage = Model.PageNumber < totalPages ? Model.PageNumber + 1 : totalPages;
+}
+
+<div class="invoice-page">
+
+    <h1 class="invoice-title">Invoice Management</h1>
+
+    @if (TempData["Success"] != null)
+    {
+        <div class="invoice-alert success">@TempData["Success"]</div>
+    }
+
+    @if (TempData["Error"] != null)
+    {
+        <div class="invoice-alert error">@TempData["Error"]</div>
+    }
+
+    <form method="get" asp-action="Index" class="invoice-toolbar">
+        <div class="invoice-search-wrap">
+            <span class="invoice-search-icon">
+                <i class="bi bi-search"></i>
+            </span>
+
+            <input type="text"
+                   name="searchTerm"
+                   value="@ViewBag.SearchTerm"
+                   class="invoice-search"
+                   placeholder="Cari nomor tiket" />
+
+            <input type="hidden" name="pageNumber" value="1" />
+            <input type="hidden" name="pageSize" value="@Model.PageSize" />
+            <input type="hidden" name="sortColumn" value="@ViewBag.SortColumn" />
+            <input type="hidden" name="sortDirection" value="@ViewBag.SortDirection" />
+        </div>
+    </form>
+
+    <div class="invoice-card-table">
+        <div class="table-responsive">
+            <table class="invoice-table">
+                <thead>
+                    <tr>
+                        <th>Invoice Number</th>
+                        <th>Invoice Date</th>
+                        <th>Employee ID</th>
+                        <th>Name of<br />Surveyor</th>
+                        <th>Expected<br />Settlement Date</th>
+                        <th>Total Advance<br />Required</th>
+                        <th>Status</th>
+                        <th class="invoice-action">Action</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+                    @if (Model.Items != null && Model.Items.Any())
+                    {
+                        foreach (var item in Model.Items)
+                        {
+                            var status = item.Status ?? "";
+var isWait = status == "NOT_CLAIMED";
+var isProcess = status == "IN_PROGRESS";
+var isDone = status == "COMPLETED";
+var isRejected = status == "REJECTED";
+
+                            <tr>
+                                <td>
+                                    <a asp-action="Detail"
+                                       asp-route-id="@item.Id"
+                                       class="invoice-number-link">
+                                        @item.InvoiceNo
+                                    </a>
+                                </td>
+
+                                <td>
+                                    <div class="invoice-date-main">
+                                        @(item.InvoiceDate?.ToString("dd/MM/yyyy") ?? "-")
+                                    </div>
+                                    <div class="invoice-date-sub">
+                                        @(item.InvoiceDate?.ToString("HH:mm") ?? "--:--") WIB
+                                    </div>
+                                </td>
+
+                                <td>@(item.EmployeeId ?? "-")</td>
+
+                                <td>@(item.SurveyorName ?? "-")</td>
+
+                                <td>
+                                    <div class="invoice-date-main">
+                                        @(item.ExpectedDate?.ToString("dd/MM/yyyy") ?? "-")
+                                    </div>
+                                    <div class="invoice-date-sub">
+                                        @(item.ExpectedDate?.ToString("HH:mm") ?? "--:--") WIB
+                                    </div>
+                                </td>
+
+                                <td>
+                                    Rp. @item.TotalAmount.ToString("N0")
+                                </td>
+
+                                <td>
+    @if (isWait)
+    {
+        <span class="invoice-status wait">Belum Diklaim</span>
+    }
+    else if (isProcess)
+    {
+        <span class="invoice-status process">
+            Diproses
+        </span>
+    }
+    else if (isDone)
+    {
+        <span class="invoice-status done">
+            Selesai
+            <br />
+            <span class="invoice-date-sub">
+                @(item.ExpectedDate?.ToString("dd/MM/yyyy") ?? "-")
+                <br />
+                @(item.ExpectedDate?.ToString("HH:mm") ?? "--:--") WIB
+            </span>
+        </span>
+    }
+    else if (isRejected)
+    {
+        <span class="invoice-status rejected">
+            Ditolak
+        </span>
+    }
+    else
+    {
+        <span class="invoice-status">@status</span>
+    }
+</td>
+
+                                <td class="invoice-action">
+                                    @if (isWait)
+                                    {
+                                        <form asp-action="StartProcess" method="post">
+                                            @Html.AntiForgeryToken()
+                                            <input type="hidden" name="id" value="@item.Id" />
+                                            <button type="submit" class="invoice-btn">Proses</button>
+                                        </form>
+                                    }
+                                    else
+                                    {
+                                        <a asp-action="Detail"
+                                           asp-route-id="@item.Id"
+                                           class="invoice-btn">
+                                            Detail
+                                        </a>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    }
+                    else
+                    {
+                        <tr>
+                            <td colspan="8" class="invoice-empty">
+                                Tidak ada data invoice
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="invoice-scrollbar">
+        <span></span>
+    </div>
+
+    @if (totalPages > 1)
+    {
+        <div class="invoice-pagination-wrap">
+            <a class="invoice-page-arrow"
+               href="@Url.Action("Index", new {
+                   pageNumber = prevPage,
+                   pageSize = Model.PageSize,
+                   searchTerm = ViewBag.SearchTerm,
+                   sortColumn = ViewBag.SortColumn,
+                   sortDirection = ViewBag.SortDirection
+               })">
+                ‹
+            </a>
+
+            <ul class="invoice-pagination">
+                @for (int i = 1; i <= totalPages; i++)
+                {
+                    <li>
+                        <a class="invoice-page-link @(i == Model.PageNumber ? "active" : "")"
+                           href="@Url.Action("Index", new {
+                               pageNumber = i,
+                               pageSize = Model.PageSize,
+                               searchTerm = ViewBag.SearchTerm,
+                               sortColumn = ViewBag.SortColumn,
+                               sortDirection = ViewBag.SortDirection
+                           })">
+                            @i
+                        </a>
+                    </li>
+                }
+            </ul>
+
+            <a class="invoice-page-arrow"
+               href="@Url.Action("Index", new {
+                   pageNumber = nextPage,
+                   pageSize = Model.PageSize,
+                   searchTerm = ViewBag.SearchTerm,
+                   sortColumn = ViewBag.SortColumn,
+                   sortDirection = ViewBag.SortDirection
+               })">
+                ›
+            </a>
+        </div>
+    }
+</div>

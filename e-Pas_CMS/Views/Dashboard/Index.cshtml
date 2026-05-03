@@ -6,81 +6,188 @@
 }
 
 <style>
-    .btn-modern {
-        transition: all 0.3s ease;
-        border-radius: 1rem;
-        font-size: 1.1rem;
-        font-weight: 600;
+
+    /* ===== GLOBAL ===== */
+    body {
+        font-family: 'Inter', sans-serif;
+        background: #f6f8fb;
+        color: #111827;
     }
 
-        .btn-modern:hover {
-            transform: translateY(-3px);
-            box-shadow: 0 0.5rem 1rem rgba(0,0,0,0.15);
-            opacity: 0.95;
+    /* ===== TITLE ===== */
+    .dashboard-title {
+        font-size: 1.25rem;
+        font-weight: 600;
+        margin-bottom: 24px;
+    }
+
+    /* ===== CARD ===== */
+    .card-menu {
+        background: #ffffff;
+        border-radius: 16px;
+        padding: 18px 20px;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        text-decoration: none;
+        color: #111827;
+        border: 1px solid #eef2f7;
+        transition: all 0.2s ease;
+        height: 100%;
+    }
+
+        /* hover lebih halus */
+        .card-menu:hover {
+            box-shadow: 0 6px 18px rgba(0,0,0,0.04);
+            border-color: #e5e7eb;
         }
 
-    .welcome-text {
-        font-size: 2.5rem;
-        font-weight: 700;
-        color: #333;
-        text-align: center;
-        margin-top: 10vh;
-        text-shadow: 1px 1px 2px rgba(0,0,0,0.1);
+    /* title */
+    .card-title {
+        font-weight: 600;
+        font-size: 0.95rem;
+        margin-bottom: 4px;
     }
+
+    /* desc */
+    .card-desc {
+        font-size: 0.8rem;
+        color: #6b7280;
+    }
+
+    /* arrow */
+    .card-arrow {
+        position: absolute;
+        right: 16px;
+        top: 16px;
+        font-size: 0.9rem;
+        color: #9ca3af;
+    }
+
+    /* accent lebih soft */
+    .accent-red {
+        border-left: 3px solid #ef4444;
+    }
+
+    .accent-blue {
+        border-left: 3px solid #3b82f6;
+    }
+
+    .accent-green {
+        border-left: 3px solid #84cc16;
+    }
+
+    /* ===== GRID ===== */
+    .row.g-4 > div {
+        position: relative;
+    }
+
+    /* ===== WELCOME ===== */
+    .welcome-text {
+        text-align: center;
+        margin-top: 14vh;
+    }
+
+        .welcome-text h1 {
+            font-size: 1.8rem;
+            font-weight: 600;
+        }
+
+        .welcome-text span {
+            color: #ef4444;
+        }
+
+        .welcome-text small {
+            color: #6b7280;
+            font-size: 0.9rem;
+        }
+
+    /* spacing */
+    .container {
+        max-width: 1100px;
+    }
+
 </style>
 
 <div class="container py-5">
+
     @if (isSuperadmin)
     {
         <div class="welcome-text">
-            Welcome to <span style="color:#E30613">E-PAS</span><br />
-            <small class="d-block mt-2 text-muted" style="font-size:1.25rem;">
-                Your centralized audit & performance portal
-            </small>
+            <h1>Welcome to <span>E-PAS</span></h1>
+            <small>Your centralized audit & performance portal</small>
         </div>
     }
     else
     {
-        <h4 class="fw-bold mb-4">Dashboard Performance Audit SPBU Pertamina Way</h4>
+        <div class="dashboard-title">Dashboard Performance Audit</div>
 
-        <div class="row g-5">
+        <div class="row g-4">
+
             <div class="col-md-4">
-                <a href="@Url.Action("Nasional", "Dashboard")"
-                   class="btn btn-modern w-100 py-4 shadow-sm text-white"
-                   style="background-color: #E30613;">
-                    Nasional <span class="float-end">&gt;</span>
+                <a href="@Url.Action("DashboardAnalytics", "Dashboard")"
+                   class="card-menu accent-red">
+                    <div class="card-title">Nasional</div>
+                    <div class="card-desc">Overview performa audit nasional</div>
+                    <div class="card-arrow">&gt;</div>
                 </a>
             </div>
+
             <div class="col-md-4">
-                <a href="@Url.Action("Province", "Dashboard")" class="btn btn-modern w-100 py-4 shadow-sm text-white" style="background-color: #E30613;">
-                    Provinsi <span class="float-end">&gt;</span>
+                <a href="@Url.Action("Province", "Dashboard")"
+                   class="card-menu accent-red">
+                    <div class="card-title">Provinsi</div>
+                    <div class="card-desc">Analisa berdasarkan provinsi</div>
+                    <div class="card-arrow">&gt;</div>
                 </a>
             </div>
+
             <div class="col-md-4">
-                <a href="@Url.Action("Regional", "Dashboard")" class="btn btn-modern w-100 py-4 shadow-sm text-white" style="background-color: #E30613;">
-                    Regional <span class="float-end">&gt;</span>
+                <a href="@Url.Action("Regional", "Dashboard")"
+                   class="card-menu accent-red">
+                    <div class="card-title">Regional</div>
+                    <div class="card-desc">Distribusi performa regional</div>
+                    <div class="card-arrow">&gt;</div>
                 </a>
             </div>
+
             <div class="col-md-4">
-                <a href="@Url.Action("Spbu", "Dashboard")" class="btn btn-modern w-100 py-4 shadow-sm text-white" style="background-color: #006CB8;">
-                    SPBU <span class="float-end">&gt;</span>
+                <a href="@Url.Action("Spbu", "Dashboard")"
+                   class="card-menu accent-blue">
+                    <div class="card-title">SPBU</div>
+                    <div class="card-desc">Data audit per SPBU</div>
+                    <div class="card-arrow">&gt;</div>
                 </a>
             </div>
+
             <div class="col-md-4">
-                <a href="#" class="btn btn-modern w-100 py-4 shadow-sm text-white" style="background-color: #006CB8;">
-                    Auditor <span class="float-end">&gt;</span>
+                <a href="#"
+                   class="card-menu accent-blue">
+                    <div class="card-title">Auditor</div>
+                    <div class="card-desc">Kinerja & aktivitas auditor</div>
+                    <div class="card-arrow">&gt;</div>
                 </a>
             </div>
+
             <div class="col-md-4">
-                <a href="#" class="btn btn-modern w-100 py-4 shadow-sm text-white" style="background-color: #006CB8;">
-                    Verifikator <span class="float-end">&gt;</span>
+                <a href="#"
+                   class="card-menu accent-blue">
+                    <div class="card-title">Verifikator</div>
+                    <div class="card-desc">Validasi & approval audit</div>
+                    <div class="card-arrow">&gt;</div>
                 </a>
             </div>
+
             <div class="col-md-4">
-                <a href="#" class="btn btn-modern w-100 py-4 shadow-sm text-dark" style="background-color: #C3D600;">
-                    Safety Alert <span class="float-end">&gt;</span>
+                <a href="#"
+                   class="card-menu accent-green">
+                    <div class="card-title">Safety Alert</div>
+                    <div class="card-desc">Peringatan & issue penting</div>
+                    <div class="card-arrow">&gt;</div>
                 </a>
             </div>
+
         </div>
     }
+
 </div>

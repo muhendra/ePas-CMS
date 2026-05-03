@@ -1,0 +1,688 @@
+﻿@{
+    ViewData["Title"] = "Dashboard Performance Verifikator";
+}
+
+<script src="/js/apexcharts.js"></script>
+
+@section Styles {
+    <style>
+        .verifier-dashboard {
+            background: #f4f5f8;
+            min-height: calc(100vh - 120px);
+            padding: 28px 32px;
+            color: #101820;
+        }
+
+        .dash-title {
+            font-size: 28px;
+            font-weight: 800;
+            margin: 0;
+        }
+
+        .filter-bar {
+            display: flex;
+            gap: 16px;
+            justify-content: flex-end;
+            flex-wrap: wrap;
+        }
+
+        .filter-select {
+            min-width: 145px;
+            height: 48px;
+            border: 1px solid #e5e7eb;
+            border-radius: 10px;
+            padding: 0 16px;
+            background: #fff;
+            font-weight: 500;
+        }
+
+        .card-modern {
+            background: #fff;
+            border-radius: 14px;
+            border: 1px solid #e5e7eb;
+            box-shadow: 0 6px 18px rgba(15,23,42,.08);
+            height: 100%;
+        }
+
+        .chart-card {
+            padding: 24px;
+        }
+
+        .card-titlex {
+            font-size: 18px;
+            font-weight: 800;
+            margin-bottom: 2px;
+        }
+
+        .card-subtitlex {
+            color: #6b7280;
+            font-size: 14px;
+        }
+
+        .donut-wrap {
+            display: grid;
+            grid-template-columns: 1fr 170px;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .status-item {
+            margin-bottom: 18px;
+        }
+
+        .status-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: #6b7280;
+            font-size: 14px;
+        }
+
+        .status-dot {
+            width: 15px;
+            height: 15px;
+            border-radius: 4px;
+        }
+
+        .status-value {
+            font-size: 18px;
+            font-weight: 800;
+            color: #111827;
+            margin-left: 23px;
+            margin-top: 4px;
+        }
+
+        .section-title {
+            font-size: 18px;
+            font-weight: 900;
+            margin: 24px 0 12px;
+        }
+
+        .table-card {
+            background: #fff;
+            border-radius: 12px;
+            border: 1px solid #e5e7eb;
+            overflow: hidden;
+        }
+
+        .table {
+            margin: 0;
+        }
+
+            .table thead th {
+                background: #eaeaea;
+                color: #111827;
+                font-size: 16px;
+                font-weight: 900;
+                padding: 16px 22px;
+                border: none;
+                white-space: nowrap;
+            }
+
+            .table tbody td {
+                padding: 18px 22px;
+                border: none;
+                vertical-align: middle;
+                font-size: 15px;
+                color: #111827;
+            }
+
+            .table tbody tr {
+                border-bottom: 1px solid #f1f5f9;
+            }
+
+        .total-row td {
+            background: #f3ffb8;
+            font-weight: 900;
+        }
+
+        .sort-icon {
+            color: #21B6D7;
+            font-size: 15px;
+            margin-left: 6px;
+        }
+
+        .loading-box {
+            background: #fff;
+            border-radius: 14px;
+            border: 1px solid #e5e7eb;
+            padding: 18px;
+            margin-bottom: 16px;
+            font-weight: 700;
+            color: #64748b;
+        }
+
+        .pagination-soft {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin: 14px 0 8px;
+            color: #94a3b8;
+        }
+
+            .pagination-soft span {
+                color: #111827;
+            }
+
+            .pagination-soft .active {
+                background: #21B6D7;
+                color: #fff;
+                border-radius: 8px;
+                padding: 4px 9px;
+                font-weight: 800;
+            }
+
+        @@media (max-width: 992px) {
+            .donut-wrap {
+                grid-template-columns: 1fr;
+            }
+
+            .filter-bar {
+                justify-content: flex-start;
+            }
+        }
+    </style>
+}
+
+<div class="verifier-dashboard">
+
+    <div class="d-flex justify-content-between align-items-center flex-wrap gap-3 mb-4">
+        <h2 class="dash-title">Dashboard Performance Verifikator</h2>
+
+        <div class="filter-bar">
+            <select id="filterRegion" class="filter-select">
+                <option value="">Semua Region</option>
+                <option value="I">Region I</option>
+                <option value="II">Region II</option>
+                <option value="III">Region III</option>
+                <option value="IV">Region IV</option>
+                <option value="V">Region V</option>
+                <option value="VI">Region VI</option>
+                <option value="VII">Region VII</option>
+                <option value="VIII">Region VIII</option>
+            </select>
+
+            <select id="filterMonth" class="filter-select">
+                <option value="">Semua Bulan</option>
+                <option value="1">Januari</option>
+                <option value="2">Februari</option>
+                <option value="3">Maret</option>
+                <option value="4">April</option>
+                <option value="5">Mei</option>
+                <option value="6">Juni</option>
+                <option value="7">Juli</option>
+                <option value="8">Agustus</option>
+                <option value="9">September</option>
+                <option value="10">Oktober</option>
+                <option value="11">November</option>
+                <option value="12">Desember</option>
+            </select>
+
+            <select id="filterDay" class="filter-select">
+                <option value="">Semua Hari</option>
+                <option value="1">Senin</option>
+                <option value="2">Selasa</option>
+                <option value="3">Rabu</option>
+                <option value="4">Kamis</option>
+                <option value="5">Jumat</option>
+                <option value="6">Sabtu</option>
+                <option value="0">Minggu</option>
+            </select>
+
+            <select id="filterYear" class="filter-select">
+                @{
+                    var currentYear = DateTime.Now.Year;
+                    for (int y = currentYear - 3; y <= currentYear + 1; y++)
+                    {
+                        <option value="@y" selected="@(y == currentYear)">@y</option>
+                    }
+                }
+            </select>
+        </div>
+    </div>
+
+    <div id="loadingBox" class="loading-box">
+        Memuat data performance verifikator...
+    </div>
+
+    <div class="row g-4">
+        <div class="col-xl-8">
+            <div class="card-modern chart-card">
+                <div class="d-flex justify-content-between align-items-start mb-3">
+                    <div>
+                        <div class="card-titlex">Pencapaian Total yang di Verifikasi</div>
+                        <div class="card-subtitlex">dari total <span id="totalReportText">0</span> Report</div>
+                    </div>
+                </div>
+
+                <div id="verifierBarChart" style="height:270px;"></div>
+            </div>
+        </div>
+
+        <div class="col-xl-4">
+            <div class="card-modern chart-card">
+                <div class="donut-wrap">
+                    <div id="verifierDonutChart" style="height:250px;"></div>
+
+                    <div>
+                        <div class="status-item">
+                            <div class="status-row">
+                                <span class="status-dot" style="background:#a8c51d;"></span>
+                                Audit Terverifikasi
+                            </div>
+                            <div class="status-value" id="verifiedVal">0</div>
+                        </div>
+
+                        <div class="status-item">
+                            <div class="status-row">
+                                <span class="status-dot" style="background:#26b6d5;"></span>
+                                Dalam Review
+                            </div>
+                            <div class="status-value" id="reviewVal">0</div>
+                        </div>
+
+                        <div class="status-item mb-0">
+                            <div class="status-row">
+                                <span class="status-dot" style="background:#f32645;"></span>
+                                Banding
+                            </div>
+                            <div class="status-value" id="appealVal">0</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <h4 class="section-title">Peringkat Verifikator</h4>
+
+    <div class="table-card">
+        <div class="table-responsive">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Peringkat Verifikator</th>
+                        <th>Verifikator</th>
+                        <th>Kecepatan<br />Verifikasi Audit <i class="bi bi-arrow-down-up sort-icon"></i></th>
+                        <th>Total Audit yang<br />Diverifikasi <i class="bi bi-arrow-down-up sort-icon"></i></th>
+                        <th>Total Audit yang<br />Terlewat <i class="bi bi-arrow-down-up sort-icon"></i></th>
+                        <th>Total Audit yang<br />Dibatalkan</th>
+                        <th>Verifikasi<br />Audit Terakhir</th>
+                    </tr>
+                </thead>
+
+                <tbody id="rankingBody">
+                    <tr>
+                        <td colspan="7" class="text-center text-muted py-4">
+                            Memuat data...
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="pagination-soft">
+        <i class="bi bi-chevron-left"></i>
+        <span class="active">1</span>
+        <span>2</span>
+        <span>3</span>
+        <span>4</span>
+        <span>5</span>
+        <i class="bi bi-chevron-right"></i>
+    </div>
+
+    <h4 class="section-title">Performa Verifikator</h4>
+
+    <div class="table-card">
+        <div class="table-responsive">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Verifikator</th>
+                        <th>Total<br />Audited</th>
+                        <th>Under Verified <i class="bi bi-arrow-down-up sort-icon"></i></th>
+                        <th>Done Verified <i class="bi bi-arrow-down-up sort-icon"></i></th>
+                        <th>% verified <i class="bi bi-arrow-down-up sort-icon"></i></th>
+                        <th>PERDAY <i class="bi bi-arrow-down-up sort-icon"></i></th>
+                        <th>Total SPBU <i class="bi bi-arrow-down-up sort-icon"></i></th>
+                        <th>Sisa SPBU <i class="bi bi-arrow-down-up sort-icon"></i></th>
+                    </tr>
+                </thead>
+
+                <tbody id="performanceBody">
+                    <tr>
+                        <td colspan="8" class="text-center text-muted py-4">
+                            Memuat data...
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="pagination-soft">
+        <i class="bi bi-chevron-left"></i>
+        <span class="active">1</span>
+        <span>2</span>
+        <span>3</span>
+        <span>4</span>
+        <span>5</span>
+        <i class="bi bi-chevron-right"></i>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        let verifierBarChart = null;
+        let verifierDonutChart = null;
+
+        const dummyVerifierData = {
+            monthly: {
+                totalAudit: [140, 138, 136, 137, 138, 138, 137, 139, 138, 140, 139, 141],
+                verifiedAudit: [115, 114, 116, 115, 116, 116, 115, 116, 116, 117, 116, 118],
+                appealAudit: [25, 24, 25, 25, 24, 24, 25, 25, 24, 25, 25, 25]
+            },
+            status: {
+                verified: 2419,
+                review: 244,
+                appeal: 25,
+                total: 2688
+            },
+            ranking: [
+                { rank: 1, verifier: 'Muhammad Ramadan', speed: '15 Menit 32 Detik', verifiedAudit: 92, missedAudit: 0, cancelledAudit: 3, lastVerifiedDate: '2022-10-09T16:00:00' },
+                { rank: 2, verifier: 'Muhammad Ramadan', speed: '15 Menit 32 Detik', verifiedAudit: 92, missedAudit: 0, cancelledAudit: 3, lastVerifiedDate: '2022-10-09T16:00:00' },
+                { rank: 3, verifier: 'Muhammad Ramadan', speed: '15 Menit 32 Detik', verifiedAudit: 92, missedAudit: 0, cancelledAudit: 3, lastVerifiedDate: '2022-10-09T16:00:00' },
+                { rank: 4, verifier: 'Muhammad Ramadan', speed: '15 Menit 32 Detik', verifiedAudit: 92, missedAudit: 0, cancelledAudit: 3, lastVerifiedDate: '2022-10-09T16:00:00' },
+                { rank: 5, verifier: 'Muhammad Ramadan', speed: '15 Menit 32 Detik', verifiedAudit: 92, missedAudit: 0, cancelledAudit: 3, lastVerifiedDate: '2022-10-09T16:00:00' },
+                { rank: 6, verifier: 'Muhammad Ramadan', speed: '15 Menit 32 Detik', verifiedAudit: 92, missedAudit: 0, cancelledAudit: 3, lastVerifiedDate: '2022-10-09T16:00:00' },
+                { rank: 7, verifier: 'Muhammad Ramadan', speed: '15 Menit 32 Detik', verifiedAudit: 92, missedAudit: 0, cancelledAudit: 3, lastVerifiedDate: '2022-10-09T16:00:00' }
+            ],
+            performance: [
+                { verifier: 'Hendra', totalAudited: 482, underVerified: 39, doneVerified: 443, verifiedPercent: 92, perday: 38, totalSpbu: 585, remainingSpbu: 103 },
+                { verifier: 'Bambang', totalAudited: 482, underVerified: 39, doneVerified: 443, verifiedPercent: 92, perday: 38, totalSpbu: 585, remainingSpbu: 103 },
+                { verifier: 'Alvan', totalAudited: 482, underVerified: 39, doneVerified: 443, verifiedPercent: 92, perday: 38, totalSpbu: 585, remainingSpbu: 103 },
+                { verifier: 'Rimbo', totalAudited: 482, underVerified: 39, doneVerified: 443, verifiedPercent: 92, perday: 38, totalSpbu: 585, remainingSpbu: 103 },
+                { verifier: 'Hendri', totalAudited: 482, underVerified: 39, doneVerified: 443, verifiedPercent: 92, perday: 38, totalSpbu: 585, remainingSpbu: 103 },
+                { verifier: 'Fajar', totalAudited: 482, underVerified: 39, doneVerified: 443, verifiedPercent: 92, perday: 38, totalSpbu: 585, remainingSpbu: 103 }
+            ]
+        };
+
+        function normalizeArray(arr) {
+            if (!arr || !Array.isArray(arr)) return Array(12).fill(0);
+            return arr.map(x => Number(x || 0));
+        }
+
+        function formatDateTime(value) {
+            if (!value) return '-';
+
+            const d = new Date(value);
+            if (isNaN(d.getTime())) return '-';
+
+            const date = d.toLocaleDateString('id-ID', {
+                day: '2-digit',
+                month: '2-digit',
+                year: 'numeric'
+            });
+
+            const time = d.toLocaleTimeString('id-ID', {
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+
+            return `${date}<br><small class="text-muted">${time} WIB</small>`;
+        }
+
+        async function loadVerifierPerformance() {
+            const loadingBox = document.getElementById('loadingBox');
+
+            try {
+                loadingBox.style.display = 'block';
+
+                const region = document.getElementById('filterRegion').value;
+                const month = document.getElementById('filterMonth').value;
+                const year = document.getElementById('filterYear').value;
+
+                const url = `/Dashboard/VerifierPerformanceSummary?region=${encodeURIComponent(region)}&month=${encodeURIComponent(month)}&year=${encodeURIComponent(year)}`;
+                const res = await fetch(url);
+
+                let data;
+
+                if (!res.ok) {
+                    data = dummyVerifierData;
+                } else {
+                    data = await res.json();
+                    if (!data || !data.status) data = dummyVerifierData;
+                }
+
+                renderDashboard(data);
+            } catch (e) {
+                console.error(e);
+                renderDashboard(dummyVerifierData);
+            } finally {
+                loadingBox.style.display = 'none';
+            }
+        }
+
+        function renderDashboard(data) {
+            const totalAudit = normalizeArray(data.monthly?.totalAudit);
+            const verifiedAudit = normalizeArray(data.monthly?.verifiedAudit);
+            const appealAudit = normalizeArray(data.monthly?.appealAudit);
+
+            const verified = Number(data.status?.verified || 0);
+            const review = Number(data.status?.review || 0);
+            const appeal = Number(data.status?.appeal || 0);
+            const total = Number(data.status?.total || (verified + review + appeal));
+
+            document.getElementById('totalReportText').innerText = total;
+            document.getElementById('verifiedVal').innerText = verified;
+            document.getElementById('reviewVal').innerText = review;
+            document.getElementById('appealVal').innerText = appeal;
+
+            renderBar(totalAudit, verifiedAudit, appealAudit);
+            renderDonut(verified, review, appeal, total);
+            renderRanking(data.ranking || []);
+            renderPerformance(data.performance || []);
+        }
+
+        function renderBar(totalAudit, verifiedAudit, appealAudit) {
+            if (verifierBarChart) verifierBarChart.destroy();
+
+            verifierBarChart = new ApexCharts(document.querySelector("#verifierBarChart"), {
+                chart: {
+                    type: 'bar',
+                    height: 270,
+                    toolbar: { show: false },
+                    fontFamily: 'Inter, sans-serif'
+                },
+                series: [
+                    { name: 'Total Audit', data: totalAudit },
+                    { name: 'Audit Diverifikasi', data: verifiedAudit },
+                    { name: 'Banding', data: appealAudit }
+                ],
+                colors: ['#a8c51d', '#26b6d5', '#f32645'],
+                plotOptions: {
+                    bar: {
+                        columnWidth: '46%',
+                        borderRadius: 2
+                    }
+                },
+                dataLabels: { enabled: false },
+                grid: {
+                    borderColor: '#cfd4dc',
+                    strokeDashArray: 3,
+                    xaxis: { lines: { show: false } }
+                },
+                xaxis: {
+                    categories: ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Des'],
+                    labels: { style: { colors: '#6b7280' } },
+                    axisBorder: { show: false },
+                    axisTicks: { show: false }
+                },
+                yaxis: {
+                    labels: { style: { colors: '#9ca3af' } }
+                },
+                legend: {
+                    position: 'top',
+                    horizontalAlign: 'right'
+                },
+                tooltip: { theme: 'light' }
+            });
+
+            verifierBarChart.render();
+        }
+
+        function renderDonut(verified, review, appeal, total) {
+            if (verifierDonutChart) verifierDonutChart.destroy();
+
+            verifierDonutChart = new ApexCharts(document.querySelector("#verifierDonutChart"), {
+                chart: {
+                    type: 'donut',
+                    height: 250,
+                    toolbar: { show: false },
+                    fontFamily: 'Inter, sans-serif'
+                },
+                series: [verified, review, appeal],
+                labels: ['Audit Terverifikasi', 'Dalam Review', 'Banding'],
+                colors: ['#a8c51d', '#26b6d5', '#f32645'],
+                dataLabels: {
+                    enabled: true,
+                    formatter: function (val) {
+                        return Math.round(val) + '%';
+                    },
+                    style: {
+                        fontSize: '16px',
+                        fontWeight: 800
+                    }
+                },
+                plotOptions: {
+                    pie: {
+                        donut: {
+                            size: '62%',
+                            labels: {
+                                show: true,
+                                name: { show: false },
+                                value: {
+                                    show: true,
+                                    fontSize: '18px',
+                                    fontWeight: 800,
+                                    color: '#5b616b',
+                                    formatter: function () {
+                                        return total;
+                                    }
+                                },
+                                total: {
+                                    show: true,
+                                    showAlways: true,
+                                    label: '',
+                                    formatter: function () {
+                                        return total;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                legend: { show: false },
+                stroke: { width: 0 }
+            });
+
+            verifierDonutChart.render();
+        }
+
+        function renderRanking(items) {
+            const tbody = document.getElementById('rankingBody');
+
+            if (!items || items.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="7" class="text-center text-muted py-4">
+                            Data peringkat verifikator belum tersedia
+                        </td>
+                    </tr>`;
+                return;
+            }
+
+            tbody.innerHTML = items.map(x => `
+                <tr>
+                    <td>${x.rank ?? '-'}</td>
+                    <td>${x.verifier ?? '-'}</td>
+                    <td>${x.speed ?? '-'}</td>
+                    <td>${x.verifiedAudit ?? 0} Audit</td>
+                    <td>${x.missedAudit ?? 0} Audit</td>
+                    <td>${x.cancelledAudit ?? 0} Audit</td>
+                    <td>${formatDateTime(x.lastVerifiedDate)}</td>
+                </tr>
+            `).join('');
+        }
+
+        function renderPerformance(items) {
+            const tbody = document.getElementById('performanceBody');
+
+            if (!items || items.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="8" class="text-center text-muted py-4">
+                            Data performa verifikator belum tersedia
+                        </td>
+                    </tr>`;
+                return;
+            }
+
+            let totalAudited = 0;
+            let totalUnder = 0;
+            let totalDone = 0;
+            let totalPerday = 0;
+            let totalSpbu = 0;
+            let totalRemaining = 0;
+
+            const rows = items.map(x => {
+                totalAudited += Number(x.totalAudited || 0);
+                totalUnder += Number(x.underVerified || 0);
+                totalDone += Number(x.doneVerified || 0);
+                totalPerday += Number(x.perday || 0);
+                totalSpbu += Number(x.totalSpbu || 0);
+                totalRemaining += Number(x.remainingSpbu || 0);
+
+                return `
+                    <tr>
+                        <td>${x.verifier ?? '-'}</td>
+                        <td>${x.totalAudited ?? 0}</td>
+                        <td>${x.underVerified ?? 0}</td>
+                        <td>${x.doneVerified ?? 0}</td>
+                        <td>${x.verifiedPercent ?? 0}%</td>
+                        <td>${x.perday ?? 0}</td>
+                        <td>${x.totalSpbu ?? 0}</td>
+                        <td>${x.remainingSpbu ?? 0}</td>
+                    </tr>
+                `;
+            }).join('');
+
+            const percent = totalAudited === 0
+                ? 0
+                : Math.round((totalDone / totalAudited) * 100);
+
+            tbody.innerHTML = rows + `
+                <tr class="total-row">
+                    <td>Grand Total</td>
+                    <td>${totalAudited}</td>
+                    <td>${totalUnder}</td>
+                    <td>${totalDone}</td>
+                    <td>${percent}%</td>
+                    <td>${totalPerday}</td>
+                    <td>${totalSpbu}</td>
+                    <td>${totalRemaining}</td>
+                </tr>
+            `;
+        }
+
+        document.addEventListener("DOMContentLoaded", function () {
+            loadVerifierPerformance();
+
+            document.getElementById('filterRegion').addEventListener('change', loadVerifierPerformance);
+            document.getElementById('filterMonth').addEventListener('change', loadVerifierPerformance);
+            document.getElementById('filterYear').addEventListener('change', loadVerifierPerformance);
+            document.getElementById('filterDay').addEventListener('change', loadVerifierPerformance);
+        });
+    </script>
+}

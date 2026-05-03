@@ -1,0 +1,523 @@
+﻿@{
+    ViewData["Title"] = "Dashboard Performance Auditor";
+}
+
+<script src="/js/apexcharts.js"></script>
+
+@section Styles {
+    <style>
+        .auditor-dashboard {
+            background: #f4f5f8;
+            min-height: calc(100vh - 120px);
+            padding: 28px 32px;
+            color: #101820;
+        }
+
+        .dash-title {
+            font-size: 28px;
+            font-weight: 800;
+            margin: 0;
+        }
+
+        .filter-bar {
+            display: flex;
+            gap: 16px;
+            justify-content: flex-end;
+            flex-wrap: wrap;
+        }
+
+        .filter-select {
+            min-width: 145px;
+            height: 48px;
+            border: 1px solid #e5e7eb;
+            border-radius: 10px;
+            padding: 0 16px;
+            background: #fff;
+            font-weight: 500;
+        }
+
+        .card-modern {
+            background: #fff;
+            border-radius: 14px;
+            border: 1px solid #e5e7eb;
+            box-shadow: 0 6px 18px rgba(15,23,42,.08);
+            height: 100%;
+        }
+
+        .chart-card {
+            padding: 24px;
+        }
+
+        .card-titlex {
+            font-size: 18px;
+            font-weight: 800;
+            margin-bottom: 2px;
+        }
+
+        .card-subtitlex {
+            color: #6b7280;
+            font-size: 14px;
+        }
+
+        .donut-wrap {
+            display: grid;
+            grid-template-columns: 1fr 170px;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .status-item {
+            margin-bottom: 18px;
+        }
+
+        .status-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: #6b7280;
+            font-size: 14px;
+        }
+
+        .status-dot {
+            width: 15px;
+            height: 15px;
+            border-radius: 4px;
+        }
+
+        .status-value {
+            font-size: 18px;
+            font-weight: 800;
+            color: #111827;
+            margin-left: 23px;
+            margin-top: 4px;
+        }
+
+        .table-card {
+            margin-top: 24px;
+            background: #fff;
+            border-radius: 12px;
+            border: 1px solid #e5e7eb;
+            overflow: hidden;
+        }
+
+        .table {
+            margin: 0;
+        }
+
+            .table thead th {
+                background: #eaeaea;
+                color: #111827;
+                font-size: 17px;
+                font-weight: 900;
+                padding: 16px 22px;
+                border: none;
+                white-space: nowrap;
+            }
+
+            .table tbody td {
+                padding: 18px 22px;
+                border: none;
+                vertical-align: middle;
+                font-size: 15px;
+                color: #111827;
+            }
+
+            .table tbody tr {
+                border-bottom: 1px solid #f1f5f9;
+            }
+
+        .sort-icon {
+            color: #21B6D7;
+            font-size: 15px;
+            margin-left: 6px;
+        }
+
+        .loading-box {
+            background: #fff;
+            border-radius: 14px;
+            border: 1px solid #e5e7eb;
+            padding: 18px;
+            margin-bottom: 16px;
+            font-weight: 700;
+            color: #64748b;
+        }
+
+        @@media (max-width: 992px) {
+            .donut-wrap {
+                grid-template-columns: 1fr;
+            }
+
+            .filter-bar {
+                justify-content: flex-start;
+            }
+        }
+    </style>
+}
+
+<div class="auditor-dashboard">
+
+    <div class="d-flex justify-content-between align-items-center flex-wrap gap-3 mb-4">
+        <h2 class="dash-title">Dashboard Performance Auditor</h2>
+
+        <div class="filter-bar">
+            <select id="filterRegion" class="filter-select">
+                <option value="">Semua Region</option>
+                <option value="I">Region I</option>
+                <option value="II">Region II</option>
+                <option value="III">Region III</option>
+                <option value="IV">Region IV</option>
+                <option value="V">Region V</option>
+                <option value="VI">Region VI</option>
+                <option value="VII">Region VII</option>
+                <option value="VIII">Region VIII</option>
+            </select>
+
+            <select id="filterMonth" class="filter-select">
+                <option value="">Semua Bulan</option>
+                <option value="1">Januari</option>
+                <option value="2">Februari</option>
+                <option value="3">Maret</option>
+                <option value="4">April</option>
+                <option value="5">Mei</option>
+                <option value="6">Juni</option>
+                <option value="7">Juli</option>
+                <option value="8">Agustus</option>
+                <option value="9">September</option>
+                <option value="10">Oktober</option>
+                <option value="11">November</option>
+                <option value="12">Desember</option>
+            </select>
+
+            <select id="filterDay" class="filter-select">
+                <option value="">Semua Hari</option>
+                <option value="1">Senin</option>
+                <option value="2">Selasa</option>
+                <option value="3">Rabu</option>
+                <option value="4">Kamis</option>
+                <option value="5">Jumat</option>
+                <option value="6">Sabtu</option>
+                <option value="0">Minggu</option>
+            </select>
+
+            <select id="filterYear" class="filter-select">
+                @{
+                    var currentYear = DateTime.Now.Year;
+                    for (int y = currentYear - 3; y <= currentYear + 1; y++)
+                    {
+                        <option value="@y" selected="@(y == currentYear)">@y</option>
+                    }
+                }
+            </select>
+        </div>
+    </div>
+
+    <div id="loadingBox" class="loading-box">
+        Memuat data performance auditor...
+    </div>
+
+    <div class="row g-4">
+        <div class="col-xl-8">
+            <div class="card-modern chart-card">
+                <div class="d-flex justify-content-between align-items-start mb-3">
+                    <div>
+                        <div class="card-titlex">Pencapaian Total Auditor</div>
+                        <div class="card-subtitlex">dari total <span id="totalReportText">0</span> Report</div>
+                    </div>
+                </div>
+
+                <div id="auditorBarChart" style="height:270px;"></div>
+            </div>
+        </div>
+
+        <div class="col-xl-4">
+            <div class="card-modern chart-card">
+                <div class="donut-wrap">
+                    <div id="auditorDonutChart" style="height:250px;"></div>
+
+                    <div>
+                        <div class="status-item">
+                            <div class="status-row">
+                                <span class="status-dot" style="background:#a8c51d;"></span>
+                                Audit Terverifikasi
+                            </div>
+                            <div class="status-value" id="verifiedVal">0</div>
+                        </div>
+
+                        <div class="status-item">
+                            <div class="status-row">
+                                <span class="status-dot" style="background:#26b6d5;"></span>
+                                Dalam Review
+                            </div>
+                            <div class="status-value" id="reviewVal">0</div>
+                        </div>
+
+                        <div class="status-item mb-0">
+                            <div class="status-row">
+                                <span class="status-dot" style="background:#f32645;"></span>
+                                Direvisi
+                            </div>
+                            <div class="status-value" id="revisionVal">0</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="table-card">
+        <div class="table-responsive">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Peringkat</th>
+                        <th>Auditor</th>
+                        <th>Kecepatan<br />Audit <i class="bi bi-arrow-down-up sort-icon"></i></th>
+                        <th>Total Audit yang<br />Dikerjakan <i class="bi bi-arrow-down-up sort-icon"></i></th>
+                        <th>Total Komisi <i class="bi bi-arrow-down-up sort-icon"></i></th>
+                        <th>Total Audit yang<br />Terlewat <i class="bi bi-arrow-down-up sort-icon"></i></th>
+                        <th>Total Audit yang<br />Dibatalkan</th>
+                    </tr>
+                </thead>
+
+                <tbody id="rankingBody">
+                    <tr>
+                        <td colspan="7" class="text-center text-muted py-4">
+                            Memuat data...
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        let auditorBarChart = null;
+        let auditorDonutChart = null;
+
+        const dummyData = {
+            monthly: {
+                totalAudit: [140, 150, 170, 180, 200, 225, 245, 245, 265, 285, 285, 310],
+                verifiedAudit: [115, 138, 168, 180, 200, 223, 245, 245, 260, 282, 285, 310]
+            },
+            status: {
+                verified: 2419,
+                review: 244,
+                revision: 25,
+                total: 2688
+            },
+            ranking: [
+                { rank: 1, auditor: 'Muhammad Ramadan', speed: '15 Menit', totalAudit: 92, totalCommission: 10000000, missedAudit: 0, cancelledAudit: 3 },
+                { rank: 2, auditor: 'Muhammad Ramadan', speed: '15 Menit', totalAudit: 92, totalCommission: 10000000, missedAudit: 0, cancelledAudit: 3 },
+                { rank: 3, auditor: 'Muhammad Ramadan', speed: '15 Menit', totalAudit: 92, totalCommission: 10000000, missedAudit: 0, cancelledAudit: 3 },
+                { rank: 4, auditor: 'Muhammad Ramadan', speed: '15 Menit', totalAudit: 92, totalCommission: 10000000, missedAudit: 0, cancelledAudit: 3 },
+                { rank: 5, auditor: 'Muhammad Ramadan', speed: '15 Menit', totalAudit: 92, totalCommission: 10000000, missedAudit: 0, cancelledAudit: 3 },
+                { rank: 6, auditor: 'Muhammad Ramadan', speed: '15 Menit', totalAudit: 92, totalCommission: 10000000, missedAudit: 0, cancelledAudit: 3 },
+                { rank: 7, auditor: 'Muhammad Ramadan', speed: '15 Menit', totalAudit: 92, totalCommission: 10000000, missedAudit: 0, cancelledAudit: 3 }
+            ]
+        };
+
+        function rupiah(value) {
+            return new Intl.NumberFormat('id-ID', {
+                style: 'currency',
+                currency: 'IDR',
+                maximumFractionDigits: 0
+            }).format(value || 0);
+        }
+
+        function normalizeArray(arr) {
+            if (!arr || !Array.isArray(arr)) return Array(12).fill(0);
+            return arr.map(x => Number(x || 0));
+        }
+
+        async function loadAuditorPerformance() {
+            const loadingBox = document.getElementById('loadingBox');
+
+            try {
+                loadingBox.style.display = 'block';
+
+                const region = document.getElementById('filterRegion').value;
+                const month = document.getElementById('filterMonth').value;
+                const year = document.getElementById('filterYear').value;
+
+                const url = `/Dashboard/AuditorPerformanceSummary?region=${encodeURIComponent(region)}&month=${encodeURIComponent(month)}&year=${encodeURIComponent(year)}`;
+
+                const res = await fetch(url);
+
+                let data;
+                if (!res.ok) {
+                    data = dummyData;
+                } else {
+                    data = await res.json();
+                    if (!data || !data.status) data = dummyData;
+                }
+
+                renderDashboard(data);
+            } catch (e) {
+                console.error(e);
+                renderDashboard(dummyData);
+            } finally {
+                loadingBox.style.display = 'none';
+            }
+        }
+
+        function renderDashboard(data) {
+            const totalAudit = normalizeArray(data.monthly?.totalAudit);
+            const verifiedAudit = normalizeArray(data.monthly?.verifiedAudit);
+
+            const verified = Number(data.status?.verified || 0);
+            const review = Number(data.status?.review || 0);
+            const revision = Number(data.status?.revision || 0);
+            const total = Number(data.status?.total || (verified + review + revision));
+
+            document.getElementById('totalReportText').innerText = total;
+            document.getElementById('verifiedVal').innerText = verified;
+            document.getElementById('reviewVal').innerText = review;
+            document.getElementById('revisionVal').innerText = revision;
+
+            renderBar(totalAudit, verifiedAudit);
+            renderDonut(verified, review, revision, total);
+            renderTable(data.ranking || []);
+        }
+
+        function renderBar(totalAudit, verifiedAudit) {
+            if (auditorBarChart) auditorBarChart.destroy();
+
+            auditorBarChart = new ApexCharts(document.querySelector("#auditorBarChart"), {
+                chart: {
+                    type: 'bar',
+                    height: 270,
+                    toolbar: { show: false },
+                    fontFamily: 'Inter, sans-serif'
+                },
+                series: [
+                    { name: 'Total Audit', data: totalAudit },
+                    { name: 'Audit Diverifikasi', data: verifiedAudit }
+                ],
+                colors: ['#a8c51d', '#26b6d5'],
+                plotOptions: {
+                    bar: {
+                        columnWidth: '42%',
+                        borderRadius: 2
+                    }
+                },
+                dataLabels: { enabled: false },
+                grid: {
+                    borderColor: '#cfd4dc',
+                    strokeDashArray: 3,
+                    xaxis: { lines: { show: false } }
+                },
+                xaxis: {
+                    categories: ['Jan', 'Feb', 'Mar', 'April', 'Mei', 'Jun', 'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Des'],
+                    labels: { style: { colors: '#6b7280' } },
+                    axisBorder: { show: false },
+                    axisTicks: { show: false }
+                },
+                yaxis: {
+                    labels: { style: { colors: '#9ca3af' } }
+                },
+                legend: {
+                    position: 'top',
+                    horizontalAlign: 'right'
+                },
+                tooltip: { theme: 'light' }
+            });
+
+            auditorBarChart.render();
+        }
+
+        function renderDonut(verified, review, revision, total) {
+            if (auditorDonutChart) auditorDonutChart.destroy();
+
+            auditorDonutChart = new ApexCharts(document.querySelector("#auditorDonutChart"), {
+                chart: {
+                    type: 'donut',
+                    height: 250,
+                    toolbar: { show: false },
+                    fontFamily: 'Inter, sans-serif'
+                },
+                series: [verified, review, revision],
+                labels: ['Audit Terverifikasi', 'Dalam Review', 'Direvisi'],
+                colors: ['#a8c51d', '#26b6d5', '#f32645'],
+                dataLabels: {
+                    enabled: true,
+                    formatter: function (val) {
+                        return Math.round(val) + '%';
+                    },
+                    style: {
+                        fontSize: '16px',
+                        fontWeight: 800
+                    }
+                },
+                plotOptions: {
+                    pie: {
+                        donut: {
+                            size: '62%',
+                            labels: {
+                                show: true,
+                                name: { show: false },
+                                value: {
+                                    show: true,
+                                    fontSize: '18px',
+                                    fontWeight: 800,
+                                    color: '#5b616b',
+                                    formatter: function () {
+                                        return total;
+                                    }
+                                },
+                                total: {
+                                    show: true,
+                                    showAlways: true,
+                                    label: '',
+                                    formatter: function () {
+                                        return total;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                legend: { show: false },
+                stroke: { width: 0 }
+            });
+
+            auditorDonutChart.render();
+        }
+
+        function renderTable(items) {
+            const tbody = document.getElementById('rankingBody');
+
+            if (!items || items.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="7" class="text-center text-muted py-4">
+                            Data auditor belum tersedia
+                        </td>
+                    </tr>`;
+                return;
+            }
+
+            tbody.innerHTML = items.map(x => `
+                <tr>
+                    <td>${x.rank ?? '-'}</td>
+                    <td>${x.auditor ?? '-'}</td>
+                    <td>${x.speed ?? '-'}</td>
+                    <td>${x.totalAudit ?? 0} Audit</td>
+                    <td>${rupiah(x.totalCommission)}</td>
+                    <td>${x.missedAudit ?? 0} Audit</td>
+                    <td>${x.cancelledAudit ?? 0} Audit</td>
+                </tr>
+            `).join('');
+        }
+
+        document.addEventListener("DOMContentLoaded", function () {
+            loadAuditorPerformance();
+
+            document.getElementById('filterRegion').addEventListener('change', loadAuditorPerformance);
+            document.getElementById('filterMonth').addEventListener('change', loadAuditorPerformance);
+            document.getElementById('filterYear').addEventListener('change', loadAuditorPerformance);
+            document.getElementById('filterDay').addEventListener('change', loadAuditorPerformance);
+        });
+    </script>
+}

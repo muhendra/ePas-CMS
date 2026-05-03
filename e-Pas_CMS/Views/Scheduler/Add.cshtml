@@ -2,63 +2,310 @@
     Layout = "~/Views/Shared/_Layout.cshtml";
 }
 
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <title>Add Scheduler</title>
-    <style>
-        body {
-            background-color: #f8fafc;
-            padding: 40px;
-        }
+<style>
+    body {
+        font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        background: #f4f6f9;
+        color: #1f2937;
+    }
 
-        .card {
-            border-radius: 1rem;
-        }
+    .scheduler-page {
+        padding: 28px 32px;
+    }
 
-        .form-label {
+    .page-header {
+        margin-bottom: 22px;
+    }
+
+    .page-title {
+        margin: 0;
+        font-size: 1.4rem;
+        font-weight: 700;
+        color: #111827;
+        letter-spacing: -0.02em;
+    }
+
+    .page-subtitle {
+        margin-top: 4px;
+        color: #6b7280;
+        font-size: 0.9rem;
+    }
+
+    .breadcrumb {
+        margin-top: 12px;
+        margin-bottom: 0;
+        font-size: 0.85rem;
+    }
+
+    .breadcrumb-item {
+        color: #6b7280;
+    }
+
+        .breadcrumb-item.active {
+            color: #111827;
             font-weight: 600;
         }
 
-        .selected-spbu-display {
-            font-weight: 500;
-            color: #0d6efd;
-            margin-top: 5px;
+    .card-panel {
+        background: #ffffff;
+        border: 1px solid #e5e7eb;
+        border-radius: 18px;
+        box-shadow: 0 12px 30px rgba(15, 23, 42, 0.06);
+        overflow: hidden;
+    }
+
+    .form-card {
+        padding: 24px;
+    }
+
+    .section-title {
+        font-size: 0.78rem;
+        font-weight: 800;
+        color: #64748b;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        margin-bottom: 16px;
+    }
+
+    .form-label {
+        font-size: 0.85rem;
+        font-weight: 700;
+        color: #374151;
+        margin-bottom: 8px;
+    }
+
+    .form-control,
+    .form-select {
+        border-radius: 12px;
+        border: 1px solid #dbe1ea;
+        padding: 10px 14px;
+        font-size: 0.9rem;
+        color: #111827;
+        background-color: #ffffff;
+    }
+
+        .form-control:focus,
+        .form-select:focus {
+            border-color: #111827;
+            box-shadow: 0 0 0 4px rgba(17, 24, 39, 0.08);
         }
 
-        .btn:hover {
-            transform: scale(1.02);
-            transition: all 0.2s ease-in-out;
+    .btn {
+        border-radius: 12px;
+        font-weight: 700;
+        font-size: 0.86rem;
+        padding: 9px 14px;
+    }
+
+    .btn-dark-blue {
+        background: #111827;
+        border-color: #111827;
+        color: #ffffff;
+    }
+
+        .btn-dark-blue:hover {
+            background: #1e3a8a;
+            border-color: #1e3a8a;
+            color: #ffffff;
         }
 
-        .btn:active {
-            transform: scale(0.98);
+    .btn-soft {
+        background: #f9fafb;
+        border: 1px solid #dbe1ea;
+        color: #374151;
+    }
+
+        .btn-soft:hover {
+            background: #eef2f7;
+            border-color: #cbd5e1;
+            color: #111827;
         }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <div class="mb-4">
-            <h2 class="fw-bold">Add Scheduler</h2>
-            <nav aria-label="breadcrumb">
-                <ol class="breadcrumb">
-                    <li class="breadcrumb-item">Dashboard</li>
-                    <li class="breadcrumb-item active text-primary" aria-current="page">Scheduler</li>
-                </ol>
 
+    .btn-picker {
+        width: 100%;
+        min-height: 46px;
+        background: #ffffff;
+        border: 1px solid #dbe1ea;
+        color: #111827;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        box-shadow: none;
+    }
 
-            </nav>
+        .btn-picker:hover {
+            background: #f8fafc;
+            border-color: #111827;
+            color: #111827;
+        }
 
-            @if (TempData["Success"] != null)
-            {
-                <div class="alert alert-success alert-dismissible fade show mt-3" role="alert">
-                    @TempData["Success"]
-                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-                </div>
+    .selected-display {
+        min-height: 28px;
+        margin-top: 8px;
+        padding: 7px 10px;
+        border-radius: 10px;
+        background: #f8fafc;
+        color: #475467;
+        font-size: 0.82rem;
+        font-weight: 600;
+        border: 1px dashed #dbe1ea;
+    }
+
+        .selected-display:empty {
+            display: none;
+        }
+
+    .form-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 10px;
+        margin-top: 24px;
+        padding-top: 18px;
+        border-top: 1px solid #edf0f4;
+    }
+
+    .alert {
+        border-radius: 14px;
+        border: 1px solid #bbf7d0;
+        background: #f0fdf4;
+        color: #166534;
+        font-weight: 600;
+    }
+
+    .modal-content {
+        border: none;
+        border-radius: 18px;
+        box-shadow: 0 24px 60px rgba(15, 23, 42, 0.22);
+        overflow: hidden;
+    }
+
+    .modal-header {
+        border-bottom: 1px solid #edf0f4;
+        padding: 18px 20px;
+    }
+
+    .modal-title {
+        font-size: 1rem;
+        font-weight: 800;
+        color: #111827;
+    }
+
+    .modal-body {
+        padding: 20px;
+    }
+
+    .modal-footer {
+        border-top: 1px solid #edf0f4;
+        padding: 16px 20px;
+        background: #fafafa;
+    }
+
+    .table {
+        margin-bottom: 0;
+        font-size: 0.88rem;
+    }
+
+        .table thead th {
+            background: #f8fafc;
+            color: #64748b;
+            font-size: 0.72rem;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            border-bottom: 1px solid #e5e7eb;
+            padding: 13px 14px;
+            white-space: nowrap;
+        }
+
+        .table tbody td {
+            padding: 13px 14px;
+            border-bottom: 1px solid #edf0f4;
+            color: #374151;
+            vertical-align: middle;
+        }
+
+        .table tbody tr:hover td {
+            background: #fafafa;
+        }
+
+    .table-responsive {
+        border: 1px solid #edf0f4;
+        border-radius: 14px;
+        overflow: hidden;
+    }
+
+    .list-group-item {
+        border: 1px solid #edf0f4;
+        border-radius: 12px !important;
+        margin-bottom: 8px;
+        padding: 12px 14px;
+        font-weight: 600;
+        color: #344054;
+        cursor: pointer;
+    }
+
+        .list-group-item:hover {
+            background: #f8fafc;
+            border-color: #dbe1ea;
+        }
+
+    .form-check-input:checked {
+        background-color: #111827;
+        border-color: #111827;
+    }
+
+    .pagination-controls {
+        gap: 8px;
+    }
+
+    @@media (max-width: 768px) {
+        .scheduler-page {
+            padding: 20px 16px;
+        }
+
+        .form-card {
+            padding: 18px;
+        }
+
+        .form-actions {
+            flex-direction: column-reverse;
+        }
+
+            .form-actions .btn {
+                width: 100%;
             }
+    }
+</style>
+
+<div class="scheduler-page">
+    <div class="page-header">
+        <h2 class="page-title">Add Scheduler</h2>
+        <div class="page-subtitle">
+            Buat jadwal audit baru dengan auditor, SPBU, dan tipe audit yang sesuai.
         </div>
 
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item">Dashboard</li>
+                <li class="breadcrumb-item active" aria-current="page">Scheduler</li>
+            </ol>
+        </nav>
+    </div>
+
+    @if (TempData["Success"] != null)
+    {
+        <div class="alert alert-dismissible fade show mb-3" role="alert">
+            <i class="bi bi-check-circle me-2"></i>
+            @TempData["Success"]
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+    }
+
+    <div class="card-panel form-card">
         <form method="post" asp-action="AddScheduler">
+            <div class="section-title">Informasi Scheduler</div>
+
             <div class="row g-4">
                 <div class="col-md-6">
                     <label for="tanggalAudit" class="form-label">Tanggal Audit</label>
@@ -71,32 +318,32 @@
                 </div>
 
                 <div class="col-md-6">
-                    <label class="form-label">Pilih Auditor 1</label>
-                    <button type="button" id="btnOpenAuditor" class="btn btn-primary w-100 d-flex align-items-center justify-content-center gap-2 rounded-pill shadow-sm py-2 px-3">
+                    <label class="form-label">Auditor 1</label>
+                    <button type="button" id="btnOpenAuditor" class="btn btn-picker">
                         <i class="bi bi-person-check"></i>
                         Pilih Auditor
                     </button>
-                    <div class="selected-spbu-display" id="selectedAuditorText"></div>
+                    <div class="selected-display" id="selectedAuditorText"></div>
                     <input type="hidden" id="selectedAuditorId" name="AuditorId" />
                 </div>
 
                 <div class="col-md-6">
-                    <label class="form-label">Pilih Auditor 2 (opsional)</label>
-                    <button type="button" id="btnOpenAuditor2" class="btn btn-primary w-100 d-flex align-items-center justify-content-center gap-2 rounded-pill shadow-sm py-2 px-3">
-                        <i class="bi bi-person-check"></i>
+                    <label class="form-label">Auditor 2 <span class="text-muted fw-semibold">(Opsional)</span></label>
+                    <button type="button" id="btnOpenAuditor2" class="btn btn-picker">
+                        <i class="bi bi-person-plus"></i>
                         Pilih Auditor 2
                     </button>
-                    <div class="selected-spbu-display" id="selectedAuditor2Text"></div>
+                    <div class="selected-display" id="selectedAuditor2Text"></div>
                     <input type="hidden" id="selectedAuditor2Id" name="Auditor2Id" />
                 </div>
 
                 <div class="col-md-6">
-                    <label class="form-label">Pilih SPBU</label>
-                    <button type="button" id="btnOpenSpbu" class="btn btn-success w-100 d-flex align-items-center justify-content-center gap-2 rounded-pill shadow-sm py-2 px-3">
+                    <label class="form-label">SPBU</label>
+                    <button type="button" id="btnOpenSpbu" class="btn btn-picker">
                         <i class="bi bi-geo-alt"></i>
                         Pilih SPBU
                     </button>
-                    <div class="selected-spbu-display" id="selectedSpbuText"></div>
+                    <div class="selected-display" id="selectedSpbuText"></div>
                     <input type="hidden" id="selectedSpbuIds" name="selectedSpbuIds" />
                 </div>
 
@@ -106,101 +353,118 @@
                         <option selected disabled>Pilih tipe audit</option>
                         <option>Regular Audit</option>
                         <option>Mystery Guest</option>
-                        <option>Mystery Audit</option>
                         <option>Basic Operational</option>
                     </select>
                 </div>
             </div>
 
-            <div class="mt-4 text-end">
-                <a href="@Url.Action("Index", "Scheduler")" class="btn btn-secondary px-4 py-2">
-                    <i class="bi bi-arrow-left-circle"></i> Kembali
+            <div class="form-actions">
+                <a href="@Url.Action("Index", "Scheduler")" class="btn btn-soft">
+                    <i class="bi bi-arrow-left-circle me-1"></i> Kembali
                 </a>
-                <button type="submit" class="btn btn-info text-white px-4 py-2">
-                    <i class="bi bi-plus-circle"></i> Add Scheduler
+
+                <button type="submit" class="btn btn-dark-blue">
+                    <i class="bi bi-plus-circle me-1"></i> Add Scheduler
                 </button>
             </div>
         </form>
-
     </div>
+</div>
 
-    <!-- SPBU Modal -->
-    <div class="modal fade" id="spbuModal" tabindex="-1" aria-labelledby="spbuModalLabel" aria-hidden="true">
-        <div class="modal-dialog modal-lg">
-            <div class="modal-content rounded">
-                <div class="modal-header">
-                    <h5 class="modal-title fw-bold" id="spbuModalLabel">Pilih SPBU</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Tutup"></button>
+<div class="modal fade" id="spbuModal" tabindex="-1" aria-labelledby="spbuModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="spbuModalLabel">Pilih SPBU</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Tutup"></button>
+            </div>
+
+            <div class="modal-body">
+                <input type="text"
+                       class="form-control mb-3"
+                       id="searchSpbuInput"
+                       placeholder="Cari nomor, kota, provinsi, atau alamat..." />
+
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle" id="spbuTable">
+                        <thead>
+                            <tr>
+                                <th class="text-center" style="width: 54px;">Pilih</th>
+                                <th>Nomor SPBU</th>
+                                <th>Rayon</th>
+                                <th>Provinsi</th>
+                                <th>Kabupaten/Kota</th>
+                                <th>Alamat</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td colspan="6" class="text-center text-muted py-4">Memuat data...</td>
+                            </tr>
+                        </tbody>
+                    </table>
                 </div>
-                <div class="modal-body">
-                    <input type="text" class="form-control mb-3" id="searchSpbuInput" placeholder="Cari nomor, kota, provinsi, alamat...">
-                    <div class="table-responsive">
-                        <table class="table table-bordered" id="spbuTable">
-                            <thead class="table-light">
-                                <tr>
-                                    <th></th>
-                                    <th>Nomor SPBU</th>
-                                    <th>Rayon</th>
-                                    <th>Provinsi</th>
-                                    <th>Kabupaten/Kota</th>
-                                    <th>Alamat</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <tr><td colspan="6" class="text-center">Memuat data...</td></tr>
-                            </tbody>
-                        </table>
-                    </div>
-                    <div class="d-flex justify-content-center mt-3" id="paginationControls"></div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-link text-danger" data-bs-dismiss="modal">Batal</button>
-                    <button type="button" class="btn btn-info text-white" id="btnPilihSpbu">Pilih</button>
-                </div>
+
+                <div class="d-flex justify-content-center mt-3 pagination-controls" id="paginationControls"></div>
+            </div>
+
+            <div class="modal-footer">
+                <button type="button" class="btn btn-soft" data-bs-dismiss="modal">Batal</button>
+                <button type="button" class="btn btn-dark-blue" id="btnPilihSpbu">
+                    <i class="bi bi-check2-circle me-1"></i> Pilih SPBU
+                </button>
             </div>
         </div>
     </div>
+</div>
 
-    <!-- Auditor Modal -->
-    <div class="modal fade" id="auditorModal" tabindex="-1" aria-labelledby="auditorModalLabel" aria-hidden="true">
-        <div class="modal-dialog modal-md">
-            <div class="modal-content rounded">
-                <div class="modal-header">
-                    <h5 class="modal-title fw-bold" id="auditorModalLabel">Pilih Auditor</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Tutup"></button>
+<div class="modal fade" id="auditorModal" tabindex="-1" aria-labelledby="auditorModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-md modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Pilih Auditor</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Tutup"></button>
+            </div>
+
+            <div class="modal-body">
+                <input type="text"
+                       class="form-control mb-3"
+                       id="searchAuditorInput"
+                       placeholder="Cari auditor..." />
+
+                <div class="list-group mb-3" id="auditorList">
+                    <div class="text-center text-muted py-3">Memuat data...</div>
                 </div>
-                <div class="modal-body">
-                    <input type="text" class="form-control mb-3" id="searchAuditorInput" placeholder="Cari auditor...">
-                    <div class="list-group mb-3" id="auditorList">
-                        <div class="text-center">Memuat data...</div>
-                    </div>
-                    <div class="d-flex justify-content-between">
-                        <button id="auditorPrevBtn" class="btn btn-sm btn-secondary" disabled>Sebelumnya</button>
-                        <button id="auditorNextBtn" class="btn btn-sm btn-secondary">Berikutnya</button>
-                    </div>
+
+                <div class="d-flex justify-content-between gap-2">
+                    <button id="auditorPrevBtn" type="button" class="btn btn-sm btn-soft" disabled>
+                        Sebelumnya
+                    </button>
+                    <button id="auditorNextBtn" type="button" class="btn btn-sm btn-soft">
+                        Berikutnya
+                    </button>
                 </div>
-                <div class="modal-footer">
-                    <button class="btn btn-link text-danger" data-bs-dismiss="modal">Batal</button>
-                    <button id="btnPilihAuditor" class="btn btn-info text-white">Pilih</button>
-                </div>
+            </div>
+
+            <div class="modal-footer">
+                <button type="button" class="btn btn-soft" data-bs-dismiss="modal">Batal</button>
+                <button type="button" id="btnPilihAuditor" class="btn btn-dark-blue">
+                    <i class="bi bi-check2-circle me-1"></i> Pilih Auditor
+                </button>
             </div>
         </div>
     </div>
+</div>
 
-    <!-- Bootstrap -->
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-
+@section Scripts {
     <script>
-        // === Bootstrap Modal Instances
         const spbuModal = new bootstrap.Modal(document.getElementById('spbuModal'));
         const auditorModal = new bootstrap.Modal(document.getElementById('auditorModal'));
 
-        // === SPBU ===
         const spbuTableBody = document.querySelector('#spbuTable tbody');
         const paginationControls = document.getElementById('paginationControls');
-        const selectedSpbu = new Map(); // { id: no }
+        const selectedSpbu = new Map();
+
         let currentPage = 1;
         let currentSearch = '';
 
@@ -212,38 +476,58 @@
                     currentSearch = search;
                     renderTable(data.items);
                     renderPagination(data.currentPage, data.totalPages);
+                })
+                .catch(() => {
+                    spbuTableBody.innerHTML = `
+                        <tr>
+                            <td colspan="6" class="text-center text-danger py-4">
+                                Gagal memuat data SPBU.
+                            </td>
+                        </tr>`;
                 });
         }
 
         function renderTable(spbuList) {
             spbuTableBody.innerHTML = '';
-            if (spbuList.length === 0) {
-                spbuTableBody.innerHTML = '<tr><td colspan="6" class="text-center">Tidak ada data.</td></tr>';
+
+            if (!spbuList || spbuList.length === 0) {
+                spbuTableBody.innerHTML = `
+                    <tr>
+                        <td colspan="6" class="text-center text-muted py-4">
+                            Tidak ada data.
+                        </td>
+                    </tr>`;
                 return;
             }
 
             spbuList.forEach(spbu => {
                 const row = document.createElement('tr');
-                const isChecked = selectedSpbu.has(spbu.id.toString()) ? 'checked' : '';
+                const id = spbu.id.toString();
+                const isChecked = selectedSpbu.has(id) ? 'checked' : '';
 
                 row.innerHTML = `
-                    <td><input type="checkbox" name="spbuOption" value="${spbu.id}" data-no="${spbu.spbu_no}" ${isChecked}></td>
-                    <td>${spbu.spbu_no}</td>
-                    <td>${spbu.region}</td>
-                    <td>${spbu.province_name}</td>
-                    <td>${spbu.city_name}</td>
-                    <td>${spbu.address}</td>
+                    <td class="text-center">
+                        <input class="form-check-input" type="checkbox" name="spbuOption" value="${spbu.id}" data-no="${spbu.spbu_no}" ${isChecked}>
+                    </td>
+                    <td class="fw-bold text-dark">${spbu.spbu_no ?? '-'}</td>
+                    <td>${spbu.region ?? '-'}</td>
+                    <td>${spbu.province_name ?? '-'}</td>
+                    <td>${spbu.city_name ?? '-'}</td>
+                    <td>${spbu.address ?? '-'}</td>
                 `;
 
                 const checkbox = row.querySelector('input[type="checkbox"]');
+
                 checkbox.addEventListener('change', function () {
-                    const id = this.value;
-                    const no = this.dataset.no;
+                    const selectedId = this.value;
+                    const selectedNo = this.dataset.no;
+
                     if (this.checked) {
-                        selectedSpbu.set(id, no);
+                        selectedSpbu.set(selectedId, selectedNo);
                     } else {
-                        selectedSpbu.delete(id);
+                        selectedSpbu.delete(selectedId);
                     }
+
                     updateSelectedSpbuDisplay();
                 });
 
@@ -253,19 +537,33 @@
 
         function renderPagination(current, total) {
             paginationControls.innerHTML = '';
+
             if (total <= 1) return;
 
             if (current > 1) {
-                paginationControls.innerHTML += `<button class="btn btn-sm btn-secondary me-2" onclick="loadSpbu(${current - 1}, currentSearch)">Sebelumnya</button>`;
+                paginationControls.innerHTML += `
+                    <button type="button" class="btn btn-sm btn-soft" onclick="loadSpbu(${current - 1}, currentSearch)">
+                        Sebelumnya
+                    </button>`;
             }
+
+            paginationControls.innerHTML += `
+                <span class="d-inline-flex align-items-center px-2 text-muted small">
+                    Page ${current} of ${total}
+                </span>`;
+
             if (current < total) {
-                paginationControls.innerHTML += `<button class="btn btn-sm btn-secondary" onclick="loadSpbu(${current + 1}, currentSearch)">Berikutnya</button>`;
+                paginationControls.innerHTML += `
+                    <button type="button" class="btn btn-sm btn-soft" onclick="loadSpbu(${current + 1}, currentSearch)">
+                        Berikutnya
+                    </button>`;
             }
         }
 
         function updateSelectedSpbuDisplay() {
             const display = Array.from(selectedSpbu.values()).join(', ');
             const ids = Array.from(selectedSpbu.keys()).join(',');
+
             document.getElementById('selectedSpbuText').innerText = display;
             document.getElementById('selectedSpbuIds').value = ids;
         }
@@ -281,17 +579,17 @@
 
         document.getElementById('btnPilihSpbu').addEventListener('click', function () {
             if (selectedSpbu.size === 0) {
-                alert("Silakan pilih minimal satu SPBU.");
+                alert('Silakan pilih minimal satu SPBU.');
                 return;
             }
+
             updateSelectedSpbuDisplay();
             spbuModal.hide();
         });
 
-        // === AUDITOR ===
         let auditorPage = 1;
         let auditorSearch = '';
-        let currentAuditorSlot = 1; // 1 = Auditor utama, 2 = Auditor 2
+        let currentAuditorSlot = 1;
 
         function loadAuditorList(page = 1, search = '') {
             fetch(`/Scheduler/GetAuditorList?page=${page}&search=${encodeURIComponent(search)}`)
@@ -301,7 +599,7 @@
                     container.innerHTML = '';
 
                     if (!data.items || data.items.length === 0) {
-                        container.innerHTML = '<div class="text-center text-muted">Tidak ada auditor ditemukan.</div>';
+                        container.innerHTML = '<div class="text-center text-muted py-3">Tidak ada auditor ditemukan.</div>';
                         return;
                     }
 
@@ -321,9 +619,9 @@
                     document.getElementById('auditorPrevBtn').disabled = auditorPage <= 1;
                     document.getElementById('auditorNextBtn').disabled = auditorPage >= data.totalPages;
                 })
-                .catch(err => {
-                    document.getElementById('auditorList').innerHTML = '<div class="text-danger text-center">Gagal memuat auditor.</div>';
-                    console.error(err);
+                .catch(() => {
+                    document.getElementById('auditorList').innerHTML =
+                        '<div class="text-danger text-center py-3">Gagal memuat auditor.</div>';
                 });
         }
 
@@ -344,7 +642,9 @@
         });
 
         document.getElementById('auditorPrevBtn').addEventListener('click', function () {
-            if (auditorPage > 1) loadAuditorList(auditorPage - 1, auditorSearch);
+            if (auditorPage > 1) {
+                loadAuditorList(auditorPage - 1, auditorSearch);
+            }
         });
 
         document.getElementById('auditorNextBtn').addEventListener('click', function () {
@@ -353,8 +653,9 @@
 
         document.getElementById('btnPilihAuditor').addEventListener('click', function () {
             const selected = document.querySelector('input[name="auditorOption"]:checked');
+
             if (!selected) {
-                alert("Silakan pilih auditor terlebih dahulu.");
+                alert('Silakan pilih auditor terlebih dahulu.');
                 return;
             }
 
@@ -372,8 +673,12 @@
             auditorModal.hide();
         });
 
+        setTimeout(function () {
+            var alert = document.querySelector('.alert');
+            if (alert) {
+                var bsAlert = bootstrap.Alert.getOrCreateInstance(alert);
+                bsAlert.close();
+            }
+        }, 5000);
     </script>
-
-
-</body>
-</html>
+}
