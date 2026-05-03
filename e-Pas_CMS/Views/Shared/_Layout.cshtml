@@ -72,6 +72,18 @@
     @RenderSection("Styles", required: false)
 
     <style>
+        .sidebar .nav-link,
+.sidebar .nav-link strong,
+.menu-trigger,
+.menu-trigger strong,
+.submenu-panel .nav-link {
+    font-size: 12px !important;
+}
+            .sidebar .nav-link i,
+            .menu-trigger i {
+                font-size: 12px !important;
+            }
+
         .dropdown-menu {
             z-index: 9999 !important;
             animation: fadeIn .15s ease-in-out;
@@ -941,11 +953,18 @@
 
                     const inst = bootstrap.Collapse.getOrCreateInstance(panel, { toggle: false });
 
-                    if (panel.classList.contains('show')) {
-                        inst.hide();
-                    } else {
-                        inst.show();
-                    }
+                            if (panel.classList.contains('show')) {
+            inst.hide();
+        } else {
+            document.querySelectorAll('.submenu-panel.show').forEach(openPanel => {
+                if (openPanel !== panel) {
+                    const openInst = bootstrap.Collapse.getOrCreateInstance(openPanel, { toggle: false });
+                    openInst.hide();
+                }
+            });
+
+            inst.show();
+        }
                 });
             });
 
