@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using System.Security.Claims;
 using e_Pas_CMS.Data;
+using e_Pas_CMS.Helpers;
 
 namespace e_Pas_CMS.Controllers
 {
@@ -20,7 +21,6 @@ namespace e_Pas_CMS.Controllers
         [HttpGet]
         public IActionResult Login()
         {
-            // Redirect kalau udah login
             if (User.Identity != null && User.Identity.IsAuthenticated)
                 return RedirectToAction("Index", "Dashboard");
 
@@ -34,7 +34,9 @@ namespace e_Pas_CMS.Controllers
                 return View(model);
 
             var user = await _context.app_users
-                .FirstOrDefaultAsync(u => u.username == model.Username && u.status == "ACTIVE");
+                .FirstOrDefaultAsync(u =>
+                    u.username == model.Username &&
+                    u.status == "ACTIVE");
 
             if (user == null || !BCrypt.Net.BCrypt.Verify(model.Password, user.password_hash))
             {
@@ -42,58 +44,60 @@ namespace e_Pas_CMS.Controllers
                 return View(model);
             }
 
-            // Ambil semua role user dari relasi
-            var userRoles = await (from aur in _context.app_user_roles
-                                   join ar in _context.app_roles on aur.app_role_id equals ar.id
-                                   where aur.app_user_id == user.id
-                                   select ar.name).ToListAsync();
+            var userRoles = await (
+                from aur in _context.app_user_roles
+                join ar in _context.app_roles on aur.app_role_id equals ar.id
+                where aur.app_user_id == user.id
+                select ar.name
+            ).Distinct().ToListAsync();
 
-            // Validasi: jika hanya punya 1 role dan itu "auditor", tolak login
-            if (userRoles.Count == 1 && userRoles[0].Equals("auditor", StringComparison.OrdinalIgnoreCase))
+            if (userRoles.Count == 1 &&
+                userRoles[0].Equals("auditor", StringComparison.OrdinalIgnoreCase))
             {
                 ModelState.AddModelError(string.Empty, "Tidak bisa login dengan user ini");
                 return View(model);
             }
 
-            // Tambahkan claims dasar
-            var claims = new List<Claim>
-    {
-        new Claim(ClaimTypes.Name, user.username),
-        new Claim("FullName", user.name ?? ""),
-        new Claim(ClaimTypes.NameIdentifier, user.id)
-    };
+            var menuFunctionsRaw = await (
+                from aur in _context.app_user_roles
+                join ar in _context.app_roles on aur.app_role_id equals ar.id
+                where aur.app_user_id == user.id
+                      && ar.status == "ACTIVE"
+                      && ar.menu_function != null
+                      && ar.menu_function != ""
+                select ar.menu_function
+            ).ToListAsync();
 
-            // Tambahkan semua role sebagai claim
+            var menuFunctionTokens = menuFunctionsRaw
+                .SelectMany(PermissionHelper.ParseMenuFunctions)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(x => x)
+                .ToList();
+
+            var mergedMenuFunction = string.Join("#", menuFunctionTokens);
+
+            var claims = new List<Claim>
+            {
+                new Claim(ClaimTypes.Name, user.username),
+                new Claim("FullName", user.name ?? ""),
+                new Claim(ClaimTypes.NameIdentifier, user.id),
+                new Claim(PermissionHelper.MenuFunctionClaimType, mergedMenuFunction)
+            };
+
             foreach (var role in userRoles)
             {
                 claims.Add(new Claim(ClaimTypes.Role, role));
             }
 
+            foreach (var permission in menuFunctionTokens)
+            {
+                claims.Add(new Claim(PermissionHelper.PermissionClaimType, permission));
+            }
 
-            // Ambil semua Menu Function Code (ex: ARA, ARP, etc)
-            var menuFunctionsRaw = await (from aur in _context.app_user_roles
-                                          join ar in _context.app_roles on aur.app_role_id equals ar.id
-                                          select ar.menu_function)
-                                          .Where(mf => mf != null && mf != "")
-                                          .ToListAsync();
+            var claimsIdentity = new ClaimsIdentity(
+                claims,
+                CookieAuthenticationDefaults.AuthenticationScheme);
 
-            // Pecah berdasarkan '#' dan ambil yang unik
-            var menuFunctionTokens = menuFunctionsRaw
-                .SelectMany(mf => mf.Split('#'))
-                .Where(token => !string.IsNullOrWhiteSpace(token))
-                .Distinct()
-                .OrderBy(token => token) // Optional: urutkan alphabetically
-                .ToList();
-
-            // Gabungkan kembali menjadi 1 string
-            var mergedMenuFunction = string.Join("#", menuFunctionTokens);
-
-            // Tambahkan ke Claims (hanya 1 klaim)
-            claims.Add(new Claim("MenuFunction", mergedMenuFunction));
-
-            var claimsIdentity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
-
-            // IMPORTANT: Build the principal explicitly with full claims.
             var claimsPrincipal = new ClaimsPrincipal(claimsIdentity);
 
             await HttpContext.SignInAsync(
@@ -101,24 +105,21 @@ namespace e_Pas_CMS.Controllers
                 claimsPrincipal,
                 new AuthenticationProperties
                 {
-                    IsPersistent = true, // Optional: persistent login (keep cookie)
-                    ExpiresUtc = DateTime.UtcNow.AddHours(8) // Optional: expiry time
+                    IsPersistent = true,
+                    ExpiresUtc = DateTime.UtcNow.AddHours(8)
                 });
 
-            // Set session jika diperlukan
             HttpContext.Session.SetString("UserId", user.id);
             HttpContext.Session.SetString("UserName", user.name ?? "");
+            HttpContext.Session.SetString("MenuFunction", mergedMenuFunction);
 
             return RedirectToAction("Index", "Dashboard");
         }
 
-
         public async Task<IActionResult> Logout()
         {
-            // Hapus session
             HttpContext.Session.Clear();
 
-            // Hapus cookie auth
             await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
 
             return RedirectToAction("Login");

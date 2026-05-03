@@ -13,12 +13,11 @@
             --invoice-cyan: #22b8d4;
             --invoice-yellow: #ffb800;
             --invoice-green: #12ad66;
+            --invoice-red: #ef4444;
+            --invoice-blue: #2563eb;
+            --invoice-orange: #f97316;
         }
 
-        .invoice-status.rejected {
-    color: #ef4444;
-    font-weight: 700;
-}
         body {
             background: var(--invoice-bg);
             font-family: 'Inter', Arial, Helvetica, sans-serif;
@@ -33,6 +32,12 @@
             font-size: 30px;
             font-weight: 800;
             letter-spacing: -0.5px;
+            margin-bottom: 8px;
+        }
+
+        .invoice-subtitle {
+            color: #7b8490;
+            font-size: 14px;
             margin-bottom: 28px;
         }
 
@@ -41,6 +46,7 @@
             align-items: center;
             gap: 12px;
             margin-bottom: 26px;
+            flex-wrap: wrap;
         }
 
         .invoice-search-wrap {
@@ -62,7 +68,7 @@
         .invoice-search {
             height: 50px;
             width: 100%;
-            border-radius: 8px;
+            border-radius: 12px;
             border: 1px solid #e1e5ea;
             background: #fff;
             padding: 0 18px 0 48px;
@@ -81,11 +87,49 @@
             box-shadow: 0 0 0 3px rgba(34,184,212,.12);
         }
 
+        .invoice-search-btn {
+            height: 50px;
+            border: 0;
+            border-radius: 999px;
+            background: var(--invoice-cyan);
+            color: #fff;
+            padding: 0 24px;
+            font-size: 14px;
+            font-weight: 800;
+            cursor: pointer;
+            transition: all .15s ease;
+        }
+
+        .invoice-search-btn:hover {
+            background: #19a8c3;
+            transform: translateY(-1px);
+        }
+
+        .invoice-reset-btn {
+            height: 50px;
+            border-radius: 999px;
+            border: 1px solid #d7dde5;
+            background: #fff;
+            color: #4b5563;
+            padding: 0 22px;
+            font-size: 14px;
+            font-weight: 800;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+        }
+
+        .invoice-reset-btn:hover {
+            color: #111827;
+            background: #f8fafc;
+        }
+
         .invoice-card-table {
             background: var(--invoice-card);
-            border-radius: 8px;
+            border-radius: 14px;
             overflow: hidden;
             border: 1px solid #e9ecef;
+            box-shadow: 0 14px 34px rgba(15, 23, 42, .06);
         }
 
         .invoice-table {
@@ -93,14 +137,14 @@
             margin: 0;
             border-collapse: separate;
             border-spacing: 0;
-            min-width: 1040px;
+            min-width: 1080px;
         }
 
         .invoice-table thead th {
             background: var(--invoice-head);
             border: 0;
             padding: 15px 22px;
-            font-size: 17px;
+            font-size: 15px;
             font-weight: 800;
             color: #111827;
             vertical-align: middle;
@@ -111,7 +155,7 @@
             background: #fff;
             border-top: 1px dashed #e8ebef;
             padding: 18px 22px;
-            font-size: 16px;
+            font-size: 15px;
             vertical-align: middle;
             color: #111827;
         }
@@ -137,7 +181,7 @@
         }
 
         .invoice-date-main {
-            font-weight: 500;
+            font-weight: 600;
             line-height: 1.25;
         }
 
@@ -147,20 +191,53 @@
             margin-top: 2px;
         }
 
+        .invoice-amount {
+            font-weight: 800;
+            white-space: nowrap;
+        }
+
         .invoice-status {
-            display: inline-block;
-            font-size: 15px;
-            font-weight: 500;
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
+            font-size: 13px;
+            font-weight: 800;
             line-height: 1.35;
+            border-radius: 999px;
+            padding: 7px 12px;
+            white-space: nowrap;
         }
 
-        .invoice-status.wait,
-        .invoice-status.process {
-            color: var(--invoice-yellow);
+        .invoice-status-dot {
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            background: currentColor;
         }
 
-        .invoice-status.done {
+        .invoice-status.under-review {
+            color: var(--invoice-orange);
+            background: #fff7ed;
+        }
+
+        .invoice-status.pending {
+            color: var(--invoice-blue);
+            background: #eff6ff;
+        }
+
+        .invoice-status.approved {
             color: var(--invoice-green);
+            background: #ecfdf5;
+        }
+
+        .invoice-status.rejected {
+            color: var(--invoice-red);
+            background: #fef2f2;
+        }
+
+        .invoice-status.default {
+            color: #64748b;
+            background: #f1f5f9;
         }
 
         .invoice-action {
@@ -171,9 +248,9 @@
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            min-width: 92px;
-            height: 34px;
-            padding: 0 22px;
+            min-width: 96px;
+            height: 36px;
+            padding: 0 20px;
             border: 0;
             border-radius: 999px;
             background: var(--invoice-cyan);
@@ -191,10 +268,18 @@
             transform: translateY(-1px);
         }
 
+        .invoice-btn.process {
+            background: #111827;
+        }
+
+        .invoice-btn.process:hover {
+            background: #1f2937;
+        }
+
         .invoice-empty {
             text-align: center;
             color: #8b95a1;
-            padding: 40px 16px !important;
+            padding: 44px 16px !important;
             font-weight: 600;
         }
 
@@ -220,28 +305,30 @@
             align-items: center;
             gap: 14px;
             margin-top: 12px;
+            flex-wrap: wrap;
         }
 
         .invoice-pagination {
             display: flex;
             align-items: center;
-            gap: 18px;
+            gap: 10px;
             margin: 0;
             padding: 0;
             list-style: none;
+            flex-wrap: wrap;
         }
 
         .invoice-page-link {
-            width: 26px;
-            height: 26px;
-            border-radius: 8px;
+            width: 30px;
+            height: 30px;
+            border-radius: 9px;
             display: inline-flex;
             align-items: center;
             justify-content: center;
             color: #111827;
             text-decoration: none;
             font-size: 14px;
-            font-weight: 500;
+            font-weight: 700;
         }
 
         .invoice-page-link.active {
@@ -257,11 +344,15 @@
             line-height: 1;
         }
 
+        .invoice-page-arrow:hover {
+            color: #111827;
+        }
+
         .invoice-alert {
-            border-radius: 10px;
+            border-radius: 12px;
             padding: 12px 16px;
             margin-bottom: 18px;
-            font-weight: 600;
+            font-weight: 700;
         }
 
         .invoice-alert.success {
@@ -290,6 +381,16 @@
                 padding: 15px 16px;
                 font-size: 14px;
             }
+
+            .invoice-search-wrap {
+                max-width: none;
+            }
+
+            .invoice-search-btn,
+            .invoice-reset-btn {
+                width: 100%;
+                justify-content: center;
+            }
         }
     </style>
 }
@@ -298,11 +399,47 @@
     var totalPages = Model.TotalPages;
     var prevPage = Model.PageNumber > 1 ? Model.PageNumber - 1 : 1;
     var nextPage = Model.PageNumber < totalPages ? Model.PageNumber + 1 : totalPages;
+
+    string GetStatusText(string status)
+    {
+        return status switch
+        {
+            "UNDER_REVIEW" => "Sedang Direview",
+            "PENDING_APPROVAL" => "Menunggu Approval",
+            "APPROVED" => "Disetujui",
+            "REJECTED" => "Ditolak",
+
+            "NOT_CLAIMED" => "Belum Diklaim",
+            "IN_PROGRESS" => "Diproses",
+            "COMPLETED" => "Selesai",
+
+            _ => string.IsNullOrWhiteSpace(status) ? "-" : status
+        };
+    }
+
+    string GetStatusClass(string status)
+    {
+        return status switch
+        {
+            "UNDER_REVIEW" => "under-review",
+            "PENDING_APPROVAL" => "pending",
+            "APPROVED" => "approved",
+            "REJECTED" => "rejected",
+
+            "NOT_CLAIMED" => "under-review",
+            "IN_PROGRESS" => "pending",
+            "COMPLETED" => "approved",
+
+            _ => "default"
+        };
+    }
 }
 
 <div class="invoice-page">
-
     <h1 class="invoice-title">Invoice Management</h1>
+    <div class="invoice-subtitle">
+        Kelola invoice finance, proses review, approval, reject, dan total expense auditor.
+    </div>
 
     @if (TempData["Success"] != null)
     {
@@ -324,13 +461,21 @@
                    name="searchTerm"
                    value="@ViewBag.SearchTerm"
                    class="invoice-search"
-                   placeholder="Cari nomor tiket" />
+                   placeholder="Cari invoice, SPBU, employee, atau surveyor..." />
 
             <input type="hidden" name="pageNumber" value="1" />
             <input type="hidden" name="pageSize" value="@Model.PageSize" />
             <input type="hidden" name="sortColumn" value="@ViewBag.SortColumn" />
             <input type="hidden" name="sortDirection" value="@ViewBag.SortDirection" />
         </div>
+
+        <button type="submit" class="invoice-search-btn">
+            Cari
+        </button>
+
+        <a asp-action="Index" class="invoice-reset-btn">
+            Reset
+        </a>
     </form>
 
     <div class="invoice-card-table">
@@ -343,7 +488,7 @@
                         <th>Employee ID</th>
                         <th>Name of<br />Surveyor</th>
                         <th>Expected<br />Settlement Date</th>
-                        <th>Total Advance<br />Required</th>
+                        <th>Total Expense</th>
                         <th>Status</th>
                         <th class="invoice-action">Action</th>
                     </tr>
@@ -355,10 +500,10 @@
                         foreach (var item in Model.Items)
                         {
                             var status = item.Status ?? "";
-var isWait = status == "NOT_CLAIMED";
-var isProcess = status == "IN_PROGRESS";
-var isDone = status == "COMPLETED";
-var isRejected = status == "REJECTED";
+                            var statusText = GetStatusText(status);
+                            var statusClass = GetStatusClass(status);
+
+                            var canProcess = status == "IN_PROGRESS";
 
                             <tr>
                                 <td>
@@ -392,51 +537,27 @@ var isRejected = status == "REJECTED";
                                 </td>
 
                                 <td>
-                                    Rp. @item.TotalAmount.ToString("N0")
+                                    <span class="invoice-amount">
+                                        Rp @item.TotalAmount.ToString("N0")
+                                    </span>
                                 </td>
 
                                 <td>
-    @if (isWait)
-    {
-        <span class="invoice-status wait">Belum Diklaim</span>
-    }
-    else if (isProcess)
-    {
-        <span class="invoice-status process">
-            Diproses
-        </span>
-    }
-    else if (isDone)
-    {
-        <span class="invoice-status done">
-            Selesai
-            <br />
-            <span class="invoice-date-sub">
-                @(item.ExpectedDate?.ToString("dd/MM/yyyy") ?? "-")
-                <br />
-                @(item.ExpectedDate?.ToString("HH:mm") ?? "--:--") WIB
-            </span>
-        </span>
-    }
-    else if (isRejected)
-    {
-        <span class="invoice-status rejected">
-            Ditolak
-        </span>
-    }
-    else
-    {
-        <span class="invoice-status">@status</span>
-    }
-</td>
+                                    <span class="invoice-status @statusClass">
+                                        <span class="invoice-status-dot"></span>
+                                        @statusText
+                                    </span>
+                                </td>
 
                                 <td class="invoice-action">
-                                    @if (isWait)
+                                    @if (canProcess)
                                     {
                                         <form asp-action="StartProcess" method="post">
                                             @Html.AntiForgeryToken()
                                             <input type="hidden" name="id" value="@item.Id" />
-                                            <button type="submit" class="invoice-btn">Proses</button>
+                                            <button type="submit" class="invoice-btn process">
+                                                Proses
+                                            </button>
                                         </form>
                                     }
                                     else

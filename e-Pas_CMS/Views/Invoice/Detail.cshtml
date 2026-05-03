@@ -1,8 +1,8 @@
 ﻿@using e_Pas_CMS.ViewModels
+@using System.Globalization
 @model InvoiceDetailViewModel
 
 @{
-    var status = Model.Status ?? "";
     var claimStatus = ViewBag.ClaimStatus as string ?? "";
     var claimStatusLabel = ViewBag.ClaimStatusLabel as string ?? "";
 
@@ -29,7 +29,12 @@
             ? "rejected"
             : "warning";
 
-    var amountDue = Model.TotalExpense;
+    var amountDue = Model.TotalExpense - Model.LessDirectCharges - Model.LessAdvances;
+
+    string MoneyInputValue(decimal value)
+    {
+        return value.ToString("0.##", CultureInfo.InvariantCulture);
+    }
 
     string GetMediaPath(string key)
     {
@@ -60,6 +65,7 @@
     var internet = GetMediaPath("INTERNET");
     var other = GetMediaPath("OTHER");
 }
+
 @section Styles {
     <style>
         :root {
@@ -67,66 +73,17 @@
             --invoice-card: #ffffff;
             --invoice-text: #101820;
             --invoice-muted: #8f98a3;
-            --invoice-soft-muted: #aab2bd;
             --invoice-line: #edf0f2;
             --invoice-head: #eeeeef;
             --invoice-cyan: #22b8d4;
             --invoice-yellow: #ffd43b;
             --invoice-yellow-text: #ffb800;
             --invoice-green: #13ad68;
-            --invoice-input: #eef0f2;
+            --invoice-red: #ef4444;
+            --invoice-dark: #0f172a;
         }
 
-        .status-banner.rejected {
-            background: #ef4444;
-        }
-
-        .approval-action-row {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            margin-top: 16px;
-            flex-wrap: wrap;
-        }
-
-        .btn-approve,
-        .btn-reject {
-            border: 0;
-            border-radius: 999px;
-            min-width: 120px;
-            height: 42px;
-            padding: 0 24px;
-            font-size: 14px;
-            font-weight: 800;
-            cursor: pointer;
-            color: #fff;
-        }
-
-        .btn-approve {
-            background: var(--invoice-green);
-        }
-
-            .btn-approve:hover {
-                background: #0f985b;
-            }
-
-        .btn-reject {
-            background: #ef4444;
-        }
-
-            .btn-reject:hover {
-                background: #dc2626;
-            }
-
-        .approval-rejected {
-            color: #ef4444;
-            font-size: 14px;
-            margin-top: 8px;
-            font-weight: 700;
-        }
-
-        html,
-        body {
+        html, body {
             width: 100%;
             min-height: 100%;
             overflow-x: hidden;
@@ -140,7 +97,6 @@
 
         .invoice-detail-page {
             width: 100%;
-            max-width: none !important;
             margin: 0;
             padding: 34px 24px 120px;
             box-sizing: border-box;
@@ -157,7 +113,6 @@
             gap: 16px;
             margin-bottom: 10px;
             width: 100%;
-            max-width: none;
         }
 
         .invoice-title {
@@ -202,7 +157,6 @@
 
         .status-banner {
             width: 100%;
-            max-width: none;
             min-height: 58px;
             border-radius: 7px;
             display: flex;
@@ -223,9 +177,12 @@
                 background: var(--invoice-green);
             }
 
+            .status-banner.rejected {
+                background: var(--invoice-red);
+            }
+
         .invoice-card {
             width: 100%;
-            max-width: none;
             background: var(--invoice-card);
             border-radius: 8px;
             padding: 24px 22px;
@@ -283,20 +240,6 @@
             padding-bottom: 0;
             scrollbar-width: thin;
         }
-
-            .invoice-table-wrap::-webkit-scrollbar {
-                height: 10px;
-            }
-
-            .invoice-table-wrap::-webkit-scrollbar-track {
-                background: #eeeeef;
-                border-radius: 999px;
-            }
-
-            .invoice-table-wrap::-webkit-scrollbar-thumb {
-                background: #b9b9ba;
-                border-radius: 999px;
-            }
 
         .detail-table {
             width: 100%;
@@ -391,6 +334,18 @@
                 text-align: right;
             }
 
+            .cell-input.editable {
+                border-color: #b6ecf6;
+                background: #f8feff;
+                color: #0f172a;
+                font-weight: 800;
+            }
+
+                .cell-input.editable:focus {
+                    border-color: var(--invoice-cyan);
+                    box-shadow: 0 0 0 4px rgba(34, 184, 212, .12);
+                }
+
         .summary-row td {
             font-weight: 800;
             border-top: 1px dashed #e5e8ec !important;
@@ -409,10 +364,6 @@
             border-top: 0 !important;
             padding-top: 14px !important;
             padding-bottom: 14px !important;
-        }
-
-        .invoice-scrollbar {
-            display: none;
         }
 
         .attachment-grid {
@@ -533,20 +484,49 @@
             margin-top: 8px;
         }
 
-        .bottom-action-bar {
-            position: fixed;
-            left: 202px;
-            right: 0;
-            bottom: 0;
-            min-height: 78px;
-            background: #fff;
-            box-shadow: 0 -4px 16px rgba(16,24,40,.08);
-            z-index: 50;
-            display: flex;
-            justify-content: flex-end;
-            align-items: center;
-            padding: 18px 44px;
+        .approval-rejected {
+            color: var(--invoice-red);
+            font-size: 14px;
+            margin-top: 8px;
+            font-weight: 700;
         }
+
+        .approval-action-row {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-top: 16px;
+            flex-wrap: wrap;
+        }
+
+        .btn-approve,
+        .btn-reject {
+            border: 0;
+            border-radius: 999px;
+            min-width: 120px;
+            height: 42px;
+            padding: 0 24px;
+            font-size: 14px;
+            font-weight: 800;
+            cursor: pointer;
+            color: #fff;
+        }
+
+        .btn-approve {
+            background: var(--invoice-green);
+        }
+
+            .btn-approve:hover {
+                background: #0f985b;
+            }
+
+        .btn-reject {
+            background: var(--invoice-red);
+        }
+
+            .btn-reject:hover {
+                background: #dc2626;
+            }
 
         .btn-process {
             border: 0;
@@ -564,6 +544,95 @@
             .btn-process:hover {
                 background: #18a8c3;
             }
+
+        .finance-decision-card {
+            margin-top: 22px;
+            border: 1px solid #e5e7eb;
+            border-radius: 18px;
+            background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+            padding: 20px;
+            box-shadow: 0 14px 34px rgba(15, 23, 42, 0.06);
+        }
+
+            .finance-decision-card.rejected-card {
+                border-color: #fecaca;
+                background: #fef2f2;
+            }
+
+        .decision-header {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 16px;
+            flex-wrap: wrap;
+        }
+
+        .decision-title {
+            font-size: 16px;
+            font-weight: 900;
+            color: #111827;
+        }
+
+        .decision-subtitle {
+            color: #64748b;
+            font-size: 13px;
+            margin-top: 4px;
+            line-height: 1.5;
+        }
+
+        .decision-total {
+            min-width: 220px;
+            border-radius: 16px;
+            background: var(--invoice-dark);
+            color: #fff;
+            padding: 14px 16px;
+            text-align: right;
+        }
+
+            .decision-total span {
+                display: block;
+                font-size: 12px;
+                color: #cbd5e1;
+                margin-bottom: 4px;
+            }
+
+            .decision-total strong {
+                font-size: 18px;
+                font-weight: 900;
+            }
+
+        .finance-reject-textarea {
+            width: 100%;
+            border: 1px solid #e4e8ec;
+            border-radius: 14px;
+            padding: 14px 16px;
+            resize: vertical;
+            outline: none;
+            font-size: 14px;
+            color: #111827;
+            background: #fff;
+        }
+
+            .finance-reject-textarea:focus {
+                border-color: var(--invoice-cyan);
+                box-shadow: 0 0 0 4px rgba(34, 184, 212, .12);
+            }
+
+        .bottom-action-bar {
+            position: fixed;
+            left: 202px;
+            right: 0;
+            bottom: 0;
+            min-height: 78px;
+            background: #fff;
+            box-shadow: 0 -4px 16px rgba(16,24,40,.08);
+            z-index: 50;
+            display: flex;
+            justify-content: flex-end;
+            align-items: center;
+            padding: 18px 44px;
+            gap: 12px;
+        }
 
         .invoice-alert {
             border-radius: 10px;
@@ -585,14 +654,6 @@
             }
 
         @@media (max-width: 1400px) {
-            .invoice-detail-page {
-                width: 100%;
-                max-width: none !important;
-                margin: 0;
-                padding-left: 24px;
-                padding-right: 24px;
-            }
-
             .info-grid {
                 grid-template-columns: repeat(4, minmax(150px, 1fr));
             }
@@ -600,54 +661,10 @@
             .attachment-grid {
                 grid-template-columns: repeat(4, minmax(140px, 1fr));
             }
-
-            .detail-table {
-                min-width: 1120px;
-            }
-        }
-
-        @@media (max-width: 1199px) {
-            .invoice-detail-page {
-                width: 100%;
-                max-width: none !important;
-                margin: 0;
-                padding-left: 18px;
-                padding-right: 18px;
-            }
-
-            .detail-table {
-                min-width: 1120px;
-                table-layout: fixed;
-            }
-
-            .invoice-table-wrap {
-                overflow-x: auto;
-            }
-
-            .invoice-scrollbar {
-                display: block;
-                height: 14px;
-                background: #eeeeef;
-                border-radius: 999px;
-                margin: 14px 0 26px;
-                overflow: hidden;
-            }
-
-                .invoice-scrollbar span {
-                    display: block;
-                    width: 39%;
-                    height: 100%;
-                    background: #b9b9ba;
-                    border-radius: 999px;
-                }
         }
 
         @@media (max-width: 991px) {
             .invoice-detail-page {
-                width: 100%;
-                max-width: none !important;
-                margin-left: 0;
-                margin-right: 0;
                 padding: 24px 18px 110px;
             }
 
@@ -677,34 +694,16 @@
             .download-pdf-btn {
                 width: 100%;
             }
-
-            .detail-table {
-                min-width: 1120px;
-                table-layout: fixed;
-            }
-
-            .invoice-table-wrap {
-                overflow-x: auto;
-            }
-
-            .invoice-scrollbar {
-                display: block;
-                height: 14px;
-                background: #eeeeef;
-                border-radius: 999px;
-                margin: 14px 0 26px;
-                overflow: hidden;
-            }
-
-                .invoice-scrollbar span {
-                    display: block;
-                    width: 39%;
-                    height: 100%;
-                    background: #b9b9ba;
-                    border-radius: 999px;
-                }
         }
     </style>
+}
+
+@if (isPendingApproval)
+{
+    <form id="approvalForm" method="post">
+        @Html.AntiForgeryToken()
+        <input type="hidden" name="Id" value="@Model.Id" />
+    </form>
 }
 
 <div class="invoice-detail-page">
@@ -742,70 +741,73 @@
     </div>
 
     <div class="invoice-card">
-        @if (isProcess)
-        {
-            <div class="info-grid">
-                <div>
-                    <label class="field-label">Invoice Number</label>
+        <div class="info-grid">
+            <div>
+                <label class="field-label">Invoice Number</label>
+                @if (isProcess)
+                {
                     <input class="form-control invoice-input" value="@Model.InvoiceNo" readonly />
-                </div>
+                }
+                else
+                {
+                    <div class="field-value">@Model.InvoiceNo</div>
+                }
+            </div>
 
-                <div>
-                    <label class="field-label">Name</label>
+            <div>
+                <label class="field-label">Name</label>
+                @if (isProcess)
+                {
                     <input class="form-control invoice-input" value="@Model.EmployeeName" readonly />
-                </div>
+                }
+                else
+                {
+                    <div class="field-value">@Model.EmployeeName</div>
+                }
+            </div>
 
-                <div>
-                    <label class="field-label">Period</label>
+            <div>
+                <label class="field-label">Period</label>
+                @if (isProcess)
+                {
                     <div class="position-relative">
                         <input class="form-control invoice-input" value="@Model.Period" readonly />
                         <i class="bi bi-calendar3 position-absolute"
                            style="right:14px;top:50%;transform:translateY(-50%);color:#6b7280;"></i>
                     </div>
-                </div>
+                }
+                else
+                {
+                    <div class="field-value">@Model.Period</div>
+                }
+            </div>
 
-                <div>
-                    <label class="field-label">Kind of Job</label>
+            <div>
+                <label class="field-label">Kind of Job</label>
+                @if (isProcess)
+                {
                     <select class="form-select invoice-input" disabled>
                         <option selected>@Model.Job</option>
                     </select>
-                </div>
-
-                <div>
-                    <label class="field-label">Homebase</label>
-                    <input class="form-control invoice-input" value="@Model.Homebase" readonly />
-                </div>
-            </div>
-        }
-        else
-        {
-            <div class="info-grid">
-                <div>
-                    <label class="field-label">Invoice Number</label>
-                    <div class="field-value">@Model.InvoiceNo</div>
-                </div>
-
-                <div>
-                    <label class="field-label">Name</label>
-                    <div class="field-value">@Model.EmployeeName</div>
-                </div>
-
-                <div>
-                    <label class="field-label">Period</label>
-                    <div class="field-value">@Model.Period</div>
-                </div>
-
-                <div>
-                    <label class="field-label">Kind of Job</label>
+                }
+                else
+                {
                     <div class="field-value">@Model.Job</div>
-                </div>
-
-                <div>
-                    <label class="field-label">Homebase</label>
-                    <div class="field-value">@Model.Homebase</div>
-                </div>
+                }
             </div>
-        }
+
+            <div>
+                <label class="field-label">Homebase</label>
+                @if (isProcess)
+                {
+                    <input class="form-control invoice-input" value="@Model.Homebase" readonly />
+                }
+                else
+                {
+                    <div class="field-value">@Model.Homebase</div>
+                }
+            </div>
+        </div>
     </div>
 
     <div class="invoice-card">
@@ -874,20 +876,28 @@
                                 </td>
 
                                 <td class="amount-col">
-                                    @if (isProcess)
-                                    {
-                                        <input class="cell-input amount" value="Rp @item.Amount.ToString("N0")" readonly />
-                                    }
-                                    else
-                                    {
-                                        <span>Rp @item.Amount.ToString("N0")</span>
-                                    }
+                                    <span class="line-total-text">
+                                        Rp @item.Amount.ToString("N0")
+                                    </span>
                                 </td>
 
                                 <td class="amount-col">
-                                    @if (isProcess)
+                                    @if (isPendingApproval)
                                     {
-                                        <input class="cell-input amount" value="Rp @item.AuditFee.ToString("N0")" readonly />
+                                        <input type="hidden"
+                                               form="approvalForm"
+                                               name="Items[@i].TrxInvoiceDetailId"
+                                               value="@item.TrxInvoiceDetailId" />
+
+                                        <input type="number"
+                                               form="approvalForm"
+                                               name="Items[@i].AuditFee"
+                                               value="@MoneyInputValue(item.AuditFee)"
+                                               min="0"
+                                               step="1000"
+                                               class="cell-input amount editable js-money js-audit-fee"
+                                               data-claim-amount="@MoneyInputValue(item.ClaimAmount)"
+                                               data-row-index="@i" />
                                     }
                                     else
                                     {
@@ -896,9 +906,16 @@
                                 </td>
 
                                 <td class="amount-col">
-                                    @if (isProcess)
+                                    @if (isPendingApproval)
                                     {
-                                        <input class="cell-input amount" value="Rp @item.Lumpsum.ToString("N0")" readonly />
+                                        <input type="number"
+                                               form="approvalForm"
+                                               name="Items[@i].LumpsumFee"
+                                               value="@MoneyInputValue(item.Lumpsum)"
+                                               min="0"
+                                               step="1000"
+                                               class="cell-input amount editable js-money js-lumpsum-fee"
+                                               data-row-index="@i" />
                                     }
                                     else
                                     {
@@ -920,10 +937,41 @@
                     <tr class="summary-row">
                         <td></td>
                         <td></td>
+                        <td class="summary-label" colspan="2">CLAIM EXPENSE</td>
+                        <td class="amount-col" id="claimExpenseText" data-claim-expense="@MoneyInputValue(Model.ClaimExpenseAmount)">
+                            Rp @Model.ClaimExpenseAmount.ToString("N0")
+                        </td>
+                        <td></td>
+                        <td></td>
+                    </tr>
+
+                    <tr class="summary-row">
+                        <td></td>
+                        <td></td>
+                        <td class="summary-label" colspan="2">TOTAL AUDIT FEE</td>
+                        <td></td>
+                        <td class="amount-col" id="totalAuditFeeText">Rp @Model.TotalAuditFee.ToString("N0")</td>
+                        <td></td>
+                    </tr>
+
+                    <tr class="summary-row">
+                        <td></td>
+                        <td></td>
+                        <td class="summary-label" colspan="2">TOTAL LUMPSUM</td>
+                        <td></td>
+                        <td></td>
+                        <td class="amount-col" id="totalLumpsumText">Rp @Model.TotalLumpsum.ToString("N0")</td>
+                    </tr>
+
+                    <tr class="summary-row">
+                        <td></td>
+                        <td></td>
                         <td class="summary-label" colspan="2">TOTALS/CARRIED FORWARD</td>
-                        <td class="amount-col">Rp @Model.TotalExpense.ToString("N0")</td>
-                        <td class="amount-col">Rp @Model.TotalAuditFee.ToString("N0")</td>
-                        <td class="amount-col">Rp @Model.TotalLumpsum.ToString("N0")</td>
+                        <td class="amount-col" id="totalExpenseText" data-claim-expense="@MoneyInputValue(Model.ClaimExpenseAmount)">
+                            Rp @Model.TotalExpense.ToString("N0")
+                        </td>
+                        <td class="amount-col" id="totalAuditFeeTextBottom">Rp @Model.TotalAuditFee.ToString("N0")</td>
+                        <td class="amount-col" id="totalLumpsumTextBottom">Rp @Model.TotalLumpsum.ToString("N0")</td>
                     </tr>
 
                     <tr class="summary-box-row">
@@ -948,7 +996,7 @@
                         <td></td>
                         <td></td>
                         <td class="summary-label" colspan="2">AMOUNT DUE TO/(FROM) EMPLOYEE</td>
-                        <td class="amount-col">Rp @amountDue.ToString("N0")</td>
+                        <td class="amount-col" id="amountDueText">Rp @amountDue.ToString("N0")</td>
                         <td></td>
                         <td></td>
                     </tr>
@@ -956,29 +1004,19 @@
             </table>
         </div>
 
-        <div class="invoice-scrollbar">
-            <span></span>
-        </div>
-
-        <h2 class="section-title" style="margin-top:6px;margin-bottom:22px;">Lampiran-lampiran</h2>
+        <h2 class="section-title" style="margin-top:28px;margin-bottom:22px;">Lampiran-lampiran</h2>
 
         <div class="attachment-grid">
             <div>
                 <div class="attachment-title">BPJS Kesehatan</div>
-
                 @if (isProcess)
                 {
-                    <div class="upload-box">
-                        <span>Pilih file</span>
-                        <i class="bi bi-upload"></i>
-                    </div>
+                    <div class="upload-box"><span>Pilih file</span><i class="bi bi-upload"></i></div>
                 }
 
                 @if (!string.IsNullOrWhiteSpace(bpjsKesehatan))
                 {
-                    <a href="@bpjsKesehatan" target="_blank" class="attachment-link">
-                        @GetFileName(bpjsKesehatan)
-                    </a>
+                    <a href="@bpjsKesehatan" target="_blank" class="attachment-link">@GetFileName(bpjsKesehatan)</a>
                 }
                 else
                 {
@@ -988,20 +1026,14 @@
 
             <div>
                 <div class="attachment-title">BPJS Ketenagakerjaan</div>
-
                 @if (isProcess)
                 {
-                    <div class="upload-box">
-                        <span>Pilih file</span>
-                        <i class="bi bi-upload"></i>
-                    </div>
+                    <div class="upload-box"><span>Pilih file</span><i class="bi bi-upload"></i></div>
                 }
 
                 @if (!string.IsNullOrWhiteSpace(bpjsKetenagakerjaan))
                 {
-                    <a href="@bpjsKetenagakerjaan" target="_blank" class="attachment-link">
-                        @GetFileName(bpjsKetenagakerjaan)
-                    </a>
+                    <a href="@bpjsKetenagakerjaan" target="_blank" class="attachment-link">@GetFileName(bpjsKetenagakerjaan)</a>
                 }
                 else
                 {
@@ -1011,20 +1043,14 @@
 
             <div>
                 <div class="attachment-title">Vehicle maintenance</div>
-
                 @if (isProcess)
                 {
-                    <div class="upload-box">
-                        <span>Pilih file</span>
-                        <i class="bi bi-upload"></i>
-                    </div>
+                    <div class="upload-box"><span>Pilih file</span><i class="bi bi-upload"></i></div>
                 }
 
                 @if (!string.IsNullOrWhiteSpace(vehicle))
                 {
-                    <a href="@vehicle" target="_blank" class="attachment-link">
-                        @GetFileName(vehicle)
-                    </a>
+                    <a href="@vehicle" target="_blank" class="attachment-link">@GetFileName(vehicle)</a>
                 }
                 else
                 {
@@ -1034,20 +1060,14 @@
 
             <div>
                 <div class="attachment-title">Internet data</div>
-
                 @if (isProcess)
                 {
-                    <div class="upload-box">
-                        <span>Pilih file</span>
-                        <i class="bi bi-upload"></i>
-                    </div>
+                    <div class="upload-box"><span>Pilih file</span><i class="bi bi-upload"></i></div>
                 }
 
                 @if (!string.IsNullOrWhiteSpace(internet))
                 {
-                    <a href="@internet" target="_blank" class="attachment-link">
-                        @GetFileName(internet)
-                    </a>
+                    <a href="@internet" target="_blank" class="attachment-link">@GetFileName(internet)</a>
                 }
                 else
                 {
@@ -1057,14 +1077,9 @@
 
             <div>
                 <div class="attachment-title">Others</div>
-
                 @if (isProcess)
                 {
-                    <div class="upload-box">
-                        <span>Pilih file</span>
-                        <i class="bi bi-upload"></i>
-                    </div>
-
+                    <div class="upload-box"><span>Pilih file</span><i class="bi bi-upload"></i></div>
                     <input class="cell-input" value="Biaya makan" readonly style="max-width:180px;margin-bottom:6px;" />
                 }
                 else
@@ -1074,9 +1089,7 @@
 
                 @if (!string.IsNullOrWhiteSpace(other))
                 {
-                    <a href="@other" target="_blank" class="attachment-link">
-                        @GetFileName(other)
-                    </a>
+                    <a href="@other" target="_blank" class="attachment-link">@GetFileName(other)</a>
                 }
                 else
                 {
@@ -1111,26 +1124,17 @@
             <div class="bank-grid">
                 <div>
                     <label class="field-label">Nama Bank</label>
-                    <input class="form-control invoice-input"
-                           value="@Model.BankName"
-                           placeholder="Nama Bank"
-                           readonly />
+                    <input class="form-control invoice-input" value="@Model.BankName" placeholder="Nama Bank" readonly />
                 </div>
 
                 <div>
                     <label class="field-label">Nomor Rekening</label>
-                    <input class="form-control invoice-input"
-                           value="@Model.BankAccount"
-                           placeholder="Nomor Rekening"
-                           readonly />
+                    <input class="form-control invoice-input" value="@Model.BankAccount" placeholder="Nomor Rekening" readonly />
                 </div>
 
                 <div>
                     <label class="field-label">Nama Pemilik Rekening</label>
-                    <input class="form-control invoice-input"
-                           value="@Model.BankOwner"
-                           placeholder="Nama Pemilik Rekening"
-                           readonly />
+                    <input class="form-control invoice-input" value="@Model.BankOwner" placeholder="Nama Pemilik Rekening" readonly />
                 </div>
             </div>
         }
@@ -1163,29 +1167,49 @@
                         ttd_digital.png
                     </a>
 
-                    <div class="approval-wait">
-                        @claimStatusLabel
-                    </div>
+                    <div class="approval-wait">@claimStatusLabel</div>
 
-                    <div class="approval-action-row">
-                        <form method="post"
-                              asp-action="Approve"
-                              asp-route-id="@Model.Id">
-                            @Html.AntiForgeryToken()
-                            <button type="submit" class="btn-approve">
+                    <div class="finance-decision-card">
+                        <div class="decision-header">
+                            <div>
+                                <div class="decision-title">Keputusan Finance</div>
+                                <div class="decision-subtitle">
+                                    Finance dapat menyesuaikan Audit Fee dan Lumpsum sebelum menyetujui atau menolak invoice.
+                                </div>
+                            </div>
+
+                            <div class="decision-total">
+                                <span>Total Expense</span>
+                                <strong id="decisionTotalExpense">Rp @Model.TotalExpense.ToString("N0")</strong>
+                            </div>
+                        </div>
+
+                        <label class="field-label mt-3">Alasan Ditolak</label>
+                        <textarea form="approvalForm"
+                              name="RejectionReason"
+                              class="finance-reject-textarea"
+                              rows="4"
+                              placeholder="Isi alasan jika invoice ditolak. Contoh: nominal tidak sesuai, dokumen kurang lengkap, atau perlu revisi audit fee.">@Model.RejectionReason</textarea>
+
+                        <div class="approval-action-row">
+                            <button type="submit"
+                                    form="approvalForm"
+                                    formaction="@Url.Action("Approve", "Invoice")"
+                                    class="btn-approve"
+                                    onclick="return confirmApprove();">
+                                <i class="bi bi-check-circle me-1"></i>
                                 Setuju
                             </button>
-                        </form>
 
-                        <form method="post"
-                              asp-action="Reject"
-                              asp-route-id="@Model.Id"
-                              onsubmit="return confirm('Yakin invoice ini tidak disetujui?');">
-                            @Html.AntiForgeryToken()
-                            <button type="submit" class="btn-reject">
+                            <button type="submit"
+                                    form="approvalForm"
+                                    formaction="@Url.Action("Reject", "Invoice")"
+                                    class="btn-reject"
+                                    onclick="return validateRejectReason();">
+                                <i class="bi bi-x-circle me-1"></i>
                                 Tidak Setuju
                             </button>
-                        </form>
+                        </div>
                     </div>
                 }
                 else if (isDone)
@@ -1197,19 +1221,28 @@
 
                     <div class="approval-done">
                         Setuju
+                        @if (Model.ApprovedDate.HasValue)
+                        {
+                            <br />
+                            <span class="date-sub">@Model.ApprovedDate.Value.ToString("dd/MM/yyyy HH:mm") WIB</span>
+                        }
                     </div>
                 }
                 else if (isRejected)
                 {
-                    <div class="approval-rejected">
-                        Tidak Setuju
-                    </div>
+                    <div class="approval-rejected">Tidak Setuju</div>
+
+                    @if (!string.IsNullOrWhiteSpace(Model.RejectionReason))
+                    {
+                        <div class="finance-decision-card rejected-card">
+                            <div class="decision-title text-danger">Alasan Ditolak</div>
+                            <div class="decision-subtitle mt-2">@Model.RejectionReason</div>
+                        </div>
+                    }
                 }
                 else
                 {
-                    <div class="approval-wait">
-                        Menunggu Persetujuan
-                    </div>
+                    <div class="approval-wait">Menunggu Persetujuan</div>
                 }
             </div>
         </div>
@@ -1229,20 +1262,145 @@
 else if (isPendingApproval)
 {
     <div class="bottom-action-bar">
-        <form method="post"
-              asp-action="Reject"
-              asp-route-id="@Model.Id"
-              onsubmit="return confirm('Yakin invoice ini tidak disetujui?');">
-            @Html.AntiForgeryToken()
-            <button type="submit" class="btn-reject">Tidak Setuju</button>
-        </form>
+        <button type="submit"
+                form="approvalForm"
+                formaction="@Url.Action("Reject", "Invoice")"
+                class="btn-reject"
+                onclick="return validateRejectReason();">
+            Tidak Setuju
+        </button>
 
-        <form method="post"
-              asp-action="Approve"
-              asp-route-id="@Model.Id"
-              style="margin-left:12px;">
-            @Html.AntiForgeryToken()
-            <button type="submit" class="btn-approve">Setuju</button>
-        </form>
+        <button type="submit"
+                form="approvalForm"
+                formaction="@Url.Action("Approve", "Invoice")"
+                class="btn-approve"
+                onclick="return confirmApprove();">
+            Setuju
+        </button>
     </div>
+}
+
+@section Scripts {
+    <script>
+        function toNumber(value) {
+            if (value === null || value === undefined) return 0;
+
+            let raw = String(value).trim();
+
+            if (raw.length === 0) return 0;
+
+            raw = raw.replace(/\s/g, '');
+
+            const hasComma = raw.includes(',');
+            const hasDot = raw.includes('.');
+
+            // Format Indonesia: 9.600.000,50
+            if (hasComma && hasDot) {
+                raw = raw.replace(/\./g, '').replace(',', '.');
+            }
+            // Format decimal comma: 9600000,50
+            else if (hasComma && !hasDot) {
+                raw = raw.replace(',', '.');
+            }
+            // Format display: Rp 9.600.000
+            else if (!hasComma && hasDot) {
+                const parts = raw.split('.');
+                const lastPart = parts[parts.length - 1];
+
+                if (parts.length > 1 && lastPart.length === 3) {
+                    raw = raw.replace(/\./g, '');
+                }
+            }
+
+            raw = raw.replace(/[^\d.-]/g, '');
+
+            return Number(raw) || 0;
+        }
+
+        function rupiah(value) {
+            return 'Rp ' + Number(value || 0).toLocaleString('id-ID');
+        }
+
+        function recalcFinanceTotal() {
+            let totalAudit = 0;
+            let totalLumpsum = 0;
+
+            document.querySelectorAll('.js-audit-fee').forEach(function (input) {
+                totalAudit += toNumber(input.value);
+            });
+
+            document.querySelectorAll('.js-lumpsum-fee').forEach(function (input) {
+                totalLumpsum += toNumber(input.value);
+            });
+
+            const totalExpenseEl = document.getElementById('totalExpenseText');
+            const claimExpense = totalExpenseEl ? toNumber(totalExpenseEl.dataset.claimExpense) : 0;
+            const grandTotal = claimExpense + totalAudit + totalLumpsum;
+
+            const totalAuditFeeText = document.getElementById('totalAuditFeeText');
+            const totalAuditFeeTextBottom = document.getElementById('totalAuditFeeTextBottom');
+            const totalLumpsumText = document.getElementById('totalLumpsumText');
+            const totalLumpsumTextBottom = document.getElementById('totalLumpsumTextBottom');
+            const amountDueText = document.getElementById('amountDueText');
+            const decisionTotalExpense = document.getElementById('decisionTotalExpense');
+
+            if (totalAuditFeeText) totalAuditFeeText.innerText = rupiah(totalAudit);
+            if (totalAuditFeeTextBottom) totalAuditFeeTextBottom.innerText = rupiah(totalAudit);
+            if (totalLumpsumText) totalLumpsumText.innerText = rupiah(totalLumpsum);
+            if (totalLumpsumTextBottom) totalLumpsumTextBottom.innerText = rupiah(totalLumpsum);
+            if (totalExpenseEl) totalExpenseEl.innerText = rupiah(grandTotal);
+            if (amountDueText) amountDueText.innerText = rupiah(grandTotal);
+            if (decisionTotalExpense) decisionTotalExpense.innerText = rupiah(grandTotal);
+
+            recalcLineTotals();
+        }
+
+        function recalcLineTotals() {
+            document.querySelectorAll('.js-audit-fee').forEach(function (auditInput) {
+                const row = auditInput.closest('tr');
+                if (!row) return;
+
+                const lumpsumInput = row.querySelector('.js-lumpsum-fee');
+                const lineTotalText = row.querySelector('.line-total-text');
+
+                const auditFee = toNumber(auditInput.value);
+                const lumpsumFee = lumpsumInput ? toNumber(lumpsumInput.value) : 0;
+                const claimAmount = toNumber(auditInput.dataset.claimAmount);
+
+                const lineTotal = claimAmount + auditFee + lumpsumFee;
+
+                if (lineTotalText) {
+                    lineTotalText.innerText = rupiah(lineTotal);
+                }
+            });
+        }
+
+        function validateRejectReason() {
+            const textarea = document.querySelector('textarea[name="RejectionReason"]');
+
+            if (!textarea) {
+                return confirm('Yakin ingin menolak invoice ini?');
+            }
+
+            if (textarea.value.trim().length === 0) {
+                alert('Alasan Ditolak wajib diisi.');
+                textarea.focus();
+                return false;
+            }
+
+            return confirm('Yakin ingin menolak invoice ini?');
+        }
+
+        function confirmApprove() {
+            return confirm('Yakin ingin menyetujui invoice ini?');
+        }
+
+        document.addEventListener('DOMContentLoaded', function () {
+            document.querySelectorAll('.js-money').forEach(function (input) {
+                input.addEventListener('input', recalcFinanceTotal);
+            });
+
+            recalcFinanceTotal();
+        });
+    </script>
 }

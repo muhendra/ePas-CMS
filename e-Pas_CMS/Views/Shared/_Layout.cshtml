@@ -1,39 +1,43 @@
 ﻿@inject e_Pas_CMS.Data.EpasDbContext _context
 @using System.Security.Claims
 @using System
+@using e_Pas_CMS.Helpers
 
 @{
-    var userIdString = Context.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+    var userIdString = Context.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
 
     var currentUser = _context.app_users.FirstOrDefault(u => u.id == userIdString);
 
     var username = currentUser?.username ?? "-";
     var fullname = currentUser?.name ?? "-";
+
     var userRoles = _context.app_user_roles
         .AsEnumerable()
         .Where(aur => aur.app_user_id.ToString() == userIdString)
         .ToList();
 
-    var userMenuFunctions = userRoles
+    var roleNames = userRoles
         .Join(_context.app_roles,
-              aur => aur.app_role_id,
-              ar => ar.id,
-              (aur, ar) => ar.menu_function)
-        .Where(mf => !string.IsNullOrEmpty(mf))
-        .AsEnumerable()
-        .SelectMany(mf => mf.Split('#', StringSplitOptions.RemoveEmptyEntries))
+            aur => aur.app_role_id,
+            ar => ar.id,
+            (aur, ar) => ar.name)
         .Distinct()
         .ToList();
 
-    var roleNames = userRoles
-.Join(_context.app_roles,
-    aur => aur.app_role_id,
-    ar => ar.id,
-    (aur, ar) => ar.name)
-.Distinct()
-.ToList();
-
     string roleDisplay = roleNames.Any() ? string.Join(", ", roleNames) : "-";
+
+    bool Can(params string[] permissions) => User.HasPermission(permissions);
+
+    int bandingAssignedCount = 0;
+
+    if (Can("FEEDBACK_BANDING_VIEW", "FBAN"))
+    {
+        bandingAssignedCount = _context.TrxFeedbacks
+            .Count(tf =>
+                tf.FeedbackType == "BANDING"
+                && tf.Status == "UNDER_REVIEW"
+            );
+    }
 }
 
 @functions {
@@ -41,9 +45,13 @@
     {
         var c = (string)ViewContext.RouteData.Values["controller"];
         var a = (string)ViewContext.RouteData.Values["action"];
+
         if (!string.IsNullOrEmpty(action))
+        {
             return string.Equals(c, controller, StringComparison.OrdinalIgnoreCase)
                 && string.Equals(a, action, StringComparison.OrdinalIgnoreCase);
+        }
+
         return string.Equals(c, controller, StringComparison.OrdinalIgnoreCase);
     }
 }
@@ -64,16 +72,14 @@
     @RenderSection("Styles", required: false)
 
     <style>
-        
         .dropdown-menu {
             z-index: 9999 !important;
-        }
-        .dropdown-menu {
             animation: fadeIn .15s ease-in-out;
         }
 
         body {
             font-family: 'Inter', sans-serif;
+            font-weight: 400;
         }
 
         .sidebar {
@@ -99,6 +105,8 @@
                 border-radius: 8px;
                 padding: .5rem .75rem;
                 font-size: .95rem;
+                font-weight: 500;
+                letter-spacing: 0.2px;
             }
 
                 .sidebar .nav-link:hover {
@@ -125,7 +133,6 @@
             text-align: center;
         }
 
-        /* group & caret */
         .menu-group {
             margin-top: .65rem;
             border-radius: 12px;
@@ -148,7 +155,6 @@
             transform: rotate(180deg);
         }
 
-        /* open: parent + submenu hitam */
         .menu-group.open {
             background: #140F10;
         }
@@ -171,7 +177,6 @@
                 color: #EDEDED;
             }
 
-        /* panel submenu */
         .submenu-panel {
             background: #140F10;
             border-radius: 12px;
@@ -281,6 +286,7 @@
         .dropdown-item:hover {
             background: #f1f5f9;
         }
+
         .text-user {
             font-size: 0.9rem;
             line-height: 1.3;
@@ -307,6 +313,35 @@
             margin-left: 6px;
         }
 
+        .nav-link-with-badge {
+            display: flex !important;
+            align-items: center;
+            justify-content: space-between;
+            gap: .75rem;
+        }
+
+        .nav-notification-badge {
+            min-width: 20px;
+            height: 20px;
+            padding: 0 6px;
+            border-radius: 999px;
+            background: #F02D4A;
+            color: #fff;
+            font-size: 0.72rem;
+            font-weight: 700;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            line-height: 1;
+            box-shadow: 0 2px 6px rgba(240, 45, 74, .25);
+        }
+
+        .sidebar .nav-link:hover .nav-notification-badge,
+        .sidebar .nav-link.active .nav-notification-badge {
+            background: #F02D4A;
+            color: #fff;
+        }
+
         body,
         button,
         input,
@@ -318,9 +353,6 @@
         .dropdown-menu,
         .dropdown-item {
             font-family: 'Inter', sans-serif !important;
-        }
-        body {
-            font-weight: 400;
         }
 
         strong, b {
@@ -334,60 +366,43 @@
 
         .sidebar .nav-link strong,
         .submenu-panel .nav-link {
-            text-transform: lowercase;
+            text-transform: capitalize;
         }
 
-            .sidebar .nav-link strong::first-letter,
-            .submenu-panel .nav-link::first-letter {
-                text-transform: uppercase;
-            }
+        .sidebar .nav-link i,
+        .menu-trigger i {
+            color: inherit !important;
+            opacity: 1;
+        }
 
-            .sidebar .nav-link {
-                font-weight: 500;
-                letter-spacing: 0.2px;
-            }
+        .sidebar .nav-link:hover i {
+            color: #fff !important;
+        }
 
-            .sidebar .nav-link strong,
-            .submenu-panel .nav-link {
-                text-transform: capitalize;
-            }
-
-            /* ICON ikut warna parent (nav-link) */
-            .sidebar .nav-link i,
-            .menu-trigger i {
-                color: inherit !important;
-                opacity: 1;
-            }
-
-            /* saat hover */
-            .sidebar .nav-link:hover i {
-                color: #fff !important;
-            }
-
-        /* saat active submenu */
         .submenu-panel .nav-link.active i {
             color: #fff !important;
         }
 
-        /* saat menu group open */
         .menu-group.open .menu-trigger i {
             color: #EDEDED !important;
         }
-
     </style>
 </head>
+
 <body class="d-flex flex-column min-vh-100">
-    <!-- Sidebar -->
     <div class="sidebar p-3" id="sidebar">
         <div>
             <div class="text-center mb-4">
-                <img src="https://epas-assets.zarata.co.id/uploads/pasti-pas.png" alt="E-PAS Logo" class="img-fluid" style="max-width:150px;">
+                <img src="https://epas-assets.zarata.co.id/uploads/pasti-pas.png"
+                     alt="E-PAS Logo"
+                     class="img-fluid"
+                     style="max-width:150px;">
             </div>
 
             <ul class="nav flex-column">
 
-                @* --- Dashboard Menu --- *@
-                @if (userMenuFunctions.Contains("DASH") || userMenuFunctions.Contains("DAUD") || userMenuFunctions.Contains("DVER"))
+                @* Dashboard *@
+                @if (Can("DASH_VIEW", "DASH_AUDITOR_VIEW", "DASH_VERIFIKATOR_VIEW", "DASH", "DAUD", "DVER"))
                 {
                     <li class="nav-item menu-group">
                         <a class="nav-link menu-trigger" data-target="#menu-dashboard" role="button" aria-expanded="false" aria-controls="menu-dashboard">
@@ -400,8 +415,7 @@
 
                         <div class="collapse submenu-panel" id="menu-dashboard">
                             <ul class="nav flex-column mt-1">
-
-                                @if (userMenuFunctions.Contains("DASH"))
+                                @if (Can("DASH_VIEW", "DASH"))
                                 {
                                     <li class="nav-item">
                                         <a class="nav-link @(IsActive("Dashboard", "Index") ? "active" : "")"
@@ -412,7 +426,7 @@
                                     </li>
                                 }
 
-                                @if (userMenuFunctions.Contains("DAUD"))
+                                @if (Can("DASH_AUDITOR_VIEW", "DAUD"))
                                 {
                                     <li class="nav-item">
                                         <a class="nav-link @(IsActive("Dashboard", "AuditorPerformance") ? "active" : "")"
@@ -423,7 +437,7 @@
                                     </li>
                                 }
 
-                                @if (userMenuFunctions.Contains("DVER"))
+                                @if (Can("DASH_VERIFIKATOR_VIEW", "DVER"))
                                 {
                                     <li class="nav-item">
                                         <a class="nav-link @(IsActive("Dashboard", "VerifierPerformance") ? "active" : "")"
@@ -433,14 +447,13 @@
                                         </a>
                                     </li>
                                 }
-
                             </ul>
                         </div>
                     </li>
                 }
 
-                @* --- Audit Menu --- *@
-                @if (userMenuFunctions.Contains("ARA") || userMenuFunctions.Contains("ARP"))
+                @* Audit Regular *@
+                @if (Can("AUDIT_VIEW", "AUDIT_REVIEW", "AUDIT_REPORT", "ARA", "ARP"))
                 {
                     <li class="nav-item menu-group">
                         <a class="nav-link menu-trigger" data-target="#menu-audit" role="button" aria-expanded="false" aria-controls="menu-audit">
@@ -453,18 +466,23 @@
 
                         <div class="collapse submenu-panel" id="menu-audit">
                             <ul class="nav flex-column mt-1">
-                                @if (userMenuFunctions.Contains("ARA"))
+                                @if (Can("AUDIT_VIEW", "AUDIT_REVIEW", "ARA"))
                                 {
                                     <li class="nav-item">
-                                        <a class="nav-link @(IsActive("Audit","Index") ? "active" : "")" asp-controller="Audit" asp-action="Index">
+                                        <a class="nav-link @(IsActive("Audit", "Index") ? "active" : "")"
+                                           asp-controller="Audit"
+                                           asp-action="Index">
                                             <span class="dot"></span> Review Audit
                                         </a>
                                     </li>
                                 }
-                                @if (userMenuFunctions.Contains("ARP"))
+
+                                @if (Can("AUDIT_REPORT", "ARP"))
                                 {
                                     <li class="nav-item">
-                                        <a class="nav-link @(IsActive("AuditReport","Index") ? "active" : "")" asp-controller="AuditReport" asp-action="Index">
+                                        <a class="nav-link @(IsActive("AuditReport", "Index") ? "active" : "")"
+                                           asp-controller="AuditReport"
+                                           asp-action="Index">
                                             <span class="dot"></span> Report
                                         </a>
                                     </li>
@@ -474,8 +492,8 @@
                     </li>
                 }
 
-                @* --- Audit BOA Menu --- *@
-                @if (userMenuFunctions.Contains("BOARA") || userMenuFunctions.Contains("BOARP"))
+                @* Audit Basic Operational *@
+                @if (Can("BOA_VIEW", "BOA_REVIEW", "BOA_REPORT", "BOARA", "BOARP"))
                 {
                     <li class="nav-item menu-group">
                         <a class="nav-link menu-trigger" data-target="#menu-audit-boa" role="button" aria-expanded="false" aria-controls="menu-audit-boa">
@@ -488,18 +506,23 @@
 
                         <div class="collapse submenu-panel" id="menu-audit-boa">
                             <ul class="nav flex-column mt-1">
-                                @if (userMenuFunctions.Contains("BOARA"))
+                                @if (Can("BOA_VIEW", "BOA_REVIEW", "BOARA"))
                                 {
                                     <li class="nav-item">
-                                        <a class="nav-link @(IsActive("BasicOperational","Index") ? "active" : "")" asp-controller="BasicOperational" asp-action="Index">
+                                        <a class="nav-link @(IsActive("BasicOperational", "Index") ? "active" : "")"
+                                           asp-controller="BasicOperational"
+                                           asp-action="Index">
                                             <span class="dot"></span> Review Audit BOA
                                         </a>
                                     </li>
                                 }
-                                @if (userMenuFunctions.Contains("BOARP"))
+
+                                @if (Can("BOA_REPORT", "BOARP"))
                                 {
                                     <li class="nav-item">
-                                        <a class="nav-link @(IsActive("BasicOperationalReport","Index") ? "active" : "")" asp-controller="BasicOperationalReport" asp-action="Index">
+                                        <a class="nav-link @(IsActive("BasicOperationalReport", "Index") ? "active" : "")"
+                                           asp-controller="BasicOperationalReport"
+                                           asp-action="Index">
                                             <span class="dot"></span> Report BOA
                                         </a>
                                     </li>
@@ -509,8 +532,8 @@
                     </li>
                 }
 
-                @* --- Audit Mystery Guest Menu --- *@
-                @if (userMenuFunctions.Contains("MGARA") || userMenuFunctions.Contains("MGARP"))
+                @* Audit Mystery Guest *@
+                @if (Can("MG_VIEW", "MG_REVIEW", "MG_REPORT", "MGARA", "MGARP"))
                 {
                     <li class="nav-item menu-group">
                         <a class="nav-link menu-trigger" data-target="#menu-audit-mga" role="button" aria-expanded="false" aria-controls="menu-audit-mga">
@@ -523,18 +546,23 @@
 
                         <div class="collapse submenu-panel" id="menu-audit-mga">
                             <ul class="nav flex-column mt-1">
-                                @if (userMenuFunctions.Contains("MGARA"))
+                                @if (Can("MG_VIEW", "MG_REVIEW", "MGARA"))
                                 {
                                     <li class="nav-item">
-                                        <a class="nav-link @(IsActive("MysteryGuest", "Index") ? "active" : "")" asp-controller="MysteryGuest" asp-action="Index">
+                                        <a class="nav-link @(IsActive("MysteryGuest", "Index") ? "active" : "")"
+                                           asp-controller="MysteryGuest"
+                                           asp-action="Index">
                                             <span class="dot"></span> Review Audit Mystery Guest
                                         </a>
                                     </li>
                                 }
-                                @if (userMenuFunctions.Contains("MGARP"))
+
+                                @if (Can("MG_REPORT", "MGARP"))
                                 {
                                     <li class="nav-item">
-                                        <a class="nav-link @(IsActive("MysteryGuestReport", "Index") ? "active" : "")" asp-controller="MysteryGuestReport" asp-action="Index">
+                                        <a class="nav-link @(IsActive("MysteryGuestReport", "Index") ? "active" : "")"
+                                           asp-controller="MysteryGuestReport"
+                                           asp-action="Index">
                                             <span class="dot"></span> Report Mystery Guest
                                         </a>
                                     </li>
@@ -544,20 +572,30 @@
                     </li>
                 }
 
-                @* BANDlNG - top level *@
-                @if (userMenuFunctions.Contains("FBAN"))
+                @* Banding *@
+                @if (Can("FEEDBACK_BANDING_VIEW", "FBAN"))
                 {
                     <li class="nav-item">
-                        <a class="nav-link @(IsActive("Banding","Index") ? "active" : "")"
-                           asp-controller="Banding" asp-action="Index">
+                        <a class="nav-link nav-link-with-badge @(IsActive("Banding", "Index") ? "active" : "")"
+                           asp-controller="Banding"
+                           asp-action="Index">
                             <span class="d-flex align-items-center gap-2">
                                 <i class="bi bi-flag"></i>
                                 <strong>Banding</strong>
                             </span>
+
+                            @if (bandingAssignedCount > 0)
+                            {
+                                <span class="nav-notification-badge" title="@bandingAssignedCount banding ter-assign">
+                                    @(bandingAssignedCount > 99 ? "99+" : bandingAssignedCount.ToString())
+                                </span>
+                            }
                         </a>
                     </li>
                 }
-                @if (userMenuFunctions.Contains("BKLST") || userMenuFunctions.Contains("BKAPR"))
+
+                @* Batas Kota *@
+                @if (Can("CITY_BOUNDARY_VIEW", "CITY_BOUNDARY_DETAIL", "CITY_BOUNDARY_APPROVAL_VIEW", "BKLST", "BKAPR"))
                 {
                     <li class="nav-item menu-group">
                         <a class="nav-link menu-trigger" data-target="#menu-batas-kota" role="button" aria-expanded="false" aria-controls="menu-batas-kota">
@@ -570,8 +608,7 @@
 
                         <div class="collapse submenu-panel" id="menu-batas-kota">
                             <ul class="nav flex-column mt-1">
-
-                                @if (userMenuFunctions.Contains("BKLST"))
+                                @if (Can("CITY_BOUNDARY_VIEW", "CITY_BOUNDARY_DETAIL", "BKLST"))
                                 {
                                     <li class="nav-item">
                                         <a class="nav-link @(IsActive("CityBoundary", "Index") || IsActive("CityBoundary", "Detail") ? "active" : "")"
@@ -582,7 +619,7 @@
                                     </li>
                                 }
 
-                                @if (userMenuFunctions.Contains("BKAPR"))
+                                @if (Can("CITY_BOUNDARY_APPROVAL_VIEW", "BKAPR"))
                                 {
                                     <li class="nav-item">
                                         <a class="nav-link @(IsActive("CityBoundary", "Approval") ? "active" : "")"
@@ -592,17 +629,18 @@
                                         </a>
                                     </li>
                                 }
-
                             </ul>
                         </div>
                     </li>
                 }
-                @* FEEDBACK (rename dari Complain) - top level *@
-                @if (userMenuFunctions.Contains("FKOM"))
+
+                @* Feedback Komplain *@
+                @if (Can("FEEDBACK_KOMPLAIN_VIEW", "FKOM"))
                 {
                     <li class="nav-item">
-                        <a class="nav-link @(IsActive("Complain","Index") ? "active" : "")"
-                           asp-controller="Complain" asp-action="Index">
+                        <a class="nav-link @(IsActive("Complain", "Index") ? "active" : "")"
+                           asp-controller="Complain"
+                           asp-action="Index">
                             <span class="d-flex align-items-center gap-2">
                                 <i class="bi bi-chat-dots"></i>
                                 <strong>Feedback</strong>
@@ -611,7 +649,8 @@
                     </li>
                 }
 
-                @if (userMenuFunctions.Contains("FININV"))
+                @* Finance *@
+                @if (Can("FINANCE_INVOICE_VIEW", "FINANCE_INVOICE_PROCESS", "FINANCE_INVOICE_APPROVE", "FININV"))
                 {
                     <li class="nav-item menu-group">
                         <a class="nav-link menu-trigger" data-target="#menu-finance" role="button" aria-expanded="false" aria-controls="menu-finance">
@@ -624,17 +663,23 @@
 
                         <div class="collapse submenu-panel" id="menu-finance">
                             <ul class="nav flex-column mt-1">
-                                <li class="nav-item">
-                                    <a class="nav-link @(IsActive("Invoice", "Index") ? "active" : "")"
-                                       asp-controller="Invoice" asp-action="Index">
-                                        <span class="dot"></span> Invoice Management
-                                    </a>
-                                </li>
+                                @if (Can("FINANCE_INVOICE_VIEW", "FININV"))
+                                {
+                                    <li class="nav-item">
+                                        <a class="nav-link @(IsActive("Invoice", "Index") ? "active" : "")"
+                                           asp-controller="Invoice"
+                                           asp-action="Index">
+                                            <span class="dot"></span> Invoice Management
+                                        </a>
+                                    </li>
+                                }
                             </ul>
                         </div>
                     </li>
                 }
-                @if (userMenuFunctions.Contains("MSPBU") || userMenuFunctions.Contains("MCHK"))
+
+                @* Master Data *@
+                @if (Can("MASTER_SPBU_VIEW", "MASTER_CHECKLIST_VIEW", "MSPBU", "MCHK"))
                 {
                     <li class="nav-item menu-group">
                         <a class="nav-link menu-trigger" data-target="#menu-master" role="button" aria-expanded="false" aria-controls="menu-master">
@@ -647,17 +692,18 @@
 
                         <div class="collapse submenu-panel" id="menu-master">
                             <ul class="nav flex-column mt-1">
-
-                                @if (userMenuFunctions.Contains("MSPBU"))
+                                @if (Can("MASTER_SPBU_VIEW", "MSPBU"))
                                 {
                                     <li class="nav-item">
-                                        <a class="nav-link @(IsActive("Spbu", "Index") ? "active" : "")" asp-controller="Spbu" asp-action="Index">
+                                        <a class="nav-link @(IsActive("Spbu", "Index") ? "active" : "")"
+                                           asp-controller="Spbu"
+                                           asp-action="Index">
                                             <span class="dot"></span> SPBU
                                         </a>
                                     </li>
                                 }
 
-                                @if (userMenuFunctions.Contains("MCHK"))
+                                @if (Can("MASTER_CHECKLIST_VIEW", "MCHK"))
                                 {
                                     <li class="nav-item">
                                         <a class="nav-link @(IsActive("MasterChecklist", "Index") || IsActive("MasterChecklist", "Edit") ? "active" : "")"
@@ -667,18 +713,16 @@
                                         </a>
                                     </li>
                                 }
-
                             </ul>
                         </div>
                     </li>
                 }
 
-                @* --- Scheduler Menu --- *@
-                @if (userMenuFunctions.Contains("SSCH"))
+                @* Scheduler *@
+                @if (Can("SCHEDULER_VIEW", "SCHEDULER_ADD", "SCHEDULER_EDIT", "SCHEDULER_ASSIGN", "SSCH"))
                 {
                     <li class="nav-item menu-group">
-                        <a class="nav-link menu-trigger" data-target="#menu-scheduler" role="button"
-                           aria-expanded="false" aria-controls="menu-scheduler">
+                        <a class="nav-link menu-trigger" data-target="#menu-scheduler" role="button" aria-expanded="false" aria-controls="menu-scheduler">
                             <span class="d-flex align-items-center gap-2">
                                 <i class="bi bi-alarm"></i>
                                 <strong>Scheduler</strong>
@@ -688,25 +732,34 @@
 
                         <div class="collapse submenu-panel" id="menu-scheduler">
                             <ul class="nav flex-column mt-1">
-                                <li class="nav-item">
-                                    <a class="nav-link @(IsActive("Scheduler","Index") ? "active" : "")"
-                                       asp-controller="Scheduler" asp-action="Index">
-                                        <span class="dot"></span> Add Scheduler
-                                    </a>
-                                </li>
+                                @if (Can("SCHEDULER_VIEW", "SCHEDULER_ADD", "SSCH"))
+                                {
+                                    <li class="nav-item">
+                                        <a class="nav-link @(IsActive("Scheduler", "Index") ? "active" : "")"
+                                           asp-controller="Scheduler"
+                                           asp-action="Index">
+                                            <span class="dot"></span> Add Scheduler
+                                        </a>
+                                    </li>
+                                }
 
-                                <li class="nav-item">
-                                    <a class="nav-link @(IsActive("Scheduler","Index_NotStarted") ? "active" : "")"
-                                       asp-controller="Scheduler" asp-action="Index_NotStarted">
-                                        <span class="dot"></span> Log Changed Status
-                                    </a>
-                                </li>
+                                @if (Can("SCHEDULER_VIEW", "SSCH"))
+                                {
+                                    <li class="nav-item">
+                                        <a class="nav-link @(IsActive("Scheduler", "Index_NotStarted") ? "active" : "")"
+                                           asp-controller="Scheduler"
+                                           asp-action="Index_NotStarted">
+                                            <span class="dot"></span> Log Changed Status
+                                        </a>
+                                    </li>
+                                }
                             </ul>
                         </div>
                     </li>
                 }
 
-                @if (userMenuFunctions.Contains("AROLE") || userMenuFunctions.Contains("AUSER"))
+                @* Access *@
+                @if (Can("ROLE_VIEW", "USER_VIEW", "AROLE", "AUSER"))
                 {
                     <li class="nav-item menu-group">
                         <a class="nav-link menu-trigger" data-target="#menu-access" role="button" aria-expanded="false" aria-controls="menu-access">
@@ -719,18 +772,23 @@
 
                         <div class="collapse submenu-panel" id="menu-access">
                             <ul class="nav flex-column mt-1">
-                                @if (userMenuFunctions.Contains("AUSER"))
+                                @if (Can("USER_VIEW", "AUSER"))
                                 {
                                     <li class="nav-item">
-                                        <a class="nav-link @(IsActive("Role","Index") ? "active" : "")" asp-controller="Role" asp-action="Index">
+                                        <a class="nav-link @(IsActive("Role", "Index") ? "active" : "")"
+                                           asp-controller="Role"
+                                           asp-action="Index">
                                             <span class="dot"></span> App User
                                         </a>
                                     </li>
                                 }
-                                @if (userMenuFunctions.Contains("AROLE"))
+
+                                @if (Can("ROLE_VIEW", "AROLE"))
                                 {
                                     <li class="nav-item">
-                                        <a class="nav-link @(IsActive("RoleManagement","Index") ? "active" : "")" asp-controller="RoleManagement" asp-action="Index">
+                                        <a class="nav-link @(IsActive("RoleManagement", "Index") ? "active" : "")"
+                                           asp-controller="RoleManagement"
+                                           asp-action="Index">
                                             <span class="dot"></span> App Role
                                         </a>
                                     </li>
@@ -740,82 +798,28 @@
                     </li>
                 }
 
-                @* --- Content Menu (contoh screenshot) --- *@
-                @* @if (true)
-                {
-                    <li class="nav-item menu-group">
-                        <a class="nav-link menu-trigger" data-target="#menu-content" role="button" aria-expanded="false" aria-controls="menu-content">
-                            <span class="d-flex align-items-center gap-2">
-                                <i class="bi bi-calendar3-event"></i>
-                                <strong>Content</strong>
-                            </span>
-                            <i class="bi bi-caret-down-fill chev"></i>
-                        </a>
-
-                        <div class="collapse submenu-panel" id="menu-content">
-                            <ul class="nav flex-column mt-1">
-                                <li class="nav-item">
-                                    <a class="nav-link @(IsActive("Preparation","Index") ? "active" : "")" asp-controller="Preparation" asp-action="Index">
-                                        <span class="dot"></span> Persiapan Audit
-                                    </a>
-                                </li>
-                                <li class="nav-item">
-                                    <a class="nav-link @(IsActive("Questionnaire","Index") ? "active" : "")" asp-controller="Questionnaire" asp-action="Index">
-                                        <span class="dot"></span> Kuesioner Audit
-                                    </a>
-                                </li>
-                                <li class="nav-item">
-                                    <a class="nav-link @(IsActive("QuestionList","Index") ? "active" : "")" asp-controller="QuestionList" asp-action="Index">
-                                        <span class="dot"></span> Daftar Kuesioner
-                                    </a>
-                                </li>
-                                <li class="nav-item">
-                                    <a class="nav-link @(IsActive("Survey","Index") ? "active" : "")" asp-controller="Survey" asp-action="Index">
-                                        <span class="dot"></span> Survei
-                                    </a>
-                                </li>
-                            </ul>
-                        </div>
-                    </li>
-                } *@
-
             </ul>
         </div>
-
-        @* <div class="sidebar-bottom">
-            <a class="nav-link" asp-controller="Auth" asp-action="Logout">
-                <i class="bi bi-box-arrow-right me-2"></i> Logout
-            </a>
-        </div> *@
     </div>
 
-    <!-- Sidebar Overlay -->
     <div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleSidebar()"></div>
 
-    <!-- Toggle Sidebar -->
     <button class="toggle-sidebar" onclick="toggleSidebar()" id="sidebarToggleBtn">
         <i class="bi bi-list" id="toggleIcon"></i>
     </button>
 
-    <!-- Main Content Area -->
     <div class="content-wrapper d-flex flex-column flex-grow-1">
         <header>
             <nav class="navbar navbar-expand-sm navbar-light bg-white border-bottom box-shadow mb-3">
                 <div class="container-fluid">
-                    @* <a class="navbar-brand text-dark fw-bold">
-                        E-PAS PERTAMINA / @ViewContext.RouteData.Values["controller"]
-                    </a> *@
-                    <!-- LEFT: Powered By -->
                     <div class="d-flex align-items-center gap-2">
                         <span style="font-size: 0.85rem; color: #6c757d;">Powered by</span>
-                        <img src="~/images/header_intertek.png"
+                        <img src="~/report/header_intertek.png"
                              alt="Powered by Citrabuana"
                              style="height: 48px;">
                     </div>
 
-                    <!-- RIGHT: User Info -->
                     <div class="d-flex align-items-center ms-auto">
-
                         <div class="text-end me-3 text-user">
                             <div class="fw-semibold">@fullname</div>
                             <div class="d-flex justify-content-end align-items-center gap-1">
@@ -825,7 +829,6 @@
                         </div>
 
                         <div class="dropdown">
-
                             <button class="btn btn-light rounded-circle p-2 border-0 shadow-sm"
                                     type="button"
                                     data-bs-toggle="dropdown"
@@ -835,23 +838,18 @@
                             </button>
 
                             <ul class="dropdown-menu dropdown-menu-end shadow border-0 mt-2" style="border-radius:12px;">
-
-                                @* <li class="px-3 py-2 border-bottom"> *@
-                                    @* <div class="fw-semibold">@fullname</div> *@
-                                    @* <small class="text-muted">@username</small> *@
-                                    @* <small class="text-role">@roleDisplay</small> *@
-                                @* </li> *@
-
                                 <li>
                                     <a class="dropdown-item"
-                                       asp-controller="Profile" asp-action="Index">
+                                       asp-controller="Profile"
+                                       asp-action="Index">
                                         <i class="bi bi-person me-2"></i> Profile
                                     </a>
                                 </li>
 
                                 <li>
                                     <a class="dropdown-item"
-                                       asp-controller="Profile" asp-action="ChangePassword">
+                                       asp-controller="Profile"
+                                       asp-action="ChangePassword">
                                         <i class="bi bi-key me-2"></i> Ganti Password
                                     </a>
                                 </li>
@@ -860,14 +858,13 @@
 
                                 <li>
                                     <a class="dropdown-item text-danger"
-                                       asp-controller="Auth" asp-action="Logout">
+                                       asp-controller="Auth"
+                                       asp-action="Logout">
                                         <i class="bi bi-box-arrow-right me-2"></i> Logout
                                     </a>
                                 </li>
-
                             </ul>
                         </div>
-
                     </div>
                 </div>
             </nav>
@@ -884,9 +881,9 @@
         </footer>
     </div>
 
-    <!-- Scripts -->
     <script src="~/lib/jquery/dist/jquery.min.js"></script>
     <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
+
     <script>
         function toggleSidebar() {
             const sidebar = document.getElementById('sidebar');
@@ -902,22 +899,28 @@
                 toggleIcon.classList.replace('bi-x', 'bi-list');
             }
         }
+
         document.addEventListener('DOMContentLoaded', function () {
-            // Tambah/kurangi class .open saat panel show/hide
             document.querySelectorAll('.submenu-panel').forEach(panel => {
                 panel.addEventListener('show.bs.collapse', () => {
                     panel.closest('.menu-group')?.classList.add('open');
+
                     const trigger = panel.closest('.menu-group')?.querySelector('.menu-trigger');
-                    if (trigger) trigger.setAttribute('aria-expanded', 'true');
+                    if (trigger) {
+                        trigger.setAttribute('aria-expanded', 'true');
+                    }
                 });
+
                 panel.addEventListener('hide.bs.collapse', () => {
                     panel.closest('.menu-group')?.classList.remove('open');
+
                     const trigger = panel.closest('.menu-group')?.querySelector('.menu-trigger');
-                    if (trigger) trigger.setAttribute('aria-expanded', 'false');
+                    if (trigger) {
+                        trigger.setAttribute('aria-expanded', 'false');
+                    }
                 });
             });
 
-            // Auto expand bila ada link .active DI DALAMNYA (sekali saat load)
             document.querySelectorAll('.submenu-panel').forEach(panel => {
                 if (panel.querySelector('.nav-link.active')) {
                     const inst = bootstrap.Collapse.getOrCreateInstance(panel, { toggle: false });
@@ -925,17 +928,19 @@
                 }
             });
 
-            // **KUNCI:** Hilangkan data API & kendalikan toggle sepenuhnya dari JS
-            document.querySelectorAll('.menu-trigger').forEach(tr => {
-                tr.addEventListener('click', function (e) {
+            document.querySelectorAll('.menu-trigger').forEach(trigger => {
+                trigger.addEventListener('click', function (e) {
                     e.preventDefault();
                     e.stopPropagation();
-                    const sel = tr.getAttribute('data-target'); // custom data-target (bukan data-bs-target)
-                    if (!sel) return;
-                    const panel = document.querySelector(sel);
+
+                    const selector = trigger.getAttribute('data-target');
+                    if (!selector) return;
+
+                    const panel = document.querySelector(selector);
                     if (!panel) return;
 
                     const inst = bootstrap.Collapse.getOrCreateInstance(panel, { toggle: false });
+
                     if (panel.classList.contains('show')) {
                         inst.hide();
                     } else {
@@ -943,26 +948,21 @@
                     }
                 });
             });
-        });
-    </script>
 
-    @await RenderSectionAsync("Scripts", required: false)
-    <script>
-        document.addEventListener('DOMContentLoaded', function () {
+            const dropdownTrigger = document.querySelector('[data-bs-toggle="dropdown"]');
 
-            const trigger = document.querySelector('[data-bs-toggle="dropdown"]');
+            if (dropdownTrigger) {
+                const dropdown = bootstrap.Dropdown.getOrCreateInstance(dropdownTrigger);
 
-            if (trigger) {
-                const dropdown = new bootstrap.Dropdown(trigger);
-
-                trigger.addEventListener('click', function (e) {
+                dropdownTrigger.addEventListener('click', function (e) {
                     e.preventDefault();
                     e.stopPropagation();
                     dropdown.toggle();
                 });
             }
-
         });
     </script>
+
+    @await RenderSectionAsync("Scripts", required: false)
 </body>
 </html>

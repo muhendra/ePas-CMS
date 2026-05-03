@@ -57,6 +57,9 @@ public partial class EpasDbContext : DbContext
     public DbSet<TrxInvoice> TrxInvoices { get; set; }
     public DbSet<TrxInvoiceDetail> TrxInvoiceDetails { get; set; }
 
+    public DbSet<TrxInvoiceApproval> TrxInvoiceApprovals { get; set; }
+    public DbSet<TrxInvoiceApprovalDetail> TrxInvoiceApprovalDetails { get; set; }
+
     public DbSet<trx_claim> TrxClaims { get; set; }
     public DbSet<trx_claim_detail> TrxClaimDetails { get; set; }
     public DbSet<trx_claim_media> TrxClaimMedias { get; set; }
@@ -64,7 +67,13 @@ public partial class EpasDbContext : DbContext
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.HasPostgresExtension("uuid-ossp");
-
+        // Prevent EF from accidentally mapping duplicate PascalCase scaffold entities.
+        // Project ini pakai lowercase trx_audit/master_questioner di DbContext.
+        modelBuilder.Ignore<TrxAudit>();
+        modelBuilder.Ignore<MasterQuestioner>();
+        modelBuilder.Ignore<TrxAuditChecklist>();
+        modelBuilder.Ignore<TrxAuditMedium>();
+        modelBuilder.Ignore<TrxAuditQq>();
         modelBuilder.Entity<app_role>(entity =>
         {
             entity.HasKey(e => e.id).HasName("app_role_pkey");
@@ -295,6 +304,7 @@ public partial class EpasDbContext : DbContext
             entity.Property(e => e.parent_id).HasMaxLength(50);
             entity.Property(e => e.status).HasMaxLength(100);
             entity.Property(e => e.type).HasMaxLength(50);
+            entity.Property(e => e.form_type).HasMaxLength(100);
             entity.Property(e => e.updated_by).HasMaxLength(50);
             entity.Property(e => e.updated_date)
                 .HasDefaultValueSql("CURRENT_TIMESTAMP")
@@ -905,7 +915,7 @@ public partial class EpasDbContext : DbContext
         {
             entity.ToTable("trx_invoice");
 
-            entity.HasKey(e => e.Id);
+            entity.HasKey(e => e.Id).HasName("trx_invoice_pkey");
 
             entity.Property(e => e.Id)
                 .HasColumnName("id")
@@ -948,7 +958,6 @@ public partial class EpasDbContext : DbContext
                 .HasDefaultValue("NOT_CLAIMED")
                 .IsRequired();
 
-            // ✅ FIXED
             entity.Property(e => e.CreatedBy)
                 .HasColumnName("created_by")
                 .HasMaxLength(50)
@@ -969,11 +978,12 @@ public partial class EpasDbContext : DbContext
                 .HasDefaultValueSql("CURRENT_TIMESTAMP")
                 .ValueGeneratedOnAddOrUpdate();
         });
+
         modelBuilder.Entity<TrxInvoiceDetail>(entity =>
         {
             entity.ToTable("trx_invoice_detail");
 
-            entity.HasKey(e => e.Id);
+            entity.HasKey(e => e.Id).HasName("trx_invoice_detail_pkey");
 
             entity.Property(e => e.Id)
                 .HasColumnName("id")
@@ -990,11 +1000,16 @@ public partial class EpasDbContext : DbContext
                 .HasMaxLength(50)
                 .IsRequired();
 
-            entity.Property(e => e.Amount)
-                .HasColumnName("amount")
+            entity.Property(e => e.AuditFee)
+                .HasColumnName("audit_fee")
                 .HasColumnType("numeric(18,2)")
-                .HasDefaultValue(0)
+                .HasDefaultValue(0m)
                 .IsRequired();
+
+            entity.Property(e => e.LumpsumFee)
+                .HasColumnName("lumpsum_fee")
+                .HasColumnType("numeric(18,2)")
+                .HasDefaultValue(0m);
 
             entity.Property(e => e.Status)
                 .HasColumnName("status")
@@ -1022,18 +1037,179 @@ public partial class EpasDbContext : DbContext
                 .HasDefaultValueSql("CURRENT_TIMESTAMP")
                 .ValueGeneratedOnAddOrUpdate();
 
-            // RELATIONSHIP
             entity.HasOne(d => d.Invoice)
                 .WithMany(p => p.Details)
                 .HasForeignKey(d => d.TrxInvoiceId)
-                .OnDelete(DeleteBehavior.Cascade);
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("trx_invoice_detail_trx_invoice_id_fkey");
         });
 
+        modelBuilder.Entity<TrxInvoiceApproval>(entity =>
+        {
+            entity.ToTable("trx_invoice_approval");
+
+            entity.HasKey(e => e.Id).HasName("trx_invoice_approval_pkey");
+
+            entity.HasIndex(e => e.TrxInvoiceId, "idx_trx_invoice_approval_invoice");
+
+            entity.HasIndex(e => e.TrxClaimId, "idx_trx_invoice_approval_claim");
+
+            entity.Property(e => e.Id)
+                .HasColumnName("id")
+                .HasMaxLength(50)
+                .HasDefaultValueSql("uuid_generate_v4()");
+
+            entity.Property(e => e.TrxInvoiceId)
+                .HasColumnName("trx_invoice_id")
+                .HasMaxLength(50)
+                .IsRequired();
+
+            entity.Property(e => e.TrxClaimId)
+                .HasColumnName("trx_claim_id")
+                .HasMaxLength(50)
+                .IsRequired();
+
+            entity.Property(e => e.ApprovalAction)
+                .HasColumnName("approval_action")
+                .HasMaxLength(50)
+                .IsRequired();
+
+            entity.Property(e => e.ClaimExpenseAmount)
+                .HasColumnName("claim_expense_amount")
+                .HasColumnType("numeric(18,2)")
+                .HasDefaultValue(0m)
+                .IsRequired();
+
+            entity.Property(e => e.TotalAuditFee)
+                .HasColumnName("total_audit_fee")
+                .HasColumnType("numeric(18,2)")
+                .HasDefaultValue(0m)
+                .IsRequired();
+
+            entity.Property(e => e.TotalLumpsumFee)
+                .HasColumnName("total_lumpsum_fee")
+                .HasColumnType("numeric(18,2)")
+                .HasDefaultValue(0m)
+                .IsRequired();
+
+            entity.Property(e => e.TotalExpense)
+                .HasColumnName("total_expense")
+                .HasColumnType("numeric(18,2)")
+                .HasDefaultValue(0m)
+                .IsRequired();
+
+            entity.Property(e => e.RejectionReason)
+                .HasColumnName("rejection_reason")
+                .HasColumnType("text");
+
+            entity.Property(e => e.ApprovedBy)
+                .HasColumnName("approved_by")
+                .HasMaxLength(50)
+                .IsRequired();
+
+            entity.Property(e => e.ApprovedDate)
+                .HasColumnName("approved_date")
+                .HasColumnType("timestamp(3) without time zone")
+                .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+            entity.Property(e => e.CreatedBy)
+                .HasColumnName("created_by")
+                .HasMaxLength(50)
+                .IsRequired();
+
+            entity.Property(e => e.CreatedDate)
+                .HasColumnName("created_date")
+                .HasColumnType("timestamp(3) without time zone")
+                .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+            entity.HasOne(d => d.TrxInvoice)
+                .WithMany(p => p.TrxInvoiceApprovals)
+                .HasForeignKey(d => d.TrxInvoiceId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("trx_invoice_approval_invoice_fkey");
+
+            entity.HasOne(d => d.TrxClaim)
+                .WithMany(p => p.TrxInvoiceApprovals)
+                .HasForeignKey(d => d.TrxClaimId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("trx_invoice_approval_claim_fkey");
+        });
+
+        modelBuilder.Entity<TrxInvoiceApprovalDetail>(entity =>
+        {
+            entity.ToTable("trx_invoice_approval_detail");
+
+            entity.HasKey(e => e.Id).HasName("trx_invoice_approval_detail_pkey");
+
+            entity.HasIndex(e => e.TrxInvoiceApprovalId, "idx_trx_invoice_approval_detail_header");
+
+            entity.HasIndex(e => e.TrxInvoiceDetailId, "idx_trx_invoice_approval_detail_invoice_detail");
+
+            entity.Property(e => e.Id)
+                .HasColumnName("id")
+                .HasMaxLength(50)
+                .HasDefaultValueSql("uuid_generate_v4()");
+
+            entity.Property(e => e.TrxInvoiceApprovalId)
+                .HasColumnName("trx_invoice_approval_id")
+                .HasMaxLength(50)
+                .IsRequired();
+
+            entity.Property(e => e.TrxInvoiceDetailId)
+                .HasColumnName("trx_invoice_detail_id")
+                .HasMaxLength(50)
+                .IsRequired();
+
+            entity.Property(e => e.TrxAuditId)
+                .HasColumnName("trx_audit_id")
+                .HasMaxLength(50)
+                .IsRequired();
+
+            entity.Property(e => e.AuditFee)
+                .HasColumnName("audit_fee")
+                .HasColumnType("numeric(18,2)")
+                .HasDefaultValue(0m)
+                .IsRequired();
+
+            entity.Property(e => e.LumpsumFee)
+                .HasColumnName("lumpsum_fee")
+                .HasColumnType("numeric(18,2)")
+                .HasDefaultValue(0m)
+                .IsRequired();
+
+            entity.Property(e => e.LineTotal)
+                .HasColumnName("line_total")
+                .HasColumnType("numeric(18,2)")
+                .HasDefaultValue(0m)
+                .IsRequired();
+
+            entity.Property(e => e.CreatedBy)
+                .HasColumnName("created_by")
+                .HasMaxLength(50)
+                .IsRequired();
+
+            entity.Property(e => e.CreatedDate)
+                .HasColumnName("created_date")
+                .HasColumnType("timestamp(3) without time zone")
+                .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+            entity.HasOne(d => d.TrxInvoiceApproval)
+                .WithMany(p => p.TrxInvoiceApprovalDetails)
+                .HasForeignKey(d => d.TrxInvoiceApprovalId)
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("trx_invoice_approval_detail_header_fkey");
+
+            entity.HasOne(d => d.TrxInvoiceDetail)
+                .WithMany(p => p.TrxInvoiceApprovalDetails)
+                .HasForeignKey(d => d.TrxInvoiceDetailId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("trx_invoice_approval_detail_invoice_detail_fkey");
+        });
         modelBuilder.Entity<trx_claim>(entity =>
         {
             entity.ToTable("trx_claim");
 
-            entity.HasKey(e => e.id);
+            entity.HasKey(e => e.id).HasName("trx_claim_pkey");
 
             entity.Property(e => e.id)
                 .HasColumnName("id")
@@ -1085,17 +1261,19 @@ public partial class EpasDbContext : DbContext
             entity.Property(e => e.updated_date)
                 .HasColumnName("updated_date")
                 .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+            entity.HasOne(d => d.TrxInvoice)
+                .WithMany(p => p.TrxClaims)
+                .HasForeignKey(d => d.trx_invoice_id)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("trx_claim_trx_invoice_id_fkey");
         });
 
-
-        // =========================
-        // trx_claim_detail
-        // =========================
         modelBuilder.Entity<trx_claim_detail>(entity =>
         {
             entity.ToTable("trx_claim_detail");
 
-            entity.HasKey(e => e.id);
+            entity.HasKey(e => e.id).HasName("trx_claim_detail_pkey");
 
             entity.Property(e => e.id)
                 .HasColumnName("id")
@@ -1118,7 +1296,7 @@ public partial class EpasDbContext : DbContext
             entity.Property(e => e.amount)
                 .HasColumnName("amount")
                 .HasColumnType("numeric(18,2)")
-                .HasDefaultValue(0)
+                .HasDefaultValue(0m)
                 .IsRequired();
 
             entity.Property(e => e.created_by)
@@ -1138,17 +1316,19 @@ public partial class EpasDbContext : DbContext
             entity.Property(e => e.updated_date)
                 .HasColumnName("updated_date")
                 .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+            entity.HasOne(d => d.TrxClaim)
+                .WithMany(p => p.TrxClaimDetails)
+                .HasForeignKey(d => d.trx_claim_id)
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("trx_claim_detail_trx_claim_id_fkey");
         });
 
-
-        // =========================
-        // trx_claim_media
-        // =========================
         modelBuilder.Entity<trx_claim_media>(entity =>
         {
             entity.ToTable("trx_claim_media");
 
-            entity.HasKey(e => e.id);
+            entity.HasKey(e => e.id).HasName("trx_claim_media_pkey");
 
             entity.Property(e => e.id)
                 .HasColumnName("id")
@@ -1183,6 +1363,12 @@ public partial class EpasDbContext : DbContext
             entity.Property(e => e.created_date)
                 .HasColumnName("created_date")
                 .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+            entity.HasOne(d => d.TrxClaim)
+                .WithMany(p => p.TrxClaimMedia)
+                .HasForeignKey(d => d.trx_claim_id)
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("trx_claim_media_trx_claim_id_fkey");
         });
         OnModelCreatingPartial(modelBuilder);
     }

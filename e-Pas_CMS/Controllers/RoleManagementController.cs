@@ -4,6 +4,7 @@ using e_Pas_CMS.ViewModels;
 using e_Pas_CMS.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Mvc.Rendering;
+using e_Pas_CMS.Helpers;
 
 namespace e_Pas_CMS.Controllers
 {
@@ -25,6 +26,9 @@ namespace e_Pas_CMS.Controllers
             int pageSize = 10,
             string searchTerm = "")
         {
+            if (!User.HasPermission("ROLE_VIEW", "AROLE"))
+                return Forbid();
+
             if (pageNumber <= 0)
                 pageNumber = 1;
 
@@ -93,6 +97,9 @@ namespace e_Pas_CMS.Controllers
         [HttpGet("Edit/{id}")]
         public async Task<IActionResult> Edit(string id)
         {
+            if (!User.HasPermission("ROLE_EDIT", "AROLE"))
+                return Forbid();
+
             if (string.IsNullOrWhiteSpace(id))
                 return RedirectToAction(nameof(Index));
 
@@ -122,6 +129,9 @@ namespace e_Pas_CMS.Controllers
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Edit(string id, RoleManagementEditViewModel model)
         {
+            if (!User.HasPermission("ROLE_EDIT", "AROLE"))
+                return Forbid();
+
             if (string.IsNullOrWhiteSpace(id))
                 return RedirectToAction(nameof(Index));
 

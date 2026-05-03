@@ -386,8 +386,14 @@ else if (!string.IsNullOrEmpty(Model.Notes) || (Model.FinalDocuments != null && 
 <div class="d-flex align-items-center justify-content-between mb-3 p-3 rounded"
      style="background: linear-gradient(90deg,#ffb300,#ff9800); color:white;">
 
-    <div class="fw-semibold">
-        ⏱️ Waktu Kecepatan Verifikasi
+    <div>
+        <div class="fw-semibold">
+            ⏱️ Waktu Kecepatan Verifikasi
+        </div>
+        <div class="small">
+            Started by:
+            <strong>@(ViewBag.ReviewAuditStartedBy ?? "-")</strong>
+        </div>
     </div>
 
     <div id="auditTimer"
@@ -861,7 +867,38 @@ else if (!string.IsNullOrEmpty(Model.Notes) || (Model.FinalDocuments != null && 
 
                 let fsActiveMediaPath = null;   // mediaPath yang sedang dibuka
                 let fsActiveMediaType = null;   // IMAGE/VIDEO
+const usePrimaryMedia = @(((bool?)ViewBag.UsePrimaryMedia ?? false).ToString().ToLower());
+        function setPrimaryMedia(mediaId, nodeId, auditId) {
+            if (!usePrimaryMedia) {
+                alert('Primary foto/video hanya berlaku untuk audit setelah tanggal migrasi.');
+                return;
+            }
 
+            const token = $('input[name="__RequestVerificationToken"]').val();
+
+            fetch('/Audit/SetPrimaryMedia', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'RequestVerificationToken': token
+                },
+                body: JSON.stringify({
+                    MediaId: mediaId,
+                    NodeId: nodeId,
+                    AuditId: auditId
+                })
+            })
+            .then(res => {
+                if (!res.ok) return res.text().then(t => Promise.reject(t));
+
+                alert('Primary foto/video berhasil diperbarui.');
+                location.reload();
+            })
+            .catch(err => {
+                console.error(err);
+                alert('Gagal update primary media: ' + err);
+            });
+        }
                 function getActiveFullScreenMediaEl() {
                 const activeItem = document.querySelector(
                         '#fullSizeMediaModalBody .carousel-item.active'
@@ -1037,14 +1074,36 @@ else if (!string.IsNullOrEmpty(Model.Notes) || (Model.FinalDocuments != null && 
                             mediaContainer.appendChild(img);
                         }
 
-                        // Add filename display
-                        const fileName = document.createElement('div');
-                        fileName.className = 'text-truncate small text-muted';
-                        fileName.style.fontSize = '0.75rem';
-                        fileName.title = item.mediaPath.split('/').pop(); // Full filename for tooltip
-                        fileName.textContent = item.mediaPath.split('/').pop(); // Just the filename
-                        cardBody.appendChild(mediaContainer);
-                        cardBody.appendChild(fileName);
+                                // Add filename display
+        const fileName = document.createElement('div');
+        fileName.className = 'text-truncate small text-muted';
+        fileName.style.fontSize = '0.75rem';
+        fileName.title = item.mediaPath.split('/').pop(); // Full filename for tooltip
+        fileName.textContent = item.mediaPath.split('/').pop(); // Just the filename
+
+        // ✅ Tombol Primary hanya muncul setelah tanggal migrasi
+        const primaryButton = document.createElement('button');
+        primaryButton.type = 'button';
+        primaryButton.className = 'btn btn-sm btn-warning mt-2 w-100';
+        primaryButton.textContent = 'Jadikan Primary';
+        primaryButton.style.display = usePrimaryMedia ? 'block' : 'none';
+
+        primaryButton.onclick = (e) => {
+            e.stopPropagation();
+
+            const mediaId = item.id || item.Id;
+
+            if (!mediaId) {
+                alert('Media ID tidak ditemukan. Pastikan query media sudah mengambil kolom id.');
+                return;
+            }
+
+            setPrimaryMedia(mediaId, selectedMedia.nodeId, selectedMedia.auditId);
+        };
+
+        cardBody.appendChild(mediaContainer);
+        cardBody.appendChild(fileName);
+        cardBody.appendChild(primaryButton);
 
                         // Add click handler to show full image/video in new modal
                         mediaContainer.style.cursor = 'pointer';
@@ -1559,14 +1618,29 @@ else if (!string.IsNullOrEmpty(Model.Notes) || (Model.FinalDocuments != null && 
                 });
             }
 
-                    // recalc saat update
+                            // recalc saat update
         $(document).on('click', '.update-score-btn', function() {
             var nodeId  = $(this).data('node-id');
             var auditId = $(this).data('audit-id');
             var score   = $('.option-btn[data-node-id="' + nodeId + '"].active').data('score');
             var token   = $('input[name="__RequestVerificationToken"]').val();
 
-            if (!score) return alert('Pilih jawaban dulu!');
+            var commentInput = $('.comment-input[data-node-id="' + nodeId + '"]');
+            var comment = commentInput.val() ? commentInput.val().trim() : '';
+
+            if (!score) {
+                alert('Pilih jawaban dulu!');
+                return;
+            }
+
+            var normalizedScore = String(score).trim().toUpperCase();
+            var wajibKomentar = ['C', 'D', 'E', 'F', 'X'].includes(normalizedScore);
+
+                    if (wajibKomentar && comment.length === 0) {
+            alert('Kolom komentar wajib di isi. Mohon untuk mengisi kolom komentar terlebih dahulu.');
+            commentInput.focus();
+            return;
+        }
 
             fetch('/Audit/UpdateScore', {
                 method: 'POST',
@@ -1574,39 +1648,73 @@ else if (!string.IsNullOrEmpty(Model.Notes) || (Model.FinalDocuments != null && 
                     'Content-Type': 'application/json',
                     'RequestVerificationToken': token
                 },
-                body: JSON.stringify({ NodeId: nodeId, AuditId: auditId, Score: score })
+                body: JSON.stringify({
+                    NodeId: nodeId,
+                    AuditId: auditId,
+                    Score: normalizedScore,
+                    Comment: comment
+                })
             })
-            .then(res => {
-                if (res.ok) {
-                    recalcAll();
+                    .then(res => {
+            if (!res.ok) {
+                return res.text().then(t => Promise.reject(t));
+            }
 
-                    // Tampilkan notifikasi sukses setelah update berhasil
-                    const alertBox = document.createElement('div');
-                    alertBox.className = 'alert alert-success alert-dismissible fade show position-fixed top-0 start-50 translate-middle-x mt-3';
-                    alertBox.style.zIndex = '9999';
-                    alertBox.innerHTML = `
-                        Nilai berhasil diperbarui.
-                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            return res.json();
+        })
+        .then(data => {
+            recalcAll();
+
+            if (data.isBandingNode) {
+                const previousValue = parseFloat(data.previousScoreValue || 0);
+                const newValue = parseFloat(data.newScoreValue || 0);
+                const change = parseFloat(data.change || (newValue - previousValue));
+
+                const badgeClass = change > 0
+                    ? 'bg-success'
+                    : change < 0
+                        ? 'bg-danger'
+                        : 'bg-secondary';
+
+                const sign = change > 0 ? '+' : '';
+
+                const badge = document.querySelector(
+                    `.banding-score-info[data-node-id="${nodeId}"]`
+                );
+
+                if (badge) {
+                    badge.className = `badge text-white banding-score-info ${badgeClass}`;
+                    badge.setAttribute('data-previous-score-input', data.previousScoreInput || '-');
+                    badge.setAttribute('data-previous-score-value', previousValue.toFixed(2));
+
+                    badge.innerHTML = `
+                        Skor sebelumnya: ${data.previousScoreInput || '-'} (${previousValue.toFixed(2)})
+                        <br/>
+                        Perubahan: ${sign}${change.toFixed(2)}
                     `;
-                    document.body.appendChild(alertBox);
-
-                    // Auto-dismiss setelah 2.5 detik
-                    setTimeout(() => {
-                        alertBox.classList.remove('show');
-                        alertBox.classList.add('fade');
-                        alertBox.addEventListener('transitionend', () => alertBox.remove());
-                    }, 2500);
-                } else {
-                    return res.text().then(t => Promise.reject(t));
                 }
-            })
-            .catch(err => {
-                console.error(err);
-                alert('Gagal update nilai: ' + err);
-            });
+            }
+
+            const alertBox = document.createElement('div');
+            alertBox.className = 'alert alert-success alert-dismissible fade show position-fixed top-0 start-50 translate-middle-x mt-3';
+            alertBox.style.zIndex = '9999';
+            alertBox.innerHTML = `
+                Nilai berhasil diperbarui.
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            `;
+            document.body.appendChild(alertBox);
+
+            setTimeout(() => {
+                alertBox.classList.remove('show');
+                alertBox.classList.add('fade');
+                alertBox.addEventListener('transitionend', () => alertBox.remove());
+            }, 2500);
+        })
+        .catch(err => {
+            console.error(err);
+            alert('Gagal update nilai: ' + err);
         });
-
-
+        });
 
             // Recalc juga setelah collapse toggle (open/close)
             $('#auditChecklist').on('shown.bs.collapse hidden.bs.collapse', function(){
@@ -1938,21 +2046,27 @@ else if (!string.IsNullOrEmpty(Model.Notes) || (Model.FinalDocuments != null && 
         let auditTimerInterval = null;
 
         function startAuditTimer() {
-            const key = "audit_start_" + '@ViewBag.AuditId';
+            const startFromDb = '@(ViewBag.ReviewAuditStartedAt == null ? "" : ((DateTime)ViewBag.ReviewAuditStartedAt).ToString("o"))';
 
-            const stored = localStorage.getItem(key);
-
-            if (stored) {
-                auditStartTime = new Date(stored);
-            } else {
-                auditStartTime = new Date();
-                localStorage.setItem(key, auditStartTime.toISOString());
+            if (!startFromDb) {
+                const el = document.getElementById("auditTimer");
+                if (el) {
+                    el.innerText = "Belum dimulai";
+                }
+                return;
             }
 
+            auditStartTime = new Date(startFromDb);
+
+            if (auditTimerInterval) {
+                clearInterval(auditTimerInterval);
+            }
+
+            updateAuditTimer();
             auditTimerInterval = setInterval(updateAuditTimer, 1000);
         }
 
-        function updateAuditTimer() {
+                function updateAuditTimer() {
             const now = new Date();
             const diff = Math.floor((now - auditStartTime) / 1000);
 
@@ -2244,8 +2358,33 @@ else if (!string.IsNullOrEmpty(Model.Notes) || (Model.FinalDocuments != null && 
 
                                 <!-- Skor -->
                                 <div class="text-end">
-                                    <small>skor :</small><br />
+                                    <small>Skor:</small><br />
                                     <strong class="score-x text-primary" data-node-id="@node.Id"></strong>
+
+                                    @{
+                                        var isQuestionNode = string.Equals(
+                                        node.Type?.Trim(),
+                                        "QUESTION",
+                                        StringComparison.OrdinalIgnoreCase
+                                        );
+                                    }
+
+                                    @if (node.IsBandingNode && isQuestionNode)
+                                    {
+                                        <div class="mt-1">
+                                            <span class="badge bg-warning text-dark banding-score-info"
+                                                  data-node-id="@node.Id"
+                                                  data-previous-score-input="@node.PreviousScoreInput"
+                                                  data-previous-score-value="@(node.PreviousScoreValue?.ToString("0.00") ?? "0.00")">
+                                                Skor sebelumnya:
+                                                @(string.IsNullOrWhiteSpace(node.PreviousScoreInput) ? "-" : node.PreviousScoreInput)
+                                                @if (node.PreviousScoreValue.HasValue)
+                                                {
+                                                    <text> (@node.PreviousScoreValue.Value.ToString("0.00"))</text>
+                                                }
+                                            </span>
+                                        </div>
+                                    }
                                 </div>
                             </div>
 
@@ -2277,6 +2416,23 @@ else if (!string.IsNullOrEmpty(Model.Notes) || (Model.FinalDocuments != null && 
                         <div class="ms-auto text-end">
                             <small>Skor:</small>
                             <strong class="score-x" data-node-id="@node.Id">0.00</strong>
+
+                            @if (node.IsBandingNode && node.Type == "QUESTION")
+                            {
+                                <div class="mt-1">
+                                    <span class="badge bg-warning text-dark banding-score-info"
+                                          data-node-id="@node.Id"
+                                          data-previous-score-input="@node.PreviousScoreInput"
+                                          data-previous-score-value="@(node.PreviousScoreValue?.ToString("0.00") ?? "0.00")">
+                                        Skor sebelumnya:
+                                        @(string.IsNullOrWhiteSpace(node.PreviousScoreInput) ? "-" : node.PreviousScoreInput)
+                                        @if (node.PreviousScoreValue.HasValue)
+                                        {
+                                            <text> (@node.PreviousScoreValue.Value.ToString("0.00"))</text>
+                                        }
+                                    </span>
+                                </div>
+                            }
                         </div>
                     }
                 </div>
@@ -2371,7 +2527,6 @@ else if (!string.IsNullOrEmpty(Model.Notes) || (Model.FinalDocuments != null && 
                                 }
                             </ul>
                         }
-
                     </div>
                 </div>
             </div>

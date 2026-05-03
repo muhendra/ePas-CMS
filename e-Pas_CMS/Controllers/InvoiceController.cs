@@ -1,6 +1,7 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using e_Pas_CMS.Data;
+using e_Pas_CMS.Models;
 using e_Pas_CMS.ViewModels;
 
 public class InvoiceController : Controller
@@ -47,7 +48,7 @@ public class InvoiceController : Controller
                 where au.username == currentUser
                 select aur.region
             )
-            .Where(r => r != null)
+            .Where(r => r != null && r != "")
             .Distinct()
             .ToListAsync();
 
@@ -57,7 +58,7 @@ public class InvoiceController : Controller
                 where au.username == currentUser
                 select aur.sbm
             )
-            .Where(s => s != null)
+            .Where(s => s != null && s != "")
             .Distinct()
             .ToListAsync();
 
@@ -74,6 +75,10 @@ public class InvoiceController : Controller
                 join usr in _context.app_users.AsNoTracking()
                     on aud.app_user_id equals usr.id into audUser
                 from usr in audUser.DefaultIfEmpty()
+                where claim.status == ClaimUnderReview
+                   || claim.status == ClaimPendingApproval
+                   || claim.status == ClaimApproved
+                   || claim.status == ClaimRejected
                 select new
                 {
                     Invoice = inv,
@@ -83,13 +88,6 @@ public class InvoiceController : Controller
                     Spbu = sp,
                     SurveyorName = usr != null ? usr.name : "-"
                 };
-
-            query = query.Where(x =>
-                x.Claim.status == ClaimUnderReview ||
-                x.Claim.status == ClaimPendingApproval ||
-                x.Claim.status == ClaimApproved ||
-                x.Claim.status == ClaimRejected
-            );
 
             if (userRegion.Any() || userSbm.Any())
             {
@@ -112,20 +110,35 @@ public class InvoiceController : Controller
             }
 
             var grouped = query
-                .GroupBy(x => x.Invoice.Id)
+                .GroupBy(x => new
+                {
+                    x.Invoice.Id,
+                    x.Invoice.InvoiceNo,
+                    x.Invoice.IssuedDate,
+                    x.Invoice.AppUserId,
+                    x.Invoice.DueDate,
+                    ClaimId = x.Claim.id,
+                    ClaimStatus = x.Claim.status,
+                    x.SurveyorName
+                })
                 .Select(g => new InvoiceVM
                 {
-                    Id = g.First().Invoice.Id,
-                    InvoiceNo = g.First().Invoice.InvoiceNo,
-                    InvoiceDate = g.First().Invoice.IssuedDate,
-                    EmployeeId = g.First().Invoice.AppUserId,
-                    ExpectedDate = g.First().Invoice.DueDate,
+                    Id = g.Key.Id,
+                    InvoiceNo = g.Key.InvoiceNo,
+                    InvoiceDate = g.Key.IssuedDate,
+                    EmployeeId = g.Key.AppUserId,
+                    ExpectedDate = g.Key.DueDate,
+                    Status = g.Key.ClaimStatus,
+                    SurveyorName = g.Key.SurveyorName,
 
-                    // Status di list sekarang pakai trx_claim.status
-                    Status = g.First().Claim.status,
-
-                    TotalAmount = g.Sum(x => x.Detail.Amount),
-                    SurveyorName = g.First().SurveyorName
+                    TotalAmount =
+                        (
+                            _context.TrxClaimDetails
+                                .Where(cd => cd.trx_claim_id == g.Key.ClaimId)
+                                .Sum(cd => (decimal?)cd.amount) ?? 0
+                        )
+                        + g.Sum(x => x.Detail.AuditFee)
+                        + g.Sum(x => x.Detail.LumpsumFee ?? 0)
                 });
 
             grouped = sortColumn switch
@@ -207,18 +220,61 @@ public class InvoiceController : Controller
         if (claim == null)
             return NotFound();
 
+        var claimExpenseAmount = await _context.TrxClaimDetails
+            .AsNoTracking()
+            .Where(x => x.trx_claim_id == claim.id)
+            .SumAsync(x => (decimal?)x.amount) ?? 0;
+
+        var firstClaimDescription = await _context.TrxClaimDetails
+            .AsNoTracking()
+            .Where(x => x.trx_claim_id == claim.id)
+            .OrderBy(x => x.created_date)
+            .Select(x => x.description)
+            .FirstOrDefaultAsync();
+
         var details = await (
-            from d in _context.TrxClaimDetails.AsNoTracking()
-            where d.trx_claim_id == claim.id
+            from det in _context.TrxInvoiceDetails.AsNoTracking()
+            join aud in _context.trx_audits.AsNoTracking()
+                on det.TrxAuditId equals aud.id
+            join sp in _context.spbus.AsNoTracking()
+                on aud.spbu_id equals sp.id
+            where det.TrxInvoiceId == id
+            orderby aud.audit_execution_time descending,
+                    aud.audit_schedule_date descending,
+                    det.CreatedDate descending
             select new InvoiceDetailItemVM
             {
-                Date = DateTime.SpecifyKind(claim.claim_date, DateTimeKind.Utc),
-                Description = d.description,
-                Amount = d.amount,
-                AuditFee = d.amount,
-                Lumpsum = 0
+                TrxInvoiceDetailId = det.Id,
+                TrxAuditId = det.TrxAuditId,
+
+                Date = DateTime.SpecifyKind(
+                    aud.audit_execution_time
+                        ?? (
+                            aud.audit_schedule_date.HasValue
+                                ? aud.audit_schedule_date.Value.ToDateTime(TimeOnly.MinValue)
+                                : aud.created_date
+                        ),
+                    DateTimeKind.Utc
+                ),
+
+                Description = firstClaimDescription ?? ("Audit SPBU " + sp.spbu_no),
+
+                ClaimAmount = 0,
+                AuditFee = det.AuditFee,
+                Lumpsum = det.LumpsumFee ?? 0,
+                Amount = det.AuditFee + (det.LumpsumFee ?? 0)
             }
         ).ToListAsync();
+
+        if (details.Any())
+        {
+            details[0].ClaimAmount = claimExpenseAmount;
+            details[0].Amount = details[0].Amount + claimExpenseAmount;
+        }
+
+        var totalAuditFee = details.Sum(x => x.AuditFee);
+        var totalLumpsum = details.Sum(x => x.Lumpsum);
+        var totalExpense = claimExpenseAmount + totalAuditFee + totalLumpsum;
 
         var attachments = await _context.TrxClaimMedias
             .AsNoTracking()
@@ -228,14 +284,13 @@ public class InvoiceController : Controller
         var attachmentGroups = attachments
             .Where(x => !string.IsNullOrWhiteSpace(x.claim_item_type))
             .GroupBy(x => x.claim_item_type)
-            .ToDictionary(
-                g => g.Key,
-                g => g.First()
-            );
+            .ToDictionary(g => g.Key, g => g.First());
 
-        var totalExpense = details.Sum(x => x.Amount);
-        var totalAuditFee = details.Sum(x => x.AuditFee);
-        var totalLumpsum = details.Sum(x => x.Lumpsum);
+        var latestApproval = await _context.TrxInvoiceApprovals
+            .AsNoTracking()
+            .Where(x => x.TrxInvoiceId == invoice.Id)
+            .OrderByDescending(x => x.ApprovedDate)
+            .FirstOrDefaultAsync();
 
         var isProcessOrDone =
             claim.status == ClaimUnderReview ||
@@ -247,20 +302,17 @@ public class InvoiceController : Controller
         {
             Id = invoice.Id,
             InvoiceNo = invoice.InvoiceNo,
-
-            // Tetap simpan status invoice di Model.Status
-            // Claim status dikirim lewat ViewBag.ClaimStatus
             Status = invoice.Status,
-
             ClaimDate = claim.claim_date,
 
-            EmployeeName = "Muhammad Ramdan",
-            Period = isProcessOrDone ? "Januari 2026" : "6 Januari - 15 Februari",
-            Homebase = "Depok",
+            EmployeeName = await GetEmployeeName(invoice.AppUserId, claim.app_user_id),
+            Period = $"{invoice.InvoicePeriodStart:dd MMM yyyy} - {invoice.InvoicePeriodEnd:dd MMM yyyy}",
+            Homebase = "-",
             Job = "Audit SPBU",
 
             Items = details,
 
+            ClaimExpenseAmount = claimExpenseAmount,
             TotalExpense = totalExpense,
             TotalAuditFee = totalAuditFee,
             TotalLumpsum = totalLumpsum,
@@ -275,13 +327,15 @@ public class InvoiceController : Controller
             BankAccount = isProcessOrDone ? "129383481" : "",
             BankOwner = "Deswantri Alfariza. H",
 
-            ApprovedBy = claim.status == ClaimApproved
-                ? "Finance / Accounting"
-                : null,
+            ApprovedBy = latestApproval != null
+                ? latestApproval.ApprovedBy
+                : claim.status == ClaimApproved
+                    ? "Finance / Accounting"
+                    : null,
 
-            ApprovedDate = claim.status == ClaimApproved
-                ? DateTime.Now
-                : null
+            ApprovedDate = latestApproval?.ApprovedDate,
+
+            RejectionReason = latestApproval?.RejectionReason
         };
 
         ViewBag.InvoiceStatus = invoice.Status;
@@ -299,7 +353,6 @@ public class InvoiceController : Controller
     {
         return await StartProcess(id);
     }
-
     [HttpPost]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> StartProcess(string id)
@@ -332,12 +385,22 @@ public class InvoiceController : Controller
             .Where(x => x.TrxInvoiceId == id)
             .ToListAsync();
 
+        var now = DateTime.UtcNow;
+        var currentUser = GetCurrentUser();
+
         invoice.Status = InvoiceInProgress;
+        invoice.UpdatedBy = currentUser;
+        invoice.UpdatedDate = now;
+
         claim.status = ClaimPendingApproval;
+        claim.updated_by = currentUser;
+        claim.updated_date = now;
 
         foreach (var detail in invoiceDetails)
         {
             detail.Status = InvoiceDetailNotClaimed;
+            detail.UpdatedBy = currentUser;
+            detail.UpdatedDate = now;
         }
 
         await _context.SaveChangesAsync();
@@ -349,96 +412,165 @@ public class InvoiceController : Controller
 
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> Approve(string id)
+    public async Task<IActionResult> Approve(string id, InvoiceApprovalPostVM model)
     {
-        if (string.IsNullOrWhiteSpace(id))
+        var invoiceId = ResolveInvoiceId(id, model);
+
+        if (string.IsNullOrWhiteSpace(invoiceId))
             return NotFound();
 
         var invoice = await _context.TrxInvoices
-            .FirstOrDefaultAsync(x => x.Id == id);
+            .FirstOrDefaultAsync(x => x.Id == invoiceId);
 
         if (invoice == null)
             return NotFound();
 
         var claim = await _context.TrxClaims
-            .FirstOrDefaultAsync(x => x.trx_invoice_id == id);
+            .FirstOrDefaultAsync(x => x.trx_invoice_id == invoiceId);
 
         if (claim == null)
         {
             TempData["Error"] = "Data claim tidak ditemukan.";
-            return RedirectToAction(nameof(Detail), new { id });
+            return RedirectToAction(nameof(Detail), new { id = invoiceId });
         }
 
         if (claim.status != ClaimPendingApproval)
         {
             TempData["Error"] = "Claim belum masuk tahap pending approval.";
-            return RedirectToAction(nameof(Detail), new { id });
+            return RedirectToAction(nameof(Detail), new { id = invoiceId });
         }
 
         var invoiceDetails = await _context.TrxInvoiceDetails
-            .Where(x => x.TrxInvoiceId == id)
+            .Where(x => x.TrxInvoiceId == invoiceId)
             .ToListAsync();
 
+        if (!invoiceDetails.Any())
+        {
+            TempData["Error"] = "Detail invoice tidak ditemukan.";
+            return RedirectToAction(nameof(Detail), new { id = invoiceId });
+        }
+
+        ApplyFinanceAdjustment(invoiceDetails, model?.Items);
+
+        var approval = await BuildApprovalSnapshot(
+            invoice,
+            claim,
+            invoiceDetails,
+            "APPROVED",
+            null
+        );
+
+        var now = DateTime.UtcNow;
+        var currentUser = GetCurrentUser();
+
         invoice.Status = InvoiceCompleted;
+        invoice.CompletedDate = now;
+        invoice.UpdatedBy = currentUser;
+        invoice.UpdatedDate = now;
+
         claim.status = ClaimApproved;
+        claim.completed_date = now;
+        claim.updated_by = currentUser;
+        claim.updated_date = now;
 
         foreach (var detail in invoiceDetails)
         {
             detail.Status = InvoiceDetailClaimed;
+            detail.UpdatedBy = currentUser;
+            detail.UpdatedDate = now;
         }
+
+        _context.TrxInvoiceApprovals.Add(approval);
 
         await _context.SaveChangesAsync();
 
-        TempData["Success"] = "Invoice berhasil disetujui.";
+        TempData["Success"] = "Invoice berhasil disetujui dan data approval finance berhasil disimpan.";
 
-        return RedirectToAction(nameof(Detail), new { id });
+        return RedirectToAction(nameof(Detail), new { id = invoiceId });
     }
 
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> Reject(string id)
+    public async Task<IActionResult> Reject(string id, InvoiceApprovalPostVM model)
     {
-        if (string.IsNullOrWhiteSpace(id))
+        var invoiceId = ResolveInvoiceId(id, model);
+
+        if (string.IsNullOrWhiteSpace(invoiceId))
             return NotFound();
 
+        if (string.IsNullOrWhiteSpace(model?.RejectionReason))
+        {
+            TempData["Error"] = "Alasan ditolak wajib diisi.";
+            return RedirectToAction(nameof(Detail), new { id = invoiceId });
+        }
+
         var invoice = await _context.TrxInvoices
-            .FirstOrDefaultAsync(x => x.Id == id);
+            .FirstOrDefaultAsync(x => x.Id == invoiceId);
 
         if (invoice == null)
             return NotFound();
 
         var claim = await _context.TrxClaims
-            .FirstOrDefaultAsync(x => x.trx_invoice_id == id);
+            .FirstOrDefaultAsync(x => x.trx_invoice_id == invoiceId);
 
         if (claim == null)
         {
             TempData["Error"] = "Data claim tidak ditemukan.";
-            return RedirectToAction(nameof(Detail), new { id });
+            return RedirectToAction(nameof(Detail), new { id = invoiceId });
         }
 
         if (claim.status != ClaimPendingApproval)
         {
             TempData["Error"] = "Claim belum masuk tahap pending approval.";
-            return RedirectToAction(nameof(Detail), new { id });
+            return RedirectToAction(nameof(Detail), new { id = invoiceId });
         }
 
         var invoiceDetails = await _context.TrxInvoiceDetails
-            .Where(x => x.TrxInvoiceId == id)
+            .Where(x => x.TrxInvoiceId == invoiceId)
             .ToListAsync();
 
+        if (!invoiceDetails.Any())
+        {
+            TempData["Error"] = "Detail invoice tidak ditemukan.";
+            return RedirectToAction(nameof(Detail), new { id = invoiceId });
+        }
+
+        ApplyFinanceAdjustment(invoiceDetails, model?.Items);
+
+        var approval = await BuildApprovalSnapshot(
+            invoice,
+            claim,
+            invoiceDetails,
+            "REJECTED",
+            model.RejectionReason.Trim()
+        );
+
+        var now = DateTime.UtcNow;
+        var currentUser = GetCurrentUser();
+
         invoice.Status = InvoiceRejected;
+        invoice.UpdatedBy = currentUser;
+        invoice.UpdatedDate = now;
+
         claim.status = ClaimRejected;
+        claim.completed_date = now;
+        claim.updated_by = currentUser;
+        claim.updated_date = now;
 
         foreach (var detail in invoiceDetails)
         {
             detail.Status = InvoiceDetailNotClaimed;
+            detail.UpdatedBy = currentUser;
+            detail.UpdatedDate = now;
         }
+
+        _context.TrxInvoiceApprovals.Add(approval);
 
         await _context.SaveChangesAsync();
 
-        TempData["Success"] = "Invoice berhasil ditolak.";
+        TempData["Success"] = "Invoice berhasil ditolak dan alasan penolakan berhasil disimpan.";
 
-        return RedirectToAction(nameof(Detail), new { id });
+        return RedirectToAction(nameof(Detail), new { id = invoiceId });
     }
 
     public IActionResult DownloadPdf(string id)
@@ -476,4 +608,117 @@ public class InvoiceController : Controller
             _ => status ?? "-"
         };
     }
+
+    private static string ResolveInvoiceId(string id, InvoiceApprovalPostVM model)
+    {
+        if (!string.IsNullOrWhiteSpace(model?.Id))
+            return model.Id;
+
+        return id;
+    }
+
+    private void ApplyFinanceAdjustment(
+        List<TrxInvoiceDetail> invoiceDetails,
+        List<InvoiceApprovalDetailPostVM> postedItems)
+    {
+        if (postedItems == null || !postedItems.Any())
+            return;
+
+        var postedMap = postedItems
+            .Where(x => !string.IsNullOrWhiteSpace(x.TrxInvoiceDetailId))
+            .GroupBy(x => x.TrxInvoiceDetailId)
+            .ToDictionary(x => x.Key, x => x.First());
+
+        foreach (var detail in invoiceDetails)
+        {
+            if (!postedMap.TryGetValue(detail.Id, out var posted))
+                continue;
+
+            detail.AuditFee = posted.AuditFee < 0 ? 0 : posted.AuditFee;
+            detail.LumpsumFee = posted.LumpsumFee < 0 ? 0 : posted.LumpsumFee;
+        }
+    }
+
+    private async Task<TrxInvoiceApproval> BuildApprovalSnapshot(
+    TrxInvoice invoice,
+    trx_claim claim,
+    List<TrxInvoiceDetail> invoiceDetails,
+    string action,
+    string rejectionReason)
+    {
+        var claimExpenseAmount = await _context.TrxClaimDetails
+            .Where(x => x.trx_claim_id == claim.id)
+            .SumAsync(x => (decimal?)x.amount) ?? 0;
+
+        var totalAuditFee = invoiceDetails.Sum(x => x.AuditFee);
+        var totalLumpsumFee = invoiceDetails.Sum(x => x.LumpsumFee ?? 0);
+        var totalExpense = claimExpenseAmount + totalAuditFee + totalLumpsumFee;
+
+        var currentUser = GetCurrentUser();
+        var now = DateTime.UtcNow;
+
+        return new TrxInvoiceApproval
+        {
+            Id = Guid.NewGuid().ToString(),
+            TrxInvoiceId = invoice.Id,
+            TrxClaimId = claim.id,
+            ApprovalAction = action,
+            ClaimExpenseAmount = claimExpenseAmount,
+            TotalAuditFee = totalAuditFee,
+            TotalLumpsumFee = totalLumpsumFee,
+            TotalExpense = totalExpense,
+            RejectionReason = rejectionReason,
+            ApprovedBy = currentUser,
+            ApprovedDate = now,
+            CreatedBy = currentUser,
+            CreatedDate = now,
+            TrxInvoiceApprovalDetails = invoiceDetails.Select(x => new TrxInvoiceApprovalDetail
+            {
+                Id = Guid.NewGuid().ToString(),
+                TrxInvoiceDetailId = x.Id,
+                TrxAuditId = x.TrxAuditId,
+                AuditFee = x.AuditFee,
+                LumpsumFee = x.LumpsumFee ?? 0,
+                LineTotal = x.AuditFee + (x.LumpsumFee ?? 0),
+                CreatedBy = currentUser,
+                CreatedDate = now
+            }).ToList()
+        };
+    }
+    private string GetCurrentUser()
+    {
+        return User.Identity?.Name ?? "SYSTEM";
+    }
+
+    private async Task<string> GetEmployeeName(string invoiceAppUserId, string claimAppUserId)
+    {
+        var userId = !string.IsNullOrWhiteSpace(invoiceAppUserId)
+            ? invoiceAppUserId
+            : claimAppUserId;
+
+        if (string.IsNullOrWhiteSpace(userId))
+            return "-";
+
+        var name = await _context.app_users
+            .AsNoTracking()
+            .Where(x => x.id == userId)
+            .Select(x => x.name)
+            .FirstOrDefaultAsync();
+
+        return string.IsNullOrWhiteSpace(name) ? "-" : name;
+    }
+}
+
+public class InvoiceApprovalPostVM
+{
+    public string Id { get; set; }
+    public string RejectionReason { get; set; }
+    public List<InvoiceApprovalDetailPostVM> Items { get; set; } = new List<InvoiceApprovalDetailPostVM>();
+}
+
+public class InvoiceApprovalDetailPostVM
+{
+    public string TrxInvoiceDetailId { get; set; }
+    public decimal AuditFee { get; set; }
+    public decimal LumpsumFee { get; set; }
 }

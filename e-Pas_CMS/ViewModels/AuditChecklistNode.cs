@@ -20,6 +20,12 @@
 
         public decimal? TotalScore { get; set; }
 
+        // AuditChecklistNode
+        public bool IsBandingNode { get; set; }
+        public string PreviousScoreInput { get; set; }
+        public decimal? PreviousScoreX { get; set; }
+        public decimal? PreviousScoreValue { get; set; }
+
         public string? number { get; set; }
 
         public List<AuditChecklistNode> Children { get; set; } = new();

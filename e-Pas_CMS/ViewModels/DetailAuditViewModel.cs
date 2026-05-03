@@ -20,23 +20,30 @@
         public string AuditType { get; set; }
         public List<MediaItem> MediaNotes { get; set; } = new List<MediaItem>();
 
-
-        public List<AuditChecklistNode> Elements { get; set; } = new(); // rekursif
+        public List<AuditChecklistNode> Elements { get; set; } = new();
 
         public List<AuditQqCheckItem> QqChecks { get; set; }
 
-        public string Notes { get; set; } // Untuk isi catatan
-        public List<MediaItem> FinalDocuments { get; set; } // Untuk list foto/video FINAL
+        public string Notes { get; set; }
+        public List<MediaItem> FinalDocuments { get; set; }
         public string PenaltyAlert { get; set; }
-
     }
 
     public class MediaItem
     {
-        public string MediaType { get; set; } // "IMAGE" or "VIDEO"
+        public string Id { get; set; }
+        public string MediaType { get; set; }
         public string MediaPath { get; set; }
-        public string FileName { get; set; }    // opsional, untuk caption
-        public string SizeReadable { get; set; } // opsional
+        public string FileName { get; set; }
+        public string SizeReadable { get; set; }
+        public bool IsStar { get; set; }
+    }
+
+    public class SetPrimaryMediaRequest
+    {
+        public string AuditId { get; set; }
+        public string NodeId { get; set; }
+        public string MediaId { get; set; }
     }
 
     public class UpdateScoreRequest
@@ -44,6 +51,7 @@
         public string NodeId { get; set; }
         public string AuditId { get; set; }
         public string Score { get; set; }
+        public string Comment { get; set; }
     }
 
     public class UpdateQqRequest
@@ -69,5 +77,12 @@
         public decimal? DensityVariation { get; set; }
     }
 
-
+    public class ScoreSnapshotDto
+    {
+        public string ScoreInput { get; set; }
+        public decimal? ScoreX { get; set; }
+        public decimal? Weight { get; set; }
+        public bool? IsRelaksasi { get; set; }
+        public bool IsBandingNode { get; set; }
+    }
 }

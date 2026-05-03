@@ -20,9 +20,9 @@ namespace e_Pas_CMS.Controllers
 
         [HttpGet]
         public async Task<IActionResult> Index(
-    int pageNumber = 1,
-    int pageSize = 10,
-    string searchTerm = "")
+            int pageNumber = 1,
+            int pageSize = 10,
+            string searchTerm = "")
         {
             var conn = _context.Database.GetDbConnection();
             if (conn.State != ConnectionState.Open)
@@ -31,86 +31,86 @@ namespace e_Pas_CMS.Controllers
             var keyword = searchTerm ?? "";
 
             var whereSql = @"
-        WHERE 1=1
-          AND EXISTS (
-              SELECT 1
-              FROM app_user_city_boundary b
-              WHERE b.app_user_id = au.id
-          )
-          AND (
-                @searchTerm = ''
-                OR LOWER(COALESCE(au.name, '')) LIKE LOWER('%' || @searchTerm || '%')
-                OR LOWER(COALESCE(au.username, '')) LIKE LOWER('%' || @searchTerm || '%')
-                OR EXISTS (
-                    SELECT 1
-                    FROM app_user_city_boundary bx
-                    WHERE bx.app_user_id = au.id
-                      AND LOWER(COALESCE(bx.address, '')) LIKE LOWER('%' || @searchTerm || '%')
-                )
-          )
-    ";
+                WHERE 1=1
+                  AND EXISTS (
+                      SELECT 1
+                      FROM app_user_city_boundary b
+                      WHERE b.app_user_id = au.id
+                  )
+                  AND (
+                        @searchTerm = ''
+                        OR LOWER(COALESCE(au.name, '')) LIKE LOWER('%' || @searchTerm || '%')
+                        OR LOWER(COALESCE(au.username, '')) LIKE LOWER('%' || @searchTerm || '%')
+                        OR EXISTS (
+                            SELECT 1
+                            FROM app_user_city_boundary bx
+                            WHERE bx.app_user_id = au.id
+                              AND LOWER(COALESCE(bx.address, '')) LIKE LOWER('%' || @searchTerm || '%')
+                        )
+                  )
+            ";
 
             var totalItems = await conn.ExecuteScalarAsync<int>($@"
-        SELECT COUNT(1)
-        FROM app_user au
-        {whereSql};
-    ", new
+                SELECT COUNT(1)
+                FROM app_user au
+                {whereSql};
+            ", new
             {
                 searchTerm = keyword
             });
 
             var dataSql = $@"
-        WITH boundary_ranked AS (
-            SELECT
-                b.app_user_id,
-                b.address,
-                ROW_NUMBER() OVER (
-                    PARTITION BY b.app_user_id
-                    ORDER BY b.created_date DESC, b.id DESC
-                ) AS rn
-            FROM app_user_city_boundary b
-        ),
-        boundary_pivot AS (
-            SELECT
-                app_user_id,
-                MAX(CASE WHEN rn = 1 THEN address END) AS BoundaryCity1,
-                MAX(CASE WHEN rn = 2 THEN address END) AS BoundaryCity2,
-                MAX(CASE WHEN rn = 3 THEN address END) AS BoundaryCity3,
-                MAX(CASE WHEN rn = 4 THEN address END) AS BoundaryCity4
-            FROM boundary_ranked
-            WHERE rn <= 4
-            GROUP BY app_user_id
-        ),
-        last_audit AS (
-            SELECT
-                ta.app_user_id,
-                MAX(COALESCE(
-                    ta.audit_execution_time,
-                    ta.audit_schedule_date::timestamp,
-                    ta.created_date
-                )) AS LastAuditDate
-            FROM trx_audit ta
-            GROUP BY ta.app_user_id
-        )
-        SELECT
-            au.id AS Id,
-            au.id AS AppUserId,
-            au.name AS AuditorName,
-            au.username AS AuditorUsername,
-            la.LastAuditDate,
-            bp.BoundaryCity1,
-            bp.BoundaryCity2,
-            bp.BoundaryCity3,
-            bp.BoundaryCity4,
-            au.status AS Status
-        FROM app_user au
-        INNER JOIN boundary_pivot bp ON bp.app_user_id = au.id
-        LEFT JOIN last_audit la ON la.app_user_id = au.id
-        {whereSql}
-        ORDER BY COALESCE(la.LastAuditDate, au.created_date) DESC NULLS LAST
-        OFFSET @offset
-        LIMIT @pageSize;
-    ";
+                WITH boundary_ranked AS (
+                    SELECT
+                        b.app_user_id,
+                        b.address,
+                        ROW_NUMBER() OVER (
+                            PARTITION BY b.app_user_id
+                            ORDER BY b.created_date DESC, b.id DESC
+                        ) AS rn
+                    FROM app_user_city_boundary b
+                ),
+                boundary_pivot AS (
+                    SELECT
+                        app_user_id,
+                        MAX(CASE WHEN rn = 1 THEN address END) AS BoundaryCity1,
+                        MAX(CASE WHEN rn = 2 THEN address END) AS BoundaryCity2,
+                        MAX(CASE WHEN rn = 3 THEN address END) AS BoundaryCity3,
+                        MAX(CASE WHEN rn = 4 THEN address END) AS BoundaryCity4
+                    FROM boundary_ranked
+                    WHERE rn <= 4
+                    GROUP BY app_user_id
+                ),
+                last_audit AS (
+                    SELECT
+                        ta.app_user_id,
+                        MAX(COALESCE(
+                            ta.audit_execution_time,
+                            ta.audit_schedule_date::timestamp,
+                            ta.created_date
+                        )) AS LastAuditDate
+                    FROM trx_audit ta
+                    GROUP BY ta.app_user_id
+                )
+                SELECT
+                    au.id AS Id,
+                    au.id AS AppUserId,
+                    au.name AS AuditorName,
+                    au.username AS AuditorUsername,
+                    la.LastAuditDate,
+                    bp.BoundaryCity1,
+                    bp.BoundaryCity2,
+                    bp.BoundaryCity3,
+                    bp.BoundaryCity4,
+                    au.status AS Status
+                FROM app_user au
+                INNER JOIN boundary_pivot bp ON bp.app_user_id = au.id
+                LEFT JOIN last_audit la ON la.app_user_id = au.id
+                {whereSql}
+                ORDER BY COALESCE(la.LastAuditDate, au.created_date) DESC NULLS LAST
+                OFFSET @offset
+                LIMIT @pageSize;
+            ";
 
             var items = (await conn.QueryAsync<CityBoundaryListVm>(dataSql, new
             {
@@ -143,13 +143,16 @@ namespace e_Pas_CMS.Controllers
             if (conn.State != ConnectionState.Open)
                 await conn.OpenAsync();
 
+            var keyword = searchTerm ?? "";
+            var selectedStatus = status ?? "";
+
             var whereSql = @"
                 WHERE 1=1
                   AND (@status = '' OR t.status = @status)
                   AND (
                         @searchTerm = ''
-                        OR LOWER(au.name) LIKE LOWER('%' || @searchTerm || '%')
-                        OR LOWER(au.username) LIKE LOWER('%' || @searchTerm || '%')
+                        OR LOWER(COALESCE(au.name, '')) LIKE LOWER('%' || @searchTerm || '%')
+                        OR LOWER(COALESCE(au.username, '')) LIKE LOWER('%' || @searchTerm || '%')
                         OR LOWER(COALESCE(t.status, '')) LIKE LOWER('%' || @searchTerm || '%')
                   )
             ";
@@ -161,13 +164,13 @@ namespace e_Pas_CMS.Controllers
                 {whereSql};
             ", new
             {
-                searchTerm = searchTerm ?? "",
-                status = status ?? ""
+                searchTerm = keyword,
+                status = selectedStatus
             });
 
             var items = (await conn.QueryAsync<CityBoundaryListVm>($@"
                 SELECT
-                    t.id,
+                    t.id AS Id,
                     t.app_user_id AS AppUserId,
                     au.name AS AuditorName,
                     au.username AS AuditorUsername,
@@ -176,7 +179,7 @@ namespace e_Pas_CMS.Controllers
                     t.boundary_city_2 AS BoundaryCity2,
                     t.boundary_city_3 AS BoundaryCity3,
                     t.boundary_city_4 AS BoundaryCity4,
-                    t.status
+                    t.status AS Status
                 FROM trx_city_boundary_request t
                 INNER JOIN app_user au ON au.id = t.app_user_id
                 {whereSql}
@@ -187,8 +190,8 @@ namespace e_Pas_CMS.Controllers
                 LIMIT @pageSize;
             ", new
             {
-                searchTerm = searchTerm ?? "",
-                status = status ?? "",
+                searchTerm = keyword,
+                status = selectedStatus,
                 offset = (pageNumber - 1) * pageSize,
                 pageSize
             })).ToList();
@@ -216,91 +219,96 @@ namespace e_Pas_CMS.Controllers
                 await conn.OpenAsync();
 
             var model = await conn.QueryFirstOrDefaultAsync<CityBoundaryDetailVm>(@"
-        WITH boundary_ranked AS (
-            SELECT
-                b.app_user_id,
-                b.address,
-                ROW_NUMBER() OVER (
-                    PARTITION BY b.app_user_id
-                    ORDER BY b.created_date DESC, b.id DESC
-                ) AS rn
-            FROM app_user_city_boundary b
-            WHERE b.app_user_id = @appUserId
-        ),
-        boundary_pivot AS (
-            SELECT
-                app_user_id,
-                MAX(CASE WHEN rn = 1 THEN address END) AS BoundaryCity1,
-                MAX(CASE WHEN rn = 2 THEN address END) AS BoundaryCity2,
-                MAX(CASE WHEN rn = 3 THEN address END) AS BoundaryCity3,
-                MAX(CASE WHEN rn = 4 THEN address END) AS BoundaryCity4
-            FROM boundary_ranked
-            WHERE rn <= 4
-            GROUP BY app_user_id
-        ),
-        last_audit AS (
-            SELECT
-                ta.app_user_id,
-                MAX(COALESCE(
-                    ta.audit_execution_time,
-                    ta.audit_schedule_date::timestamp,
-                    ta.created_date
-                )) AS LastAuditDate
-            FROM trx_audit ta
-            WHERE ta.app_user_id = @appUserId
-            GROUP BY ta.app_user_id
-        )
-        SELECT
-            au.id AS Id,
-            au.id AS AppUserId,
-            au.name AS AuditorName,
-            au.username AS AuditorUsername,
-            au.phone_number AS AuditorPhone,
-            au.email AS AuditorEmail,
-            au.status AS AuditorStatus,
-            la.LastAuditDate,
-            bp.BoundaryCity1,
-            bp.BoundaryCity2,
-            bp.BoundaryCity3,
-            bp.BoundaryCity4,
-            au.status AS Status,
-            NULL AS Notes,
-            NULL AS ApprovalNotes
-        FROM app_user au
-        INNER JOIN boundary_pivot bp ON bp.app_user_id = au.id
-        LEFT JOIN last_audit la ON la.app_user_id = au.id
-        WHERE au.id = @appUserId
-        LIMIT 1;
-    ", new { appUserId = id });
+                WITH boundary_ranked AS (
+                    SELECT
+                        b.app_user_id,
+                        b.address,
+                        ROW_NUMBER() OVER (
+                            PARTITION BY b.app_user_id
+                            ORDER BY b.created_date DESC, b.id DESC
+                        ) AS rn
+                    FROM app_user_city_boundary b
+                    WHERE b.app_user_id = @appUserId
+                ),
+                boundary_pivot AS (
+                    SELECT
+                        app_user_id,
+                        MAX(CASE WHEN rn = 1 THEN address END) AS BoundaryCity1,
+                        MAX(CASE WHEN rn = 2 THEN address END) AS BoundaryCity2,
+                        MAX(CASE WHEN rn = 3 THEN address END) AS BoundaryCity3,
+                        MAX(CASE WHEN rn = 4 THEN address END) AS BoundaryCity4
+                    FROM boundary_ranked
+                    WHERE rn <= 4
+                    GROUP BY app_user_id
+                ),
+                last_audit AS (
+                    SELECT
+                        ta.app_user_id,
+                        MAX(COALESCE(
+                            ta.audit_execution_time,
+                            ta.audit_schedule_date::timestamp,
+                            ta.created_date
+                        )) AS LastAuditDate
+                    FROM trx_audit ta
+                    WHERE ta.app_user_id = @appUserId
+                    GROUP BY ta.app_user_id
+                )
+                SELECT
+                    au.id AS Id,
+                    au.id AS AppUserId,
+                    au.name AS AuditorName,
+                    au.username AS AuditorUsername,
+                    au.phone_number AS AuditorPhone,
+                    au.email AS AuditorEmail,
+                    au.status AS AuditorStatus,
+                    la.LastAuditDate,
+                    bp.BoundaryCity1,
+                    bp.BoundaryCity2,
+                    bp.BoundaryCity3,
+                    bp.BoundaryCity4,
+                    au.status AS Status,
+                    NULL AS Notes,
+                    NULL AS ApprovalNotes
+                FROM app_user au
+                INNER JOIN boundary_pivot bp ON bp.app_user_id = au.id
+                LEFT JOIN last_audit la ON la.app_user_id = au.id
+                WHERE au.id = @appUserId
+                LIMIT 1;
+            ", new { appUserId = id });
 
             if (model == null)
                 return NotFound();
 
-            model.AuditHistories = (await conn.QueryAsync<CityBoundaryAuditHistoryVm>(@"
-        SELECT
-            ta.id AS TrxAuditId,
-            ta.report_no AS ReportNo,
-            COALESCE(
-                ta.audit_execution_time,
-                ta.audit_schedule_date::timestamp,
-                ta.created_date
-            ) AS AuditDate,
-            ta.audit_type AS AuditType,
-            ta.audit_level AS AuditLevel,
-            s.spbu_no AS SpbuNo,
-            s.address AS SpbuAddress,
-            COALESCE(tid.amount, 0) AS Amount
-        FROM trx_audit ta
-        INNER JOIN spbu s ON s.id = ta.spbu_id
-        LEFT JOIN trx_invoice_detail tid ON tid.trx_audit_id = ta.id
-        WHERE ta.app_user_id = @appUserId
-        ORDER BY COALESCE(
-            ta.audit_execution_time,
-            ta.audit_schedule_date::timestamp,
-            ta.created_date
-        ) DESC
-        LIMIT 30;
-    ", new { appUserId = model.AppUserId })).ToList();
+            var invoiceAmountCteSql = await BuildInvoiceAmountCteSqlAsync(conn);
+
+            model.AuditHistories = (await conn.QueryAsync<CityBoundaryAuditHistoryVm>($@"
+                WITH invoice_amount AS (
+                    {invoiceAmountCteSql}
+                )
+                SELECT
+                    ta.id AS TrxAuditId,
+                    ta.report_no AS ReportNo,
+                    COALESCE(
+                        ta.audit_execution_time,
+                        ta.audit_schedule_date::timestamp,
+                        ta.created_date
+                    ) AS AuditDate,
+                    ta.audit_type AS AuditType,
+                    ta.audit_level AS AuditLevel,
+                    s.spbu_no AS SpbuNo,
+                    s.address AS SpbuAddress,
+                    COALESCE(ia.amount, 0) AS Amount
+                FROM trx_audit ta
+                INNER JOIN spbu s ON s.id = ta.spbu_id
+                LEFT JOIN invoice_amount ia ON ia.trx_audit_id = ta.id
+                WHERE ta.app_user_id = @appUserId
+                ORDER BY COALESCE(
+                    ta.audit_execution_time,
+                    ta.audit_schedule_date::timestamp,
+                    ta.created_date
+                ) DESC
+                LIMIT 30;
+            ", new { appUserId = model.AppUserId })).ToList();
 
             return View(model);
         }
@@ -403,7 +411,11 @@ namespace e_Pas_CMS.Controllers
                 SELECT
                     uuid_generate_v4(),
                     au.id,
-                    MAX(COALESCE(ta.audit_execution_time, ta.audit_schedule_date::timestamp, ta.created_date)) AS last_audit_date,
+                    MAX(COALESCE(
+                        ta.audit_execution_time,
+                        ta.audit_schedule_date::timestamp,
+                        ta.created_date
+                    )) AS last_audit_date,
                     au.city_name,
                     NULL,
                     NULL,
@@ -427,6 +439,89 @@ namespace e_Pas_CMS.Controllers
 
             TempData["Success"] = "Data batas kota berhasil digenerate dari auditor aktif.";
             return RedirectToAction(nameof(Index));
+        }
+
+        private static async Task<string> BuildInvoiceAmountCteSqlAsync(IDbConnection conn)
+        {
+            var columns = (await conn.QueryAsync<string>(@"
+                SELECT LOWER(column_name)
+                FROM information_schema.columns
+                WHERE table_schema = 'public'
+                  AND table_name = 'trx_invoice_detail';
+            ")).ToHashSet();
+
+            if (!columns.Contains("trx_audit_id"))
+            {
+                return @"
+                    SELECT
+                        ta_empty.id AS trx_audit_id,
+                        0::numeric AS amount
+                    FROM trx_audit ta_empty
+                    WHERE 1 = 0
+                ";
+            }
+
+            string? amountExpression = null;
+
+            var singleAmountColumns = new[]
+            {
+                "amount",
+                "total_amount",
+                "invoice_amount",
+                "grand_total",
+                "subtotal",
+                "sub_total",
+                "total",
+                "total_price",
+                "net_amount",
+                "base_amount",
+                "price",
+                "value"
+            };
+
+            foreach (var column in singleAmountColumns)
+            {
+                if (columns.Contains(column))
+                {
+                    amountExpression = $"COALESCE(tid.{column}, 0)";
+                    break;
+                }
+            }
+
+            if (amountExpression == null)
+            {
+                if (columns.Contains("unit_price") && columns.Contains("quantity"))
+                {
+                    amountExpression = "COALESCE(tid.unit_price, 0) * COALESCE(tid.quantity, 0)";
+                }
+                else if (columns.Contains("price") && columns.Contains("quantity"))
+                {
+                    amountExpression = "COALESCE(tid.price, 0) * COALESCE(tid.quantity, 0)";
+                }
+                else if (columns.Contains("rate") && columns.Contains("quantity"))
+                {
+                    amountExpression = "COALESCE(tid.rate, 0) * COALESCE(tid.quantity, 0)";
+                }
+            }
+
+            if (amountExpression == null)
+            {
+                return @"
+                    SELECT
+                        tid.trx_audit_id,
+                        0::numeric AS amount
+                    FROM trx_invoice_detail tid
+                    GROUP BY tid.trx_audit_id
+                ";
+            }
+
+            return $@"
+                SELECT
+                    tid.trx_audit_id,
+                    SUM(({amountExpression})::numeric) AS amount
+                FROM trx_invoice_detail tid
+                GROUP BY tid.trx_audit_id
+            ";
         }
     }
 }
