@@ -38,7 +38,7 @@
 
     .page-title {
         margin: 0;
-        font-size: 1.35rem;
+        font-size: 12px !important;
         font-weight: 800;
         color: #111827;
         letter-spacing: -0.02em;
@@ -47,7 +47,7 @@
     .page-subtitle {
         margin-top: 5px;
         color: #6b7280;
-        font-size: 0.88rem;
+        font-size: 12px !important;
     }
 
     .summary-grid {
@@ -67,15 +67,15 @@
 
     .summary-label {
         color: #64748b;
-        font-size: 0.78rem;
+        font-size: 12px !important;
         font-weight: 700;
         text-transform: uppercase;
-        letter-spacing: 0.06em;
+        letter-spacing: 0.04em;
     }
 
     .summary-value {
         margin-top: 8px;
-        font-size: 1.35rem;
+        font-size: 12px !important;
         font-weight: 800;
         color: #111827;
     }
@@ -97,7 +97,7 @@
         border-radius: 12px;
         border: 1px solid #dbe1ea;
         padding: 10px 14px;
-        font-size: 0.9rem;
+        font-size: 12px !important;
         color: #111827;
         background: #ffffff;
     }
@@ -114,8 +114,9 @@
     .btn {
         border-radius: 12px;
         font-weight: 700;
-        font-size: 0.86rem;
+        font-size: 12px !important;
         padding: 9px 14px;
+        line-height: 1.2;
     }
 
     .btn-dark-blue {
@@ -144,37 +145,48 @@
 
     .table-card {
         padding: 0;
+        overflow: hidden;
     }
 
-    .table {
+    .table-responsive {
+        width: 100%;
+        overflow-x: auto;
+    }
+
+    .table-card .table {
+        width: 100%;
         margin-bottom: 0;
-        font-size: 0.9rem;
+        font-size: 12px !important;
+        border-collapse: separate;
+        border-spacing: 0;
     }
 
-        .table thead th {
+        .table-card .table thead th {
             background: #f8fafc;
             color: #64748b;
-            font-size: 0.73rem;
+            font-size: 12px !important;
             font-weight: 800;
             text-transform: uppercase;
-            letter-spacing: 0.06em;
+            letter-spacing: 0.04em;
             border-bottom: 1px solid #e5e7eb;
             padding: 15px 16px;
             white-space: nowrap;
+            vertical-align: middle !important;
         }
 
-        .table tbody td {
+        .table-card .table tbody td {
             padding: 16px;
             border-bottom: 1px solid #edf0f4;
             color: #374151;
-            vertical-align: middle;
+            vertical-align: middle !important;
+            font-size: 12px !important;
         }
 
-        .table tbody tr:last-child td {
+        .table-card .table tbody tr:last-child td {
             border-bottom: none;
         }
 
-        .table tbody tr:hover td {
+        .table-card .table tbody tr:hover td {
             background: #fafafa;
         }
 
@@ -182,28 +194,31 @@
         color: #94a3b8;
         font-weight: 700;
         width: 70px;
+        white-space: nowrap;
     }
 
     .role-name {
         font-weight: 800;
         color: #111827;
+        font-size: 12px !important;
     }
 
     .role-meta {
         color: #6b7280;
-        font-size: 0.82rem;
+        font-size: 12px !important;
         margin-top: 2px;
     }
 
     .app-pill {
         display: inline-flex;
         align-items: center;
+        justify-content: center;
         padding: 6px 11px;
         border-radius: 999px;
         background: #f1f5f9;
         color: #334155;
         font-weight: 700;
-        font-size: 0.8rem;
+        font-size: 12px !important;
         white-space: nowrap;
     }
 
@@ -221,9 +236,10 @@
         border-radius: 999px;
         background: #eff6ff;
         color: #1d4ed8;
-        font-size: 0.75rem;
+        font-size: 12px !important;
         font-weight: 700;
         line-height: 1.2;
+        white-space: nowrap;
     }
 
     .permission-more {
@@ -234,10 +250,11 @@
     .status-badge {
         display: inline-flex;
         align-items: center;
+        justify-content: center;
         gap: 6px;
         padding: 6px 12px;
         border-radius: 999px;
-        font-size: 0.78rem;
+        font-size: 12px !important;
         font-weight: 800;
         white-space: nowrap;
     }
@@ -257,17 +274,39 @@
         height: 7px;
         border-radius: 50%;
         background: currentColor;
+        flex: 0 0 auto;
+    }
+
+    .action-cell {
+        width: 120px;
+        min-width: 120px;
+        white-space: nowrap;
+    }
+
+    .action-group {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        flex-wrap: nowrap;
+        white-space: nowrap;
     }
 
     .btn-action {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 4px;
         background: #ffffff;
         border: 1px solid #dbe1ea;
         color: #344054;
         padding: 7px 11px;
         border-radius: 10px;
         font-weight: 700;
-        font-size: 0.82rem;
+        font-size: 12px !important;
+        line-height: 1.2;
         white-space: nowrap;
+        text-decoration: none;
     }
 
         .btn-action:hover {
@@ -276,10 +315,17 @@
             color: #ffffff;
         }
 
+        .btn-action i,
+        .btn-dark-blue i {
+            font-size: 12px !important;
+            line-height: 1;
+        }
+
     .empty-state {
         padding: 44px 20px;
         text-align: center;
         color: #6b7280;
+        font-size: 12px !important;
     }
 
     .empty-icon {
@@ -292,7 +338,7 @@
         align-items: center;
         justify-content: center;
         color: #9ca3af;
-        font-size: 1.4rem;
+        font-size: 12px !important;
     }
 
     .pagination-wrapper {
@@ -306,7 +352,7 @@
 
     .pagination-info {
         color: #6b7280;
-        font-size: 0.85rem;
+        font-size: 12px !important;
         font-weight: 600;
     }
 
@@ -320,7 +366,7 @@
             border: 1px solid #dbe1ea;
             color: #475467;
             font-weight: 700;
-            font-size: 0.84rem;
+            font-size: 12px !important;
             min-width: 38px;
             text-align: center;
         }
@@ -342,6 +388,7 @@
         background: #f0fdf4;
         color: #166534;
         font-weight: 700;
+        font-size: 12px !important;
     }
 
     @@media (max-width: 992px) {
@@ -364,8 +411,13 @@
             padding: 14px;
         }
 
-        .table thead {
+        .table-card .table thead {
             white-space: nowrap;
+        }
+
+        .action-cell {
+            width: 120px;
+            min-width: 120px;
         }
     }
 </style>
@@ -434,13 +486,13 @@
         <div class="table-responsive">
             <table class="table table-hover align-middle">
                 <thead>
-                    <tr class="align-middle">
+                    <tr>
                         <th class="text-center">No</th>
                         <th>Nama Role</th>
                         <th class="text-center">App</th>
                         <th>Permission</th>
                         <th class="text-center">Status</th>
-                        <th class="text-center">Action</th>
+                        <th class="text-center action-cell">Action</th>
                     </tr>
                 </thead>
 
@@ -494,17 +546,22 @@
                                     </span>
                                 </td>
 
-                                @if (User.HasPermission("ROLE_EDIT", "AROLE"))
-                                {
-                                    <a href="@Url.Action("Edit", "RoleManagement", new { id = item.Id })"
-                                       class="btn btn-action">
-                                        <i class="bi bi-pencil-square me-1"></i> Edit
-                                    </a>
-                                }
-                                else
-                                {
-                                    <span class="text-muted small">No Access</span>
-                                }
+                                <td class="text-center action-cell">
+                                    @if (User.HasPermission("ROLE_EDIT", "AROLE"))
+                                    {
+                                        <div class="action-group">
+                                            <a href="@Url.Action("Edit", "RoleManagement", new { id = item.Id })"
+                                               class="btn btn-action">
+                                                <i class="bi bi-pencil-square"></i>
+                                                Edit
+                                            </a>
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted small">No Access</span>
+                                    }
+                                </td>
                             </tr>
 
                             rowNumber++;
