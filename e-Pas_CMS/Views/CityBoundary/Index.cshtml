@@ -1,0 +1,199 @@
+﻿@model e_Pas_CMS.ViewModels.PaginationModel<e_Pas_CMS.ViewModels.CityBoundaryListVm>
+
+@{
+    ViewData["Title"] = "List Batas Kota Auditor";
+}
+
+@section Styles {
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+
+    <style>
+        .boundary-page {
+            background: #f4f5f8;
+            min-height: calc(100vh - 120px);
+            padding: 28px 22px;
+        }
+
+        .page-title {
+            font-size: 28px;
+            font-weight: 800;
+            color: #111827;
+            margin-bottom: 28px;
+        }
+
+        .filter-card {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 28px;
+            flex-wrap: wrap;
+        }
+
+        .search-input {
+            width: 520px;
+            max-width: 100%;
+            height: 48px;
+            border: 1px solid #e5e7eb;
+            border-radius: 10px;
+            padding: 0 16px;
+            background: #fff;
+        }
+
+        .btn-cyan {
+            background: #21B6D7;
+            border: 0;
+            color: #fff;
+            border-radius: 10px;
+            padding: 0 22px;
+            height: 48px;
+            font-weight: 700;
+        }
+
+        .table-card {
+            background: #fff;
+            border-radius: 12px;
+            overflow: hidden;
+            border: 1px solid #e5e7eb;
+        }
+
+        .table {
+            margin: 0;
+            color: #111827;
+        }
+
+            .table thead th {
+                background: #eaeaea;
+                border: none;
+                padding: 18px 24px;
+                font-weight: 800;
+                color: #111827;
+                white-space: nowrap;
+            }
+
+            .table tbody td {
+                border: none;
+                padding: 18px 24px;
+                vertical-align: middle;
+                white-space: nowrap;
+            }
+
+            .table tbody tr {
+                border-bottom: 1px solid #f1f5f9;
+            }
+
+                .table tbody tr:hover td {
+                    background: #f8fafc;
+                }
+
+        .btn-icon {
+            width: 34px;
+            height: 34px;
+            border-radius: 50%;
+            border: 0;
+            background: #21B6D7;
+            color: #fff;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            text-decoration: none;
+        }
+
+        .pagination .page-link {
+            border: 0;
+            color: #111827;
+            background: transparent;
+            border-radius: 8px;
+            margin: 0 2px;
+        }
+
+        .pagination .active .page-link {
+            background: #21B6D7;
+            color: #fff;
+        }
+    </style>
+}
+
+<div class="boundary-page">
+
+    <h3 class="page-title">List Batas Kota Auditor</h3>
+
+    @if (TempData["Success"] != null)
+    {
+        <div class="alert alert-success rounded-3">@TempData["Success"]</div>
+    }
+
+    <form method="get" class="filter-card">
+        <input type="text"
+               name="searchTerm"
+               value="@ViewBag.SearchTerm"
+               class="search-input"
+               placeholder="Cari nama auditor" />
+
+        <select name="pageSize" class="search-input" style="width:180px;">
+            @{
+                var sizes = new[] { 10, 25, 50 };
+                foreach (var s in sizes)
+                {
+                    <option value="@s" selected="@(Model.PageSize == s)">@s per halaman</option>
+                }
+            }
+        </select>
+
+        <button class="btn-cyan" type="submit">
+            Cari
+        </button>
+    </form>
+
+    <div class="table-card">
+        <div class="table-responsive">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Auditor</th>
+                        <th>Tanggal Audit<br />Terakhir</th>
+                        <th>Batas Kota 1</th>
+                        <th>Batas Kota 2</th>
+                        <th>Batas Kota 3</th>
+                        <th>Batas Kota 4</th>
+                        <th class="text-center">Action</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+                    @if (Model.Items != null && Model.Items.Any())
+                    {
+                        foreach (var item in Model.Items)
+                        {
+                            <tr>
+                                <td>@item.AuditorName</td>
+                                <td>@(item.LastAuditDate?.ToString("dd/MM/yyyy") ?? "-")</td>
+                                <td>@(item.BoundaryCity1 ?? "-")</td>
+                                <td>@(item.BoundaryCity2 ?? "-")</td>
+                                <td>@(item.BoundaryCity3 ?? "-")</td>
+                                <td>@(item.BoundaryCity4 ?? "-")</td>
+                                <td class="text-center">
+                                    <a class="btn-icon"
+                                       asp-controller="CityBoundary"
+                                       asp-action="Detail"
+                                       asp-route-id="@item.Id"
+                                       title="Detail">
+                                        <i class="bi bi-eye-fill"></i>
+                                    </a>
+                                </td>
+                            </tr>
+                        }
+                    }
+                    else
+                    {
+                        <tr>
+                            <td colspan="7" class="text-center py-5 text-muted">
+                                Data tidak ditemukan
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    @await Html.PartialAsync("_CityBoundaryPagination", Model)
+</div>

@@ -15,6 +15,8 @@ using Microsoft.EntityFrameworkCore;
 using Npgsql;
 using QuestPDF.Fluent;
 using static NpgsqlTypes.NpgsqlTsQuery;
+using System.Text.Json;
+using System.Text.RegularExpressions;
 
 namespace e_Pas_CMS.Controllers
 {
@@ -25,6 +27,11 @@ namespace e_Pas_CMS.Controllers
         private const int DefaultPageSize = 10;
         private readonly ILogger<AuditController> _logger;
         private readonly IConfiguration _configuration;
+
+        // ✅ PARAMETER TANGGAL MIGRASI PRIMARY MEDIA
+        // Audit sebelum tanggal ini: behavior existing, abaikan is_star
+        // Audit tanggal ini dan setelahnya: gunakan is_star sebagai primary
+        private static readonly DateTime PrimaryMediaMigrationDate = new DateTime(2025, 6, 1);
 
         public AuditController(EpasDbContext context, ILogger<AuditController> logger, IConfiguration configuration)
         {
@@ -58,7 +65,7 @@ namespace e_Pas_CMS.Controllers
                     .Distinct()
                     .ToListAsync();
                 var query =
-    from a in _context.trx_audits
+    from a in _context.trx_audits.AsNoTracking()
     join s in _context.spbus on a.spbu_id equals s.id
 
     // Auditor 1 (LEFT JOIN)
@@ -449,7 +456,7 @@ WHERE
                 if (!Directory.Exists(outputDirectory))
                     Directory.CreateDirectory(outputDirectory);
 
-                var auditIds = await _context.trx_audits
+                var auditIds = await _context.trx_audits.AsNoTracking()
                     .Where(a => a.status == "VERIFIED" && a.audit_type != "Basic Operational" && a.report_file_excellent == null && a.id == ids)
                     .OrderByDescending(a => a.audit_execution_time)
                     //.Take(10)
@@ -511,7 +518,7 @@ WHERE
                 if (!Directory.Exists(outputDirectory))
                     Directory.CreateDirectory(outputDirectory);
 
-                var auditIds = await _context.trx_audits
+                var auditIds = await _context.trx_audits.AsNoTracking()
                     .Where(a => a.status == "VERIFIED" && a.audit_type != "Basic Operational" && a.report_file_good == null && a.id == ids)
                     .OrderByDescending(a => a.audit_execution_time)
                     //.Take(10)
@@ -721,19 +728,42 @@ WHERE
 
         private async Task<List<MediaItem>> GetMediaNotesAsync(IDbConnection conn, string id, string type)
         {
-            string sql = @"SELECT media_type, media_path
-                   FROM trx_audit_media
-                   WHERE trx_audit_id = @id AND type = @type";
+            var usePrimaryMedia = await ShouldUsePrimaryMediaAsync(conn, id);
 
-            var raw = await conn.QueryAsync<(string media_type, string media_path)>(sql, new { id, type });
+            string sql = @"
+        SELECT 
+            id,
+            media_type,
+            media_path,
+            COALESCE(is_star, false) AS is_star
+        FROM trx_audit_media
+        WHERE trx_audit_id = @id 
+          AND type = @type
+        ORDER BY
+            CASE 
+                WHEN @usePrimaryMedia THEN COALESCE(is_star, false)
+                ELSE false
+            END DESC,
+            created_date ASC";
+
+            var raw = await conn.QueryAsync<(string id, string media_type, string media_path, bool is_star)>(
+                sql,
+                new
+                {
+                    id,
+                    type,
+                    usePrimaryMedia
+                }
+            );
 
             return raw.Select(x => new MediaItem
             {
+                Id = x.id,
                 MediaType = x.media_type,
-                MediaPath = "https://epas-assets.zarata.co.id" + x.media_path
+                MediaPath = "https://epas-assets.zarata.co.id" + x.media_path,
+                IsStar = usePrimaryMedia && x.is_star
             }).ToList();
         }
-
         private async Task<List<AuditQqCheckItem>> GetQqCheckDataAsync(IDbConnection conn, string id)
         {
             string sql = @"SELECT id AS Id, nozzle_number AS NozzleNumber,
@@ -757,22 +787,200 @@ WHERE
 
         private async Task<List<FotoTemuan>> GetMediaReportFAsync(IDbConnection conn, string id)
         {
-            string sql = @"SELECT ac.""comment"" as title,am.media_path
-                        FROM trx_audit_media am
-                        JOIN trx_audit_checklist ac
-                          ON am.trx_audit_id = ac.trx_audit_id
-                          AND am.master_questioner_detail_id = ac.master_questioner_detail_id
-                         join master_questioner_detail mqd on mqd.id  = ac.master_questioner_detail_id 
-                        WHERE ac.score_input = 'F'
-                          AND am.trx_audit_id = @id";
+            var usePrimaryMedia = await ShouldUsePrimaryMediaAsync(conn, id);
 
-            var raw = await conn.QueryAsync<(string media_type, string media_path)>(sql, new { id });
+            string sql = @"
+        SELECT DISTINCT ON (am.master_questioner_detail_id)
+            ac.""comment"" AS title,
+            am.media_path,
+            am.media_type,
+            COALESCE(am.is_star, false) AS is_star
+        FROM trx_audit_media am
+        JOIN trx_audit_checklist ac
+          ON am.trx_audit_id = ac.trx_audit_id
+         AND am.master_questioner_detail_id = ac.master_questioner_detail_id
+        JOIN master_questioner_detail mqd 
+          ON mqd.id = ac.master_questioner_detail_id
+        WHERE ac.score_input = 'F'
+          AND am.trx_audit_id = @id
+        ORDER BY 
+            am.master_questioner_detail_id,
+            CASE 
+                WHEN @usePrimaryMedia THEN COALESCE(am.is_star, false)
+                ELSE false
+            END DESC,
+            am.created_date ASC";
+
+            var raw = await conn.QueryAsync<(string title, string media_path, string media_type, bool is_star)>(
+                sql,
+                new
+                {
+                    id,
+                    usePrimaryMedia
+                }
+            );
 
             return raw.Select(x => new FotoTemuan
             {
-                Caption = x.media_type,
+                Caption = x.title,
                 Path = x.media_path
             }).ToList();
+        }
+
+        public class StartReviewAuditRequest
+        {
+            public string AuditId { get; set; }
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> GetActiveReviewAudit()
+        {
+            var currentUser = User.Identity?.Name ?? "system";
+
+            await using var conn = new NpgsqlConnection(_configuration.GetConnectionString("DefaultConnection"));
+            await conn.OpenAsync();
+
+            var activeAudit = await conn.QueryFirstOrDefaultAsync<dynamic>(@"
+        SELECT 
+            ta.id,
+            s.spbu_no,
+            ta.report_no,
+            ta.review_audit_started_at
+        FROM trx_audit ta
+        JOIN spbu s ON s.id = ta.spbu_id
+        WHERE ta.status = 'UNDER_REVIEW'
+          AND ta.review_audit_started_at IS NOT NULL
+          AND ta.review_audit_finished_at IS NULL
+          AND ta.review_audit_started_by = @currentUser
+        ORDER BY ta.review_audit_started_at DESC
+        LIMIT 1;
+    ", new { currentUser });
+
+            if (activeAudit == null)
+            {
+                return Ok(new
+                {
+                    hasActive = false
+                });
+            }
+
+            return Ok(new
+            {
+                hasActive = true,
+                auditId = (string)activeAudit.id,
+                spbuNo = (string)activeAudit.spbu_no,
+                reportNo = (string)activeAudit.report_no,
+                startedAt = activeAudit.review_audit_started_at
+            });
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> StartReviewAudit([FromBody] StartReviewAuditRequest request)
+        {
+            if (request == null || string.IsNullOrWhiteSpace(request.AuditId))
+                return BadRequest("Audit tidak valid.");
+
+            var currentUser = User.Identity?.Name ?? "system";
+
+            await using var conn = new NpgsqlConnection(_configuration.GetConnectionString("DefaultConnection"));
+            await conn.OpenAsync();
+
+            await using var tx = await conn.BeginTransactionAsync();
+
+            try
+            {
+                var targetAudit = await conn.QueryFirstOrDefaultAsync<dynamic>(@"
+            SELECT 
+                ta.id,
+                ta.status,
+                ta.review_audit_started_at,
+                ta.review_audit_started_by,
+                ta.review_audit_finished_at,
+                s.spbu_no,
+                ta.report_no
+            FROM trx_audit ta
+            JOIN spbu s ON s.id = ta.spbu_id
+            WHERE ta.id = @auditId
+            LIMIT 1;
+        ", new { auditId = request.AuditId }, tx);
+
+                if (targetAudit == null)
+                    return NotFound("Data audit tidak ditemukan.");
+
+                if ((string)targetAudit.status != "UNDER_REVIEW")
+                    return BadRequest("Audit ini sudah tidak dalam status UNDER_REVIEW.");
+
+                var activeAudit = await conn.QueryFirstOrDefaultAsync<dynamic>(@"
+            SELECT 
+                ta.id,
+                s.spbu_no,
+                ta.report_no
+            FROM trx_audit ta
+            JOIN spbu s ON s.id = ta.spbu_id
+            WHERE ta.status = 'UNDER_REVIEW'
+              AND ta.review_audit_started_at IS NOT NULL
+              AND ta.review_audit_finished_at IS NULL
+              AND ta.review_audit_started_by = @currentUser
+              AND ta.id <> @auditId
+            LIMIT 1;
+        ", new
+                {
+                    currentUser,
+                    auditId = request.AuditId
+                }, tx);
+
+                if (activeAudit != null)
+                {
+                    return Conflict(new
+                    {
+                        message = "Anda masih memiliki audit review yang sedang berjalan. Selesaikan audit tersebut terlebih dahulu.",
+                        activeAuditId = (string)activeAudit.id,
+                        spbuNo = (string)activeAudit.spbu_no,
+                        reportNo = (string)activeAudit.report_no
+                    });
+                }
+
+                if (targetAudit.review_audit_started_at != null &&
+                    targetAudit.review_audit_finished_at == null &&
+                    ((string)targetAudit.review_audit_started_by) != currentUser)
+                {
+                    return Conflict(new
+                    {
+                        message = $"Audit ini sedang direview oleh {targetAudit.review_audit_started_by}."
+                    });
+                }
+
+                if (targetAudit.review_audit_started_at == null)
+                {
+                    await conn.ExecuteAsync(@"
+                UPDATE trx_audit
+                SET 
+                    review_audit_started_at = NOW(),
+                    review_audit_started_by = @currentUser,
+                    updated_date = NOW(),
+                    updated_by = @currentUser
+                WHERE id = @auditId;
+            ", new
+                    {
+                        auditId = request.AuditId,
+                        currentUser
+                    }, tx);
+                }
+
+                await tx.CommitAsync();
+
+                return Ok(new
+                {
+                    message = "Review audit dimulai.",
+                    auditId = request.AuditId
+                });
+            }
+            catch
+            {
+                await tx.RollbackAsync();
+                throw;
+            }
         }
 
         [HttpGet("Audit/Detail/{id}")]
@@ -781,7 +989,7 @@ WHERE
             var userIdString = User.FindFirstValue(ClaimTypes.NameIdentifier);
 
             var roleNames = await _context.app_user_roles
-                .Where(aur => aur.app_user_id == userIdString) // ✅ STRING vs STRING
+                .Where(aur => aur.app_user_id == userIdString)
                 .Join(_context.app_roles,
                       aur => aur.app_role_id,
                       ar => ar.id,
@@ -792,30 +1000,27 @@ WHERE
             ViewBag.IsSuperadmin = roleNames
                 .Any(r => r.Equals("Superadmin", StringComparison.OrdinalIgnoreCase));
 
-            // --- EF Core tetap pakai _context untuk data LINQ ---
             var audit = await (
-    from ta in _context.trx_audits
+                from ta in _context.trx_audits.AsNoTracking()
 
-        // JOIN auditor utama
-    join au in _context.app_users on ta.app_user_id equals au.id into aud1
-    from au in aud1.DefaultIfEmpty()
+                join au in _context.app_users on ta.app_user_id equals au.id into aud1
+                from au in aud1.DefaultIfEmpty()
 
-        // JOIN auditor kedua (LEFT JOIN)
-    join au2 in _context.app_users on ta.app_user_id_auditor2 equals au2.id into aud2
-    from au2 in aud2.DefaultIfEmpty()
+                join au2 in _context.app_users on ta.app_user_id_auditor2 equals au2.id into aud2
+                from au2 in aud2.DefaultIfEmpty()
 
-    join s in _context.spbus on ta.spbu_id equals s.id
+                join s in _context.spbus on ta.spbu_id equals s.id
 
-    where ta.id == id
+                where ta.id == id
 
-    select new DetailAuditViewModel
-    {
-        ReportNo = ta.report_no,
-        NamaAuditor = au.name,
-        Auditor2 = au2.name ?? "-",   // <--- tambahan
-        TanggalSubmit = (ta.audit_execution_time == null || ta.audit_execution_time.Value == DateTime.MinValue)
-                                    ? ta.updated_date.Value
-                                    : ta.audit_execution_time.Value,
+                select new DetailAuditViewModel
+                {
+                    ReportNo = ta.report_no,
+                    NamaAuditor = au.name,
+                    Auditor2 = au2.name ?? "-",
+                    TanggalSubmit = (ta.audit_execution_time == null || ta.audit_execution_time.Value == DateTime.MinValue)
+                                        ? ta.updated_date.Value
+                                        : ta.audit_execution_time.Value,
                     Status = ta.status,
                     SpbuNo = s.spbu_no,
                     Provinsi = s.province_name,
@@ -829,89 +1034,167 @@ WHERE
             if (audit == null)
                 return NotFound();
 
-            // --- OPEN NEW Dapper Connection ---
+            var currentUserName = User.Identity?.Name ?? "system";
+
+            var activeAuditForUser = await _context.trx_audits
+                .AsNoTracking()
+                .Where(x =>
+                    x.status == "UNDER_REVIEW" &&
+                    x.review_audit_started_at != null &&
+                    x.review_audit_finished_at == null &&
+                    x.review_audit_started_by == currentUserName &&
+                    x.id != id
+                )
+                .Select(x => x.id)
+                .FirstOrDefaultAsync();
+
+            if (!string.IsNullOrWhiteSpace(activeAuditForUser))
+            {
+                TempData["Error"] = "Anda masih memiliki audit review yang sedang berjalan. Selesaikan audit tersebut terlebih dahulu.";
+                return RedirectToAction("Detail", new { id = activeAuditForUser });
+            }
+
             var connectionString = _context.Database.GetConnectionString();
             await using var conn = new NpgsqlConnection(connectionString);
             await conn.OpenAsync();
 
+            var reviewStartInfo = await conn.QueryFirstOrDefaultAsync<dynamic>(@"
+    SELECT 
+        review_audit_started_at,
+        review_audit_started_by,
+        review_audit_finished_at
+    FROM trx_audit
+    WHERE id = @id
+    LIMIT 1;
+", new { id });
+
+            ViewBag.ReviewAuditStartedAt = reviewStartInfo?.review_audit_started_at;
+            ViewBag.ReviewAuditStartedBy = reviewStartInfo?.review_audit_started_by;
+            ViewBag.ReviewAuditFinishedAt = reviewStartInfo?.review_audit_finished_at;
+
+            // ✅ AUTO FILL CATATAN UMK DARI additional_info_json
+            await AutoFillUmkChecklistNotesAsync(conn, id);
+
+            // ✅ PRIMARY MEDIA hanya aktif mulai tanggal migrasi
+            var usePrimaryMedia = await ShouldUsePrimaryMediaAsync(conn, id);
+            ViewBag.UsePrimaryMedia = usePrimaryMedia;
+
             // Load QUESTION-type media notes
             var mediaQuestionSql = @"
-                SELECT media_path, media_type
-                FROM trx_audit_media
-                WHERE trx_audit_id = @id
-                  AND type = 'QUESTION'";
-            var mq = (await conn.QueryAsync<(string media_path, string media_type)>(mediaQuestionSql, new { id }))
-                       .ToList();
+        SELECT 
+            id,
+            media_path,
+            media_type,
+            COALESCE(is_star, false) AS is_star
+        FROM trx_audit_media
+        WHERE trx_audit_id = @id
+          AND type = 'QUESTION'
+        ORDER BY
+            CASE 
+                WHEN @usePrimaryMedia THEN COALESCE(is_star, false)
+                ELSE false
+            END DESC,
+            created_date ASC";
+
+            var mq = (await conn.QueryAsync<(string id, string media_path, string media_type, bool is_star)>(
+                    mediaQuestionSql,
+                    new
+                    {
+                        id,
+                        usePrimaryMedia
+                    }
+                ))
+                .ToList();
+
             if ((audit.AuditType == "Mystery Audit" || audit.AuditType == "Mystery Guest") && mq.Any())
             {
                 audit.MediaNotes = mq
                     .Select(x => new MediaItem
                     {
+                        Id = x.id,
                         MediaType = x.media_type,
-                        MediaPath = "https://epas-assets.zarata.co.id" + x.media_path
+                        MediaPath = "https://epas-assets.zarata.co.id" + x.media_path,
+                        IsStar = usePrimaryMedia && x.is_star
                     })
                     .ToList();
             }
 
-            // Load the flat checklist
             var checklistSql = @"
-                SELECT
-                  mqd.id,
-                  mqd.title,
-                  mqd.description,
-                  mqd.parent_id,
-                  mqd.type,
-                  mqd.weight,
-                  mqd.score_option,
-                  tac.score_input,
-                  tac.score_af,
-                  tac.score_x,
-                  tac.comment,
-                  mqd.is_penalty,
-                  mqd.order_no,
-                  mqd.is_relaksasi,
-                  mqd.number,
-                  (
-                    SELECT string_agg(mqd2.penalty_alert, ', ')
-                    FROM trx_audit_checklist tac2
-                    INNER JOIN master_questioner_detail mqd2 ON mqd2.id = tac2.master_questioner_detail_id
-                    WHERE 
-                      tac2.trx_audit_id = @id
-                      AND tac2.score_input = 'F'
-                      AND mqd2.is_penalty = true
-                  ) AS penalty_alert
-                FROM master_questioner_detail mqd
-                LEFT JOIN trx_audit_checklist tac
-                  ON tac.master_questioner_detail_id = mqd.id
-                 AND tac.trx_audit_id = @id
-                WHERE mqd.master_questioner_id = (
-                  SELECT master_questioner_checklist_id
-                  FROM trx_audit
-                  WHERE id = @id
-                )
-                ORDER BY mqd.order_no;";
+    SELECT
+      mqd.id,
+      mqd.title,
+      mqd.description,
+      mqd.parent_id,
+      mqd.type,
+      mqd.weight,
+      mqd.score_option,
+      tac.score_input,
+      tac.score_af,
+      tac.score_x,
+      tac.comment,
+      mqd.is_penalty,
+      mqd.order_no,
+      mqd.is_relaksasi,
+      mqd.number,
+      (
+        SELECT string_agg(mqd2.penalty_alert, ', ')
+        FROM trx_audit_checklist tac2
+        INNER JOIN master_questioner_detail mqd2 ON mqd2.id = tac2.master_questioner_detail_id
+        WHERE 
+          tac2.trx_audit_id = @id
+          AND tac2.score_input = 'F'
+          AND mqd2.is_penalty = true
+      ) AS penalty_alert
+    FROM master_questioner_detail mqd
+    LEFT JOIN trx_audit_checklist tac
+      ON tac.master_questioner_detail_id = mqd.id
+     AND tac.trx_audit_id = @id
+    WHERE mqd.master_questioner_id = (
+      SELECT master_questioner_checklist_id
+      FROM trx_audit
+      WHERE id = @id
+    )
+    ORDER BY mqd.order_no;";
+            var checklistData = await GetChecklistDataAsync(conn, id);
 
-            var checklistData = (await conn.QueryAsync<ChecklistFlatItem>(checklistSql, new { id }))
-                                    .ToList();
-
-            // Load any media per-node
             var mediaSql = @"
-                SELECT master_questioner_detail_id, media_type, media_path
-                FROM trx_audit_media
-                WHERE trx_audit_id = @id
-                  AND master_questioner_detail_id IS NOT NULL";
-            var mediaList = (await conn.QueryAsync<(string master_questioner_detail_id, string media_type, string media_path)>(mediaSql, new { id }))
+        SELECT 
+            id,
+            master_questioner_detail_id,
+            media_type,
+            media_path,
+            COALESCE(is_star, false) AS is_star
+        FROM trx_audit_media
+        WHERE trx_audit_id = @id
+          AND master_questioner_detail_id IS NOT NULL
+        ORDER BY 
+            master_questioner_detail_id,
+            CASE 
+                WHEN @usePrimaryMedia THEN COALESCE(is_star, false)
+                ELSE false
+            END DESC,
+            created_date ASC";
+
+            var mediaList = (await conn.QueryAsync<(string id, string master_questioner_detail_id, string media_type, string media_path, bool is_star)>(
+                    mediaSql,
+                    new
+                    {
+                        id,
+                        usePrimaryMedia
+                    }
+                ))
                 .GroupBy(x => x.master_questioner_detail_id)
                 .ToDictionary(
                     g => g.Key,
                     g => g.Select(m => new MediaItem
                     {
+                        Id = m.id,
                         MediaType = m.media_type,
-                        MediaPath = "https://epas-assets.zarata.co.id" + m.media_path
+                        MediaPath = "https://epas-assets.zarata.co.id" + m.media_path,
+                        IsStar = usePrimaryMedia && m.is_star
                     }).ToList()
                 );
 
-            // Build tree
             audit.Elements = BuildHierarchy(checklistData, mediaList);
 
             var validAF = new Dictionary<string, decimal>
@@ -933,7 +1216,6 @@ WHERE
                 string input = q.score_input?.Trim();
                 decimal weight = q.weight ?? 0m;
 
-                // Expand A-F into [A,B,C,D,E,F], then ensure X is in the list
                 var allowed = (q.score_option ?? "")
                     .Split('/', StringSplitOptions.RemoveEmptyEntries)
                     .SelectMany(opt =>
@@ -945,7 +1227,6 @@ WHERE
                     .Distinct()
                     .ToList();
 
-                // skip if empty or not in allowed
                 if (string.IsNullOrWhiteSpace(input) || !allowed.Contains(input))
                     continue;
 
@@ -955,7 +1236,6 @@ WHERE
                 }
                 else
                 {
-                    // Override input jadi F kalau relaksasi
                     if (q.is_relaksasi == true)
                         input = "F";
 
@@ -974,41 +1254,128 @@ WHERE
                 : 0m;
 
             var qqSql = @"
-    SELECT 
-       id AS Id,
-       nozzle_number AS NozzleNumber,
-       du_make  AS DuMake,
-       du_serial_no AS DuSerialNo,
-       product  AS Product,
-       mode     AS Mode,
-       quantity_variation_with_measure AS QuantityVariationWithMeasure,
-       quantity_variation_in_percentage  AS QuantityVariationInPercentage,
-       observed_density      AS ObservedDensity,
-       observed_temp         AS ObservedTemp,
-       observed_density_15_degree   AS ObservedDensity15Degree,
-       reference_density_15_degree  AS ReferenceDensity15Degree,
-       tank_number  AS TankNumber,
-       density_variation AS DensityVariation
-    FROM trx_audit_qq
-    WHERE trx_audit_id = @id";
+        SELECT 
+           id AS Id,
+           nozzle_number AS NozzleNumber,
+           du_make  AS DuMake,
+           du_serial_no AS DuSerialNo,
+           product  AS Product,
+           mode     AS Mode,
+           quantity_variation_with_measure AS QuantityVariationWithMeasure,
+           quantity_variation_in_percentage  AS QuantityVariationInPercentage,
+           observed_density      AS ObservedDensity,
+           observed_temp         AS ObservedTemp,
+           observed_density_15_degree   AS ObservedDensity15Degree,
+           reference_density_15_degree  AS ReferenceDensity15Degree,
+           tank_number  AS TankNumber,
+           density_variation AS DensityVariation
+        FROM trx_audit_qq
+        WHERE trx_audit_id = @id";
+
             audit.QqChecks = (await conn.QueryAsync<AuditQqCheckItem>(qqSql, new { id })).ToList();
 
-
             var finalMediaSql = @"
-                SELECT media_type, media_path
-                FROM trx_audit_media
-                WHERE trx_audit_id = @id
-                  AND type = 'FINAL'";
-            audit.FinalDocuments = (await conn.QueryAsync<(string media_type, string media_path)>(finalMediaSql, new { id }))
+        SELECT 
+            id,
+            media_type,
+            media_path,
+            COALESCE(is_star, false) AS is_star
+        FROM trx_audit_media
+        WHERE trx_audit_id = @id
+          AND type = 'FINAL'
+        ORDER BY
+            CASE 
+                WHEN @usePrimaryMedia THEN COALESCE(is_star, false)
+                ELSE false
+            END DESC,
+            created_date ASC";
+
+            audit.FinalDocuments = (await conn.QueryAsync<(string id, string media_type, string media_path, bool is_star)>(
+                    finalMediaSql,
+                    new
+                    {
+                        id,
+                        usePrimaryMedia
+                    }
+                ))
                 .Select(x => new MediaItem
                 {
+                    Id = x.id,
                     MediaType = x.media_type,
-                    MediaPath = "https://epas-assets.zarata.co.id" + x.media_path
+                    MediaPath = "https://epas-assets.zarata.co.id" + x.media_path,
+                    IsStar = usePrimaryMedia && x.is_star
                 })
                 .ToList();
 
             ViewBag.AuditId = id;
             return View(audit);
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> SetPrimaryMedia([FromBody] SetPrimaryMediaRequest req)
+        {
+            if (req == null ||
+                string.IsNullOrWhiteSpace(req.AuditId) ||
+                string.IsNullOrWhiteSpace(req.NodeId) ||
+                string.IsNullOrWhiteSpace(req.MediaId))
+            {
+                return BadRequest("Data tidak lengkap.");
+            }
+
+            var currentUser = User.Identity?.Name ?? "system";
+
+            var connectionString = _context.Database.GetConnectionString();
+            await using var conn = new NpgsqlConnection(connectionString);
+            await conn.OpenAsync();
+
+            var usePrimaryMedia = await ShouldUsePrimaryMediaAsync(conn, req.AuditId);
+            if (!usePrimaryMedia)
+            {
+                return BadRequest("Primary foto/video hanya berlaku untuk audit setelah tanggal migrasi.");
+            }
+
+            await using var tx = await conn.BeginTransactionAsync();
+
+            await conn.ExecuteAsync(@"
+        UPDATE trx_audit_media
+        SET is_star = false,
+            updated_by = @updatedBy,
+            updated_date = NOW()
+        WHERE trx_audit_id = @auditId
+          AND master_questioner_detail_id = @nodeId;
+    ", new
+            {
+                auditId = req.AuditId,
+                nodeId = req.NodeId,
+                updatedBy = currentUser
+            }, tx);
+
+            var affected = await conn.ExecuteAsync(@"
+        UPDATE trx_audit_media
+        SET is_star = true,
+            updated_by = @updatedBy,
+            updated_date = NOW()
+        WHERE id = @mediaId
+          AND trx_audit_id = @auditId
+          AND master_questioner_detail_id = @nodeId;
+    ", new
+            {
+                mediaId = req.MediaId,
+                auditId = req.AuditId,
+                nodeId = req.NodeId,
+                updatedBy = currentUser
+            }, tx);
+
+            if (affected == 0)
+            {
+                await tx.RollbackAsync();
+                return NotFound("Media tidak ditemukan.");
+            }
+
+            await tx.CommitAsync();
+
+            return Ok(new { message = "Primary media berhasil diperbarui." });
         }
 
         [HttpPost]
@@ -1027,6 +1394,14 @@ WHERE
             {
                 // contoh hitungan kamu yang di view: /20000*100
                 req.QuantityVariationInPercentage = (req.QuantityVariationWithMeasure.Value / 20000m) * 100m;
+            }
+
+            // auto hitung Density Variation dari (Observed Density 15° - Reference Density 15°)
+            if (req.ObservedDensity15Degree.HasValue && req.ReferenceDensity15Degree.HasValue)
+            {
+                req.DensityVariation = Math.Round(
+                    req.ObservedDensity15Degree.Value - req.ReferenceDensity15Degree.Value, 3
+                );
             }
 
             var currentUser = User.Identity?.Name ?? "system";
@@ -1303,20 +1678,26 @@ WHERE
             if (isRevision != true) // masuk jika NULL atau false
             {
                 const string sqlApprove = @"
-                UPDATE trx_audit
-                SET 
-                    approval_date = now(),
-                    score = @p0,
-                    approval_by = @p1,
-                    updated_date = now(),
-                    updated_by = @p1,
-                    status = 'VERIFIED',
-                    form_status_auditor1 = 'VERIFIED',
-                    form_status_auditor2 = @p5,
-                    good_status = @p2,
-                    excellent_status = @p3
-                WHERE id = @p4;
-                ";
+UPDATE trx_audit
+SET 
+    approval_date = now(),
+    score = @p0,
+    approval_by = @p1,
+    updated_date = now(),
+    updated_by = @p1,
+    status = 'VERIFIED',
+    form_status_auditor1 = 'VERIFIED',
+    form_status_auditor2 = @p5,
+    good_status = @p2,
+    excellent_status = @p3,
+    review_audit_finished_at = now(),
+    review_audit_duration_seconds = CASE
+        WHEN review_audit_started_at IS NOT NULL
+        THEN EXTRACT(EPOCH FROM (now() - review_audit_started_at))::int
+        ELSE NULL
+    END
+WHERE id = @p4;
+";
 
                 int affected = await _context.Database.ExecuteSqlRawAsync(
                     sqlApprove,
@@ -1325,20 +1706,21 @@ WHERE
                     goodStatus,                // @p2
                     excellentStatus,           // @p3
                     id,                        // @p4
-                    formStatusAuditor2Value    // @p5 
+                    formStatusAuditor2Value    // @p5
                 );
 
                 if (affected == 0)
                     return NotFound();
 
                 const string updateSpbuWithNext = @"
-                UPDATE spbu
-                SET audit_next = @auditnext,
-                    ""level""   = @level,
-                    audit_current = @current,
-                    updated_date = now(),
-                    updated_by = @upby
-                WHERE spbu_no  = @spbuNo";
+UPDATE spbu
+SET audit_next = @auditnext,
+    ""level"" = @level,
+    audit_current = @current,
+    updated_date = now(),
+    updated_by = @upby
+WHERE spbu_no = @spbuNo;
+";
 
                 await conn.ExecuteAsync(updateSpbuWithNext, new
                 {
@@ -1352,20 +1734,26 @@ WHERE
             else
             {
                 const string sqlApprove = @"
-                UPDATE trx_audit
-                SET 
-                    approval_date = now(),
-                    score = @p0,
-                    approval_by = @p1,
-                    updated_date = now(),
-                    updated_by = @p1,
-                    status = 'VERIFIED',
-                    form_status_auditor1 = 'VERIFIED',
-                    form_status_auditor2 = @p5,
-                    good_status = @p2,
-                    excellent_status = @p3
-                WHERE id = @p4;
-                ";
+UPDATE trx_audit
+SET 
+    approval_date = now(),
+    score = @p0,
+    approval_by = @p1,
+    updated_date = now(),
+    updated_by = @p1,
+    status = 'VERIFIED',
+    form_status_auditor1 = 'VERIFIED',
+    form_status_auditor2 = @p5,
+    good_status = @p2,
+    excellent_status = @p3,
+    review_audit_finished_at = now(),
+    review_audit_duration_seconds = CASE
+        WHEN review_audit_started_at IS NOT NULL
+        THEN EXTRACT(EPOCH FROM (now() - review_audit_started_at))::int
+        ELSE NULL
+    END
+WHERE id = @p4;
+";
 
                 int affected = await _context.Database.ExecuteSqlRawAsync(
                     sqlApprove,
@@ -1374,15 +1762,17 @@ WHERE
                     goodStatus,                // @p2
                     excellentStatus,           // @p3
                     id,                        // @p4
-                    formStatusAuditor2Value    // @p5 
+                    formStatusAuditor2Value    // @p5
                 );
 
                 if (affected == 0)
                     return NotFound();
 
-                const string updateFeedback = @"UPDATE trx_feedback
-                SET next_audit_before = @auditbefore
-                WHERE trx_audit_id = @trxauditid";
+                const string updateFeedback = @"
+UPDATE trx_feedback
+SET next_audit_before = @auditbefore
+WHERE trx_audit_id = @trxauditid;
+";
 
                 await conn.ExecuteAsync(updateFeedback, new
                 {
@@ -1391,13 +1781,14 @@ WHERE
                 });
 
                 const string updateSpbuWithNext = @"
-                UPDATE spbu
-                SET audit_next = @auditnext,
-                    ""level""   = @level,
-                    audit_current = @current,
-                    updated_date = now(),
-                    updated_by = @upby
-                WHERE spbu_no  = @spbuNo";
+UPDATE spbu
+SET audit_next = @auditnext,
+    ""level"" = @level,
+    audit_current = @current,
+    updated_date = now(),
+    updated_by = @upby
+WHERE spbu_no = @spbuNo;
+";
 
                 await conn.ExecuteAsync(updateSpbuWithNext, new
                 {
@@ -1409,13 +1800,19 @@ WHERE
                 });
 
                 const string updatUnused = @"
-                UPDATE trx_audit
-                SET status = 'DELETED'
-                WHERE spbu_id = @spbuid AND STATUS IN ('DRAFT', 'NOT_STARTED')";
+UPDATE trx_audit
+SET 
+    status = 'DELETED',
+    updated_date = now(),
+    updated_by = @upby
+WHERE spbu_id = @spbuid 
+  AND status IN ('DRAFT', 'NOT_STARTED');
+";
 
                 await conn.ExecuteAsync(updatUnused, new
                 {
-                    spbuid = spbuid
+                    spbuid = spbuid,
+                    upby = currentUser
                 });
             }
 
@@ -1945,87 +2342,310 @@ WHERE
                 System.Diagnostics.Debug.WriteLine(line);
             System.Diagnostics.Debug.WriteLine($"TOTAL: {totalScore:0.##} / {maxScore:0.##} = {model.FinalScore:0.##}%");
         }
-
-
         private async Task<List<ChecklistFlatItem>> GetChecklistDataAsync(IDbConnection conn, string id)
         {
-            string sql = @"SELECT
-                  mqd.id,
-                  mqd.title,
-                  mqd.description,
-                  mqd.parent_id,
-                  mqd.type,
-                  mqd.weight,
-                  mqd.score_option,
-                  tac.score_input,
-                  tac.score_af,
-                  tac.score_x,
-                  mqd.order_no,
-                  mqd.is_relaksasi,
-                  mqd.number
-                FROM master_questioner_detail mqd
-                LEFT JOIN trx_audit_checklist tac
-                  ON tac.master_questioner_detail_id = mqd.id
-                 AND tac.trx_audit_id = @id
-                WHERE mqd.master_questioner_id = (
-                  SELECT master_questioner_checklist_id
-                  FROM trx_audit
-                  WHERE id = @id
-                )
-                ORDER BY mqd.order_no";
-            var data = await conn.QueryAsync<ChecklistFlatItem>(sql, new { id });
-            return data.ToList();
+            var bandingNodeIds = (await conn.QueryAsync<string>(@"
+        SELECT DISTINCT tfpe.master_questioner_detail_id
+        FROM trx_feedback tf
+        JOIN trx_feedback_point tfp
+          ON tfp.trx_feedback_id = tf.id
+        JOIN trx_feedback_point_element tfpe
+          ON tfpe.trx_feedback_point_id = tfp.id
+        WHERE tf.trx_audit_id = @id
+          AND UPPER(tf.feedback_type) = 'BANDING'
+          AND COALESCE(tf.status, '') NOT IN ('REJECT', 'REJECT_CBI')
+          AND tfpe.master_questioner_detail_id IS NOT NULL;
+    ", new { id }))
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            _logger.LogWarning(
+                "DEBUG BANDING IDS - AuditId={AuditId}, BandingNodeIdsCount={Count}, Ids={Ids}",
+                id,
+                bandingNodeIds.Count,
+                string.Join(",", bandingNodeIds)
+            );
+
+            var sql = @"
+        SELECT
+            mqd.id,
+            mqd.title,
+            mqd.description,
+            mqd.parent_id,
+            mqd.type,
+            mqd.weight,
+            mqd.score_option,
+            tac.score_input,
+            tac.score_af,
+            tac.score_x,
+            tac.""comment"",
+            mqd.is_penalty,
+            mqd.order_no,
+            COALESCE(mqd.is_relaksasi, false) AS is_relaksasi,
+            mqd.number,
+            (
+                SELECT string_agg(mqd2.penalty_alert, ', ')
+                FROM trx_audit_checklist tac2
+                INNER JOIN master_questioner_detail mqd2 
+                    ON mqd2.id = tac2.master_questioner_detail_id
+                WHERE 
+                    tac2.trx_audit_id = @id
+                    AND tac2.score_input = 'F'
+                    AND mqd2.is_penalty = true
+            ) AS penalty_alert
+        FROM master_questioner_detail mqd
+        LEFT JOIN trx_audit_checklist tac
+          ON tac.master_questioner_detail_id = mqd.id
+         AND tac.trx_audit_id = @id
+        WHERE mqd.master_questioner_id = (
+            SELECT master_questioner_checklist_id
+            FROM trx_audit
+            WHERE id = @id
+        )
+        ORDER BY mqd.order_no;";
+
+            var data = (await conn.QueryAsync<ChecklistFlatItem>(sql, new { id })).ToList();
+
+            foreach (var item in data)
+            {
+                item.IsBandingNode = !string.IsNullOrWhiteSpace(item.id)
+                                     && bandingNodeIds.Contains(item.id);
+
+                item.PreviousScoreInput = item.score_input;
+                item.PreviousScoreX = item.score_x;
+                item.PreviousScoreValue = CalculateNodeScoreValue(
+                    item.score_input,
+                    item.score_x,
+                    item.weight,
+                    item.is_relaksasi
+                );
+            }
+
+            var bandingRows = data.Where(x => x.IsBandingNode).ToList();
+
+            _logger.LogWarning(
+                "DEBUG BANDING - GetChecklistDataAsync AuditId={AuditId}, TotalRows={TotalRows}, BandingRows={BandingRows}",
+                id,
+                data.Count,
+                bandingRows.Count
+            );
+
+            foreach (var x in bandingRows)
+            {
+                _logger.LogWarning(
+                    "DEBUG BANDING - FLAT Id={Id}, Number={Number}, Type={Type}, IsBandingNode={IsBandingNode}, PrevInput={PrevInput}, PrevValue={PrevValue}, Title={Title}",
+                    x.id,
+                    x.number,
+                    x.type,
+                    x.IsBandingNode,
+                    x.PreviousScoreInput,
+                    x.PreviousScoreValue,
+                    x.title
+                );
+            }
+
+            return data;
         }
 
         private async Task<Dictionary<string, List<MediaItem>>> GetMediaPerNodeAsync(IDbConnection conn, string id)
         {
-            string sql = @"SELECT master_questioner_detail_id, media_type, media_path
-                   FROM trx_audit_media
-                   WHERE trx_audit_id = @id
-                     AND master_questioner_detail_id IS NOT NULL";
+            var usePrimaryMedia = await ShouldUsePrimaryMediaAsync(conn, id);
 
-            var raw = await conn.QueryAsync<(string master_questioner_detail_id, string media_type, string media_path)>(sql, new { id });
+            string sql = @"
+        SELECT 
+            id,
+            master_questioner_detail_id,
+            media_type,
+            media_path,
+            COALESCE(is_star, false) AS is_star
+        FROM trx_audit_media
+        WHERE trx_audit_id = @id
+          AND master_questioner_detail_id IS NOT NULL
+        ORDER BY 
+            master_questioner_detail_id,
+            CASE 
+                WHEN @usePrimaryMedia THEN COALESCE(is_star, false)
+                ELSE false
+            END DESC,
+            created_date ASC";
 
-            return raw.GroupBy(x => x.master_questioner_detail_id)
-                      .ToDictionary(
-                          g => g.Key,
-                          g => g.Select(m => new MediaItem
-                          {
-                              MediaType = m.media_type,
-                              MediaPath = "https://epas-assets.zarata.co.id" + m.media_path
-                          }).ToList()
-                      );
+            var raw = await conn.QueryAsync<(string id, string master_questioner_detail_id, string media_type, string media_path, bool is_star)>(
+                sql,
+                new
+                {
+                    id,
+                    usePrimaryMedia
+                }
+            );
+
+            return raw
+                .GroupBy(x => x.master_questioner_detail_id)
+                .ToDictionary(
+                    g => g.Key,
+                    g => g.Select(m => new MediaItem
+                    {
+                        Id = m.id,
+                        MediaType = m.media_type,
+                        MediaPath = "https://epas-assets.zarata.co.id" + m.media_path,
+                        IsStar = usePrimaryMedia && m.is_star
+                    }).ToList()
+                );
         }
 
-
         [HttpPost]
+        [ValidateAntiForgeryToken]
         public async Task<IActionResult> UpdateScore([FromBody] UpdateScoreRequest request)
         {
+            if (request == null ||
+                string.IsNullOrWhiteSpace(request.AuditId) ||
+                string.IsNullOrWhiteSpace(request.NodeId) ||
+                string.IsNullOrWhiteSpace(request.Score))
+            {
+                return BadRequest("Data tidak lengkap.");
+            }
+
+            var score = request.Score.Trim().ToUpperInvariant();
+            var comment = request.Comment?.Trim();
+
+            var wajibKomentar = new[] { "C", "D", "E", "F", "X" }.Contains(score);
+
+            if (wajibKomentar && string.IsNullOrWhiteSpace(comment))
+            {
+                return BadRequest("Kolom komentar wajib di isi. Mohon untuk mengisi kolom komentar terlebih dahulu.");
+            }
+
             using var conn = _context.Database.GetDbConnection();
-            if (conn.State != System.Data.ConnectionState.Open)
+            if (conn.State != ConnectionState.Open)
                 await conn.OpenAsync();
 
-                var sql = @"
-                    UPDATE trx_audit_checklist
-                    SET score_input = @score
-                    WHERE master_questioner_detail_id = @nodeId
-                      AND trx_audit_id = @auditId";
+            var before = await conn.QueryFirstOrDefaultAsync<ScoreSnapshotDto>(@"
+        SELECT
+            tac.score_input AS ScoreInput,
+            tac.score_x AS ScoreX,
+            mqd.weight AS Weight,
+            mqd.is_relaksasi AS IsRelaksasi,
 
-                var affected = await conn.ExecuteAsync(sql, new
-                {
-                score = request.Score,
+            CASE 
+                WHEN EXISTS (
+                    SELECT 1
+                    FROM trx_feedback tf
+                    JOIN trx_feedback_point tfp 
+                      ON tfp.trx_feedback_id = tf.id
+                    JOIN trx_feedback_point_element tfpe 
+                      ON tfpe.trx_feedback_point_id = tfp.id
+                    WHERE tf.trx_audit_id = @auditId
+                      AND UPPER(tf.feedback_type) = 'BANDING'
+                      AND COALESCE(tf.status, '') NOT IN ('REJECT', 'REJECT_CBI')
+                      AND tfpe.master_questioner_detail_id = @nodeId
+                )
+                THEN TRUE ELSE FALSE
+            END AS IsBandingNode
+        FROM master_questioner_detail mqd
+        LEFT JOIN trx_audit_checklist tac
+          ON tac.master_questioner_detail_id = mqd.id
+         AND tac.trx_audit_id = @auditId
+        WHERE mqd.id = @nodeId
+        LIMIT 1;
+    ", new
+            {
+                auditId = request.AuditId,
+                nodeId = request.NodeId
+            });
+
+            if (before == null)
+                return BadRequest("Data checklist tidak ditemukan.");
+
+            var beforeValue = CalculateNodeScoreValue(
+                before.ScoreInput,
+                before.ScoreX,
+                before.Weight,
+                before.IsRelaksasi
+            );
+
+            var afterValue = CalculateNodeScoreValue(
+                score,
+                before.ScoreX,
+                before.Weight,
+                before.IsRelaksasi
+            );
+
+            var sql = @"
+        UPDATE trx_audit_checklist
+        SET score_input = @score,
+            comment = CASE
+                WHEN @comment IS NULL OR TRIM(@comment) = '' THEN comment
+                ELSE @comment
+            END,
+            updated_by = @updatedBy,
+            updated_date = NOW()
+        WHERE master_questioner_detail_id = @nodeId
+          AND trx_audit_id = @auditId;
+    ";
+
+            var affected = await conn.ExecuteAsync(sql, new
+            {
+                score,
+                comment,
                 nodeId = request.NodeId,
-                auditId = request.AuditId
-                });
+                auditId = request.AuditId,
+                updatedBy = User.Identity?.Name ?? "system"
+            });
 
-            return affected > 0 ? Ok() : BadRequest("Tidak berhasil update");
+            if (affected == 0)
+                return BadRequest("Tidak berhasil update nilai.");
+
+            return Ok(new
+            {
+                message = "Nilai berhasil diperbarui.",
+                isBandingNode = before.IsBandingNode,
+                previousScoreInput = before.ScoreInput,
+                previousScoreX = before.ScoreX,
+                previousScoreValue = beforeValue,
+                newScoreInput = score,
+                newScoreValue = afterValue,
+                change = afterValue - beforeValue
+            });
+        }
+
+        private sealed class ScoreSnapshotDto
+        {
+            public string ScoreInput { get; set; }
+            public decimal? ScoreX { get; set; }
+            public decimal? Weight { get; set; }
+            public bool? IsRelaksasi { get; set; }
+            public bool IsBandingNode { get; set; }
+        }
+
+        private static decimal CalculateNodeScoreValue(string scoreInput, decimal? scoreX, decimal? weight, bool? isRelaksasi)
+        {
+            var w = weight ?? 0m;
+            var input = (scoreInput ?? "").Trim().ToUpperInvariant();
+
+            if (input == "X")
+                return scoreX ?? 0m;
+
+            if (input == "F" && isRelaksasi == true)
+                return w;
+
+            var af = input switch
+            {
+                "A" => 1.00m,
+                "B" => 0.80m,
+                "C" => 0.60m,
+                "D" => 0.40m,
+                "E" => 0.20m,
+                "F" => 0.00m,
+                _ => 0.00m
+            };
+
+            return af * w;
         }
 
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> UpdateBeritaAcaraText(string id, string notes)
         {
-            var audit = await _context.trx_audits.FirstOrDefaultAsync(x => x.id == id);
+            var audit = await _context.trx_audits.AsNoTracking().FirstOrDefaultAsync(x => x.id == id);
             if (audit == null) return NotFound();
 
             audit.audit_mom_final = notes;
@@ -2126,9 +2746,17 @@ VALUES
                     IsPenalty = item.is_penalty,
                     PenaltyAlert = item.penalty_alert,
                     IsRelaksasi = item.is_relaksasi,
+
+                    // Banding / skor sebelumnya
+                    IsBandingNode = item.IsBandingNode,
+                    PreviousScoreInput = item.PreviousScoreInput,
+                    PreviousScoreX = item.PreviousScoreX,
+                    PreviousScoreValue = item.PreviousScoreValue,
+
                     MediaItems = mediaList.ContainsKey(item.id)
-                                  ? mediaList[item.id]
-                                  : new List<MediaItem>(),
+                  ? mediaList[item.id]
+                  : new List<MediaItem>(),
+
                     Children = BuildChildren(item.id)
                 })
                 .ToList();
@@ -2371,5 +2999,126 @@ VALUES
             return BitConverter.ToString(hash).Replace("-", "").ToLowerInvariant();
         }
 
+        [HttpGet]
+        public async Task<IActionResult> GetScore(string id)
+        {
+            var data = await _context.trx_audits.AsNoTracking()
+                .Where(x => x.id == id)
+                .Select(x => new {
+                    score = x.score,
+                    good = x.good_status,
+                    excellent = x.excellent_status
+                })
+                .FirstOrDefaultAsync();
+
+            return Json(data);
+        }
+
+        private async Task AutoFillUmkChecklistNotesAsync(IDbConnection conn, string auditId)
+        {
+            var sql = @"
+        SELECT 
+            tac.id,
+            tac.comment,
+            tac.additional_info_json,
+            mqd.form_type
+        FROM trx_audit_checklist tac
+        JOIN master_questioner_detail mqd
+          ON mqd.id = tac.master_questioner_detail_id
+        WHERE tac.trx_audit_id = @auditId
+          AND mqd.form_type = 'UMK'
+          AND tac.additional_info_json IS NOT NULL
+          AND TRIM(tac.additional_info_json) <> ''
+          AND (tac.comment IS NULL OR TRIM(tac.comment) = '');
+    ";
+
+            var rows = await conn.QueryAsync<(string id, string comment, string additional_info_json, string form_type)>(
+                sql,
+                new { auditId }
+            );
+
+            foreach (var row in rows)
+            {
+                var note = BuildUmkNoteFromAdditionalInfo(row.additional_info_json);
+                if (string.IsNullOrWhiteSpace(note))
+                    continue;
+
+                await conn.ExecuteAsync(@"
+            UPDATE trx_audit_checklist
+            SET comment = @note,
+                updated_by = @updatedBy,
+                updated_date = NOW()
+            WHERE id = @id;
+        ", new
+                {
+                    id = row.id,
+                    note,
+                    updatedBy = User.Identity?.Name ?? "system"
+                });
+            }
+        }
+
+        private async Task<bool> ShouldUsePrimaryMediaAsync(IDbConnection conn, string auditId)
+        {
+            var auditDate = await conn.ExecuteScalarAsync<DateTime?>(@"
+        SELECT COALESCE(audit_execution_time, updated_date, created_date)
+        FROM trx_audit
+        WHERE id = @auditId
+        LIMIT 1;
+    ", new { auditId });
+
+            if (!auditDate.HasValue)
+                return false;
+
+            return auditDate.Value.Date >= PrimaryMediaMigrationDate.Date;
+        }
+
+        private static string BuildUmkNoteFromAdditionalInfo(string additionalInfoJson)
+        {
+            if (string.IsNullOrWhiteSpace(additionalInfoJson))
+                return null;
+
+            try
+            {
+                using var doc = JsonDocument.Parse(additionalInfoJson);
+                var root = doc.RootElement;
+
+                string ReadString(string key)
+                {
+                    if (!root.TryGetProperty(key, out var prop)) return null;
+
+                    return prop.ValueKind switch
+                    {
+                        JsonValueKind.String => prop.GetString(),
+                        JsonValueKind.Number => prop.ToString(),
+                        JsonValueKind.True => "Ya",
+                        JsonValueKind.False => "Tidak",
+                        _ => prop.ToString()
+                    };
+                }
+
+                var lines = new List<string>();
+
+                void Add(string label, string key)
+                {
+                    var value = ReadString(key);
+                    if (!string.IsNullOrWhiteSpace(value))
+                        lines.Add($"{label}: {value}");
+                }
+
+                Add("Upah 2025", "upah2025");
+                Add("Upah 2026", "upah2026");
+                Add("Upah Pekerja", "upahPekerja");
+                Add("Hari Kerja", "hariKerja");
+                Add("BPJS Kesehatan", "bpjsKesehatan");
+                Add("BPJS Ketenagakerjaan", "bpjsKetenagakerjaan");
+
+                return lines.Any() ? string.Join(Environment.NewLine, lines) : null;
+            }
+            catch
+            {
+                return null;
+            }
+        }
     }
 }

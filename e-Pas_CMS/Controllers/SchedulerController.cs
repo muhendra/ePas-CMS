@@ -69,7 +69,8 @@ namespace e_Pas_CMS.Controllers
                 a.audit_level,
                 SpbuNo = a.spbu != null ? a.spbu.spbu_no : null,
                 SBM = a.spbu.sbm,
-                a.report_no
+                a.report_no,
+                a.note
             });
 
             if (filterMonth.HasValue && filterYear.HasValue)
@@ -113,6 +114,89 @@ namespace e_Pas_CMS.Controllers
             };
 
             return View(vm);
+        }
+
+        [HttpPost("BulkInlineUpdate")]
+        public IActionResult BulkInlineUpdate([FromBody] List<BulkInlineUpdateRequest> reqs)
+        {
+            if (reqs == null || !reqs.Any())
+                return Json(new { success = false });
+
+            var ids = reqs.Select(x => x.Id).ToList();
+
+            var audits = _context.trx_audits
+                .Where(x => ids.Contains(x.id))
+                .ToList();
+
+            var allowed = new[] { "DRAFT", "NOT_STARTED" };
+
+            foreach (var req in reqs)
+            {
+                var audit = audits.FirstOrDefault(x => x.id == req.Id);
+                if (audit == null) continue;
+
+                var oldStatus = audit.status;
+
+                // STATUS
+                if (!string.IsNullOrEmpty(req.Status) &&
+                    allowed.Contains(oldStatus) &&
+                    allowed.Contains(req.Status))
+                {
+                    audit.status = req.Status;
+                    audit.form_status_auditor1 = req.Status;
+
+                    if (oldStatus == "DRAFT" && req.Status == "NOT_STARTED")
+                    {
+                        _context.trx_audit_not_started_logs.Add(new trx_audit_not_started_log
+                        {
+                            id = Guid.NewGuid().ToString(),
+                            trx_audit_id = audit.id,
+                            spbu_id = audit.spbu_id,
+                            old_status = oldStatus,
+                            new_status = req.Status,
+                            changed_by = User.Identity?.Name ?? "SYSTEM",
+                            changed_date = DateTime.UtcNow,
+                            note = "Inline batch update"
+                        });
+                    }
+                }
+
+                // NOTE
+                if (req.Note != null)
+                {
+                    audit.note = req.Note;
+                }
+
+                audit.updated_by = User.Identity?.Name ?? "SYSTEM";
+                audit.updated_date = DateTime.Now;
+            }
+
+            _context.SaveChanges();
+
+            return Json(new { success = true });
+        }
+
+        [HttpPost("UpdateNoteInline")]
+        public IActionResult UpdateNoteInline([FromBody] UpdateNoteRequest req)
+        {
+            if (string.IsNullOrEmpty(req.Id))
+                return Json(new { success = false });
+
+            var audit = _context.trx_audits.FirstOrDefault(x => x.id == req.Id);
+            if (audit == null)
+                return Json(new { success = false });
+
+            // Optional: limit panjang note
+            if (req.Note != null && req.Note.Length > 500)
+                return Json(new { success = false, message = "Note terlalu panjang" });
+
+            audit.note = req.Note;
+            audit.updated_by = User.Identity?.Name ?? "SYSTEM";
+            audit.updated_date = DateTime.Now;
+
+            _context.SaveChanges();
+
+            return Json(new { success = true });
         }
 
         [HttpGet("NotStarted")]
@@ -711,6 +795,11 @@ namespace e_Pas_CMS.Controllers
 
                 bool isBasicOperational = TipeAudit == "Basic Operational";
 
+                if (TipeAudit == "Regular Audit")
+                {
+                    TipeAudit = "Mystery Audit";
+                }
+
                 string checklistId = "";
                 string? introId = null;
 
@@ -722,6 +811,12 @@ namespace e_Pas_CMS.Controllers
                 {
                     var sqlChecklist = "select id from master_questioner where type = 'Basic Operational' and category = 'CHECKLIST' order by version desc limit 1";
                     checklistId = await conn2.QueryFirstOrDefaultAsync<string>(sqlChecklist);
+                }
+                else if (TipeAudit == "Mystery Guest")
+                {
+                    // 🔥 FIX: khusus Mystery Guest
+                    checklistId = "aa03815d-3672-4e27-b3df-27becb533938";
+                    introId = null;
                 }
                 else
                 {

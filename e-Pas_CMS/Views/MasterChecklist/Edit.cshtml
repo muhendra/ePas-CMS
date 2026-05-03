@@ -1,0 +1,908 @@
+﻿@using e_Pas_CMS.ViewModels
+@model MasterChecklistEditVm
+
+@{
+    ViewData["Title"] = "Edit Konten Checklist";
+}
+
+@Html.AntiForgeryToken()
+
+<div class="container-fluid py-4 checklist-page">
+
+    <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-3">
+        <div>
+            <div class="d-flex align-items-center gap-2 mb-2">
+                <a asp-action="Index" class="btn btn-light border rounded-pill px-3">
+                    <i class="bi bi-arrow-left"></i>
+                </a>
+                <h3 class="fw-bold mb-0">Edit Konten Checklist</h3>
+            </div>
+
+            <div class="text-muted">
+                @Model.Type • @Model.Category • Version @Model.Version
+            </div>
+        </div>
+
+        <button type="button"
+                class="btn btn-primary rounded-pill px-4"
+                onclick="openNodeModal('', '')">
+            <i class="bi bi-plus-circle"></i> Tambah Element
+        </button>
+    </div>
+
+    <div class="row g-4 mb-4">
+        <div class="col-md-3">
+            <div class="summary-card">
+                <div class="summary-label">Type Audit</div>
+                <div class="summary-value">@Model.Type</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="summary-card">
+                <div class="summary-label">Category</div>
+                <div class="summary-value">@Model.Category</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="summary-card">
+                <div class="summary-label">Status</div>
+                <div class="summary-value">@Model.Status</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="summary-card">
+                <div class="summary-label">Effective Date</div>
+                <div class="summary-value small">
+                    @Model.EffectiveStartDate.ToString("dd/MM/yyyy") - @Model.EffectiveEndDate.ToString("dd/MM/yyyy")
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card border-0 shadow-sm rounded-4">
+        <div class="card-header bg-white border-0 p-4">
+            <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+                <div>
+                    <h5 class="fw-bold mb-1">Hierarchy Checklist</h5>
+                    <div class="text-muted small">
+                        Format: Element → Sub Element → Question. Semua level bisa diedit.
+                    </div>
+                </div>
+
+                <div class="d-flex gap-2 flex-wrap">
+                    <button type="button" class="btn btn-sm btn-light border rounded-pill px-3" onclick="expandAll()">
+                        <i class="bi bi-arrows-expand"></i> Expand All
+                    </button>
+                    <button type="button" class="btn btn-sm btn-light border rounded-pill px-3" onclick="collapseAll()">
+                        <i class="bi bi-arrows-collapse"></i> Collapse All
+                    </button>
+
+                    <div class="input-group search-box">
+                        <span class="input-group-text bg-light border-0">
+                            <i class="bi bi-search"></i>
+                        </span>
+                        <input type="text"
+                               id="searchNode"
+                               class="form-control border-0 bg-light"
+                               placeholder="Cari title / number..." />
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card-body p-4">
+            @if (Model.Nodes.Any())
+            {
+                <div id="treeWrapper" class="tree-wrapper">
+                    @foreach (var node in Model.Nodes)
+                    {
+                        await RenderNode(node, 0);
+                    }
+                </div>
+            }
+            else
+            {
+                <div class="text-center py-5 text-muted">
+                    Belum ada detail checklist.
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="nodeModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content rounded-4 border-0">
+            <div class="modal-header border-0 px-4 pt-4">
+                <div>
+                    <h5 class="modal-title fw-bold" id="nodeModalTitle">Edit Node</h5>
+                    <div class="text-muted small">Isi konten checklist sesuai level hirarki.</div>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+
+            <div class="modal-body px-4 pb-4">
+                <input type="hidden" id="nodeId" />
+                <input type="hidden" id="masterQuestionerId" value="@Model.MasterQuestionerId" />
+                <input type="hidden" id="parentId" />
+
+                <div class="alert alert-light border rounded-4 small mb-3">
+                    <div class="fw-semibold mb-1">Parent</div>
+                    <div id="parentInfo" class="text-muted">Root / Element utama</div>
+                </div>
+
+                <div class="row g-3">
+                    <div class="col-md-3">
+                        <label class="form-label fw-semibold">Type Node</label>
+                        <select id="nodeType" class="form-select rounded-3">
+                            <option value="ELEMENT">ELEMENT</option>
+                            <option value="SUB_ELEMENT">SUB_ELEMENT</option>
+                            <option value="QUESTION">QUESTION</option>
+                            <option value="GROUP">GROUP</option>
+                        </select>
+                    </div>
+
+                    <div class="col-md-3">
+                        <label class="form-label fw-semibold">Number</label>
+                        <input id="number" class="form-control rounded-3" placeholder="Contoh: 1.1.1" />
+                    </div>
+
+                    <div class="col-md-3">
+                        <label class="form-label fw-semibold">Order No</label>
+                        <input id="orderNo" type="number" class="form-control rounded-3" value="0" />
+                    </div>
+
+                    <div class="col-md-3">
+                        <label class="form-label fw-semibold">Status</label>
+                        <select id="status" class="form-select rounded-3">
+                            <option value="ACTIVE">ACTIVE</option>
+                            <option value="INACTIVE">INACTIVE</option>
+                        </select>
+                    </div>
+
+                    <div class="col-md-12">
+                        <label class="form-label fw-semibold">Title</label>
+                        <input id="title" class="form-control rounded-3" placeholder="Judul element / sub element / question" />
+                    </div>
+
+                    <div class="col-md-12">
+                        <label class="form-label fw-semibold">Description</label>
+                        <textarea id="description" class="form-control rounded-3" rows="3" placeholder="Deskripsi / panduan auditor"></textarea>
+                    </div>
+
+                    <div class="col-md-4 question-field">
+                        <label class="form-label fw-semibold">Score Option</label>
+                        <input id="scoreOption" class="form-control rounded-3" placeholder="Contoh: A,B,C,D,E,F,X" />
+                    </div>
+
+                    <div class="col-md-4 question-field">
+                        <label class="form-label fw-semibold">Weight</label>
+                        <input id="weight" type="number" step="0.01" class="form-control rounded-3" />
+                    </div>
+
+                    <div class="col-md-4 question-field">
+                        <label class="form-label fw-semibold">Form Type</label>
+                        <input id="formType" class="form-control rounded-3" placeholder="TEXT / PHOTO / OPTION / dll" />
+                    </div>
+
+                    <div class="col-md-4 question-field">
+                        <div class="form-check form-switch mt-4">
+                            <input class="form-check-input" type="checkbox" id="isPenalty">
+                            <label class="form-check-label fw-semibold" for="isPenalty">Penalty</label>
+                        </div>
+                    </div>
+
+                    <div class="col-md-4 question-field">
+                        <div class="form-check form-switch mt-4">
+                            <input class="form-check-input" type="checkbox" id="isRelaksasi">
+                            <label class="form-check-label fw-semibold" for="isRelaksasi">Relaksasi</label>
+                        </div>
+                    </div>
+
+                    <div class="col-md-4 question-field">
+                        <label class="form-label fw-semibold">Penalty Alert</label>
+                        <input id="penaltyAlert" class="form-control rounded-3" />
+                    </div>
+
+                    <div class="col-md-6 question-field">
+                        <label class="form-label fw-semibold">Penalty Excellent Criteria</label>
+                        <select id="penaltyExcellentCriteria" class="form-select rounded-3">
+                            <option value="">-</option>
+                            <option value="LT_1">LT_1</option>
+                            <option value="EQ_0">EQ_0</option>
+                        </select>
+                    </div>
+
+                    <div class="col-md-6 question-field">
+                        <label class="form-label fw-semibold">Score Excellent Criteria</label>
+                        <input id="scoreExcellentCriteria" class="form-control rounded-3" />
+                    </div>
+                </div>
+            </div>
+
+            <div class="modal-footer border-0 px-4 pb-4">
+                <button type="button" class="btn btn-light border rounded-pill px-4" data-bs-dismiss="modal">
+                    Batal
+                </button>
+                <button type="button" class="btn btn-primary rounded-pill px-4" onclick="saveNode()">
+                    <i class="bi bi-save"></i> Simpan
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@functions {
+    private async Task RenderNode(MasterChecklistNodeVm node, int level)
+    {
+        var hasChild = node.Children != null && node.Children.Any();
+        var type = (node.Type ?? "").ToUpper();
+        var levelName = level == 0 ? "ELEMENT" : level == 1 ? "SUB ELEMENT" : "QUESTION";
+        var typeClass = type switch
+        {
+            "ELEMENT" => "type-element",
+            "SUB_ELEMENT" => "type-sub",
+            "QUESTION" => "type-question",
+            _ => "type-group"
+        };
+
+        var childText = type switch
+        {
+            "ELEMENT" => "Tambah Sub Element",
+            "SUB_ELEMENT" => "Tambah Question",
+            "GROUP" => "Tambah Child",
+            _ => "Tambah Child"
+        };
+
+        <div class="tree-node level-@level"
+             data-node-id="@node.Id"
+             data-parent-id="@node.ParentId"
+             data-type="@node.Type"
+             data-number="@node.Number"
+             data-title="@node.Title"
+             data-description="@node.Description"
+             data-score-option="@node.ScoreOption"
+             data-weight="@node.Weight"
+             data-order-no="@node.OrderNo"
+             data-status="@node.Status"
+             data-is-penalty="@((node.IsPenalty ?? false).ToString().ToLower())"
+             data-penalty-alert="@node.PenaltyAlert"
+             data-is-relaksasi="@((node.IsRelaksasi ?? false).ToString().ToLower())"
+             data-penalty-excellent-criteria="@node.PenaltyExcellentCriteria"
+             data-score-excellent-criteria="@node.ScoreExcellentCriteria"
+             data-form-type="@node.FormType">
+
+            <div class="node-row level-border-@level">
+                <div class="tree-line"></div>
+
+                <button type="button"
+                        class="btn btn-sm btn-toggle"
+                        onclick="toggleChildren(this)"
+                        @(hasChild ? "" : "disabled")>
+                    <i class="bi @(hasChild ? "bi-chevron-down" : "bi-dot")"></i>
+                </button>
+
+                <div class="node-content">
+                    <div class="node-top">
+                        <div class="node-badges">
+                            <span class="node-level">Level @(level + 1) - @levelName</span>
+                            <span class="node-type @typeClass">@node.Type</span>
+
+                            @if (!string.IsNullOrWhiteSpace(node.Number))
+                            {
+                                <span class="node-number">@node.Number</span>
+                            }
+
+                            @if (node.Status == "INACTIVE")
+                            {
+                                <span class="badge bg-secondary-subtle text-secondary">INACTIVE</span>
+                            }
+
+                            @if (node.IsPenalty == true)
+                            {
+                                <span class="badge bg-danger-subtle text-danger">Penalty</span>
+                            }
+
+                            @if (node.IsRelaksasi == true)
+                            {
+                                <span class="badge bg-info-subtle text-info">Relaksasi</span>
+                            }
+                        </div>
+
+                        <div class="node-actions">
+                            @if (node.Type != "QUESTION")
+                            {
+                                <button type="button"
+                                        class="btn btn-sm btn-light border rounded-pill"
+                                        onclick="openNodeModal('', '@node.Id', '@node.Title', '@node.Type')">
+                                    <i class="bi bi-plus"></i> @childText
+                                </button>
+                            }
+
+                            <button type="button"
+                                    class="btn btn-sm btn-outline-primary rounded-pill"
+                                    onclick="editNode(this)">
+                                <i class="bi bi-pencil"></i> Edit
+                            </button>
+
+                            <button type="button"
+                                    class="btn btn-sm btn-outline-danger rounded-pill"
+                                    onclick="deleteNode('@node.Id')">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="node-title">@node.Title</div>
+
+                    @if (!string.IsNullOrWhiteSpace(node.Description))
+                    {
+                        <div class="node-desc">@node.Description</div>
+                    }
+
+                    @if (node.Type == "QUESTION")
+                    {
+                        <div class="question-box">
+                            <div>
+                                <span class="meta-label">Weight</span>
+                                <span class="meta-value">@(node.Weight?.ToString("0.##") ?? "-")</span>
+                            </div>
+                            <div>
+                                <span class="meta-label">Score Option</span>
+                                <span class="meta-value">@(node.ScoreOption ?? "-")</span>
+                            </div>
+                            <div>
+                                <span class="meta-label">Form Type</span>
+                                <span class="meta-value">@(node.FormType ?? "-")</span>
+                            </div>
+                            <div>
+                                <span class="meta-label">Penalty Excellent</span>
+                                <span class="meta-value">@(node.PenaltyExcellentCriteria ?? "-")</span>
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+
+            @if (hasChild)
+            {
+                <div class="children">
+                    @foreach (var child in node.Children)
+                    {
+                        await RenderNode(child, level + 1);
+                    }
+                </div>
+            }
+        </div>
+    }
+}
+
+@section Styles {
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css" />
+
+    <style>
+        .checklist-page {
+            background: #f6f8fb;
+            min-height: 100vh;
+        }
+
+        .summary-card {
+            background: #fff;
+            border-radius: 18px;
+            padding: 18px;
+            box-shadow: 0 8px 24px rgba(15,23,42,.06);
+            border: 1px solid rgba(15,23,42,.06);
+            height: 100%;
+        }
+
+        .summary-label {
+            color: #64748b;
+            font-size: 12px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: .04em;
+            margin-bottom: 8px;
+        }
+
+        .summary-value {
+            font-weight: 800;
+            color: #0f172a;
+            font-size: 18px;
+        }
+
+        .search-box {
+            width: 330px;
+            border-radius: 999px;
+            overflow: hidden;
+            background: #f8fafc;
+        }
+
+        .tree-wrapper {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .tree-node {
+            position: relative;
+        }
+
+        .children {
+            margin-left: 34px;
+            padding-left: 22px;
+            border-left: 2px dashed #cbd5e1;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            margin-top: 10px;
+        }
+
+            .children.collapsed {
+                display: none;
+            }
+
+        .node-row {
+            position: relative;
+            background: #fff;
+            border: 1px solid #e5e7eb;
+            border-left-width: 6px;
+            border-radius: 18px;
+            padding: 14px;
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            transition: .18s ease;
+        }
+
+            .node-row:hover {
+                border-color: #93c5fd;
+                box-shadow: 0 10px 28px rgba(37,99,235,.08);
+            }
+
+        .level-border-0 {
+            border-left-color: #2563eb;
+        }
+
+        .level-border-1 {
+            border-left-color: #7c3aed;
+        }
+
+        .level-border-2 {
+            border-left-color: #16a34a;
+        }
+
+        .level-border-3 {
+            border-left-color: #f59e0b;
+        }
+
+        .btn-toggle {
+            width: 34px;
+            height: 34px;
+            border-radius: 50%;
+            background: #f1f5f9;
+            border: 0;
+            color: #334155;
+            flex: 0 0 34px;
+        }
+
+            .btn-toggle:disabled {
+                opacity: .65;
+            }
+
+        .node-content {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .node-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .node-badges {
+            display: flex;
+            align-items: center;
+            gap: 7px;
+            flex-wrap: wrap;
+        }
+
+        .node-level {
+            font-size: 11px;
+            font-weight: 800;
+            color: #334155;
+            background: #f1f5f9;
+            border: 1px solid #e2e8f0;
+            border-radius: 999px;
+            padding: 5px 9px;
+        }
+
+        .node-type {
+            font-size: 11px;
+            font-weight: 800;
+            border-radius: 999px;
+            padding: 5px 9px;
+        }
+
+        .type-element {
+            background: #dbeafe;
+            color: #1d4ed8;
+        }
+
+        .type-sub {
+            background: #ede9fe;
+            color: #6d28d9;
+        }
+
+        .type-question {
+            background: #dcfce7;
+            color: #15803d;
+        }
+
+        .type-group {
+            background: #fef3c7;
+            color: #b45309;
+        }
+
+        .node-number {
+            font-size: 12px;
+            font-weight: 800;
+            color: #475569;
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 999px;
+            padding: 4px 8px;
+        }
+
+        .node-title {
+            font-weight: 800;
+            color: #111827;
+            margin-top: 8px;
+            line-height: 1.35;
+        }
+
+        .node-desc {
+            color: #64748b;
+            font-size: 13px;
+            margin-top: 5px;
+            white-space: pre-line;
+        }
+
+        .node-actions {
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+            justify-content: flex-end;
+        }
+
+        .question-box {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(130px, 1fr));
+            gap: 10px;
+            margin-top: 12px;
+            padding: 12px;
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 14px;
+        }
+
+        .meta-label {
+            display: block;
+            color: #64748b;
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            margin-bottom: 3px;
+        }
+
+        .meta-value {
+            color: #0f172a;
+            font-weight: 700;
+            font-size: 13px;
+            word-break: break-word;
+        }
+
+        .tree-node.hidden-by-search {
+            display: none;
+        }
+
+        @@media (max-width: 768px) {
+            .children {
+                margin-left: 12px;
+                padding-left: 12px;
+            }
+
+            .question-box {
+                grid-template-columns: 1fr;
+            }
+
+            .search-box {
+                width: 100%;
+            }
+        }
+    </style>
+}
+
+@section Scripts {
+    <script>
+        const nodeModal = new bootstrap.Modal(document.getElementById('nodeModal'));
+
+        function getToken() {
+            return document.querySelector('input[name="__RequestVerificationToken"]').value;
+        }
+
+        function emptyToNull(v) {
+            return v === undefined || v === null || String(v).trim() === '' ? null : v;
+        }
+
+        function getNextChildType(parentType) {
+            if (!parentType) return 'ELEMENT';
+
+            parentType = parentType.toUpperCase();
+
+            if (parentType === 'ELEMENT') return 'SUB_ELEMENT';
+            if (parentType === 'SUB_ELEMENT') return 'QUESTION';
+            if (parentType === 'GROUP') return 'QUESTION';
+
+            return 'QUESTION';
+        }
+
+        function openNodeModal(id, parentId, parentTitle, parentType) {
+            clearForm();
+
+            const nextType = getNextChildType(parentType);
+
+            document.getElementById('nodeModalTitle').innerText = id ? 'Edit Node' : 'Tambah Node';
+            document.getElementById('nodeId').value = id || '';
+            document.getElementById('parentId').value = parentId || '';
+            document.getElementById('nodeType').value = nextType;
+
+            if (parentId) {
+                document.getElementById('parentInfo').innerText = `${parentType || '-'} > ${parentTitle || '-'}`;
+            } else {
+                document.getElementById('parentInfo').innerText = 'Root / Element utama';
+                document.getElementById('nodeType').value = 'ELEMENT';
+            }
+
+            toggleQuestionFields();
+            nodeModal.show();
+        }
+
+        function clearForm() {
+            document.getElementById('nodeId').value = '';
+            document.getElementById('parentId').value = '';
+            document.getElementById('nodeType').value = 'ELEMENT';
+            document.getElementById('number').value = '';
+            document.getElementById('orderNo').value = '0';
+            document.getElementById('status').value = 'ACTIVE';
+            document.getElementById('title').value = '';
+            document.getElementById('description').value = '';
+            document.getElementById('scoreOption').value = '';
+            document.getElementById('weight').value = '';
+            document.getElementById('formType').value = '';
+            document.getElementById('isPenalty').checked = false;
+            document.getElementById('isRelaksasi').checked = false;
+            document.getElementById('penaltyAlert').value = '';
+            document.getElementById('penaltyExcellentCriteria').value = '';
+            document.getElementById('scoreExcellentCriteria').value = '';
+            document.getElementById('parentInfo').innerText = 'Root / Element utama';
+        }
+
+        function editNode(btn) {
+            const node = btn.closest('.tree-node');
+
+            openNodeModal(node.dataset.nodeId, node.dataset.parentId);
+
+            document.getElementById('nodeModalTitle').innerText = 'Edit Node';
+            document.getElementById('nodeId').value = node.dataset.nodeId || '';
+            document.getElementById('parentId').value = node.dataset.parentId || '';
+            document.getElementById('nodeType').value = node.dataset.type || 'QUESTION';
+            document.getElementById('number').value = node.dataset.number || '';
+            document.getElementById('orderNo').value = node.dataset.orderNo || 0;
+            document.getElementById('status').value = node.dataset.status || 'ACTIVE';
+            document.getElementById('title').value = node.dataset.title || '';
+            document.getElementById('description').value = node.dataset.description || '';
+            document.getElementById('scoreOption').value = node.dataset.scoreOption || '';
+            document.getElementById('weight').value = node.dataset.weight || '';
+            document.getElementById('formType').value = node.dataset.formType || '';
+            document.getElementById('isPenalty').checked = node.dataset.isPenalty === 'true';
+            document.getElementById('isRelaksasi').checked = node.dataset.isRelaksasi === 'true';
+            document.getElementById('penaltyAlert').value = node.dataset.penaltyAlert || '';
+            document.getElementById('penaltyExcellentCriteria').value = node.dataset.penaltyExcellentCriteria || '';
+            document.getElementById('scoreExcellentCriteria').value = node.dataset.scoreExcellentCriteria || '';
+
+            const parentId = node.dataset.parentId || '';
+            if (parentId) {
+                const parentNode = document.querySelector(`.tree-node[data-node-id="${parentId}"]`);
+                if (parentNode) {
+                    document.getElementById('parentInfo').innerText =
+                        `${parentNode.dataset.type || '-'} > ${parentNode.dataset.title || '-'}`;
+                }
+            } else {
+                document.getElementById('parentInfo').innerText = 'Root / Element utama';
+            }
+
+            toggleQuestionFields();
+        }
+
+        function toggleQuestionFields() {
+            const type = document.getElementById('nodeType').value;
+            const isQuestion = type === 'QUESTION';
+
+            document.querySelectorAll('.question-field').forEach(el => {
+                el.style.display = isQuestion ? '' : 'none';
+            });
+        }
+
+        document.getElementById('nodeType').addEventListener('change', toggleQuestionFields);
+
+        function saveNode() {
+            const title = document.getElementById('title').value.trim();
+
+            if (!title) {
+                alert('Title wajib diisi.');
+                return;
+            }
+
+            const payload = {
+                Id: emptyToNull(document.getElementById('nodeId').value),
+                MasterQuestionerId: document.getElementById('masterQuestionerId').value,
+                ParentId: emptyToNull(document.getElementById('parentId').value),
+                Type: document.getElementById('nodeType').value,
+                Number: emptyToNull(document.getElementById('number').value),
+                Title: title,
+                Description: emptyToNull(document.getElementById('description').value),
+                ScoreOption: emptyToNull(document.getElementById('scoreOption').value),
+                Weight: emptyToNull(document.getElementById('weight').value),
+                OrderNo: parseInt(document.getElementById('orderNo').value || '0'),
+                Status: document.getElementById('status').value,
+                IsPenalty: document.getElementById('isPenalty').checked,
+                PenaltyAlert: emptyToNull(document.getElementById('penaltyAlert').value),
+                IsRelaksasi: document.getElementById('isRelaksasi').checked,
+                PenaltyExcellentCriteria: emptyToNull(document.getElementById('penaltyExcellentCriteria').value),
+                ScoreExcellentCriteria: emptyToNull(document.getElementById('scoreExcellentCriteria').value),
+                FormType: emptyToNull(document.getElementById('formType').value)
+            };
+
+            fetch('/MasterChecklist/SaveNode', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'RequestVerificationToken': getToken()
+                },
+                body: JSON.stringify(payload)
+            })
+            .then(async res => {
+                if (!res.ok) throw await res.text();
+                return res.json();
+            })
+            .then(res => {
+                showToast(res.message || 'Data berhasil disimpan.', 'success');
+                setTimeout(() => location.reload(), 700);
+            })
+            .catch(err => {
+                console.error(err);
+                showToast(err || 'Gagal menyimpan data.', 'danger');
+            });
+        }
+
+        function deleteNode(id) {
+            if (!confirm('Yakin hapus node ini? Node yang punya child tidak bisa dihapus.')) return;
+
+            fetch('/MasterChecklist/DeleteNode', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'RequestVerificationToken': getToken()
+                },
+                body: JSON.stringify({ Id: id })
+            })
+            .then(async res => {
+                if (!res.ok) throw await res.text();
+                return res.json();
+            })
+            .then(res => {
+                showToast(res.message || 'Node berhasil dihapus.', 'success');
+                setTimeout(() => location.reload(), 700);
+            })
+            .catch(err => {
+                console.error(err);
+                showToast(err || 'Gagal hapus node.', 'danger');
+            });
+        }
+
+        function toggleChildren(btn) {
+            const node = btn.closest('.tree-node');
+            const children = node.querySelector(':scope > .children');
+            const icon = btn.querySelector('i');
+
+            if (!children) return;
+
+            children.classList.toggle('collapsed');
+
+            if (children.classList.contains('collapsed')) {
+                icon.classList.remove('bi-chevron-down');
+                icon.classList.add('bi-chevron-right');
+            } else {
+                icon.classList.remove('bi-chevron-right');
+                icon.classList.add('bi-chevron-down');
+            }
+        }
+
+        function expandAll() {
+            document.querySelectorAll('.children').forEach(x => x.classList.remove('collapsed'));
+            document.querySelectorAll('.btn-toggle i').forEach(icon => {
+                if (icon.classList.contains('bi-chevron-right')) {
+                    icon.classList.remove('bi-chevron-right');
+                    icon.classList.add('bi-chevron-down');
+                }
+            });
+        }
+
+        function collapseAll() {
+            document.querySelectorAll('.children').forEach(x => x.classList.add('collapsed'));
+            document.querySelectorAll('.btn-toggle i').forEach(icon => {
+                if (icon.classList.contains('bi-chevron-down')) {
+                    icon.classList.remove('bi-chevron-down');
+                    icon.classList.add('bi-chevron-right');
+                }
+            });
+        }
+
+        document.getElementById('searchNode').addEventListener('input', function () {
+            const keyword = this.value.toLowerCase().trim();
+
+            if (!keyword) {
+                document.querySelectorAll('.tree-node').forEach(node => {
+                    node.classList.remove('hidden-by-search');
+                });
+                return;
+            }
+
+            expandAll();
+
+            document.querySelectorAll('.tree-node').forEach(node => {
+                const title = (node.dataset.title || '').toLowerCase();
+                const number = (node.dataset.number || '').toLowerCase();
+                const type = (node.dataset.type || '').toLowerCase();
+                const desc = (node.dataset.description || '').toLowerCase();
+
+                const selfMatch =
+                    title.includes(keyword) ||
+                    number.includes(keyword) ||
+                    type.includes(keyword) ||
+                    desc.includes(keyword);
+
+                const childMatch = Array.from(node.querySelectorAll(':scope .tree-node')).some(child => {
+                    const cTitle = (child.dataset.title || '').toLowerCase();
+                    const cNumber = (child.dataset.number || '').toLowerCase();
+                    const cType = (child.dataset.type || '').toLowerCase();
+                    const cDesc = (child.dataset.description || '').toLowerCase();
+
+                    return cTitle.includes(keyword)
+                        || cNumber.includes(keyword)
+                        || cType.includes(keyword)
+                        || cDesc.includes(keyword);
+                });
+
+                node.classList.toggle('hidden-by-search', !(selfMatch || childMatch));
+            });
+        });
+
+        function showToast(message, type) {
+            const el = document.createElement('div');
+            el.className = `alert alert-${type} alert-dismissible fade show position-fixed top-0 start-50 translate-middle-x mt-3 shadow`;
+            el.style.zIndex = '9999';
+            el.innerHTML = `
+                ${message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            `;
+            document.body.appendChild(el);
+            setTimeout(() => el.remove(), 2500);
+        }
+
+        toggleQuestionFields();
+    </script>
+}

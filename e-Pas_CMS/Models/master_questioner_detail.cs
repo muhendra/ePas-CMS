@@ -12,6 +12,7 @@ public partial class master_questioner_detail
     public string? parent_id { get; set; }
 
     public string type { get; set; } = null!;
+    public string form_type { get; set; } = null!;
 
     public string title { get; set; } = null!;
 

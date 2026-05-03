@@ -24,6 +24,7 @@ public partial class trx_audit
     public string audit_level { get; set; } = null!;
 
     public string audit_type { get; set; } = null!;
+
     public decimal? score { get; set; } = 0;
 
     public DateOnly? audit_schedule_date { get; set; }
@@ -45,7 +46,7 @@ public partial class trx_audit
     public string? form_type_auditor2 { get; set; }
 
     public string? form_status_auditor1 { get; set; }
-    
+
     public string? form_status_auditor2 { get; set; }
 
     public string status { get; set; } = null!;
@@ -59,8 +60,11 @@ public partial class trx_audit
     public DateTime? updated_date { get; set; }
 
     public DateTime? approval_date { get; set; }
+
     public string? approval_by { get; set; }
+
     public string? good_status { get; set; }
+
     public string? excellent_status { get; set; }
 
     public string? report_file_good { get; set; }
@@ -68,6 +72,15 @@ public partial class trx_audit
     public string? report_file_excellent { get; set; }
 
     public string? report_file_boa { get; set; }
+
+    public string? note { get; set; }
+    public DateTime? review_audit_started_at { get; set; }
+
+    public string? review_audit_started_by { get; set; }
+
+    public DateTime? review_audit_finished_at { get; set; }
+
+    public int? review_audit_duration_seconds { get; set; }
 
     public virtual app_user? app_user { get; set; }
 

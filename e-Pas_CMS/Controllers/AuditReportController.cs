@@ -1,29 +1,30 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Data;
-using System.Linq;
-using System.Threading.Tasks;
-using Dapper;
-using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
+﻿using Dapper;
 using e_Pas_CMS.Data;
+using e_Pas_CMS.Models;
 using e_Pas_CMS.ViewModels;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.ModelBinding;
 using Microsoft.AspNetCore.Mvc.Razor;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.AspNetCore.Mvc.ViewFeatures;
-using QuestPDF.Fluent;
-using Newtonsoft.Json;
-using System.Xml.Linq;
-using Npgsql;
-using System.Reflection.Emit;
-using e_Pas_CMS.Models;
-using System.Text;
-using static System.Formats.Asn1.AsnWriter;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
+using Newtonsoft.Json;
+using Npgsql;
+using QuestPDF.Fluent;
+using System;
+using System.Collections.Generic;
+using System.Data;
 using System.Data.Common;
 using System.Globalization;
+using System.Linq;
+using System.Reflection.Emit;
+using System.Runtime.Intrinsics.X86;
+using System.Text;
+using System.Threading.Tasks;
+using System.Xml.Linq;
+using static System.Formats.Asn1.AsnWriter;
 
 namespace e_Pas_CMS.Controllers
 {
@@ -63,7 +64,7 @@ namespace e_Pas_CMS.Controllers
                     .Distinct()
                     .ToListAsync();
 
-            var query = _context.trx_audits
+            var query = _context.trx_audits.AsNoTracking()
                 .Include(a => a.spbu)
                 .Include(a => a.app_user)
                 .Where(a => a.status == "VERIFIED" && a.audit_type != "Basic Operational");
@@ -442,8 +443,7 @@ namespace e_Pas_CMS.Controllers
             SELECT DISTINCT ON (spbu_id) *
             FROM trx_audit
             WHERE status = 'VERIFIED' AND audit_type <> 'Basic Operational'
-            ORDER BY spbu_id, audit_execution_time DESC, audit_schedule_date DESC, created_date DESC
-        ")
+            ORDER BY spbu_id, audit_execution_time DESC, audit_schedule_date DESC, created_date DESC")
                 .Include(a => a.spbu)
                 .Include(a => a.app_user)
                 .AsNoTracking();
@@ -503,21 +503,21 @@ namespace e_Pas_CMS.Controllers
                 {
                     // --- Ambil checklist untuk hitung finalScore ---
                     var sql = @"
-            SELECT 
-                mqd.weight, 
-                tac.score_input, 
-                tac.score_x, 
-                mqd.is_relaksasi
-            FROM master_questioner_detail mqd
-            LEFT JOIN trx_audit_checklist tac 
-                ON tac.master_questioner_detail_id = mqd.id 
-                AND tac.trx_audit_id = @id
-            WHERE mqd.master_questioner_id = (
-                SELECT master_questioner_checklist_id 
-                FROM trx_audit 
-                WHERE id = @id
-            )
-            AND mqd.type = 'QUESTION'";
+                    SELECT 
+                        mqd.weight, 
+                        tac.score_input, 
+                        tac.score_x, 
+                        mqd.is_relaksasi
+                    FROM master_questioner_detail mqd
+                    LEFT JOIN trx_audit_checklist tac 
+                        ON tac.master_questioner_detail_id = mqd.id 
+                        AND tac.trx_audit_id = @id
+                    WHERE mqd.master_questioner_id = (
+                        SELECT master_questioner_checklist_id 
+                        FROM trx_audit 
+                        WHERE id = @id
+                    )
+                    AND mqd.type = 'QUESTION'";
 
                     var checklist = (await conn.QueryAsync<(decimal? weight, string score_input, decimal? score_x, bool? is_relaksasi)>(
                         sql, new { id = a.id }, transaction: tx)).ToList();
@@ -562,11 +562,11 @@ namespace e_Pas_CMS.Controllers
 
                     // === Special Node Score Check ===
                     var specialNodeIds = new List<Guid>
-            {
-                Guid.Parse("555fe2e4-b95b-461b-9c92-ad8b5c837119"),
-                Guid.Parse("bafc206f-ed29-4bbc-8053-38799e186fb0"),
-                Guid.Parse("d26f4caa-e849-4ab4-9372-298693247272")
-            };
+                    {
+                        Guid.Parse("555fe2e4-b95b-461b-9c92-ad8b5c837119"),
+                        Guid.Parse("bafc206f-ed29-4bbc-8053-38799e186fb0"),
+                        Guid.Parse("d26f4caa-e849-4ab4-9372-298693247272")
+                    };
 
                     if (a.created_date > new DateTime(2025, 5, 31))
                     {
@@ -574,13 +574,13 @@ namespace e_Pas_CMS.Controllers
                     }
 
                     var specialScoreSql = @"
-            SELECT mqd.id, tac.score_input, ta.created_date
-            FROM master_questioner_detail mqd
-            LEFT JOIN trx_audit_checklist tac 
-                ON tac.master_questioner_detail_id = mqd.id 
-                AND tac.trx_audit_id = @id
-            LEFT JOIN trx_audit ta ON ta.id = tac.trx_audit_id
-            WHERE mqd.id = ANY(@ids);";
+                    SELECT mqd.id, tac.score_input, ta.created_date
+                    FROM master_questioner_detail mqd
+                    LEFT JOIN trx_audit_checklist tac 
+                        ON tac.master_questioner_detail_id = mqd.id 
+                        AND tac.trx_audit_id = @id
+                    LEFT JOIN trx_audit ta ON ta.id = tac.trx_audit_id
+                    WHERE mqd.id = ANY(@ids);";
 
                     var specialScoresRaw = (await conn.QueryAsync<(string id, string score_input, DateTime? created_date)>(
                         specialScoreSql,
@@ -608,45 +608,45 @@ namespace e_Pas_CMS.Controllers
 
                     // === Penalty checks ===
                     var penaltyExcellentQuery = @"SELECT STRING_AGG(mqd.penalty_alert, ', ') AS penalty_alerts
-                FROM trx_audit_checklist tac
-                INNER JOIN master_questioner_detail mqd ON mqd.id = tac.master_questioner_detail_id
-                INNER JOIN trx_audit ta ON ta.id = tac.trx_audit_id
-                WHERE 
-                tac.trx_audit_id = @id
-                AND (
+                    FROM trx_audit_checklist tac
+                    INNER JOIN master_questioner_detail mqd ON mqd.id = tac.master_questioner_detail_id
+                    INNER JOIN trx_audit ta ON ta.id = tac.trx_audit_id
+                    WHERE 
+                    tac.trx_audit_id = @id
+                    AND (
+                        (
+                            tac.master_questioner_detail_id IN (
+                        '555fe2e4-b95b-461b-9c92-ad8b5c837119',
+                        'bafc206f-ed29-4bbc-8053-38799e186fb0',
+                        'd26f4caa-e849-4ab4-9372-298693247272'
+                    )
+                    AND tac.score_input <> 'A'
+                    )
+                    OR
                     (
-                        tac.master_questioner_detail_id IN (
-                    '555fe2e4-b95b-461b-9c92-ad8b5c837119',
-                    'bafc206f-ed29-4bbc-8053-38799e186fb0',
-                    'd26f4caa-e849-4ab4-9372-298693247272'
-                )
-                AND tac.score_input <> 'A'
-                )
-                OR
-                (
-                tac.master_questioner_detail_id = '5e9ffc47-de99-4d7d-b8bc-0fb9b7acc81b'
-                AND ta.created_date < '2025-06-01'
-                AND tac.score_input <> 'A')
-                OR
-                (
+                    tac.master_questioner_detail_id = '5e9ffc47-de99-4d7d-b8bc-0fb9b7acc81b'
+                    AND ta.created_date < '2025-06-01'
+                    AND tac.score_input <> 'A')
+                    OR
                     (
-                    (mqd.penalty_excellent_criteria = 'LT_1' AND tac.score_input <> 'A') OR
-                    (mqd.penalty_excellent_criteria = 'EQ_0' AND tac.score_input = 'F')
-                )
-                AND (mqd.is_relaksasi = false OR mqd.is_relaksasi IS NULL)
-                AND mqd.is_penalty = true
-                AND NOT (
-                    mqd.id = '5e9ffc47-de99-4d7d-b8bc-0fb9b7acc81b'
-                    AND ta.created_date >= '2025-06-01'
-                )));";
+                        (
+                        (mqd.penalty_excellent_criteria = 'LT_1' AND tac.score_input <> 'A') OR
+                        (mqd.penalty_excellent_criteria = 'EQ_0' AND tac.score_input = 'F')
+                    )
+                    AND (mqd.is_relaksasi = false OR mqd.is_relaksasi IS NULL)
+                    AND mqd.is_penalty = true
+                    AND NOT (
+                        mqd.id = '5e9ffc47-de99-4d7d-b8bc-0fb9b7acc81b'
+                        AND ta.created_date >= '2025-06-01'
+                    )));";
 
                     var penaltyGoodQuery = @"SELECT STRING_AGG(mqd.penalty_alert, ', ') AS penalty_alerts
-                FROM trx_audit_checklist tac
-                INNER JOIN master_questioner_detail mqd ON mqd.id = tac.master_questioner_detail_id
-                WHERE tac.trx_audit_id = @id AND
-                  tac.score_input = 'F' AND
-                  mqd.is_penalty = true AND 
-                  (mqd.is_relaksasi = false OR mqd.is_relaksasi IS NULL) and mqd.id <> '5e9ffc47-de99-4d7d-b8bc-0fb9b7acc81b';";
+                    FROM trx_audit_checklist tac
+                    INNER JOIN master_questioner_detail mqd ON mqd.id = tac.master_questioner_detail_id
+                    WHERE tac.trx_audit_id = @id AND
+                      tac.score_input = 'F' AND
+                      mqd.is_penalty = true AND 
+                      (mqd.is_relaksasi = false OR mqd.is_relaksasi IS NULL) and mqd.id <> '5e9ffc47-de99-4d7d-b8bc-0fb9b7acc81b';";
 
                     var penaltyExcellentResult = await conn.ExecuteScalarAsync<string>(penaltyExcellentQuery, new { id = a.id }, transaction: tx);
                     var penaltyGoodResult = await conn.ExecuteScalarAsync<string>(penaltyGoodQuery, new { id = a.id }, transaction: tx);
@@ -811,6 +811,7 @@ namespace e_Pas_CMS.Controllers
             return View(model);
         }
 
+
         [HttpGet]
         public async Task<IActionResult> DownloadCsv(string searchTerm = "")
         {
@@ -830,26 +831,27 @@ namespace e_Pas_CMS.Controllers
 
                 var allowedStatuses = new[] { "VERIFIED", "UNDER_REVIEW" };
 
-                var start = new DateTime(2026, 02, 1);
-                var end = new DateTime(2026, 02, 28);
+                var start = new DateTime(2026, 04, 01);
+                var end = new DateTime(2026, 04, 30);
 
-                var baseQuery = _context.trx_audits
-                .Where(a =>
-                    allowedStatuses.Contains(a.status) &&
-                    a.audit_type != "Basic Operational" &&
-                    (a.audit_execution_time ?? a.created_date) >= start &&
-                    (a.audit_execution_time ?? a.created_date) < end
-                );
+                var baseQuery = _context.trx_audits.AsNoTracking()
+.Where(a =>
+    allowedStatuses.Contains(a.status) &&
+    a.audit_type != "Basic Operational" &&
+    (a.audit_execution_time ?? a.created_date) >= start &&
+    (a.audit_execution_time ?? a.created_date) < end &&
+    a.id == "89ac7143-bac3-4bf2-9b6b-b1f55f81602b"
+);
 
                 var lastAuditIdsQuery = baseQuery
-                    .GroupBy(a => a.spbu_id) // atau a.spbu.spbu_no, sesuaikan
+                    .GroupBy(a => a.spbu_id)
                     .Select(g => g
                         .OrderByDescending(a => a.audit_execution_time ?? a.created_date)
                         .Select(a => a.id)
                         .FirstOrDefault()
                     );
 
-                var query = _context.trx_audits
+                var query = _context.trx_audits.AsNoTracking()
                     .Where(a => lastAuditIdsQuery.Contains(a.id))
                     .Include(a => a.spbu)
                     .Include(a => a.app_user);
@@ -858,6 +860,7 @@ namespace e_Pas_CMS.Controllers
                     .OrderBy(a => a.spbu.spbu_no)
                     .ThenByDescending(a => a.audit_execution_time ?? a.created_date)
                     .ToListAsync();
+
                 await using var conn2 = _context.Database.GetDbConnection();
                 if (conn2.State != ConnectionState.Open)
                     await conn2.OpenAsync();
@@ -866,12 +869,10 @@ namespace e_Pas_CMS.Controllers
             SELECT DISTINCT number 
             FROM master_questioner_detail 
             WHERE number IS NOT NULL AND TRIM(number) <> '' 
-            ORDER BY number ASC;
-        ");
+            ORDER BY number ASC;");
 
                 var numberList = checklistNumbers.ToList();
 
-                var csv = new StringBuilder();
                 var headers = new[]
                 {
             "send_date","Audit Date","spbu_no","region","year","address","city_name","tipe_spbu","rayon",
@@ -880,8 +881,16 @@ namespace e_Pas_CMS.Controllers
             "kelas_spbu","penalty_good_alerts","penalty_excellent_alerts"
         };
 
-                // Tambahkan header number checklist
-                csv.AppendLine(string.Join(",", headers.Concat(numberList).Select(h => $"\"{h}\"")));
+                // === STREAM HEADER
+                var fileName = $"Audit_Summary_{DateTime.Now:yyyyMMddHHmmss}.csv";
+                Response.Headers.Add("Content-Disposition", $"attachment; filename={fileName}");
+                Response.ContentType = "text/csv";
+
+                await using var writer = new StreamWriter(Response.Body, Encoding.UTF8, leaveOpen: true);
+
+                await writer.WriteLineAsync(string.Join(",", headers.Concat(numberList).Select(h => $"\"{h}\"")));
+                await writer.FlushAsync();
+                await Response.Body.FlushAsync();
 
                 await using var conn = _context.Database.GetDbConnection();
                 if (conn.State != ConnectionState.Open)
@@ -952,11 +961,11 @@ namespace e_Pas_CMS.Controllers
 
                     // === Special Node Score Check ===
                     var specialNodeIds = new List<Guid>
-            {
-                Guid.Parse("555fe2e4-b95b-461b-9c92-ad8b5c837119"),
-                Guid.Parse("bafc206f-ed29-4bbc-8053-38799e186fb0"),
-                Guid.Parse("d26f4caa-e849-4ab4-9372-298693247272")
-            };
+                    {
+                        Guid.Parse("555fe2e4-b95b-461b-9c92-ad8b5c837119"),
+                        Guid.Parse("bafc206f-ed29-4bbc-8053-38799e186fb0"),
+                        Guid.Parse("d26f4caa-e849-4ab4-9372-298693247272")
+                    };
 
                     if (a.created_date > new DateTime(2025, 5, 31))
                     {
@@ -997,46 +1006,45 @@ namespace e_Pas_CMS.Controllers
 
                     // === Penalty Check
                     var penaltyExcellentQuery = @"SELECT STRING_AGG(mqd.penalty_alert, ', ') AS penalty_alerts
-                FROM trx_audit_checklist tac
-                INNER JOIN master_questioner_detail mqd ON mqd.id = tac.master_questioner_detail_id
-                INNER JOIN trx_audit ta ON ta.id = tac.trx_audit_id
-                WHERE 
-                tac.trx_audit_id = @id
-                AND (
+                    FROM trx_audit_checklist tac
+                    INNER JOIN master_questioner_detail mqd ON mqd.id = tac.master_questioner_detail_id
+                    INNER JOIN trx_audit ta ON ta.id = tac.trx_audit_id
+                    WHERE 
+                    tac.trx_audit_id = @id
+                    AND (
+                        (
+                            tac.master_questioner_detail_id IN (
+                        '555fe2e4-b95b-461b-9c92-ad8b5c837119',
+                        'bafc206f-ed29-4bbc-8053-38799e186fb0',
+                        'd26f4caa-e849-4ab4-9372-298693247272'
+                    )
+                    AND tac.score_input <> 'A'
+                    )
+                    OR
                     (
-                        tac.master_questioner_detail_id IN (
-                    '555fe2e4-b95b-461b-9c92-ad8b5c837119',
-                    'bafc206f-ed29-4bbc-8053-38799e186fb0',
-                    'd26f4caa-e849-4ab4-9372-298693247272'
-                )
-                AND tac.score_input <> 'A'
-                )
-                OR
-                (
-                tac.master_questioner_detail_id = '5e9ffc47-de99-4d7d-b8bc-0fb9b7acc81b'
-                AND ta.created_date < '2025-06-01'
-                AND tac.score_input <> 'A')
-                OR
-                (
+                    tac.master_questioner_detail_id = '5e9ffc47-de99-4d7d-b8bc-0fb9b7acc81b'
+                    AND ta.created_date < '2025-06-01'
+                    AND tac.score_input <> 'A')
+                    OR
                     (
-                    (mqd.penalty_excellent_criteria = 'LT_1' AND tac.score_input <> 'A') OR
-                    (mqd.penalty_excellent_criteria = 'EQ_0' AND tac.score_input = 'F')
-                )
-                AND (mqd.is_relaksasi = false OR mqd.is_relaksasi IS NULL)
-                AND mqd.is_penalty = true
-                AND NOT (
-                    mqd.id = '5e9ffc47-de99-4d7d-b8bc-0fb9b7acc81b'
-                    AND ta.created_date >= '2025-06-01'
-                )));";
+                        (
+                        (mqd.penalty_excellent_criteria = 'LT_1' AND tac.score_input <> 'A') OR
+                        (mqd.penalty_excellent_criteria = 'EQ_0' AND tac.score_input = 'F')
+                    )
+                    AND (mqd.is_relaksasi = false OR mqd.is_relaksasi IS NULL)
+                    AND mqd.is_penalty = true
+                    AND NOT (
+                        mqd.id = '5e9ffc47-de99-4d7d-b8bc-0fb9b7acc81b'
+                        AND ta.created_date >= '2025-06-01'
+                    )));";
 
                     var penaltyGoodQuery = @"SELECT STRING_AGG(mqd.penalty_alert, ', ') AS penalty_alerts
-                FROM trx_audit_checklist tac
-                INNER JOIN master_questioner_detail mqd ON mqd.id = tac.master_questioner_detail_id
-                WHERE tac.trx_audit_id = @id AND
-                  tac.score_input = 'F' AND
-                  mqd.is_penalty = true AND 
-                  (mqd.is_relaksasi = false OR mqd.is_relaksasi IS NULL) and mqd.id <> '5e9ffc47-de99-4d7d-b8bc-0fb9b7acc81b';";
-
+                    FROM trx_audit_checklist tac
+                    INNER JOIN master_questioner_detail mqd ON mqd.id = tac.master_questioner_detail_id
+                    WHERE tac.trx_audit_id = @id AND
+                      tac.score_input = 'F' AND
+                      mqd.is_penalty = true AND 
+                      (mqd.is_relaksasi = false OR mqd.is_relaksasi IS NULL) and mqd.id <> '5e9ffc47-de99-4d7d-b8bc-0fb9b7acc81b';";
 
                     string penaltyExcellentResult = "";
                     string penaltyGoodResult = "";
@@ -1181,15 +1189,14 @@ namespace e_Pas_CMS.Controllers
                     });
 
                     var checklistRaw = await conn.QueryAsync<(string number, decimal? weight, string score_input, decimal? score_x, bool? is_relaksasi)>(@"
-                SELECT DISTINCT ON (mqd.number) 
-                    mqd.number, mqd.weight, tac.score_input, tac.score_x, mqd.is_relaksasi
-                FROM master_questioner_detail mqd
-                LEFT JOIN trx_audit_checklist tac 
-                    ON tac.master_questioner_detail_id = mqd.id 
-                    AND tac.trx_audit_id = @id
-                WHERE mqd.number IS NOT NULL AND TRIM(mqd.number) <> ''
-                ORDER BY mqd.number, tac.updated_date DESC NULLS LAST
-            ", new { id = a.id });
+                    SELECT DISTINCT ON (mqd.number) 
+                        mqd.number, mqd.weight, tac.score_input, tac.score_x, mqd.is_relaksasi
+                    FROM master_questioner_detail mqd
+                    LEFT JOIN trx_audit_checklist tac 
+                        ON tac.master_questioner_detail_id = mqd.id 
+                        AND tac.trx_audit_id = @id
+                    WHERE mqd.number IS NOT NULL AND TRIM(mqd.number) <> ''
+                    ORDER BY mqd.number, tac.updated_date DESC NULLS LAST", new { id = a.id });
 
                     var checklistMap = checklistRaw
                         .GroupBy(x => x.number)
@@ -1202,7 +1209,7 @@ namespace e_Pas_CMS.Controllers
 
                     decimal scores = (decimal)(totalScore ?? a.score);
 
-                    csv.AppendLine(string.Join(",", new[]
+                    await writer.WriteLineAsync(string.Join(",", new[]
                     {
                 $"\"{submitDate:yyyy-MM-dd}\"",
                 $"\"{auditDate:yyyy-MM-dd}\"",
@@ -1232,25 +1239,459 @@ namespace e_Pas_CMS.Controllers
                 $"\"{penaltyGoodResult}\"",
                 $"\"{penaltyExcellentResult}\""
             }.Concat(checklistValues)));
+
+                    // === FLUSH PER ROW (INI KUNCI BIAR NGGAK DELAY)
+                    await writer.FlushAsync();
+                    await Response.Body.FlushAsync();
                 }
 
-                var fileName = $"Audit_Summary_{DateTime.Now:yyyyMMddHHmmss}.csv";
-                var bytes = Encoding.UTF8.GetBytes(csv.ToString());
-                return File(bytes, "text/csv", fileName);
+                return new EmptyResult();
             }
             catch (Exception ex)
             {
-                // TODO: kalau kamu punya ILogger, pakai ini:
-                // _logger.LogError(ex, "Error saat generate CSV di DownloadCsv");
-
-                // Bisa pakai TempData kalau mau tampilkan ke View:
-                // TempData["ErrorMessage"] = "Terjadi kesalahan saat generate CSV. Silakan coba lagi atau hubungi administrator.";
-                // return RedirectToAction("Index");
-
                 return StatusCode(StatusCodes.Status500InternalServerError,
                     $"Terjadi error saat generate CSV: {ex.Message}");
             }
         }
+
+        //[HttpGet]
+        //public async Task<IActionResult> DownloadCsv(string searchTerm = "")
+        //{
+        //    try
+        //    {
+        //        var currentUser = User.Identity?.Name;
+
+        //        _context.Database.SetCommandTimeout(123600);
+
+        //        var userRegion = await (from aur in _context.app_user_roles
+        //                                join au in _context.app_users on aur.app_user_id equals au.id
+        //                                where au.username == currentUser
+        //                                select aur.region)
+        //                           .Distinct()
+        //                           .Where(r => r != null)
+        //                           .ToListAsync();
+
+        //        var allowedStatuses = new[] { "VERIFIED", "UNDER_REVIEW" };
+
+        //        var start = new DateTime(2026, 03, 01);
+        //        var end = new DateTime(2026, 03, 31);
+
+        //        var baseQuery = _context.trx_audits.AsNoTracking()
+        //        .Where(a =>
+        //            allowedStatuses.Contains(a.status) &&
+        //            a.audit_type != "Basic Operational" &&
+        //            (a.audit_execution_time ?? a.created_date) >= start &&
+        //            (a.audit_execution_time ?? a.created_date) < end
+        //        );
+
+        //        var lastAuditIdsQuery = baseQuery
+        //            .GroupBy(a => a.spbu_id) // atau a.spbu.spbu_no, sesuaikan
+        //            .Select(g => g
+        //                .OrderByDescending(a => a.audit_execution_time ?? a.created_date)
+        //                .Select(a => a.id)
+        //                .FirstOrDefault()
+        //            );
+
+        //        var query = _context.trx_audits.AsNoTracking()
+        //            .Where(a => lastAuditIdsQuery.Contains(a.id))
+        //            .Include(a => a.spbu)
+        //            .Include(a => a.app_user);
+
+        //        var audits = await query
+        //            .OrderBy(a => a.spbu.spbu_no)
+        //            .ThenByDescending(a => a.audit_execution_time ?? a.created_date)
+        //            .ToListAsync();
+        //        await using var conn2 = _context.Database.GetDbConnection();
+        //        if (conn2.State != ConnectionState.Open)
+        //            await conn2.OpenAsync();
+
+        //        var checklistNumbers = await conn2.QueryAsync<string>(@"
+        //    SELECT DISTINCT number 
+        //    FROM master_questioner_detail 
+        //    WHERE number IS NOT NULL AND TRIM(number) <> '' 
+        //    ORDER BY number ASC;");
+
+        //        var numberList = checklistNumbers.ToList();
+
+        //        var csv = new StringBuilder();
+        //        var headers = new[]
+        //        {
+        //    "send_date","Audit Date","spbu_no","region","year","address","city_name","tipe_spbu","rayon",
+        //    "audit_level","audit_next","good_status","excellent_status","Total Score",
+        //    "SSS","EQnQ","RFS","VFC","EPO","wtms","qq","wmef","format_fisik","cpo",
+        //    "kelas_spbu","penalty_good_alerts","penalty_excellent_alerts"};
+
+        //        // Tambahkan header number checklist
+        //        csv.AppendLine(string.Join(",", headers.Concat(numberList).Select(h => $"\"{h}\"")));
+
+        //        await using var conn = _context.Database.GetDbConnection();
+        //        if (conn.State != ConnectionState.Open)
+        //            await conn.OpenAsync();
+
+        //        foreach (var a in audits)
+        //        {
+        //            var sql = @"
+        //        SELECT 
+        //            mqd.weight, 
+        //            tac.score_input, 
+        //            tac.score_x, 
+        //            mqd.is_relaksasi
+        //        FROM master_questioner_detail mqd
+        //        LEFT JOIN trx_audit_checklist tac 
+        //            ON tac.master_questioner_detail_id = mqd.id 
+        //            AND tac.trx_audit_id = @id
+        //        WHERE mqd.master_questioner_id = (
+        //            SELECT master_questioner_checklist_id 
+        //            FROM trx_audit 
+        //            WHERE id = @id
+        //        )
+        //        AND mqd.type = 'QUESTION'";
+
+        //            var checklist = (await conn.QueryAsync<(decimal? weight, string score_input, decimal? score_x, bool? is_relaksasi)>(
+        //                sql,
+        //                new { id = a.id },
+        //                commandTimeout: 60000
+        //            )).ToList();
+
+        //            decimal sumAF = 0, sumWeight = 0, sumX = 0;
+
+        //            foreach (var item in checklist)
+        //            {
+        //                decimal w = item.weight ?? 0;
+        //                string input = item.score_input?.Trim().ToUpperInvariant() ?? "";
+
+        //                if (input == "X")
+        //                {
+        //                    sumX += w;
+        //                    sumAF += item.score_x ?? 0;
+        //                }
+        //                else if (input == "F" && item.is_relaksasi == true)
+        //                {
+        //                    sumAF += 1.00m * w;
+        //                }
+        //                else
+        //                {
+        //                    decimal af = input switch
+        //                    {
+        //                        "A" => 1.00m,
+        //                        "B" => 0.80m,
+        //                        "C" => 0.60m,
+        //                        "D" => 0.40m,
+        //                        "E" => 0.20m,
+        //                        "F" => 0.00m,
+        //                        _ => 0.00m
+        //                    };
+        //                    sumAF += af * w;
+        //                }
+
+        //                sumWeight += w;
+        //            }
+
+        //            decimal finalScore = (sumWeight - sumX) > 0
+        //                ? (sumAF / (sumWeight - sumX)) * sumWeight
+        //                : 0m;
+
+        //            // === Special Node Score Check ===
+        //            var specialNodeIds = new List<Guid>
+        //            {
+        //                Guid.Parse("555fe2e4-b95b-461b-9c92-ad8b5c837119"),
+        //                Guid.Parse("bafc206f-ed29-4bbc-8053-38799e186fb0"),
+        //                Guid.Parse("d26f4caa-e849-4ab4-9372-298693247272")
+        //            };
+
+        //            if (a.created_date > new DateTime(2025, 5, 31))
+        //            {
+        //                specialNodeIds.Add(Guid.Parse("5e9ffc47-de99-4d7d-b8bc-0fb9b7acc81b"));
+        //            }
+
+        //            var specialScoreSql = @"
+        //        SELECT mqd.id, tac.score_input, ta.created_date
+        //        FROM master_questioner_detail mqd
+        //        LEFT JOIN trx_audit_checklist tac 
+        //            ON tac.master_questioner_detail_id = mqd.id 
+        //            AND tac.trx_audit_id = @id
+        //        LEFT JOIN trx_audit ta ON ta.id = tac.trx_audit_id
+        //        WHERE mqd.id = ANY(@ids);";
+
+        //            var specialScoresRaw = (await conn.QueryAsync<(string id, string score_input, DateTime? created_date)>(
+        //                specialScoreSql,
+        //                new { id = a.id, ids = specialNodeIds.Select(x => x.ToString()).ToArray() }
+        //            )).ToList();
+
+        //            var specialScores = specialScoresRaw
+        //                .Where(x =>
+        //                    x.id != "5e9ffc47-de99-4d7d-b8bc-0fb9b7acc81b" ||
+        //                    (x.created_date != null && x.created_date.Value < new DateTime(2025, 6, 1))
+        //                )
+        //                .ToDictionary(x => x.id, x => x.score_input?.Trim().ToUpperInvariant());
+
+        //            bool forceGoodOnly = false;
+        //            bool forceNotCertified = false;
+
+        //            foreach (var score in specialScores.Values)
+        //            {
+        //                if (score == "C")
+        //                    forceGoodOnly = true;
+        //                else if (score != "A")
+        //                    forceNotCertified = true;
+        //            }
+
+        //            // === Penalty Check
+        //            var penaltyExcellentQuery = @"SELECT STRING_AGG(mqd.penalty_alert, ', ') AS penalty_alerts
+        //            FROM trx_audit_checklist tac
+        //            INNER JOIN master_questioner_detail mqd ON mqd.id = tac.master_questioner_detail_id
+        //            INNER JOIN trx_audit ta ON ta.id = tac.trx_audit_id
+        //            WHERE 
+        //            tac.trx_audit_id = @id
+        //            AND (
+        //                (
+        //                    tac.master_questioner_detail_id IN (
+        //                '555fe2e4-b95b-461b-9c92-ad8b5c837119',
+        //                'bafc206f-ed29-4bbc-8053-38799e186fb0',
+        //                'd26f4caa-e849-4ab4-9372-298693247272'
+        //            )
+        //            AND tac.score_input <> 'A'
+        //            )
+        //            OR
+        //            (
+        //            tac.master_questioner_detail_id = '5e9ffc47-de99-4d7d-b8bc-0fb9b7acc81b'
+        //            AND ta.created_date < '2025-06-01'
+        //            AND tac.score_input <> 'A')
+        //            OR
+        //            (
+        //                (
+        //                (mqd.penalty_excellent_criteria = 'LT_1' AND tac.score_input <> 'A') OR
+        //                (mqd.penalty_excellent_criteria = 'EQ_0' AND tac.score_input = 'F')
+        //            )
+        //            AND (mqd.is_relaksasi = false OR mqd.is_relaksasi IS NULL)
+        //            AND mqd.is_penalty = true
+        //            AND NOT (
+        //                mqd.id = '5e9ffc47-de99-4d7d-b8bc-0fb9b7acc81b'
+        //                AND ta.created_date >= '2025-06-01'
+        //            )));";
+
+        //                var penaltyGoodQuery = @"SELECT STRING_AGG(mqd.penalty_alert, ', ') AS penalty_alerts
+        //            FROM trx_audit_checklist tac
+        //            INNER JOIN master_questioner_detail mqd ON mqd.id = tac.master_questioner_detail_id
+        //            WHERE tac.trx_audit_id = @id AND
+        //              tac.score_input = 'F' AND
+        //              mqd.is_penalty = true AND 
+        //              (mqd.is_relaksasi = false OR mqd.is_relaksasi IS NULL) and mqd.id <> '5e9ffc47-de99-4d7d-b8bc-0fb9b7acc81b';";
+
+        //            string penaltyExcellentResult = "";
+        //            string penaltyGoodResult = "";
+
+        //            try
+        //            {
+        //                // === Query penalty excellent
+        //                penaltyExcellentResult = await conn.ExecuteScalarAsync<string>(
+        //                    penaltyExcellentQuery,
+        //                    new { id = a.id },
+        //                    commandTimeout: 60000
+        //                );
+
+        //                // === Query penalty good
+        //                penaltyGoodResult = await conn.ExecuteScalarAsync<string>(
+        //                    penaltyGoodQuery,
+        //                    new { id = a.id },
+        //                    commandTimeout: 60000
+        //                );
+        //            }
+        //            catch (Exception ex)
+        //            {
+        //                // Logging optional
+        //                Console.WriteLine($"[ERROR] AuditID: {a.id} gagal ambil penalty. Reason: {ex.Message}");
+
+        //                // Kamu bisa simpan ke database audit log kalau perlu
+
+        //                // Supaya CSV tetap lanjut, jangan throw — set value khusus
+        //                penaltyExcellentResult = $"ERROR-{a.id}";
+        //                penaltyGoodResult = $"ERROR-{a.id}";
+        //            }
+
+        //            bool hasExcellentPenalty = !string.IsNullOrEmpty(penaltyExcellentResult);
+        //            bool hasGoodPenalty = !string.IsNullOrEmpty(penaltyGoodResult);
+
+        //            // === Audit Next
+        //            string auditNext = null;
+        //            string levelspbu = null;
+
+        //            var auditFlowSql = @"SELECT * FROM master_audit_flow WHERE audit_level = @level LIMIT 1;";
+        //            var auditFlow = await conn.QueryFirstOrDefaultAsync<dynamic>(auditFlowSql, new { level = a.audit_level });
+
+        //            // === Hitung Compliance
+        //            var checklistData = await GetChecklistDataAsync(conn, a.id);
+        //            var mediaList = await GetMediaPerNodeAsync(conn, a.id);
+        //            var elements = BuildHierarchy(checklistData, mediaList);
+        //            foreach (var element in elements) AssignWeightRecursive(element);
+        //            CalculateChecklistScores(elements);
+        //            CalculateOverallScore(new DetailReportViewModel { Elements = elements }, checklistData);
+        //            var modelstotal = new DetailReportViewModel { Elements = elements };
+        //            CalculateOverallScore(modelstotal, checklistData);
+        //            decimal? totalScore = modelstotal.TotalScore;
+        //            var compliance = HitungComplianceLevelDariElements(elements);
+
+        //            var auditDate = a.audit_execution_time ?? a.updated_date ?? DateTime.MinValue;
+
+        //            var submitDate = a.approval_date == null || a.approval_date == DateTime.MinValue
+        //                ? a.updated_date
+        //                : a.approval_date;
+
+        //            // === Compliance validation
+        //            var sss = Math.Round(compliance.SSS ?? 0, 2);
+        //            var eqnq = Math.Round(compliance.EQnQ ?? 0, 2);
+        //            var rfs = Math.Round(compliance.RFS ?? 0, 2);
+        //            var vfc = Math.Round(compliance.VFC ?? 0, 2);
+        //            var epo = Math.Round(compliance.EPO ?? 0, 2);
+
+        //            bool failGood = sss < 80 || eqnq < 85 || rfs < 85 || vfc < 15 || epo < 25;
+        //            bool failExcellent = sss < 85 || eqnq < 85 || rfs < 85 || vfc < 20 || epo < 50;
+
+        //            // === Update status with compliance logic
+        //            string goodStatus = (finalScore >= 75 && !hasGoodPenalty && !failGood)
+        //                ? "CERTIFIED"
+        //                : "NOT CERTIFIED";
+
+        //            string excellentStatus = (finalScore >= 80 && !hasExcellentPenalty && !failExcellent && !forceNotCertified)
+        //                ? (forceGoodOnly ? "GOOD" : "CERTIFIED")
+        //                : "NOT CERTIFIED";
+
+        //            if (auditFlow != null)
+        //            {
+        //                string passedGood = auditFlow.passed_good;
+        //                string passedExcellent = auditFlow.passed_excellent;
+        //                string passedAuditLevel = auditFlow.passed_audit_level;
+        //                string failed_audit_level = auditFlow.failed_audit_level;
+
+        //                if (string.IsNullOrWhiteSpace(passedGood) && string.IsNullOrWhiteSpace(passedExcellent) && goodStatus == "CERTIFIED" && excellentStatus == "CERTIFIED")
+        //                {
+        //                    auditNext = passedAuditLevel;
+        //                }
+        //                else if (string.IsNullOrWhiteSpace(passedGood) && string.IsNullOrWhiteSpace(passedExcellent) && goodStatus == "CERTIFIED" && excellentStatus == "NOT CERTIFIED")
+        //                {
+        //                    auditNext = passedAuditLevel;
+        //                }
+        //                else if (string.IsNullOrWhiteSpace(passedGood) && string.IsNullOrWhiteSpace(passedExcellent) && goodStatus == "NOT CERTIFIED" && excellentStatus == "NOT CERTIFIED")
+        //                {
+        //                    auditNext = failed_audit_level;
+        //                }
+        //                else if (goodStatus == "NOT CERTIFIED" && excellentStatus == "NOT CERTIFIED")
+        //                {
+        //                    auditNext = failed_audit_level;
+        //                }
+        //                else if (goodStatus == "CERTIFIED" && excellentStatus == "NOT CERTIFIED")
+        //                {
+        //                    auditNext = passedGood;
+        //                }
+        //                else if (goodStatus == "CERTIFIED" && excellentStatus == "CERTIFIED")
+        //                {
+        //                    auditNext = passedExcellent;
+        //                }
+        //                else if (string.IsNullOrWhiteSpace(passedGood) && string.IsNullOrWhiteSpace(passedExcellent) && finalScore >= 75)
+        //                {
+        //                    auditNext = passedAuditLevel;
+        //                }
+        //                else
+        //                {
+        //                    auditNext = failed_audit_level;
+        //                }
+
+        //                var auditlevelClassSql = @"SELECT audit_level_class FROM master_audit_flow WHERE audit_level = @level LIMIT 1;";
+        //                var auditlevelClass = await conn.QueryFirstOrDefaultAsync<dynamic>(auditlevelClassSql, new { level = auditNext });
+        //                levelspbu = auditlevelClass != null
+        //                    ? (auditlevelClass.audit_level_class ?? "")
+        //                    : "";
+        //            }
+
+        //            // === UPDATE AUDIT_NEXT & LEVEL SPBU KE TABEL SPBU
+        //            var updateSpbuSql = @"
+        //            UPDATE spbu 
+        //            SET 
+        //                audit_next = @auditNext,
+        //                ""level""   = @level,
+        //                updated_date = NOW()
+        //            WHERE id = @spbuId;
+        //            ";
+
+        //            await conn.ExecuteAsync(updateSpbuSql, new
+        //            {
+        //                auditNext = auditNext,
+        //                level = levelspbu,
+        //                spbuId = a.spbu_id
+        //            });
+
+        //            var checklistRaw = await conn.QueryAsync<(string number, decimal? weight, string score_input, decimal? score_x, bool? is_relaksasi)>(@"
+        //            SELECT DISTINCT ON (mqd.number) 
+        //                mqd.number, mqd.weight, tac.score_input, tac.score_x, mqd.is_relaksasi
+        //            FROM master_questioner_detail mqd
+        //            LEFT JOIN trx_audit_checklist tac 
+        //                ON tac.master_questioner_detail_id = mqd.id 
+        //                AND tac.trx_audit_id = @id
+        //            WHERE mqd.number IS NOT NULL AND TRIM(mqd.number) <> ''
+        //            ORDER BY mqd.number, tac.updated_date DESC NULLS LAST", new { id = a.id });
+
+        //            var checklistMap = checklistRaw
+        //                .GroupBy(x => x.number)
+        //                .ToDictionary(
+        //                    g => g.Key,
+        //                    g => g.First().score_input?.Trim().ToUpperInvariant() ?? ""
+        //                );
+
+        //            var checklistValues = numberList.Select(number => $"\"{(checklistMap.TryGetValue(number, out var val) ? val : "")}\"");
+
+        //            decimal scores = (decimal)(totalScore ?? a.score);
+
+        //            csv.AppendLine(string.Join(",", new[]
+        //            {
+        //                $"\"{submitDate:yyyy-MM-dd}\"",
+        //                $"\"{auditDate:yyyy-MM-dd}\"",
+        //                $"\"{a.spbu.spbu_no}\"",
+        //                $"\"{a.spbu.region}\"",
+        //                $"\"{a.spbu.year ?? DateTime.Now.Year}\"",
+        //                $"\"{a.spbu.address}\"",
+        //                $"\"{a.spbu.city_name}\"",
+        //                $"\"{a.spbu.owner_type}\"",
+        //                $"\"{a.spbu.sbm}\"",
+        //                $"\"{a.audit_level}\"",
+        //                $"\"{auditNext}\"",
+        //                $"\"{goodStatus}\"",
+        //                $"\"{excellentStatus}\"",
+        //                $"\"{scores:0.##}\"",
+        //                $"\"{sss}\"",
+        //                $"\"{eqnq}\"",
+        //                $"\"{rfs}\"",
+        //                $"\"{vfc}\"",
+        //                $"\"{epo}\"",
+        //                $"\"{a.spbu.wtms}\"",
+        //                $"\"{a.spbu.qq}\"",
+        //                $"\"{a.spbu.wmef}\"",
+        //                $"\"{a.spbu.format_fisik}\"",
+        //                $"\"{a.spbu.cpo}\"",
+        //                $"\"{levelspbu}\"",
+        //                $"\"{penaltyGoodResult}\"",
+        //                $"\"{penaltyExcellentResult}\""
+        //            }.Concat(checklistValues)));
+        //        }
+
+        //        var fileName = $"Audit_Summary_{DateTime.Now:yyyyMMddHHmmss}.csv";
+
+        //        Response.Headers.Add("Content-Disposition", $"attachment; filename={fileName}");
+        //        Response.ContentType = "text/csv";
+
+        //        await using var writer = new StreamWriter(Response.Body, Encoding.UTF8, leaveOpen: true);
+
+        //        await writer.WriteAsync(csv.ToString());
+        //        await writer.FlushAsync();
+        //        await Response.Body.FlushAsync();
+
+        //        return new EmptyResult();
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //        return StatusCode(StatusCodes.Status500InternalServerError,
+        //            $"Terjadi error saat generate CSV: {ex.Message}");
+        //    }
+        //}
 
         [HttpGet]
         public IActionResult DownloadCsvByDate(int month, int year, string? searchTerm = "")
@@ -1286,310 +1727,15 @@ namespace e_Pas_CMS.Controllers
             return PhysicalFile(fullPath, "text/csv", downloadFileName);
         }
 
-        //    [HttpGet]
-        //    public async Task<IActionResult> DownloadCsvByDate(
-        //string searchTerm = "",
-        //DateTime? startDate = null,
-        //DateTime? endDate = null)
-        //    {
-        //        if (startDate == null || endDate == null)
-        //        {
-        //            // boleh kamu ganti default-nya kalau perlu
-        //            return BadRequest("startDate dan endDate wajib diisi.");
-        //        }
-
-        //        // Normalisasi jam supaya perbandingan gampang
-        //        startDate = startDate.Value.Date;
-        //        endDate = endDate.Value.Date;
-
-        //        // Folder: wwwroot/Report
-        //        var reportFolder = Path.Combine(_env.WebRootPath, "Report");
-
-        //        if (!Directory.Exists(reportFolder))
-        //            return NotFound("Folder report tidak ditemukan.");
-
-        //        // Kumpulkan list file berdasarkan rentang bulan
-        //        var files = new List<string>();
-
-        //        var cursor = new DateTime(startDate.Value.Year, startDate.Value.Month, 1);
-        //        var last = new DateTime(endDate.Value.Year, endDate.Value.Month, 1);
-
-        //        while (cursor <= last)
-        //        {
-        //            var monthAbbr = cursor.ToString("MMM", CultureInfo.InvariantCulture); // Jul, Aug, dst
-        //            var fileName = $"{monthAbbr}_{cursor:yyyy}_Audit_Summary.csv";
-        //            var fullPath = Path.Combine(reportFolder, fileName);
-
-        //            if (System.IO.File.Exists(fullPath))
-        //            {
-        //                files.Add(fullPath);
-        //            }
-
-        //            cursor = cursor.AddMonths(1);
-        //        }
-
-        //        if (files.Count == 0)
-        //            return NotFound("Tidak ada file report untuk periode tersebut.");
-
-        //        var sb = new StringBuilder();
-        //        bool headerWritten = false;
-
-        //        searchTerm = searchTerm?.Trim();
-        //        bool hasSearch = !string.IsNullOrWhiteSpace(searchTerm);
-
-        //        foreach (var file in files)
-        //        {
-        //            var lines = await System.IO.File.ReadAllLinesAsync(file);
-        //            if (lines.Length == 0) continue;
-
-        //            // Tuliskan header sekali saja (baris pertama file pertama)
-        //            if (!headerWritten)
-        //            {
-        //                sb.AppendLine(lines[0]);
-        //                headerWritten = true;
-        //            }
-
-        //            // Mulai dari baris ke-2 (index 1) = data
-        //            for (int i = 1; i < lines.Length; i++)
-        //            {
-        //                var line = lines[i];
-        //                if (string.IsNullOrWhiteSpace(line)) continue;
-
-        //                // Filter searchTerm (cek di seluruh baris)
-        //                if (hasSearch &&
-        //                    !line.Contains(searchTerm, StringComparison.OrdinalIgnoreCase))
-        //                {
-        //                    continue;
-        //                }
-
-        //                // Filter tanggal berdasarkan kolom "Audit Date"
-        //                // Asumsi format baris: "send_date","Audit Date","spbu_no",...
-        //                // dan kita simpan sebagai "yyyy-MM-dd"
-        //                if (startDate != null || endDate != null)
-        //                {
-        //                    var cols = SplitCsvLine(line); // helper di bawah
-        //                    if (cols.Length > 1) // kolom ke-2 = Audit Date
-        //                    {
-        //                        var auditDateStr = cols[1]; // sudah tanpa tanda kutip
-        //                        if (DateTime.TryParse(auditDateStr, out var auditDate))
-        //                        {
-        //                            auditDate = auditDate.Date;
-
-        //                            if (auditDate < startDate.Value || auditDate > endDate.Value)
-        //                                continue;
-        //                        }
-        //                    }
-        //                }
-
-        //                sb.AppendLine(line);
-        //            }
-        //        }
-        //        // Tentukan bulan dan tahun dari endDate (atau current date kalau null)
-        //        var reportMonth = (startDate ?? DateTime.Now).ToString("MMM", CultureInfo.InvariantCulture); // contoh: "Nov"
-        //        var reportYear = (endDate ?? DateTime.Now).ToString("yyyy");
-
-        //        // Format akhir: "Nov_2025_BOA_Audit_Summary_20251110115233.csv"
-        //        var outFileName = $"{reportMonth}_{reportYear}_Audit_Summary_{DateTime.Now:yyyyMMddHHmmss}.csv";
-
-        //        var bytes = Encoding.UTF8.GetBytes(sb.ToString());
-        //        return File(bytes, "text/csv", outFileName);
-        //    }
-
         private static string[] SplitCsvLine(string line)
         {
             if (string.IsNullOrEmpty(line))
                 return Array.Empty<string>();
 
-            // buang quote awal/akhir, lalu split pakai "," di tengah
-            // contoh: "\"2025-07-01\",\"2025-07-03\",\"xxxx\""
-            // -> 2025-07-01 | 2025-07-03 | xxxx
             return line.Trim()
                        .Trim('"')
                        .Split("\",\"", StringSplitOptions.None);
         }
-
-        //    [HttpGet]
-        //    public async Task<IActionResult> DownloadCsvByDate(
-        //string searchTerm = "",
-        //DateTime? startDate = null,
-        //DateTime? endDate = null)
-        //    {
-        //        var currentUser = User.Identity?.Name;
-
-        //        _context.Database.SetCommandTimeout(123600);
-
-        //        var userRegion = await (from aur in _context.app_user_roles
-        //                                join au in _context.app_users on aur.app_user_id equals au.id
-        //                                where au.username == currentUser
-        //                                select aur.region)
-        //                           .Distinct()
-        //                           .Where(r => r != null)
-        //                           .ToListAsync();
-
-        //        var allowedStatuses = new[] { "VERIFIED" };
-
-        //        var query = _context.trx_audits
-        //            .Include(a => a.spbu)
-        //            .Include(a => a.app_user)
-        //            .Where(a =>
-        //                allowedStatuses.Contains(a.status) &&
-        //                a.audit_execution_time >= startDate &&
-        //                a.audit_execution_time < endDate &&
-        //                a.audit_type != "Basic Operational"
-        //            );
-
-        //        if (userRegion.Any())
-        //        {
-        //            query = query.Where(x => userRegion.Contains(x.spbu.region));
-        //        }
-
-        //        if (!string.IsNullOrWhiteSpace(searchTerm))
-        //        {
-        //            searchTerm = searchTerm.ToLower();
-        //            query = query.Where(a =>
-        //                a.spbu.spbu_no.ToLower().Contains(searchTerm) ||
-        //                a.app_user.name.ToLower().Contains(searchTerm) ||
-        //                a.status.ToLower().Contains(searchTerm) ||
-        //                a.spbu.address.ToLower().Contains(searchTerm) ||
-        //                a.spbu.province_name.ToLower().Contains(searchTerm) ||
-        //                a.spbu.city_name.ToLower().Contains(searchTerm)
-        //            );
-        //        }
-
-        //        var audits = await query
-        //            .OrderByDescending(a => a.audit_execution_time ?? a.updated_date)
-        //            .ToListAsync();
-
-        //        // Header CSV (tanpa kolom checklist number)
-        //        var csv = new StringBuilder();
-        //        var headers = new[]
-        //        {
-        //    "send_date","Audit Date","spbu_no","region","year","address","city_name","tipe_spbu","rayon",
-        //    "audit_level","audit_next","good_status","excellent_status","Total Score",
-        //    "SSS","EQnQ","RFS","VFC","EPO","wtms","qq","wmef","format_fisik","cpo",
-        //    "kelas_spbu","penalty_good_alerts","penalty_excellent_alerts"
-        //};
-        //        csv.AppendLine(string.Join(",", headers.Select(h => $"\"{h}\"")));
-
-        //        await using var conn = _context.Database.GetDbConnection();
-        //        if (conn.State != ConnectionState.Open)
-        //            await conn.OpenAsync();
-
-        //        foreach (var a in audits)
-        //        {
-        //            var auditDate = a.audit_execution_time ?? a.updated_date ?? DateTime.MinValue;
-
-        //            var submitDate = a.approval_date == null || a.approval_date == DateTime.MinValue
-        //                ? a.updated_date
-        //                : a.approval_date;
-
-        //            // === Penalty Check (EXCELLENT - non-relaksasi)
-        //            var penaltyExcellentQuery = @"
-        //        SELECT STRING_AGG(mqd.penalty_alert, ', ')
-        //        FROM trx_audit_checklist tac
-        //        JOIN master_questioner_detail mqd ON mqd.id = tac.master_questioner_detail_id
-        //        JOIN trx_audit ta ON ta.id = tac.trx_audit_id
-        //        WHERE tac.trx_audit_id = @id
-        //          AND (
-        //                (
-        //                    tac.master_questioner_detail_id IN (
-        //                        '555fe2e4-b95b-461b-9c92-ad8b5c837119',
-        //                        'bafc206f-ed29-4bbc-8053-38799e186fb0',
-        //                        'd26f4caa-e849-4ab4-9372-298693247272'
-        //                    )
-        //                    AND tac.score_input <> 'A'
-        //                )
-        //             OR (
-        //                    tac.master_questioner_detail_id = '5e9ffc47-de99-4d7d-b8bc-0fb9b7acc81b'
-        //                    AND ta.created_date < DATE '2025-06-01'
-        //                    AND tac.score_input <> 'A'
-        //                )
-        //             OR (
-        //                      (
-        //                          (mqd.penalty_excellent_criteria = 'LT_1' AND tac.score_input <> 'A')
-        //                       OR (mqd.penalty_excellent_criteria = 'EQ_0' AND tac.score_input = 'F')
-        //                      )
-        //                      AND COALESCE(mqd.is_relaksasi, false) = false
-        //                      AND mqd.is_penalty = true
-        //                      AND NOT (
-        //                          mqd.id = '5e9ffc47-de99-4d7d-b8bc-0fb9b7acc81b'
-        //                          AND ta.created_date >= DATE '2025-06-01'
-        //                      )
-        //                  )
-        //            );";
-
-        //            // === Penalty Check (GOOD - non-relaksasi)
-        //            var penaltyGoodQuery = @"
-        //            SELECT STRING_AGG(mqd.penalty_alert, ', ')
-        //            FROM trx_audit_checklist tac
-        //            JOIN master_questioner_detail mqd ON mqd.id = tac.master_questioner_detail_id
-        //            WHERE tac.trx_audit_id = @id
-        //              AND tac.score_input = 'F'
-        //              AND mqd.is_penalty = true
-        //              AND COALESCE(mqd.is_relaksasi, false) = false
-        //              AND mqd.id <> '5e9ffc47-de99-4d7d-b8bc-0fb9b7acc81b';";
-
-        //            var penaltyExcellentResult = await conn.ExecuteScalarAsync<string>(penaltyExcellentQuery, new { id = a.id });
-        //            var penaltyGoodResult = await conn.ExecuteScalarAsync<string>(penaltyGoodQuery, new { id = a.id });
-
-        //            // === Hitung Compliance
-        //            var checklistData = await GetChecklistDataAsync(conn, a.id);
-        //            var mediaList = await GetMediaPerNodeAsync(conn, a.id);
-        //            var elements = BuildHierarchy(checklistData, mediaList);
-        //            foreach (var element in elements) AssignWeightRecursive(element);
-        //            CalculateChecklistScores(elements);
-
-        //            // Total score
-        //            var modelTotal = new DetailReportViewModel { Elements = elements };
-        //            CalculateOverallScore(modelTotal, checklistData);
-        //            decimal? totalScore = modelTotal.TotalScore;
-
-        //            // Compliance breakdown
-        //            var compliance = HitungComplianceLevelDariElements(elements);
-        //            var sss = Math.Round(compliance.SSS ?? 0, 2);
-        //            var eqnq = Math.Round(compliance.EQnQ ?? 0, 2);
-        //            var rfs = Math.Round(compliance.RFS ?? 0, 2);
-        //            var vfc = Math.Round(compliance.VFC ?? 0, 2);
-        //            var epo = Math.Round(compliance.EPO ?? 0, 2);
-
-        //            decimal scores = (decimal)(totalScore ?? a.score);
-
-        //            csv.AppendLine(string.Join(",", new[]
-        //            {
-        //                $"\"{submitDate:yyyy-MM-dd}\"",
-        //                $"\"{auditDate:yyyy-MM-dd}\"",
-        //                $"\"{a.spbu.spbu_no}\"",
-        //                $"\"{a.spbu.region}\"",
-        //                $"\"{a.spbu.year ?? DateTime.Now.Year}\"",
-        //                $"\"{a.spbu.address}\"",
-        //                $"\"{a.spbu.city_name}\"",
-        //                $"\"{a.spbu.owner_type}\"",
-        //                $"\"{a.spbu.sbm}\"",
-        //                $"\"{a.audit_level}\"",
-        //                $"\"{a.spbu.audit_next}\"",
-        //                $"\"{a.good_status}\"",
-        //                $"\"{a.excellent_status}\"",
-        //                $"\"{scores:0.##}\"",
-        //                $"\"{sss}\"",
-        //                $"\"{eqnq}\"",
-        //                $"\"{rfs}\"",
-        //                $"\"{vfc}\"",
-        //                $"\"{epo}\"",
-        //                $"\"{a.spbu.wtms}\"",
-        //                $"\"{a.spbu.qq}\"",
-        //                $"\"{a.spbu.wmef}\"",
-        //                $"\"{a.spbu.format_fisik}\"",
-        //                $"\"{a.spbu.cpo}\"",
-        //                $"\"{a.spbu.level}\"",
-        //                $"\"{penaltyGoodResult}\"",
-        //                $"\"{penaltyExcellentResult}\""
-        //            }));
-        //        }
-
-        //        var fileName = $"Audit_Summary_{DateTime.Now:yyyyMMddHHmmss}.csv";
-        //        var bytes = Encoding.UTF8.GetBytes(csv.ToString());
-        //        return File(bytes, "text/csv", fileName);
-        //    }
 
         private async Task<List<AuditReportListViewModel>> GetAuditReportViewModels(List<trx_audit> audits)
         {
@@ -1602,21 +1748,21 @@ namespace e_Pas_CMS.Controllers
             foreach (var a in audits)
             {
                 var sql = @"
-        SELECT 
-            mqd.weight, 
-            tac.score_input, 
-            tac.score_x, 
-            mqd.is_relaksasi
-        FROM master_questioner_detail mqd
-        LEFT JOIN trx_audit_checklist tac 
-            ON tac.master_questioner_detail_id = mqd.id 
-            AND tac.trx_audit_id = @id
-        WHERE mqd.master_questioner_id = (
-            SELECT master_questioner_checklist_id 
-            FROM trx_audit 
-            WHERE id = @id
-        )
-        AND mqd.type = 'QUESTION'";
+                SELECT 
+                    mqd.weight, 
+                    tac.score_input, 
+                    tac.score_x, 
+                    mqd.is_relaksasi
+                FROM master_questioner_detail mqd
+                LEFT JOIN trx_audit_checklist tac 
+                    ON tac.master_questioner_detail_id = mqd.id 
+                    AND tac.trx_audit_id = @id
+                WHERE mqd.master_questioner_id = (
+                    SELECT master_questioner_checklist_id 
+                    FROM trx_audit 
+                    WHERE id = @id
+                )
+                AND mqd.type = 'QUESTION'";
 
                 var checklist = (await conn.QueryAsync<(decimal? weight, string score_input, decimal? score_x, bool? is_relaksasi)>(sql, new { id = a.id })).ToList();
 
@@ -1734,10 +1880,10 @@ namespace e_Pas_CMS.Controllers
                 )));";
 
                 var penaltyGoodQuery = @"SELECT STRING_AGG(mqd.penalty_alert, ', ') AS penalty_alerts
-            FROM trx_audit_checklist tac
-            INNER JOIN master_questioner_detail mqd ON mqd.id = tac.master_questioner_detail_id
-            WHERE tac.trx_audit_id = @id AND tac.score_input = 'F' AND mqd.is_penalty = true AND 
-                  (mqd.is_relaksasi = false OR mqd.is_relaksasi IS NULL) and mqd.id <> '5e9ffc47-de99-4d7d-b8bc-0fb9b7acc81b';";
+                FROM trx_audit_checklist tac
+                INNER JOIN master_questioner_detail mqd ON mqd.id = tac.master_questioner_detail_id
+                WHERE tac.trx_audit_id = @id AND tac.score_input = 'F' AND mqd.is_penalty = true AND 
+                (mqd.is_relaksasi = false OR mqd.is_relaksasi IS NULL) and mqd.id <> '5e9ffc47-de99-4d7d-b8bc-0fb9b7acc81b';";
 
                 var penaltyExcellentResult = await conn.ExecuteScalarAsync<string>(penaltyExcellentQuery, new { id = a.id });
                 var penaltyGoodResult = await conn.ExecuteScalarAsync<string>(penaltyGoodQuery, new { id = a.id });
@@ -2238,7 +2384,7 @@ namespace e_Pas_CMS.Controllers
         //            Directory.CreateDirectory(outputDirectory);
 
         //        // ✅ Gunakan EF Core langsung agar koneksi tidak conflict dengan GetDetailReportAsync
-        //        var auditIds = await _context.trx_audits
+        //        var auditIds = await _context.trx_audits.AsNoTracking()
         //            .Where(a => a.status == "VERIFIED")
         //            .OrderByDescending(a => a.audit_execution_time)
         //            .Take(10)
@@ -2288,7 +2434,7 @@ namespace e_Pas_CMS.Controllers
                 if (!Directory.Exists(outputDirectory))
                     Directory.CreateDirectory(outputDirectory);
 
-                var auditIds = await _context.trx_audits
+                var auditIds = await _context.trx_audits.AsNoTracking()
                     .Where(a => a.status == "VERIFIED" && a.audit_type != "Basic Operational" && a.report_file_excellent == null)
                     .OrderByDescending(a => a.audit_execution_time)
                     //.Take(10)
@@ -2349,7 +2495,7 @@ namespace e_Pas_CMS.Controllers
                 // 1) Ambil list ID dulu (materialize) agar EF selesai memakai koneksinya
                 _context.ChangeTracker.AutoDetectChangesEnabled = false;
 
-                var ids = await _context.trx_audits
+                var ids = await _context.trx_audits.AsNoTracking()
                     .AsNoTracking()
                     .Where(a => a.status == "VERIFIED" && a.audit_type != "Basic Operational")
                     .OrderByDescending(a => a.audit_execution_time)
@@ -2485,7 +2631,7 @@ namespace e_Pas_CMS.Controllers
                 if (!Directory.Exists(outputDirectory))
                     Directory.CreateDirectory(outputDirectory);
 
-                var auditIds = await _context.trx_audits
+                var auditIds = await _context.trx_audits.AsNoTracking()
                     .Where(a => a.status == "VERIFIED" && a.audit_type != "Basic Operational" && a.report_file_good == null)
                     .OrderByDescending(a => a.audit_execution_time)
                     //.Take(10)
@@ -2559,17 +2705,17 @@ namespace e_Pas_CMS.Controllers
 
             // Hitung final score seperti Index
             var scoreSql = @"
-SELECT mqd.weight, tac.score_input, mqd.is_relaksasi
-FROM master_questioner_detail mqd
-LEFT JOIN trx_audit_checklist tac 
-    ON tac.master_questioner_detail_id = mqd.id 
-    AND tac.trx_audit_id = @id
-WHERE mqd.master_questioner_id = (
-    SELECT master_questioner_checklist_id 
-    FROM trx_audit 
-    WHERE id = @id
-)
-AND mqd.type = 'QUESTION'";
+            SELECT mqd.weight, tac.score_input, mqd.is_relaksasi
+            FROM master_questioner_detail mqd
+            LEFT JOIN trx_audit_checklist tac 
+                ON tac.master_questioner_detail_id = mqd.id 
+                AND tac.trx_audit_id = @id
+            WHERE mqd.master_questioner_id = (
+                SELECT master_questioner_checklist_id 
+                FROM trx_audit 
+                WHERE id = @id
+            )
+            AND mqd.type = 'QUESTION'";
 
             var checklist = (await conn.QueryAsync<(decimal? weight, string score_input, bool? is_relaksasi)>(scoreSql, new { id = id.ToString() })).ToList();
 
@@ -2633,14 +2779,14 @@ AND mqd.type = 'QUESTION'";
             model.PenaltyAlerts = await conn.ExecuteScalarAsync<string>(penaltySql, new { id = id.ToString() });
 
             var penaltySqlGood = @"
-SELECT STRING_AGG(mqd.penalty_alert, ', ') AS penalty_alerts
-FROM trx_audit_checklist tac
-INNER JOIN master_questioner_detail mqd ON mqd.id = tac.master_questioner_detail_id
-WHERE 
-    tac.trx_audit_id = @id AND
-    tac.score_input = 'F' AND
-    mqd.is_penalty = true AND 
-    (mqd.is_relaksasi = false OR mqd.is_relaksasi IS NULL) and mqd.id <> '5e9ffc47-de99-4d7d-b8bc-0fb9b7acc81b';";
+            SELECT STRING_AGG(mqd.penalty_alert, ', ') AS penalty_alerts
+            FROM trx_audit_checklist tac
+            INNER JOIN master_questioner_detail mqd ON mqd.id = tac.master_questioner_detail_id
+            WHERE 
+                tac.trx_audit_id = @id AND
+                tac.score_input = 'F' AND
+                mqd.is_penalty = true AND 
+                (mqd.is_relaksasi = false OR mqd.is_relaksasi IS NULL) and mqd.id <> '5e9ffc47-de99-4d7d-b8bc-0fb9b7acc81b';";
             model.PenaltyAlertsGood = await conn.ExecuteScalarAsync<string>(penaltySqlGood, new { id = id.ToString() });
 
             // Hitung compliance dan simpan ke model
@@ -2923,179 +3069,178 @@ AND mqd.type = 'QUESTION'";
 
         private async Task<AuditHeaderDto> GetAuditHeaderAsync(IDbConnection conn, string id)
         {
-            string sql = @"
-    WITH RECURSIVE
-question_hierarchy AS (
-    SELECT
-        mqd.id,
-        mqd.title,
-        mqd.parent_id,
-        mqd.title AS root_title
-    FROM master_questioner_detail mqd
-    WHERE mqd.title IN ('Elemen 1','Elemen 2','Elemen 3','Elemen 4','Elemen 5')
-    UNION ALL
-    SELECT
-        mqd.id,
-        mqd.title,
-        mqd.parent_id,
-        qh.root_title
-    FROM master_questioner_detail mqd
-    INNER JOIN question_hierarchy qh ON mqd.parent_id = qh.id
-),
-penalty_flags AS (
-    SELECT
-        tac.id                           AS tac_id,
-        tac.trx_audit_id,
-        tac.master_questioner_detail_id  AS mqd_id,
-        tac.score_input,
-        tac.comment,
-        ta.created_date,
-        mqd.is_penalty,
-        mqd.is_relaksasi,
-        mqd.penalty_excellent_criteria,
-        (
-              (
-                  tac.master_questioner_detail_id IN (
-                      '555fe2e4-b95b-461b-9c92-ad8b5c837119',
-                      'bafc206f-ed29-4bbc-8053-38799e186fb0',
-                      'd26f4caa-e849-4ab4-9372-298693247272'
-                  )
-                  AND tac.score_input <> 'A'
-              )
-           OR (
-                  tac.master_questioner_detail_id = '5e9ffc47-de99-4d7d-b8bc-0fb9b7acc81b'
-                  AND ta.created_date < DATE '2025-06-01'
-                  AND tac.score_input <> 'A'
-              )
-           OR (
-                  (
-                      (mqd.penalty_excellent_criteria = 'LT_1' AND tac.score_input <> 'A')
-                   OR (mqd.penalty_excellent_criteria = 'EQ_0' AND tac.score_input = 'F')
-                  )
-                  AND COALESCE(mqd.is_relaksasi, false) = false
-                  AND mqd.is_penalty = true
-                  AND NOT (
-                      mqd.id = '5e9ffc47-de99-4d7d-b8bc-0fb9b7acc81b'
-                      AND ta.created_date >= DATE '2025-06-01'
-                      AND tac.comment IS NOT NULL
-                      AND btrim(tac.comment) <> ''
-                  )
-              )
-        ) AS is_penalty_excellent,
-        (
-            tac.score_input = 'F'
-            AND mqd.is_penalty = true
-            AND COALESCE(mqd.is_relaksasi, false) = false
-            AND mqd.id <> '5e9ffc47-de99-4d7d-b8bc-0fb9b7acc81b'
-        ) AS is_penalty_good,
-        (
-            mqd.is_penalty = true
-            AND mqd.is_relaksasi = true
-            AND (
-                    (
-                        (
-                            tac.master_questioner_detail_id IN (
-                                '555fe2e4-b95b-461b-9c92-ad8b5c837119',
-                                'bafc206f-ed29-4bbc-8053-38799e186fb0',
-                                'd26f4caa-e849-4ab4-9372-298693247272'
-                            )
-                            AND tac.score_input <> 'A'
+            string sql = @"WITH RECURSIVE
+                        question_hierarchy AS (
+                            SELECT
+                                mqd.id,
+                                mqd.title,
+                                mqd.parent_id,
+                                mqd.title AS root_title
+                            FROM master_questioner_detail mqd
+                            WHERE mqd.title IN ('Elemen 1','Elemen 2','Elemen 3','Elemen 4','Elemen 5')
+                            UNION ALL
+                            SELECT
+                                mqd.id,
+                                mqd.title,
+                                mqd.parent_id,
+                                qh.root_title
+                            FROM master_questioner_detail mqd
+                            INNER JOIN question_hierarchy qh ON mqd.parent_id = qh.id
+                        ),
+                        penalty_flags AS (
+                            SELECT
+                                tac.id                           AS tac_id,
+                                tac.trx_audit_id,
+                                tac.master_questioner_detail_id  AS mqd_id,
+                                tac.score_input,
+                                tac.comment,
+                                ta.created_date,
+                                mqd.is_penalty,
+                                mqd.is_relaksasi,
+                                mqd.penalty_excellent_criteria,
+                                (
+                                      (
+                                          tac.master_questioner_detail_id IN (
+                                              '555fe2e4-b95b-461b-9c92-ad8b5c837119',
+                                              'bafc206f-ed29-4bbc-8053-38799e186fb0',
+                                              'd26f4caa-e849-4ab4-9372-298693247272'
+                                          )
+                                          AND tac.score_input <> 'A'
+                                      )
+                                   OR (
+                                          tac.master_questioner_detail_id = '5e9ffc47-de99-4d7d-b8bc-0fb9b7acc81b'
+                                          AND ta.created_date < DATE '2025-06-01'
+                                          AND tac.score_input <> 'A'
+                                      )
+                                   OR (
+                                          (
+                                              (mqd.penalty_excellent_criteria = 'LT_1' AND tac.score_input <> 'A')
+                                           OR (mqd.penalty_excellent_criteria = 'EQ_0' AND tac.score_input = 'F')
+                                          )
+                                          AND COALESCE(mqd.is_relaksasi, false) = false
+                                          AND mqd.is_penalty = true
+                                          AND NOT (
+                                              mqd.id = '5e9ffc47-de99-4d7d-b8bc-0fb9b7acc81b'
+                                              AND ta.created_date >= DATE '2025-06-01'
+                                              AND tac.comment IS NOT NULL
+                                              AND btrim(tac.comment) <> ''
+                                          )
+                                      )
+                                ) AS is_penalty_excellent,
+                                (
+                                    tac.score_input = 'F'
+                                    AND mqd.is_penalty = true
+                                    AND COALESCE(mqd.is_relaksasi, false) = false
+                                    AND mqd.id <> '5e9ffc47-de99-4d7d-b8bc-0fb9b7acc81b'
+                                ) AS is_penalty_good,
+                                (
+                                    mqd.is_penalty = true
+                                    AND mqd.is_relaksasi = true
+                                    AND (
+                                            (
+                                                (
+                                                    tac.master_questioner_detail_id IN (
+                                                        '555fe2e4-b95b-461b-9c92-ad8b5c837119',
+                                                        'bafc206f-ed29-4bbc-8053-38799e186fb0',
+                                                        'd26f4caa-e849-4ab4-9372-298693247272'
+                                                    )
+                                                    AND tac.score_input <> 'A'
+                                                )
+                                                OR (
+                                                    tac.master_questioner_detail_id = '5e9ffc47-de99-4d7d-b8bc-0fb9b7acc81b'
+                                                    AND ta.created_date < DATE '2025-06-01'
+                                                    AND tac.score_input <> 'A'
+                                                )
+                                                OR (
+                                                    (mqd.penalty_excellent_criteria = 'LT_1' AND tac.score_input <> 'A')
+                                                    OR (mqd.penalty_excellent_criteria = 'EQ_0' AND tac.score_input = 'F')
+                                                )
+                                            )
+                                            OR (tac.score_input = 'F' AND mqd.id <> '5e9ffc47-de99-4d7d-b8bc-0fb9b7acc81b')
+                                        )
+                                ) AS is_penalty_relaksasi
+                            FROM trx_audit_checklist tac
+                            JOIN master_questioner_detail mqd ON mqd.id = tac.master_questioner_detail_id
+                            JOIN trx_audit ta ON ta.id = tac.trx_audit_id
+                            WHERE tac.trx_audit_id = @id
+                        ),
+                        comment_per_elemen AS (
+                            SELECT
+                                qh.root_title,
+                                string_agg(
+                                    (
+                                        regexp_replace(pf.comment, E'[\\n\\r]+', ' ', 'g')
+                                        ||
+                                        CASE
+                                            WHEN (pf.is_penalty_excellent OR pf.is_penalty_good OR pf.is_penalty_relaksasi) THEN
+                                                ' - ' ||
+                                                trim(
+                                                    BOTH ' / '
+                                                    FROM concat_ws(
+                                                        ' / ',
+                                                        CASE WHEN pf.is_penalty_excellent THEN 'penalty excellent' END,
+                                                        CASE WHEN pf.is_penalty_good THEN 'penalty good' END,
+                                                        CASE WHEN pf.is_penalty_relaksasi THEN '*relaksasi*' END
+                                                    )
+                                                )
+                                            ELSE ''
+                                        END
+                                    ),
+                                    E'\n' ORDER BY pf.tac_id
+                                ) AS all_comments
+                            FROM question_hierarchy qh
+                            JOIN penalty_flags pf ON pf.mqd_id = qh.id
+                            WHERE pf.comment IS NOT NULL AND btrim(pf.comment) <> ''
+                            GROUP BY qh.root_title
                         )
-                        OR (
-                            tac.master_questioner_detail_id = '5e9ffc47-de99-4d7d-b8bc-0fb9b7acc81b'
-                            AND ta.created_date < DATE '2025-06-01'
-                            AND tac.score_input <> 'A'
-                        )
-                        OR (
-                            (mqd.penalty_excellent_criteria = 'LT_1' AND tac.score_input <> 'A')
-                            OR (mqd.penalty_excellent_criteria = 'EQ_0' AND tac.score_input = 'F')
-                        )
-                    )
-                    OR (tac.score_input = 'F' AND mqd.id <> '5e9ffc47-de99-4d7d-b8bc-0fb9b7acc81b')
-                )
-        ) AS is_penalty_relaksasi
-    FROM trx_audit_checklist tac
-    JOIN master_questioner_detail mqd ON mqd.id = tac.master_questioner_detail_id
-    JOIN trx_audit ta ON ta.id = tac.trx_audit_id
-    WHERE tac.trx_audit_id = @id
-),
-comment_per_elemen AS (
-    SELECT
-        qh.root_title,
-        string_agg(
-            (
-                regexp_replace(pf.comment, E'[\\n\\r]+', ' ', 'g')
-                ||
-                CASE
-                    WHEN (pf.is_penalty_excellent OR pf.is_penalty_good OR pf.is_penalty_relaksasi) THEN
-                        ' - ' ||
-                        trim(
-                            BOTH ' / '
-                            FROM concat_ws(
-                                ' / ',
-                                CASE WHEN pf.is_penalty_excellent THEN 'penalty excellent' END,
-                                CASE WHEN pf.is_penalty_good THEN 'penalty good' END,
-                                CASE WHEN pf.is_penalty_relaksasi THEN '*relaksasi*' END
-                            )
-                        )
-                    ELSE ''
-                END
-            ),
-            E'\n' ORDER BY pf.tac_id
-        ) AS all_comments
-    FROM question_hierarchy qh
-    JOIN penalty_flags pf ON pf.mqd_id = qh.id
-    WHERE pf.comment IS NOT NULL AND btrim(pf.comment) <> ''
-    GROUP BY qh.root_title
-)
-SELECT
-    ta.id,
-    ta.report_no              AS ReportNo,
-    ta.audit_type             AS AuditType,
-    ta.audit_execution_time   AS SubmitDate,
-    ta.status,
-    ta.audit_mom_final        AS Notes,
-    ta.audit_level,
-    s.spbu_no                 AS SpbuNo,
-    s.region,
-    s.city_name               AS Kota,
-    s.address                 AS Alamat,
-    s.owner_name              AS OwnerName,
-    s.manager_name            AS ManagerName,
-    s.owner_type              AS OwnershipType,
-    s.quater                  AS Quarter,
-    s.""year""                  AS Year,
-    s.mor                     AS Mor,
-    s.sales_area              AS SalesArea,
-    s.sbm                     AS Sbm,
-    s.""level""                 AS ClassSpbu,
-    s.phone_number_1          AS Phone,
-    (SELECT all_comments FROM comment_per_elemen WHERE root_title = 'Elemen 1') AS KomentarStaf,
-    (SELECT all_comments FROM comment_per_elemen WHERE root_title = 'Elemen 2') AS KomentarQuality,
-    (SELECT all_comments FROM comment_per_elemen WHERE root_title = 'Elemen 3') AS KomentarHSSE,
-    (SELECT all_comments FROM comment_per_elemen WHERE root_title = 'Elemen 4') AS KomentarVisual,
-    (SELECT all_comments FROM comment_per_elemen WHERE root_title = 'Elemen 5') AS PenawaranKomperhensif,
-    CASE
-        WHEN audit_mom_final IS NOT NULL AND audit_mom_final <> '' THEN audit_mom_final
-        ELSE audit_mom_intro
-    END AS KomentarManager,
-    approval_date         AS ApproveDate,
-    (SELECT name FROM app_user WHERE username = ta.approval_by) AS ApproveBy,
-    ta.updated_date       AS UpdateDate,
-    ta.audit_level        AS AuditCurrent,
-    s.audit_next          AS AuditNext,
-    au.name               AS NamaAuditor,
-    COALESCE(
-            (SELECT name 
-             FROM app_user 
-             WHERE id = ta.app_user_id_auditor2
-             LIMIT 1),
-            '-'
-        ) AS NamaAuditor2
-    FROM trx_audit ta
-    JOIN spbu s   ON ta.spbu_id = s.id
-    JOIN app_user au ON au.id = ta.app_user_id
-    WHERE ta.id = @id;";
+                        SELECT
+                            ta.id,
+                            ta.report_no              AS ReportNo,
+                            ta.audit_type             AS AuditType,
+                            ta.audit_execution_time   AS SubmitDate,
+                            ta.status,
+                            ta.audit_mom_final        AS Notes,
+                            ta.audit_level,
+                            s.spbu_no                 AS SpbuNo,
+                            s.region,
+                            s.city_name               AS Kota,
+                            s.address                 AS Alamat,
+                            s.owner_name              AS OwnerName,
+                            s.manager_name            AS ManagerName,
+                            s.owner_type              AS OwnershipType,
+                            s.quater                  AS Quarter,
+                            s.""year""                  AS Year,
+                            s.mor                     AS Mor,
+                            s.sales_area              AS SalesArea,
+                            s.sbm                     AS Sbm,
+                            s.""level""                 AS ClassSpbu,
+                            s.phone_number_1          AS Phone,
+                            (SELECT all_comments FROM comment_per_elemen WHERE root_title = 'Elemen 1') AS KomentarStaf,
+                            (SELECT all_comments FROM comment_per_elemen WHERE root_title = 'Elemen 2') AS KomentarQuality,
+                            (SELECT all_comments FROM comment_per_elemen WHERE root_title = 'Elemen 3') AS KomentarHSSE,
+                            (SELECT all_comments FROM comment_per_elemen WHERE root_title = 'Elemen 4') AS KomentarVisual,
+                            (SELECT all_comments FROM comment_per_elemen WHERE root_title = 'Elemen 5') AS PenawaranKomperhensif,
+                            CASE
+                                WHEN audit_mom_final IS NOT NULL AND audit_mom_final <> '' THEN audit_mom_final
+                                ELSE audit_mom_intro
+                            END AS KomentarManager,
+                            approval_date         AS ApproveDate,
+                            (SELECT name FROM app_user WHERE username = ta.approval_by) AS ApproveBy,
+                            ta.updated_date       AS UpdateDate,
+                            ta.audit_level        AS AuditCurrent,
+                            s.audit_next          AS AuditNext,
+                            au.name               AS NamaAuditor,
+                            COALESCE(
+                                    (SELECT name 
+                                     FROM app_user 
+                                     WHERE id = ta.app_user_id_auditor2
+                                     LIMIT 1),
+                                    '-'
+                                ) AS NamaAuditor2
+                            FROM trx_audit ta
+                            JOIN spbu s   ON ta.spbu_id = s.id
+                            JOIN app_user au ON au.id = ta.app_user_id
+                            WHERE ta.id = @id;";
 
             var a = await conn.QueryFirstOrDefaultAsync<AuditHeaderDto>(sql, new { id });
             if (a == null)
@@ -3103,17 +3248,17 @@ SELECT
 
             // --- Hitung finalScore seperti di Index ---
             var scoreSql = @"
-        SELECT mqd.weight, tac.score_input, mqd.is_relaksasi
-        FROM master_questioner_detail mqd
-        LEFT JOIN trx_audit_checklist tac 
-            ON tac.master_questioner_detail_id = mqd.id 
-            AND tac.trx_audit_id = @id
-        WHERE mqd.master_questioner_id = (
-            SELECT master_questioner_checklist_id 
-            FROM trx_audit 
-            WHERE id = @id
-        )
-        AND mqd.type = 'QUESTION'";
+            SELECT mqd.weight, tac.score_input, mqd.is_relaksasi
+            FROM master_questioner_detail mqd
+            LEFT JOIN trx_audit_checklist tac 
+                ON tac.master_questioner_detail_id = mqd.id 
+                AND tac.trx_audit_id = @id
+            WHERE mqd.master_questioner_id = (
+                SELECT master_questioner_checklist_id 
+                FROM trx_audit 
+                WHERE id = @id
+            )
+            AND mqd.type = 'QUESTION'";
             var checklist = (await conn.QueryAsync<(decimal? weight, string score_input, bool? is_relaksasi)>(scoreSql, new { id = id.ToString() })).ToList();
 
             decimal totalScore = 0, maxScore = 0;
@@ -3174,13 +3319,13 @@ SELECT
                 )));";
 
             var penaltyGoodQuery = @"
-        SELECT STRING_AGG(mqd.penalty_alert, ', ')
-        FROM trx_audit_checklist tac
-        INNER JOIN master_questioner_detail mqd ON mqd.id = tac.master_questioner_detail_id
-        WHERE tac.trx_audit_id = @id AND
-              tac.score_input = 'F' AND
-              mqd.is_penalty = true AND 
-              (mqd.is_relaksasi = false OR mqd.is_relaksasi IS NULL) and mqd.id <> '5e9ffc47-de99-4d7d-b8bc-0fb9b7acc81b'";
+            SELECT STRING_AGG(mqd.penalty_alert, ', ')
+            FROM trx_audit_checklist tac
+            INNER JOIN master_questioner_detail mqd ON mqd.id = tac.master_questioner_detail_id
+            WHERE tac.trx_audit_id = @id AND
+                  tac.score_input = 'F' AND
+                  mqd.is_penalty = true AND 
+                  (mqd.is_relaksasi = false OR mqd.is_relaksasi IS NULL) and mqd.id <> '5e9ffc47-de99-4d7d-b8bc-0fb9b7acc81b'";
 
             var penaltyExcellentResult = await conn.ExecuteScalarAsync<string>(penaltyExcellentQuery, new { id });
             var penaltyGoodResult = await conn.ExecuteScalarAsync<string>(penaltyGoodQuery, new { id });
@@ -3203,27 +3348,6 @@ SELECT
             var flow = await conn.QueryFirstOrDefaultAsync<dynamic>(flowSql, new { id });
 
             string column;
-
-            // Cek apakah passed_good dan passed_excellent kosong/null
-            //if (string.IsNullOrWhiteSpace((string)flow?.passed_good) && string.IsNullOrWhiteSpace((string)flow?.passed_excellent))
-            //{
-            //    column = "passed_audit_level";
-            //}
-            //else
-            //{
-            //    column = (goodStatus == "CERTIFIED" && excellentStatus == "NOT CERTIFIED") ? "passed_good"
-            //           : (goodStatus == "CERTIFIED" && excellentStatus == "CERTIFIED") ? "passed_excellent"
-            //           : (goodStatus == "NOT CERTIFIED" && excellentStatus == "NOT CERTIFIED") ? "failed_audit_level"
-            //           : "passed_audit_level";
-            //}
-
-            //// Gunakan kolom yang dipilih dalam query berikutnya
-            //var auditNextQuery = $"SELECT {column} FROM master_audit_flow WHERE audit_level = @level LIMIT 1";
-
-            //var auditNext = await conn.ExecuteScalarAsync<string>(auditNextQuery, new { level = a.AuditCurrent });
-
-            //// Isi ke DTO
-            //a.AuditNext = auditNext;
 
             return a;
         }
@@ -3672,7 +3796,6 @@ SELECT
             return totalWeight > 0 ? (totalScore / totalWeight) * 100m : 0m;
         }
 
-
         private void CalculateOverallScore(DetailReportViewModel model, List<ChecklistFlatItem> flatItems)
         {
             decimal totalScore = 0m;
@@ -3842,13 +3965,13 @@ SELECT
             var currentUser = User.Identity?.Name;
 
             string sql = @"
-        UPDATE trx_audit
-        SET approval_date = now(),
-            approval_by = @p0,
-            updated_date = now(),
-            updated_by = @p0,
-            status = 'UNDER_REVIEW'
-        WHERE id = @p1";
+            UPDATE trx_audit
+            SET approval_date = now(),
+                approval_by = @p0,
+                updated_date = now(),
+                updated_by = @p0,
+                status = 'UNDER_REVIEW'
+            WHERE id = @p1";
 
             int affected = await _context.Database.ExecuteSqlRawAsync(sql, currentUser, id);
 

@@ -44,7 +44,9 @@ public partial class TrxAudit
     public string UpdatedBy { get; set; } = null!;
 
     public DateTime? UpdatedDate { get; set; }
+
     public DateTime? approval_date { get; set; }
+
     public string? approval_by { get; set; }
 
     public virtual AppUser? AppUser { get; set; }
@@ -62,4 +64,8 @@ public partial class TrxAudit
     public virtual ICollection<TrxAuditQq> TrxAuditQqs { get; set; } = new List<TrxAuditQq>();
 
     public virtual ICollection<TrxFeedback> TrxFeedbacks { get; set; } = new List<TrxFeedback>();
+
+    public virtual ICollection<TrxInvoiceDetail> TrxInvoiceDetails { get; set; } = new List<TrxInvoiceDetail>();
+
+    public virtual ICollection<TrxInvoiceApprovalDetail> TrxInvoiceApprovalDetails { get; set; } = new List<TrxInvoiceApprovalDetail>();
 }

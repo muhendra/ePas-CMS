@@ -24,7 +24,11 @@
         public bool is_relaksasi { get; set; }
 
         public string number { get; set; }
-
+        // ChecklistFlatItem
+        public bool IsBandingNode { get; set; }
+        public string PreviousScoreInput { get; set; }
+        public decimal? PreviousScoreX { get; set; }
+        public decimal? PreviousScoreValue { get; set; }
     }
 
 }

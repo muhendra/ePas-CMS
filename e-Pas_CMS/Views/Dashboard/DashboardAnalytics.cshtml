@@ -1,0 +1,945 @@
+﻿@{
+    ViewData["Title"] = "Dashboard Analytics";
+}
+
+<script src="/js/apexcharts.js"></script>
+
+<style>
+    body {
+        background: #f6f8fc;
+    }
+
+    .dash-page {
+        font-family: Inter, system-ui, sans-serif;
+        color: #0f172a;
+    }
+
+    .dash-hero {
+        background: linear-gradient(135deg, #071b3a, #0f75bc 55%, #21B6D7);
+        border-radius: 26px;
+        padding: 26px;
+        color: white;
+        box-shadow: 0 20px 50px rgba(15, 23, 42, .18);
+        margin-bottom: 22px;
+    }
+
+    .hero-title {
+        font-size: 26px;
+        font-weight: 800;
+        margin-bottom: 4px;
+    }
+
+    .hero-subtitle {
+        color: rgba(255,255,255,.78);
+        font-size: 14px;
+    }
+
+    .hero-badge {
+        background: rgba(255,255,255,.16);
+        border: 1px solid rgba(255,255,255,.25);
+        border-radius: 999px;
+        padding: 8px 14px;
+        font-size: 13px;
+        font-weight: 700;
+    }
+
+    .kpi-card,
+    .chart-card {
+        background: rgba(255,255,255,.96);
+        border: 1px solid rgba(226,232,240,.9);
+        border-radius: 22px;
+        box-shadow: 0 14px 34px rgba(15,23,42,.07);
+    }
+
+    .kpi-card {
+        padding: 18px;
+        height: 100%;
+    }
+
+    .kpi-icon {
+        width: 46px;
+        height: 46px;
+        border-radius: 16px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 22px;
+        margin-bottom: 14px;
+    }
+
+    .kpi-label {
+        color: #64748b;
+        font-size: 13px;
+        font-weight: 700;
+        margin-bottom: 6px;
+    }
+
+    .kpi-value {
+        font-size: 30px;
+        font-weight: 850;
+        color: #0f172a;
+        line-height: 1;
+    }
+
+    .kpi-note {
+        color: #94a3b8;
+        font-size: 12px;
+        margin-top: 8px;
+    }
+
+    .chart-card {
+        padding: 20px;
+        height: 100%;
+    }
+
+    .chart-head {
+        display: flex;
+        align-items: start;
+        justify-content: space-between;
+        gap: 10px;
+        margin-bottom: 12px;
+    }
+
+    .chart-title {
+        font-size: 15px;
+        font-weight: 850;
+        color: #0f172a;
+        margin: 0;
+    }
+
+    .chart-desc {
+        color: #64748b;
+        font-size: 12px;
+        margin-top: 3px;
+    }
+
+    .chart-chip {
+        background: #f1f5f9;
+        color: #475569;
+        border-radius: 999px;
+        padding: 6px 10px;
+        font-size: 12px;
+        font-weight: 800;
+        white-space: nowrap;
+    }
+
+    .chart-container {
+        min-height: 310px;
+    }
+
+    .chart-compact {
+        min-height: 260px;
+    }
+
+    .mini-legend {
+        display: grid;
+        gap: 10px;
+        margin-top: 10px;
+    }
+
+    .mini-legend-item {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        background: #f8fafc;
+        border: 1px solid #e2e8f0;
+        border-radius: 16px;
+        padding: 11px 13px;
+    }
+
+    .legend-left {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        color: #334155;
+        font-weight: 700;
+        font-size: 13px;
+    }
+
+    .legend-dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+    }
+
+    .legend-val {
+        font-size: 18px;
+        font-weight: 850;
+        color: #0f172a;
+    }
+
+    .soft-blue {
+        background: #e0f2fe;
+        color: #0284c7;
+    }
+
+    .soft-green {
+        background: #dcfce7;
+        color: #16a34a;
+    }
+
+    .soft-red {
+        background: #fee2e2;
+        color: #dc2626;
+    }
+
+    .soft-purple {
+        background: #ede9fe;
+        color: #7c3aed;
+    }
+
+    .loading-state {
+        min-height: 420px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #64748b;
+        font-weight: 700;
+    }
+
+    .spinner-modern {
+        width: 34px;
+        height: 34px;
+        border: 4px solid #e2e8f0;
+        border-top-color: #21B6D7;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+        margin-right: 12px;
+    }
+
+    @@keyframes spin {
+        to {
+            transform: rotate(360deg);
+        }
+    }
+
+    .error-box {
+        display: none;
+        background: #fff1f2;
+        color: #be123c;
+        border: 1px solid #fecdd3;
+        border-radius: 18px;
+        padding: 14px 16px;
+        margin-bottom: 16px;
+        font-weight: 700;
+    }
+
+    #mapIndonesia {
+        width: 100%;
+        height: 620px;
+        overflow: hidden;
+    }
+
+        #mapIndonesia svg {
+            width: 100%;
+            height: 100%;
+            max-height: none;
+            display: block;
+        }
+
+            #mapIndonesia svg #Lautan {
+                display: none !important;
+            }
+
+    @@media (max-width: 768px) {
+        .dash-hero {
+            padding: 20px;
+        }
+
+        .hero-title {
+            font-size: 21px;
+        }
+
+        .chart-container {
+            min-height: 260px;
+        }
+    }
+</style>
+
+<div class="container-fluid dash-page px-0">
+
+    <div class="dash-hero">
+        <div class="d-flex justify-content-between align-items-start flex-wrap gap-3">
+            <div>
+                <div class="hero-title">Dashboard Analytics</div>
+                <div class="hero-subtitle">
+                    Monitoring performa audit SPBU nasional, pencapaian, progress, dan analisa kegagalan.
+                </div>
+            </div>
+            <div class="hero-badge">
+                <i class="bi bi-activity me-1"></i>
+                Live Summary
+            </div>
+        </div>
+    </div>
+
+    <div id="errorBox" class="error-box">
+        Gagal memuat data dashboard. Cek endpoint SummaryFull atau response JSON.
+    </div>
+
+    <div id="loadingState" class="loading-state">
+        <div class="spinner-modern"></div>
+        Memuat dashboard...
+    </div>
+
+    <div id="dashboardContent" style="display:none;">
+
+        <div class="row g-3 mb-3">
+            <div class="col-md-3">
+                <div class="kpi-card">
+                    <div class="kpi-icon soft-green">
+                        <i class="bi bi-patch-check"></i>
+                    </div>
+                    <div class="kpi-label">PastiPas Good</div>
+                    <div class="kpi-value" id="goodVal">0</div>
+                    <div class="kpi-note">Total status Good</div>
+                </div>
+            </div>
+
+            <div class="col-md-3">
+                <div class="kpi-card">
+                    <div class="kpi-icon soft-blue">
+                        <i class="bi bi-stars"></i>
+                    </div>
+                    <div class="kpi-label">PastiPas Excellent</div>
+                    <div class="kpi-value" id="excVal">0</div>
+                    <div class="kpi-note">Total status Excellent</div>
+                </div>
+            </div>
+
+            <div class="col-md-3">
+                <div class="kpi-card">
+                    <div class="kpi-icon soft-red">
+                        <i class="bi bi-exclamation-triangle"></i>
+                    </div>
+                    <div class="kpi-label">Basic</div>
+                    <div class="kpi-value" id="basicVal">0</div>
+                    <div class="kpi-note">Total status Basic</div>
+                </div>
+            </div>
+
+            <div class="col-md-3">
+                <div class="kpi-card">
+                    <div class="kpi-icon soft-purple">
+                        <i class="bi bi-database-check"></i>
+                    </div>
+                    <div class="kpi-label">Total Audit</div>
+                    <div class="kpi-value" id="totalVal">0</div>
+                    <div class="kpi-note">Akumulasi seluruh status</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row g-3">
+            <div class="col-xl-8">
+                <div class="chart-card">
+                    <div class="chart-head">
+                        <div>
+                            <h5 class="chart-title">Sebaran Nasional</h5>
+                            <div class="chart-desc">Warna provinsi berdasarkan jumlah audit.</div>
+                        </div>
+                        <span class="chart-chip">Indonesia Map</span>
+                    </div>
+                    <div id="mapIndonesia" class="chart-container"></div>
+                </div>
+            </div>
+
+            <div class="col-xl-4">
+                <div class="chart-card">
+                    <div class="chart-head">
+                        <div>
+                            <h5 class="chart-title">Status Sertifikasi</h5>
+                            <div class="chart-desc">Distribusi Good, Excellent, dan Basic.</div>
+                        </div>
+                    </div>
+                    <div id="statusDonut" class="chart-container"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row g-3 mt-1">
+            <div class="col-xl-8">
+                <div class="chart-card">
+                    <div class="chart-head">
+                        <div>
+                            <h5 class="chart-title">Pencapaian Bulanan</h5>
+                            <div class="chart-desc">Perbandingan audit reguler dan Basic Operational.</div>
+                        </div>
+                        <span class="chart-chip">Jan - Des</span>
+                    </div>
+                    <div id="achievementChart" class="chart-container"></div>
+                </div>
+            </div>
+
+            <div class="col-xl-4">
+                <div class="chart-card">
+                    <div class="chart-head">
+                        <div>
+                            <h5 class="chart-title">Ringkasan Status</h5>
+                            <div class="chart-desc">Angka utama dari status audit.</div>
+                        </div>
+                    </div>
+
+                    <div class="mini-legend">
+                        <div class="mini-legend-item">
+                            <div class="legend-left">
+                                <span class="legend-dot" style="background:#16a34a"></span>
+                                PastiPas Good
+                            </div>
+                            <div class="legend-val" id="goodVal2">0</div>
+                        </div>
+
+                        <div class="mini-legend-item">
+                            <div class="legend-left">
+                                <span class="legend-dot" style="background:#0284c7"></span>
+                                PastiPas Excellent
+                            </div>
+                            <div class="legend-val" id="excVal2">0</div>
+                        </div>
+
+                        <div class="mini-legend-item">
+                            <div class="legend-left">
+                                <span class="legend-dot" style="background:#dc2626"></span>
+                                Basic
+                            </div>
+                            <div class="legend-val" id="basicVal2">0</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row g-3 mt-1">
+            <div class="col-xl-3 col-md-6">
+                <div class="chart-card">
+                    <div class="chart-head">
+                        <div>
+                            <h5 class="chart-title">Progress Audit Reguler</h5>
+                            <div class="chart-desc">Certification, Transitional, Direct.</div>
+                        </div>
+                    </div>
+                    <div id="regulerChart" class="chart-compact"></div>
+
+                    <div class="mini-legend">
+                        <div class="mini-legend-item">
+                            <div class="legend-left">Certification</div>
+                            <div class="legend-val" id="certVal">0</div>
+                        </div>
+                        <div class="mini-legend-item">
+                            <div class="legend-left">Transitional</div>
+                            <div class="legend-val" id="transVal">0</div>
+                        </div>
+                        <div class="mini-legend-item">
+                            <div class="legend-left">Direct</div>
+                            <div class="legend-val" id="directVal">0</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-xl-3 col-md-6">
+                <div class="chart-card">
+                    <div class="chart-head">
+                        <div>
+                            <h5 class="chart-title">Progress Basic Operational</h5>
+                            <div class="chart-desc">Passed dan Not Passed.</div>
+                        </div>
+                    </div>
+                    <div id="boaChart" class="chart-compact"></div>
+
+                    <div class="mini-legend">
+                        <div class="mini-legend-item">
+                            <div class="legend-left">Passed</div>
+                            <div class="legend-val" id="passBoa">0</div>
+                        </div>
+                        <div class="mini-legend-item">
+                            <div class="legend-left">Not Passed</div>
+                            <div class="legend-val" id="failBoa">0</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-xl-2 col-md-4">
+                <div class="chart-card">
+                    <div class="chart-head">
+                        <div>
+                            <h5 class="chart-title">Total DA</h5>
+                            <div class="chart-desc">Pass vs Fail.</div>
+                        </div>
+                    </div>
+                    <div id="daDonut" class="chart-compact"></div>
+                </div>
+            </div>
+
+            <div class="col-xl-2 col-md-4">
+                <div class="chart-card">
+                    <div class="chart-head">
+                        <div>
+                            <h5 class="chart-title">Total TA</h5>
+                            <div class="chart-desc">Pass vs Fail.</div>
+                        </div>
+                    </div>
+                    <div id="taDonut" class="chart-compact"></div>
+                </div>
+            </div>
+
+            <div class="col-xl-2 col-md-4">
+                <div class="chart-card">
+                    <div class="chart-head">
+                        <div>
+                            <h5 class="chart-title">Total CA</h5>
+                            <div class="chart-desc">Pass vs Fail.</div>
+                        </div>
+                    </div>
+                    <div id="caDonut2" class="chart-compact"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row g-3 mt-1">
+            <div class="col-xl-12">
+                <div class="chart-card">
+                    <div class="chart-head">
+                        <div>
+                            <h5 class="chart-title">Analisa Kegagalan Elemen</h5>
+                            <div class="chart-desc">Jumlah kegagalan berdasarkan elemen utama.</div>
+                        </div>
+                    </div>
+                    <div id="failureChart" class="chart-container"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row g-3 mt-1">
+            <div class="col-xl-5">
+                <div class="chart-card">
+                    <div class="chart-head">
+                        <div>
+                            <h5 class="chart-title">Analisa Sub-Element</h5>
+                            <div class="chart-desc">Distribusi kegagalan sub-element.</div>
+                        </div>
+                    </div>
+                    <div id="subElementChart" class="chart-container"></div>
+                </div>
+            </div>
+
+            <div class="col-xl-7">
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <div class="chart-card">
+                            <div class="chart-head">
+                                <div>
+                                    <h5 class="chart-title">Top 10 Kegagalan Penalty</h5>
+                                    <div class="chart-desc">Dummy sementara sesuai dashboard lama.</div>
+                                </div>
+                            </div>
+                            <div id="penaltyPie" class="chart-container"></div>
+                        </div>
+                    </div>
+
+                    <div class="col-md-6">
+                        <div class="chart-card">
+                            <div class="chart-head">
+                                <div>
+                                    <h5 class="chart-title">Penalty Pass / Fail</h5>
+                                    <div class="chart-desc">Perbandingan tiap region.</div>
+                                </div>
+                            </div>
+                            <div id="penaltyBar" class="chart-container"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<script>
+    let renderedCharts = [];
+
+    const COLORS = {
+        green: '#16a34a',
+        blue: '#0284c7',
+        cyan: '#21B6D7',
+        red: '#dc2626',
+        orange: '#f59e0b',
+        purple: '#7c3aed',
+        slate: '#475569'
+    };
+
+    function destroyCharts() {
+        renderedCharts.forEach(c => {
+            try { c.destroy(); } catch { }
+        });
+        renderedCharts = [];
+    }
+
+    function renderChart(selector, options) {
+        const el = document.querySelector(selector);
+        if (!el) return;
+
+        const chart = new ApexCharts(el, options);
+        renderedCharts.push(chart);
+        chart.render();
+    }
+
+    function setText(id, value) {
+        const el = document.getElementById(id);
+        if (el) el.innerText = value ?? 0;
+    }
+
+    function baseChart(type, extra) {
+        return Object.assign({
+            chart: {
+                type: type,
+                toolbar: { show: false },
+                fontFamily: 'Inter, sans-serif',
+                animations: {
+                    enabled: true,
+                    easing: 'easeinout',
+                    speed: 550
+                }
+            },
+            dataLabels: { enabled: false },
+            legend: {
+                fontSize: '12px',
+                labels: { colors: '#475569' }
+            },
+            tooltip: {
+                theme: 'light'
+            },
+            stroke: {
+                width: 2,
+                colors: ['#fff']
+            }
+        }, extra || {});
+    }
+
+    async function loadDashboard() {
+        const loading = document.getElementById('loadingState');
+        const content = document.getElementById('dashboardContent');
+        const error = document.getElementById('errorBox');
+
+        try {
+            loading.style.display = 'flex';
+            content.style.display = 'none';
+            error.style.display = 'none';
+
+            destroyCharts();
+
+            const res = await fetch('/Dashboard/SummaryFull');
+
+            if (!res.ok) {
+                const txt = await res.text();
+                console.error("API ERROR:", txt);
+                throw new Error(txt);
+            }
+
+            const d = await res.json();
+
+            setText("goodVal", d.good);
+            setText("excVal", d.excellent);
+            setText("basicVal", d.basic);
+            setText("totalVal", d.total);
+
+            setText("goodVal2", d.good);
+            setText("excVal2", d.excellent);
+            setText("basicVal2", d.basic);
+
+            setText("certVal", d.progress_reguler?.cert);
+            setText("transVal", d.progress_reguler?.trans);
+            setText("directVal", d.progress_reguler?.direct);
+            setText("passBoa", d.progress_boa?.pass);
+            setText("failBoa", d.progress_boa?.fail);
+
+            renderChart("#statusDonut", baseChart('donut', {
+                series: [d.good || 0, d.excellent || 0, d.basic || 0],
+                labels: ['Good', 'Excellent', 'Basic'],
+                colors: [COLORS.green, COLORS.cyan, COLORS.red],
+                plotOptions: {
+                    pie: {
+                        donut: {
+                            size: '68%',
+                            labels: {
+                                show: true,
+                                name: {
+                                    show: true,
+                                    color: '#64748b'
+                                },
+                                value: {
+                                    show: true,
+                                    fontSize: '26px',
+                                    fontWeight: 850,
+                                    color: '#0f172a'
+                                },
+                                total: {
+                                    show: true,
+                                    label: 'Total',
+                                    color: '#64748b',
+                                    formatter: () => d.total || 0
+                                }
+                            }
+                        }
+                    }
+                }
+            }));
+
+            renderChart("#achievementChart", baseChart('bar', {
+                chart: {
+                    type: 'bar',
+                    height: 330,
+                    toolbar: { show: false },
+                    fontFamily: 'Inter, sans-serif'
+                },
+                series: [
+                    { name: 'Audit Reguler', data: d.regular || [] },
+                    { name: 'BOA', data: d.boa || [] }
+                ],
+                colors: [COLORS.green, COLORS.cyan],
+                plotOptions: {
+                    bar: {
+                        borderRadius: 8,
+                        columnWidth: '42%'
+                    }
+                },
+                grid: {
+                    borderColor: '#e2e8f0',
+                    strokeDashArray: 4
+                },
+                xaxis: {
+                    categories: ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Des'],
+                    labels: { style: { colors: '#64748b' } }
+                },
+                yaxis: {
+                    labels: { style: { colors: '#64748b' } }
+                }
+            }));
+
+            renderChart("#regulerChart", baseChart('donut', {
+                series: [
+                    d.progress_reguler?.cert || 0,
+                    d.progress_reguler?.trans || 0,
+                    d.progress_reguler?.direct || 0
+                ],
+                labels: ['Certification', 'Transitional', 'Direct'],
+                colors: [COLORS.red, COLORS.green, COLORS.cyan],
+                plotOptions: {
+                    pie: {
+                        donut: {
+                            size: '70%',
+                            labels: { show: true }
+                        }
+                    }
+                },
+                legend: { position: 'bottom' }
+            }));
+
+            renderChart("#boaChart", baseChart('donut', {
+                series: [
+                    d.progress_boa?.pass || 0,
+                    d.progress_boa?.fail || 0
+                ],
+                labels: ['Passed', 'Not Passed'],
+                colors: [COLORS.green, COLORS.red],
+                plotOptions: {
+                    pie: {
+                        donut: {
+                            size: '70%',
+                            labels: { show: true }
+                        }
+                    }
+                },
+                legend: { position: 'bottom' }
+            }));
+
+            renderChart("#daDonut", baseChart('donut', {
+                series: [d.da_pass || 0, d.da_fail || 0],
+                labels: ['PASS', 'FAIL'],
+                colors: [COLORS.cyan, COLORS.red],
+                legend: { position: 'bottom' },
+                plotOptions: { pie: { donut: { size: '72%', labels: { show: true } } } }
+            }));
+
+            renderChart("#taDonut", baseChart('donut', {
+                series: [d.ta_pass || 0, d.ta_fail || 0],
+                labels: ['PASS', 'FAIL'],
+                colors: [COLORS.cyan, COLORS.red],
+                legend: { position: 'bottom' },
+                plotOptions: { pie: { donut: { size: '72%', labels: { show: true } } } }
+            }));
+
+            renderChart("#caDonut2", baseChart('donut', {
+                series: [d.ca_pass || 0, d.ca_fail || 0],
+                labels: ['PASS', 'FAIL'],
+                colors: [COLORS.cyan, COLORS.red],
+                legend: { position: 'bottom' },
+                plotOptions: { pie: { donut: { size: '72%', labels: { show: true } } } }
+            }));
+
+            renderChart("#failureChart", baseChart('bar', {
+                chart: {
+                    type: 'bar',
+                    height: 330,
+                    toolbar: { show: false },
+                    fontFamily: 'Inter, sans-serif'
+                },
+                series: [{
+                    name: 'Failure',
+                    data: [
+                        d.failure?.wtms || 0,
+                        d.failure?.qq || 0,
+                        d.failure?.wmef || 0,
+                        d.failure?.cpf || 0,
+                        d.failure?.cpo || 0
+                    ]
+                }],
+                xaxis: {
+                    categories: ['WTMS', 'Q&Q', 'WME&F', 'CPF', 'CPO'],
+                    labels: { style: { colors: '#64748b' } }
+                },
+                yaxis: {
+                    labels: { style: { colors: '#64748b' } }
+                },
+                colors: [COLORS.purple],
+                plotOptions: {
+                    bar: {
+                        borderRadius: 8,
+                        horizontal: false,
+                        columnWidth: '36%'
+                    }
+                },
+                grid: {
+                    borderColor: '#e2e8f0',
+                    strokeDashArray: 4
+                }
+            }));
+
+            const subLabels = Object.keys(d.subElement || {});
+            const subValues = Object.values(d.subElement || {});
+
+            renderChart("#subElementChart", baseChart('donut', {
+                chart: {
+                    type: 'donut',
+                    height: 330,
+                    toolbar: { show: false },
+                    fontFamily: 'Inter, sans-serif'
+                },
+                series: subValues,
+                labels: subLabels,
+                colors: ['#0284c7', '#16a34a', '#f59e0b', '#7c3aed', '#dc2626', '#14b8a6'],
+                legend: { position: 'bottom' },
+                plotOptions: {
+                    pie: {
+                        donut: {
+                            size: '65%',
+                            labels: { show: true }
+                        }
+                    }
+                }
+            }));
+
+            renderChart("#penaltyPie", baseChart('donut', {
+                chart: {
+                    type: 'donut',
+                    height: 330,
+                    toolbar: { show: false },
+                    fontFamily: 'Inter, sans-serif'
+                },
+                series: [20, 19, 16, 14, 8, 8, 6, 4, 3, 2],
+                labels: [
+                    "Salam/BBK Top Tier",
+                    "Volume BBM",
+                    "Toilet Bersih",
+                    "Toilet Rusak",
+                    "HP",
+                    "Terima Kasih",
+                    "APAR",
+                    "APAB",
+                    "BBK",
+                    "Izin NFR"
+                ],
+                legend: {
+                    position: 'bottom',
+                    fontSize: '11px'
+                },
+                plotOptions: {
+                    pie: {
+                        donut: {
+                            size: '62%',
+                            labels: { show: true }
+                        }
+                    }
+                }
+            }));
+
+            renderChart("#penaltyBar", baseChart('bar', {
+                chart: {
+                    type: 'bar',
+                    height: 330,
+                    toolbar: { show: false },
+                    fontFamily: 'Inter, sans-serif'
+                },
+                series: [
+                    { name: 'PASS', data: [96, 96, 96, 96, 96, 96, 96, 96] },
+                    { name: 'FAIL', data: [4, 4, 4, 4, 4, 4, 4, 4] }
+                ],
+                xaxis: {
+                    categories: ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII'],
+                    labels: { style: { colors: '#64748b' } }
+                },
+                yaxis: {
+                    labels: { style: { colors: '#64748b' } }
+                },
+                colors: [COLORS.green, COLORS.red],
+                plotOptions: {
+                    bar: {
+                        borderRadius: 7,
+                        columnWidth: '45%'
+                    }
+                },
+                grid: {
+                    borderColor: '#e2e8f0',
+                    strokeDashArray: 4
+                }
+            }));
+
+            await loadMap(d.map || []);
+
+            loading.style.display = 'none';
+            content.style.display = 'block';
+        } catch (err) {
+            console.error(err);
+            loading.style.display = 'none';
+            error.style.display = 'block';
+        }
+    }
+        function loadMap(mapData) {
+        fetch('/Report/indonesia.svg')
+            .then(r => r.text())
+            .then(svg => {
+                document.getElementById("mapIndonesia").innerHTML = svg;
+
+                mapData.forEach(p => {
+                    const el = document.querySelector(`[data-name="${p.province}"]`);
+
+                    if (el) {
+                        const val = p.total || 0;
+
+                        const color =
+                            val > 200 ? '#0f766e' :
+                            val > 100 ? '#14b8a6' :
+                            val > 50 ? '#67e8f9' :
+                            '#cffafe';
+
+                        el.style.setProperty('--province-fill', color);
+                        el.style.setProperty('--province-hover-fill', '#22c55e');
+                        el.setAttribute('title', `${p.province}: ${val}`);
+                    }
+                });
+            });
+    }
+
+    document.addEventListener("DOMContentLoaded", loadDashboard);
+</script>

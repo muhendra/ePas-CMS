@@ -2,72 +2,463 @@
 
 @{
     Layout = "~/Views/Shared/_Layout.cshtml";
+
+    var groupedMenu = Model.MenuFunctionList
+        .GroupBy(x => x.Group?.Name ?? "Lainnya")
+        .OrderBy(x => x.Key)
+        .ToList();
+
+    var selectedValues = Model.SelectedMenuFunctions ?? new List<string>();
 }
 
-<div class="container mt-5">
-    <h3 class="fw-bold mb-4">Edit Role Management</h3>
+<style>
+    body {
+        background: #f4f6f9;
+        color: #111827;
+        font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
 
-    <form asp-action="Edit" asp-route-id="@Model.Id" method="post" class="row g-4">
+    .role-edit-page {
+        padding: 28px 32px;
+    }
+
+    .page-header {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 16px;
+        margin-bottom: 22px;
+    }
+
+    .page-title {
+        margin: 0;
+        font-size: 1.35rem;
+        font-weight: 800;
+        letter-spacing: -0.02em;
+        color: #111827;
+    }
+
+    .page-subtitle {
+        margin-top: 5px;
+        color: #6b7280;
+        font-size: 0.88rem;
+    }
+
+    .card-panel {
+        background: #ffffff;
+        border: 1px solid #e5e7eb;
+        border-radius: 18px;
+        box-shadow: 0 12px 30px rgba(15, 23, 42, 0.06);
+    }
+
+    .form-card {
+        padding: 22px;
+    }
+
+    .form-label {
+        font-weight: 800;
+        color: #374151;
+        font-size: 0.84rem;
+        margin-bottom: 7px;
+    }
+
+    .form-control,
+    .form-select {
+        border-radius: 12px;
+        border: 1px solid #dbe1ea;
+        padding: 10px 14px;
+        color: #111827;
+        font-size: 0.9rem;
+    }
+
+        .form-control:focus,
+        .form-select:focus {
+            border-color: #1e3a8a;
+            box-shadow: 0 0 0 4px rgba(30, 58, 138, 0.08);
+        }
+
+    .permission-box {
+        border: 1px solid #dbe1ea;
+        border-radius: 16px;
+        background: #f8fafc;
+        padding: 14px;
+    }
+
+    .permission-top {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 12px;
+    }
+
+    .permission-counter {
+        color: #475467;
+        font-size: 0.82rem;
+        font-weight: 700;
+    }
+
+    .selected-display {
+        min-height: 42px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 7px;
+        padding-top: 4px;
+    }
+
+    .permission-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 10px;
+        border-radius: 999px;
+        background: #eff6ff;
+        color: #1d4ed8;
+        font-weight: 800;
+        font-size: 0.75rem;
+    }
+
+    .permission-empty {
+        color: #6b7280;
+        font-size: 0.86rem;
+        padding: 7px 0;
+    }
+
+    .btn {
+        border-radius: 12px;
+        font-size: 0.86rem;
+        font-weight: 800;
+        padding: 9px 14px;
+    }
+
+    .btn-dark-blue {
+        background: #111827;
+        border-color: #111827;
+        color: #ffffff;
+    }
+
+        .btn-dark-blue:hover {
+            background: #1e3a8a;
+            border-color: #1e3a8a;
+            color: #ffffff;
+        }
+
+    .btn-soft {
+        background: #f9fafb;
+        border: 1px solid #dbe1ea;
+        color: #374151;
+    }
+
+        .btn-soft:hover {
+            background: #eef2f7;
+            color: #111827;
+        }
+
+    .modal-content {
+        border: none;
+        border-radius: 20px;
+        overflow: hidden;
+        box-shadow: 0 30px 80px rgba(15, 23, 42, 0.25);
+    }
+
+    .modal-header {
+        border-bottom: 1px solid #e5e7eb;
+        background: #ffffff;
+        padding: 18px 20px;
+    }
+
+    .modal-title {
+        font-weight: 800;
+        color: #111827;
+    }
+
+    .modal-body {
+        background: #f8fafc;
+        padding: 18px 20px;
+        max-height: 70vh;
+        overflow-y: auto;
+    }
+
+    .modal-footer {
+        border-top: 1px solid #e5e7eb;
+        padding: 14px 20px;
+    }
+
+    .permission-search {
+        position: sticky;
+        top: -18px;
+        z-index: 5;
+        background: #f8fafc;
+        padding-bottom: 12px;
+    }
+
+    .permission-group-card {
+        background: #ffffff;
+        border: 1px solid #e5e7eb;
+        border-radius: 16px;
+        overflow: hidden;
+        margin-bottom: 12px;
+    }
+
+    .permission-group-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+        background: #f9fafb;
+        border-bottom: 1px solid #e5e7eb;
+        padding: 12px 14px;
+    }
+
+    .permission-group-title {
+        font-weight: 900;
+        color: #111827;
+        font-size: 0.9rem;
+    }
+
+    .permission-group-action {
+        border: none;
+        background: transparent;
+        color: #1e3a8a;
+        font-weight: 800;
+        font-size: 0.8rem;
+        padding: 0;
+    }
+
+    .permission-group-body {
+        padding: 10px 14px 12px;
+    }
+
+    .permission-check-item {
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+        padding: 8px 0;
+        border-bottom: 1px dashed #edf0f4;
+    }
+
+        .permission-check-item:last-child {
+            border-bottom: none;
+        }
+
+    .form-check-input {
+        margin-top: 3px;
+        cursor: pointer;
+    }
+
+    .form-check-label {
+        cursor: pointer;
+        font-weight: 700;
+        color: #374151;
+        font-size: 0.88rem;
+    }
+
+    .permission-code {
+        display: block;
+        margin-top: 2px;
+        color: #94a3b8;
+        font-size: 0.73rem;
+        font-weight: 700;
+    }
+
+    .footer-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 10px;
+        margin-top: 22px;
+    }
+
+    @@media (max-width: 768px) {
+        .role-edit-page {
+            padding: 20px 16px;
+        }
+
+        .page-header {
+            flex-direction: column;
+        }
+
+        .permission-top {
+            flex-direction: column;
+            align-items: stretch;
+        }
+
+        .footer-actions {
+            flex-direction: column-reverse;
+        }
+
+            .footer-actions .btn {
+                width: 100%;
+            }
+    }
+</style>
+
+<div class="role-edit-page">
+    <div class="page-header">
+        <div>
+            <h3 class="page-title">Edit Role Management</h3>
+            <div class="page-subtitle">
+                Atur akses fitur CMS berdasarkan role: view, edit, assign, approve, dashboard, dan lainnya.
+            </div>
+        </div>
+
+        <a href="@Url.Action("Index", "RoleManagement")" class="btn btn-soft">
+            <i class="bi bi-arrow-left me-1"></i> Kembali
+        </a>
+    </div>
+
+    <form asp-action="Edit" asp-route-id="@Model.Id" method="post" id="roleForm">
+        @Html.AntiForgeryToken()
+
         <input type="hidden" asp-for="Id" />
 
-        <div class="col-md-6">
-            <label class="form-label">Nama Role</label>
-            <input asp-for="NamaRole" class="form-control" />
-        </div>
+        <div class="card-panel form-card">
+            <div class="row g-4">
+                <div class="col-md-6">
+                    <label class="form-label">Nama Role</label>
+                    <input asp-for="NamaRole" class="form-control" placeholder="Masukkan nama role" />
+                </div>
 
-        <div class="col-md-6">
-            <label class="form-label">App</label>
-            <input asp-for="App" class="form-control" />
-        </div>
+                <div class="col-md-6">
+                    <label class="form-label">App</label>
+                    <input asp-for="App" class="form-control" placeholder="CMS / MOBILE / APP" />
+                </div>
 
-        <div class="col-md-6">
-            <label class="form-label">Menu Function</label>
-            <button type="button" id="btnOpenMenuFunction" class="btn btn-outline-primary w-100">Pilih Menu Function</button>
-            <div id="MenuFunctionBadgeContainer" class="selected-display mt-2 d-flex flex-wrap gap-2">
-                @foreach (var func in Model.SelectedMenuFunctions)
-                {
-                    var text = Model.MenuFunctionList.FirstOrDefault(x => x.Value == func)?.Text ?? func;
-                    <span class="badge bg-primary">@text</span>
-                }
+                <div class="col-md-6">
+                    <label class="form-label">Status</label>
+                    <select asp-for="Status" class="form-select">
+                        <option value="ACTIVE">Aktif</option>
+                        <option value="INACTIVE">Non Aktif</option>
+                        <option value="Non Aktif">Non Aktif Legacy</option>
+                    </select>
+                </div>
+
+                <div class="col-md-6">
+                    <label class="form-label">Permission Summary</label>
+                    <div class="permission-box">
+                        <div class="permission-top">
+                            <button type="button" id="btnOpenMenuFunction" class="btn btn-dark-blue">
+                                <i class="bi bi-shield-lock me-1"></i> Pilih Permission
+                            </button>
+
+                            <div class="permission-counter">
+                                <span id="selectedPermissionCount">@selectedValues.Count</span> permission dipilih
+                            </div>
+                        </div>
+
+                        <div id="MenuFunctionBadgeContainer" class="selected-display">
+                            @if (selectedValues.Any())
+                            {
+                                foreach (var func in selectedValues)
+                                {
+                                    var text = Model.MenuFunctionList.FirstOrDefault(x => x.Value == func)?.Text ?? func;
+                                    <span class="permission-badge" data-code="@func">@text</span>
+                                }
+                            }
+                            else
+                            {
+                                <div class="permission-empty">Belum ada permission dipilih.</div>
+                            }
+                        </div>
+
+                        <div id="hiddenPermissionContainer">
+                            @foreach (var func in selectedValues)
+                            {
+                                <input type="hidden" name="SelectedMenuFunctions" value="@func" />
+                            }
+                        </div>
+                    </div>
+                </div>
             </div>
-            @foreach (var func in Model.SelectedMenuFunctions)
-            {
-                <input type="hidden" name="SelectedMenuFunctions" value="@func" />
-            }
-        </div>
 
-        <div class="col-md-6">
-            <label class="form-label">Status</label>
-            <select asp-for="Status" class="form-select">
-                <option value="ACTIVE" selected="@("ACTIVE" == Model.Status)">Aktif</option>
-                <option value="Non Aktif" selected="@("Non Aktif" == Model.Status)">Non Aktif</option>
-            </select>
-        </div>
+            <div class="footer-actions">
+                <a href="@Url.Action("Index", "RoleManagement")" class="btn btn-soft">
+                    Batal
+                </a>
 
-        <div class="col-12 text-end">
-            <a href="@Url.Action("Index", "RoleManagement")" class="btn btn-secondary">Kembali</a>
-            <button type="submit" class="btn btn-primary">Simpan Perubahan</button>
+                <button type="submit" class="btn btn-dark-blue">
+                    <i class="bi bi-save me-1"></i> Simpan Perubahan
+                </button>
+            </div>
         </div>
     </form>
 </div>
 
-<!-- Menu Function Modal -->
-<div class="modal fade" id="menuFunctionModal" tabindex="-1">
-    <div class="modal-dialog">
+<div class="modal fade" id="menuFunctionModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
         <div class="modal-content">
-            <div class="modal-header"><h5 class="modal-title">Pilih Menu Function</h5></div>
+            <div class="modal-header">
+                <div>
+                    <h5 class="modal-title">Pilih Permission Role</h5>
+                    <div class="text-muted small mt-1">
+                        Centang fitur yang boleh diakses oleh role ini.
+                    </div>
+                </div>
+
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+
             <div class="modal-body">
-                @foreach (var func in Model.MenuFunctionList)
+                <div class="permission-search">
+                    <input type="text"
+                           id="permissionSearch"
+                           class="form-control"
+                           placeholder="Cari permission, contoh: dashboard, approve, invoice..." />
+                </div>
+
+                @foreach (var group in groupedMenu)
                 {
-                    <div class="form-check">
-                        <input class="form-check-input menu-function-checkbox" type="checkbox" value="@func.Value" data-name="@func.Text">
-                        <label class="form-check-label">@func.Text</label>
+                    var groupKey = group.Key.Replace(" ", "_").Replace("-", "_").Replace("/", "_");
+
+                    <div class="permission-group-card" data-group-card="@group.Key.ToLower()">
+                        <div class="permission-group-header">
+                            <div class="permission-group-title">@group.Key</div>
+
+                            <button type="button"
+                                    class="permission-group-action btnSelectGroup"
+                                    data-group="@groupKey">
+                                Select All
+                            </button>
+                        </div>
+
+                        <div class="permission-group-body" data-group-body="@groupKey">
+                            @foreach (var func in group)
+                            {
+                                var isChecked = selectedValues.Contains(func.Value);
+
+                                <div class="permission-check-item"
+                                     data-permission-row
+                                     data-search="@($"{group.Key} {func.Text} {func.Value}".ToLower())">
+                                    <input class="form-check-input menu-function-checkbox"
+                                           type="checkbox"
+                                           value="@func.Value"
+                                           data-name="@func.Text"
+                                           data-group="@groupKey"
+                                           id="perm_@func.Value"
+                                           checked="@isChecked" />
+
+                                    <label class="form-check-label" for="perm_@func.Value">
+                                        @func.Text
+                                        <span class="permission-code">@func.Value</span>
+                                    </label>
+                                </div>
+                            }
+                        </div>
                     </div>
                 }
             </div>
+
             <div class="modal-footer">
-                <button class="btn btn-secondary" data-bs-dismiss="modal">Tutup</button>
-                <button class="btn btn-primary" id="btnPilihMenuFunction">Pilih</button>
+                <button type="button" id="btnClearPermission" class="btn btn-soft me-auto">
+                    Clear
+                </button>
+
+                <button type="button" class="btn btn-soft" data-bs-dismiss="modal">
+                    Tutup
+                </button>
+
+                <button type="button" class="btn btn-dark-blue" id="btnPilihMenuFunction">
+                    Terapkan Permission
+                </button>
             </div>
         </div>
     </div>
@@ -76,41 +467,107 @@
 @section Scripts {
     <script>
         $(document).ready(function () {
-            $('#btnOpenMenuFunction').click(function () {
-                var selectedIds = $('input[name="SelectedMenuFunctions"]').map(function () { return this.value; }).get();
+            const modalEl = document.getElementById('menuFunctionModal');
+            const menuModal = new bootstrap.Modal(modalEl);
+
+            $('#btnOpenMenuFunction').on('click', function () {
+                const selectedIds = $('input[name="SelectedMenuFunctions"]')
+                    .map(function () { return this.value; })
+                    .get();
+
                 $('.menu-function-checkbox').each(function () {
                     $(this).prop('checked', selectedIds.includes($(this).val()));
                 });
-                var modal = new bootstrap.Modal(document.getElementById('menuFunctionModal'));
-                modal.show();
+
+                $('#permissionSearch').val('');
+                $('[data-permission-row]').show();
+                $('.permission-group-card').show();
+
+                menuModal.show();
             });
 
-            $('#btnPilihMenuFunction').click(function () {
-                var selected = $('.menu-function-checkbox:checked');
-                var ids = selected.map(function () { return this.value; }).get();
-                var names = selected.map(function () { return $(this).data('name'); }).get();
-
-                // Clear existing hidden inputs
-                $('input[name="SelectedMenuFunctions"]').remove();
-
-                // Add new hidden inputs
-                ids.forEach(id => {
-                    $('<input>').attr({ type: 'hidden', name: 'SelectedMenuFunctions', value: id }).appendTo('form');
-                });
-
-                updateBadge('MenuFunctionBadgeContainer', names);
-                bootstrap.Modal.getInstance(document.getElementById('menuFunctionModal')).hide();
+            $('#btnPilihMenuFunction').on('click', function () {
+                applySelectedPermission();
+                menuModal.hide();
             });
 
-            function updateBadge(containerId, items) {
-                const container = document.getElementById(containerId);
-                container.innerHTML = '';
-                items.forEach(item => {
-                    const badge = document.createElement('span');
-                    badge.className = 'badge bg-primary';
-                    badge.innerText = item;
-                    container.appendChild(badge);
+            $('#btnClearPermission').on('click', function () {
+                $('.menu-function-checkbox').prop('checked', false);
+            });
+
+            $('.btnSelectGroup').on('click', function () {
+                const group = $(this).data('group');
+                const items = $('.menu-function-checkbox[data-group="' + group + '"]:visible');
+                const checkedCount = items.filter(':checked').length;
+                const shouldCheck = checkedCount !== items.length;
+
+                items.prop('checked', shouldCheck);
+            });
+
+            $('#permissionSearch').on('input', function () {
+                const keyword = ($(this).val() || '').toLowerCase().trim();
+
+                $('[data-permission-row]').each(function () {
+                    const searchable = $(this).data('search') || '';
+                    const isMatch = keyword === '' || searchable.includes(keyword);
+                    $(this).toggle(isMatch);
                 });
+
+                $('.permission-group-card').each(function () {
+                    const visibleRows = $(this).find('[data-permission-row]:visible').length;
+                    $(this).toggle(visibleRows > 0);
+                });
+            });
+
+            function applySelectedPermission() {
+                const selected = $('.menu-function-checkbox:checked');
+
+                const ids = selected.map(function () {
+                    return this.value;
+                }).get();
+
+                const names = selected.map(function () {
+                    return $(this).data('name');
+                }).get();
+
+                $('#hiddenPermissionContainer').empty();
+
+                ids.forEach(function (id) {
+                    $('<input>')
+                        .attr({
+                            type: 'hidden',
+                            name: 'SelectedMenuFunctions',
+                            value: id
+                        })
+                        .appendTo('#hiddenPermissionContainer');
+                });
+
+                updateBadge(names, ids);
+                updateCounter(ids.length);
+            }
+
+            function updateBadge(names, ids) {
+                const container = $('#MenuFunctionBadgeContainer');
+                container.empty();
+
+                if (!names || names.length === 0) {
+                    container.append('<div class="permission-empty">Belum ada permission dipilih.</div>');
+                    return;
+                }
+
+                names.forEach(function (name, index) {
+                    const code = ids[index];
+
+                    $('<span>')
+                        .addClass('permission-badge')
+                        .attr('data-code', code)
+                        .text(name)
+                        .appendTo(container);
+                });
+            }
+
+            function updateCounter(count) {
+                $('#selectedPermissionCount').text(count);
             }
         });
     </script>

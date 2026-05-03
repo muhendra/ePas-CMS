@@ -49,7 +49,7 @@ namespace e_Pas_CMS.Controllers
                     .Distinct()
                     .ToListAsync();
 
-                var query = from a in _context.trx_audits
+                var query = from a in _context.trx_audits.AsNoTracking()
                             join s in _context.spbus on a.spbu_id equals s.id
                             join u in _context.app_users on a.app_user_id equals u.id into aud
                             from u in aud.DefaultIfEmpty()
@@ -318,7 +318,7 @@ namespace e_Pas_CMS.Controllers
         {
             // Get EF data (header audit tetap aman pakai _context)
             var audit = await (
-                from ta in _context.trx_audits
+                from ta in _context.trx_audits.AsNoTracking()
                 join au in _context.app_users on ta.app_user_id equals au.id
                 join s in _context.spbus on ta.spbu_id equals s.id
                 where ta.id == id
@@ -601,7 +601,7 @@ namespace e_Pas_CMS.Controllers
                 if (!Directory.Exists(outputDirectory))
                     Directory.CreateDirectory(outputDirectory);
 
-                var auditIds = await _context.trx_audits
+                var auditIds = await _context.trx_audits.AsNoTracking()
                     .Where(a => a.status == "VERIFIED" && a.audit_type == "Basic Operational" && a.report_file_boa == null)
                     .OrderByDescending(a => a.audit_execution_time)
                     //.Take(10)
@@ -1208,7 +1208,7 @@ namespace e_Pas_CMS.Controllers
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> UpdateBeritaAcaraText(string id, string notes)
         {
-            var audit = await _context.trx_audits.FirstOrDefaultAsync(x => x.id == id);
+            var audit = await _context.trx_audits.AsNoTracking().FirstOrDefaultAsync(x => x.id == id);
             if (audit == null) return NotFound();
 
             audit.audit_mom_final = notes;
@@ -1335,7 +1335,7 @@ VALUES
                 if (!Directory.Exists(outputDirectory))
                     Directory.CreateDirectory(outputDirectory);
 
-                var auditIds = await _context.trx_audits
+                var auditIds = await _context.trx_audits.AsNoTracking()
                     .Where(a => a.status == "VERIFIED" && a.audit_type != "Basic Operational" && a.report_file_excellent == null && a.id == ids)
                     .OrderByDescending(a => a.audit_execution_time)
                     //.Take(10)

@@ -1,6 +1,7 @@
 ﻿@using e_Pas_CMS.ViewModels
 @using System.Globalization
 @model SchedulerIndexViewModel
+
 @{
     Layout = "~/Views/Shared/_Layout.cshtml";
 
@@ -16,234 +17,604 @@
     var selectedMonth = ViewBag.FilterMonth as int?;
     var selectedYear = ViewBag.FilterYear as int?;
     var currentYear = DateTime.Now.Year;
-
-    // Route values agar semua filter ikut saat klik pagination
-    var routeFilters = new
-    {
-        searchTerm = Model.SearchTerm,
-        pageSize = Model.PageSize,
-        filterStatus = selectedStatus,
-        filterMonth = selectedMonth,
-        filterYear = selectedYear
-    };
 }
 
-<div class="mt-4 px-4">
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <h3 class="fw-bold">Penjadwalan Audit</h3>
-        <div class="d-flex align-items-center gap-2">
-            <form asp-action="RunAutoSchedule" asp-controller="Scheduler" method="post" class="d-inline"
-                  onsubmit="return confirm('Jalankan auto-scheduler sekarang?');">
-                @Html.AntiForgeryToken()
-                <button type="submit" class="btn btn-success">
-                    <i class="bi bi-play-circle me-1"></i> Run Scheduler
-                </button>
-            </form>
+<style>
+    body {
+        font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        background: #f4f6f9;
+        color: #1f2937;
+    }
 
-            <a href="@Url.Action("Add", "Scheduler")" class="btn btn-primary">
-                <i class="bi bi-plus-lg me-1"></i> Tambah Jadwal
+    .scheduler-page {
+        padding: 28px 32px;
+    }
+
+    .page-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 16px;
+        margin-bottom: 22px;
+    }
+
+    .page-title {
+        margin: 0;
+        font-size: 1.35rem;
+        font-weight: 700;
+        color: #111827;
+        letter-spacing: -0.02em;
+    }
+
+    .page-subtitle {
+        margin-top: 4px;
+        color: #6b7280;
+        font-size: 0.88rem;
+    }
+
+    .header-actions {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+    }
+
+    .card-panel {
+        background: #ffffff;
+        border: 1px solid #e5e7eb;
+        border-radius: 18px;
+        box-shadow: 0 12px 30px rgba(15, 23, 42, 0.06);
+        overflow: hidden;
+    }
+
+    .filter-panel {
+        padding: 18px;
+        margin-bottom: 20px;
+    }
+
+    .form-control,
+    .form-select {
+        border-radius: 12px;
+        border: 1px solid #dbe1ea;
+        padding: 10px 14px;
+        font-size: 0.9rem;
+        color: #111827;
+        background: #ffffff;
+    }
+
+        .form-control:focus,
+        .form-select:focus {
+            border-color: #111827;
+            box-shadow: 0 0 0 4px rgba(17, 24, 39, 0.08);
+        }
+
+    .btn {
+        border-radius: 12px;
+        font-weight: 700;
+        font-size: 0.86rem;
+        padding: 9px 14px;
+    }
+
+    .btn-dark-blue {
+        background: #111827;
+        border-color: #111827;
+        color: #ffffff;
+    }
+
+        .btn-dark-blue:hover {
+            background: #1e3a8a;
+            border-color: #1e3a8a;
+            color: #ffffff;
+        }
+
+    .btn-soft {
+        background: #f9fafb;
+        border: 1px solid #dbe1ea;
+        color: #374151;
+    }
+
+        .btn-soft:hover {
+            background: #eef2f7;
+            border-color: #cbd5e1;
+            color: #111827;
+        }
+
+    .btn-save {
+        background: #027a48;
+        border-color: #027a48;
+        color: #ffffff;
+    }
+
+        .btn-save:hover {
+            background: #05603a;
+            border-color: #05603a;
+            color: #ffffff;
+        }
+
+    .dirty-info {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        background: #fffaeb;
+        color: #b54708;
+        border: 1px solid #fedf89;
+        padding: 8px 12px;
+        border-radius: 999px;
+        font-size: 0.83rem;
+        font-weight: 700;
+        margin-bottom: 12px;
+    }
+
+    .table-card {
+        padding: 0;
+    }
+
+    .table {
+        margin-bottom: 0;
+        font-size: 0.9rem;
+    }
+
+        .table thead th {
+            background: #f8fafc;
+            color: #64748b;
+            font-size: 0.73rem;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            border-bottom: 1px solid #e5e7eb;
+            padding: 15px 16px;
+            white-space: nowrap;
+        }
+
+        .table tbody td {
+            padding: 16px;
+            border-bottom: 1px solid #edf0f4;
+            color: #374151;
+            vertical-align: middle;
+        }
+
+        .table tbody tr:last-child td {
+            border-bottom: none;
+        }
+
+        .table tbody tr:hover td {
+            background: #fafafa;
+        }
+
+        .table tbody tr.table-warning td {
+            background: #fffbeb !important;
+        }
+
+    .td-number {
+        color: #94a3b8;
+        font-weight: 700;
+        width: 70px;
+    }
+
+    .status-select {
+        min-width: 150px;
+        font-weight: 700;
+        font-size: 0.82rem;
+    }
+
+    .auditor-name {
+        font-weight: 700;
+        color: #111827;
+    }
+
+    .date-text {
+        font-weight: 700;
+        color: #344054;
+    }
+
+    .audit-pill {
+        display: inline-flex;
+        align-items: center;
+        padding: 6px 11px;
+        border-radius: 999px;
+        background: #f1f5f9;
+        color: #334155;
+        font-weight: 700;
+        font-size: 0.8rem;
+        white-space: nowrap;
+    }
+
+    .spbu-text {
+        font-weight: 700;
+        color: #111827;
+        white-space: nowrap;
+    }
+
+    .note-input {
+        min-width: 220px;
+        font-size: 0.84rem;
+    }
+
+    .btn-action {
+        background: #ffffff;
+        border: 1px solid #dbe1ea;
+        color: #344054;
+        padding: 7px 11px;
+        border-radius: 10px;
+        font-weight: 700;
+        font-size: 0.82rem;
+        white-space: nowrap;
+    }
+
+        .btn-action:hover {
+            background: #111827;
+            border-color: #111827;
+            color: #ffffff;
+        }
+
+    .empty-state {
+        padding: 44px 20px;
+        text-align: center;
+        color: #6b7280;
+    }
+
+    .empty-icon {
+        width: 48px;
+        height: 48px;
+        margin: 0 auto 12px;
+        border-radius: 14px;
+        background: #f3f4f6;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #9ca3af;
+        font-size: 1.4rem;
+    }
+
+    .pagination-wrapper {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-top: 18px;
+        gap: 12px;
+        flex-wrap: wrap;
+    }
+
+    .pagination-info {
+        color: #6b7280;
+        font-size: 0.85rem;
+    }
+
+    .pagination {
+        margin-bottom: 0;
+        gap: 6px;
+    }
+
+        .pagination .page-link {
+            border-radius: 10px;
+            border: 1px solid #dbe1ea;
+            color: #475467;
+            font-weight: 700;
+            font-size: 0.84rem;
+            min-width: 38px;
+            text-align: center;
+        }
+
+            .pagination .page-link:hover {
+                background: #f1f5f9;
+                color: #111827;
+            }
+
+        .pagination .page-item.active .page-link {
+            background: #111827;
+            border-color: #111827;
+            color: #ffffff;
+        }
+
+    @@media (max-width: 768px) {
+        .scheduler-page {
+            padding: 20px 16px;
+        }
+
+        .page-header {
+            align-items: flex-start;
+            flex-direction: column;
+        }
+
+        .header-actions {
+            width: 100%;
+            flex-direction: column;
+        }
+
+            .header-actions .btn {
+                width: 100%;
+            }
+
+        .filter-panel {
+            padding: 14px;
+        }
+    }
+</style>
+
+<div class="scheduler-page">
+
+    <div class="page-header">
+        <div>
+            <h3 class="page-title">Penjadwalan Audit</h3>
+            <div class="page-subtitle">
+                Kelola jadwal audit, status, auditor, SPBU, dan catatan dalam satu halaman.
+            </div>
+        </div>
+
+        <div class="header-actions">
+            <button id="btnSaveChanges" class="btn btn-save d-none">
+                <i class="bi bi-save me-1"></i> Save Changes
+            </button>
+
+            <a href="@Url.Action("Add", "Scheduler")" class="btn btn-dark-blue">
+                <i class="bi bi-plus-lg me-1"></i> Add Scheduler
             </a>
         </div>
     </div>
 
-    @if (TempData["Success"] != null)
+    <div id="dirtyInfo" class="dirty-info d-none">
+        <i class="bi bi-exclamation-circle"></i>
+        <span></span>
+    </div>
+
+    <div class="card-panel filter-panel">
+        <form method="get" class="row g-2 align-items-center mb-0" id="filterForm">
+            <div class="col-md-4">
+                <input type="text"
+                       name="searchTerm"
+                       value="@Model.SearchTerm"
+                       class="form-control"
+                       placeholder="Cari SPBU atau Auditor..." />
+            </div>
+
+            <div class="col-auto" style="min-width:200px;">
+                <select name="filterStatus" class="form-select">
+                    <option value="">Semua Status</option>
+                    <option value="DRAFT" selected="@(ViewBag.FilterStatus == "DRAFT")">Draft</option>
+                    <option value="NOT_STARTED" selected="@(ViewBag.FilterStatus == "NOT_STARTED")">Belum Dimulai</option>
+                </select>
+            </div>
+
+            <div class="col-auto">
+                <button type="submit" class="btn btn-dark-blue">
+                    <i class="bi bi-search me-1"></i> Cari
+                </button>
+            </div>
+
+            <div class="col-auto">
+                <a href="@Url.Action("Index", "Scheduler")" class="btn btn-soft">
+                    Reset
+                </a>
+            </div>
+        </form>
+    </div>
+
+    <div class="card-panel table-card">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle">
+                <thead>
+                    <tr>
+                        <th class="text-center">No</th>
+                        <th class="text-center">Status</th>
+                        <th>Auditor</th>
+                        <th class="text-center">Tanggal</th>
+                        <th class="text-center">Tipe</th>
+                        <th class="text-center">Level</th>
+                        <th class="text-center">SPBU</th>
+                        <th>Note</th>
+                        <th class="text-center">Aksi</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+                    @{
+                        int index = (Model.CurrentPage - 1) * Model.PageSize + 1;
+                    }
+
+                    @if (Model.Items.Any())
+                    {
+                        foreach (var item in Model.Items)
+                        {
+                            bool canEdit = item.Status == "Draft" || item.Status == "Belum Dimulai";
+
+                            <tr data-id="@item.Id">
+                                <td class="text-center td-number">@index</td>
+
+                                <td class="text-center">
+                                    <select class="form-select form-select-sm status-select status-dropdown"
+                                            @(canEdit ? "" : "disabled")>
+                                        <option value="DRAFT" selected="@(item.Status == "Draft")">Draft</option>
+                                        <option value="NOT_STARTED" selected="@(item.Status == "Belum Dimulai")">Belum Dimulai</option>
+                                    </select>
+                                </td>
+
+                                <td>
+                                    <div class="auditor-name">@item.AppUserName</div>
+                                </td>
+
+                                <td class="text-center">
+                                    <span class="date-text">@item.AuditDate.ToString("dd/MM/yyyy")</span>
+                                </td>
+
+                                <td class="text-center">
+                                    <span class="audit-pill">@item.AuditType</span>
+                                </td>
+
+                                <td class="text-center">
+                                    <span class="audit-pill">@item.AuditLevel</span>
+                                </td>
+
+                                <td class="text-center">
+                                    <span class="spbu-text">@item.SpbuNo</span>
+                                </td>
+
+                                <td>
+                                    <input type="text"
+                                           class="form-control form-control-sm note-input"
+                                           value="@item.Note"
+                                           @(canEdit ? "" : "disabled") />
+                                </td>
+
+                                <td class="text-center">
+                                    <a href="@Url.Action("Detail", new { id = item.Id })"
+                                       class="btn btn-action">
+                                        <i class="bi bi-eye me-1"></i> Detail
+                                    </a>
+                                </td>
+                            </tr>
+
+                            index++;
+                        }
+                    }
+                    else
+                    {
+                        <tr>
+                            <td colspan="9">
+                                <div class="empty-state">
+                                    <div class="empty-icon">
+                                        <i class="bi bi-calendar-x"></i>
+                                    </div>
+                                    <div class="fw-bold text-dark mb-1">Data tidak ditemukan</div>
+                                    <div>Silakan ubah kata kunci pencarian atau reset filter.</div>
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    @if (Model.TotalPages > 1)
     {
-        <div class="alert alert-success alert-dismissible fade show" role="alert">
-            @TempData["Success"]
-            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        <div class="pagination-wrapper">
+            <div class="pagination-info">
+                Page @currentPage of @totalPages
+            </div>
+
+            <nav>
+                <ul class="pagination">
+                    @if (startPage > 1)
+                    {
+                        <li class="page-item">
+                            <a class="page-link"
+                               href="@Url.Action("Index", new { pageNumber = startPage - 1, searchTerm = Model.SearchTerm, pageSize = Model.PageSize, filterStatus = selectedStatus, filterMonth = selectedMonth, filterYear = selectedYear })">
+                                Prev
+                            </a>
+                        </li>
+                    }
+
+                    @for (int i = startPage; i <= endPage; i++)
+                    {
+                        <li class="page-item @(i == currentPage ? "active" : "")">
+                            <a class="page-link"
+                               href="@Url.Action("Index", new { pageNumber = i, searchTerm = Model.SearchTerm, pageSize = Model.PageSize, filterStatus = selectedStatus, filterMonth = selectedMonth, filterYear = selectedYear })">
+                                @i
+                            </a>
+                        </li>
+                    }
+
+                    @if (endPage < totalPages)
+                    {
+                        <li class="page-item">
+                            <a class="page-link"
+                               href="@Url.Action("Index", new { pageNumber = endPage + 1, searchTerm = Model.SearchTerm, pageSize = Model.PageSize, filterStatus = selectedStatus, filterMonth = selectedMonth, filterYear = selectedYear })">
+                                Next
+                            </a>
+                        </li>
+                    }
+                </ul>
+            </nav>
         </div>
     }
-
-    <form method="get" class="row g-2 mb-4">
-        <div class="col-md-4">
-            <input type="text" name="searchTerm" value="@Model.SearchTerm" class="form-control" placeholder="Cari no. SPBU atau auditor..." />
-        </div>
-
-        <div class="col-auto" style="min-width: 200px;">
-            <select name="filterStatus" class="form-select w-100">
-                <option value="">📌 Status</option>
-                @{
-                    var statuses = new Dictionary<string, string>
-                {
-                { "DRAFT", "Draft" },
-                { "NOT_STARTED", "Belum Dimulai" },
-                { "IN_PROGRESS_INPUT", "Sedang Berlangsung (Input)" },
-                { "IN_PROGRESS_SUBMIT", "Sedang Berlangsung (Submit)" },
-                { "UNDER_REVIEW", "Sedang Ditinjau" },
-                { "VERIFIED", "Terverifikasi" }
-                };
-
-                    foreach (var status in statuses)
-                    {
-                        var isSelected = selectedStatus == status.Key ? "selected" : "";
-                        @Html.Raw($"<option value='{status.Key}' {isSelected}>{status.Value}</option>")
-                    }
-                }
-            </select>
-        </div>
-
-        <div class="col-auto" style="min-width: 180px;">
-            <select name="filterMonth" class="form-select w-100">
-                <option value="">📅 Bulan</option>
-                @for (int m = 1; m <= 12; m++)
-                {
-                    var monthName = CultureInfo.CurrentCulture.DateTimeFormat.GetMonthName(m);
-                    var isSelected = selectedMonth == m ? "selected" : "";
-                    @Html.Raw($"<option value='{m}' {isSelected}>{monthName}</option>")
-                }
-            </select>
-        </div>
-
-        <div class="col-auto" style="min-width: 140px;">
-            <select name="filterYear" class="form-select w-100">
-                <option value="">📆 Tahun</option>
-                @for (int y = currentYear; y >= currentYear - 5; y--)
-                {
-                    var isSelected = selectedYear == y ? "selected" : "";
-                    @Html.Raw($"<option value='{y}' {isSelected}>{y}</option>")
-                }
-            </select>
-        </div>
-
-        <div class="col-auto">
-            <button type="submit" class="btn btn-outline-primary"><i class="bi bi-search"></i> Cari</button>
-            <a href="@Url.Action("Index")" class="btn btn-outline-secondary ms-1">Reset</a>
-        </div>
-    </form>
-
-    <div class="table-responsive">
-        <table class="table table-hover align-middle">
-            <thead class="table-light">
-                <tr class="align-middle text-center">
-                    <th>No</th>
-                    <th>Status</th>
-                    <th>Auditor</th>
-                    <th>Tanggal Audit</th>
-                    <th>Tipe Audit</th>
-                    <th>Level</th>
-                    <th>SPBU</th>
-                    <th>SBM</th>
-                    <th>No Report</th>
-                    <th>Aksi</th>
-                </tr>
-            </thead>
-            <tbody>
-                @{
-                    int index = (Model.CurrentPage - 1) * Model.PageSize + 1;
-                }
-                @foreach (var item in Model.Items)
-                {
-                    <tr class="text-center">
-                        <td>@index</td>
-                        <td class="fw-semibold" style="color:@GetStatusColor(item.Status)">
-                            @item.Status
-                        </td>
-                        <td>@item.AppUserName</td>
-                        <td>@item.AuditDate.ToString("dd/MM/yyyy")</td>
-                        <td>@item.AuditType</td>
-                        <td>@item.AuditLevel</td>
-                        <td>@item.SpbuNo</td>
-                        <td>@item.SBM</td>
-                        <td>@item.ReportNo</td>
-                        <td>
-                            <a href="@Url.Action("Detail", "Scheduler", new { id = item.Id })" class="btn btn-sm btn-outline-primary me-1">
-                                <i class="bi bi-eye me-1"></i> Detail
-                            </a>
-                            <a href="@Url.Action("Edit", "Scheduler", new { id = item.Id })" class="btn btn-sm btn-outline-secondary me-1">
-                                <i class="bi bi-pencil me-1"></i> Edit
-                            </a>
-                            <form method="post" asp-action="Delete" asp-controller="Scheduler" asp-route-id="@item.Id"
-                                  onsubmit="return confirm('Yakin ingin menghapus jadwal ini?')" class="d-inline">
-                                <button type="submit" class="btn btn-sm btn-outline-danger">
-                                    <i class="bi bi-trash me-1"></i> Delete
-                                </button>
-                            </form>
-                        </td>
-                    </tr>
-                    index++;
-                }
-            </tbody>
-        </table>
-    </div>
-
-    <!-- Label Total -->
-    <div class="mt-2 text-muted">
-        Total: @Model.TotalItems jadwal
-    </div>
-
-    <nav class="mt-3">
-        <ul class="pagination justify-content-start">
-            @if (startPage > 1)
-            {
-                <li class="page-item">
-                    <a class="page-link"
-                       href="@Url.Action("Index", new {
-                            pageNumber = startPage - 1,
-                            routeFilters.searchTerm,
-                            routeFilters.pageSize,
-                            routeFilters.filterStatus,
-                            routeFilters.filterMonth,
-                            routeFilters.filterYear
-                       })">« Prev</a>
-                </li>
-            }
-
-            @for (int i = startPage; i <= endPage; i++)
-            {
-                <li class="page-item @(i == currentPage ? "active" : "")">
-                    <a class="page-link"
-                       href="@Url.Action("Index", new {
-                            pageNumber = i,
-                            routeFilters.searchTerm,
-                            routeFilters.pageSize,
-                            routeFilters.filterStatus,
-                            routeFilters.filterMonth,
-                            routeFilters.filterYear
-                       })">@i</a>
-                </li>
-            }
-
-            @if (endPage < totalPages)
-            {
-                <li class="page-item">
-                    <a class="page-link"
-                       href="@Url.Action("Index", new {
-                            pageNumber = endPage + 1,
-                            routeFilters.searchTerm,
-                            routeFilters.pageSize,
-                            routeFilters.filterStatus,
-                            routeFilters.filterMonth,
-                            routeFilters.filterYear
-                       })">Next »</a>
-                </li>
-            }
-        </ul>
-    </nav>
 </div>
 
 @section Scripts {
     <script>
-        setTimeout(function () {
-            var alert = document.querySelector('.alert');
-            if (alert) {
-                var bsAlert = bootstrap.Alert.getOrCreateInstance(alert);
-                bsAlert.close();
-            }
-        }, 5000);
-    </script>
-}
+        let changes = {};
 
-@functions {
-    string GetStatusColor(string status)
-    {
-        return status switch
-        {
-            "Belum Dimulai" => "#000000",
-            "Sedang Berlangsung (Input)" => "#fbbf24",
-            "Sedang Berlangsung (Submit)" => "#f59e0b",
-            "Sedang Ditinjau" => "#3b82f6",
-            "Terverifikasi" => "#10b981",
-            _ => "#000"
-        };
-    }
+        function markDirty(row, field, value) {
+            const id = row.dataset.id;
+
+            if (!changes[id]) {
+                changes[id] = {};
+            }
+
+            changes[id][field] = value;
+            row.classList.add('table-warning');
+
+            updateUI();
+        }
+
+        function updateUI() {
+            const count = Object.keys(changes).length;
+
+            const btn = document.getElementById('btnSaveChanges');
+            const info = document.getElementById('dirtyInfo');
+            const infoText = info.querySelector('span');
+
+            if (count > 0) {
+                btn.classList.remove('d-none');
+                info.classList.remove('d-none');
+                infoText.innerText = count + ' data berubah';
+            } else {
+                btn.classList.add('d-none');
+                info.classList.add('d-none');
+                infoText.innerText = '';
+            }
+        }
+
+        document.querySelectorAll('.status-dropdown').forEach(el => {
+            el.addEventListener('change', function () {
+                const row = this.closest('tr');
+                markDirty(row, 'status', this.value);
+            });
+        });
+
+        document.querySelectorAll('.note-input').forEach(el => {
+            el.addEventListener('input', function () {
+                const row = this.closest('tr');
+                markDirty(row, 'note', this.value);
+            });
+        });
+
+        document.getElementById('btnSaveChanges').addEventListener('click', function () {
+            const payload = Object.keys(changes).map(id => ({
+                id: id,
+                status: changes[id].status,
+                note: changes[id].note
+            }));
+
+            fetch('/Scheduler/BulkInlineUpdate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            })
+            .then(res => res.json())
+            .then(res => {
+                if (res.success) {
+                    location.reload();
+                } else {
+                    alert('Gagal save');
+                }
+            })
+            .catch(() => {
+                alert('Gagal terhubung ke server');
+            });
+        });
+
+        window.addEventListener('beforeunload', function (e) {
+            if (Object.keys(changes).length > 0) {
+                e.preventDefault();
+                e.returnValue = '';
+            }
+        });
+
+        document.getElementById('filterForm').addEventListener('submit', function (e) {
+            if (Object.keys(changes).length > 0) {
+                if (!confirm('Ada perubahan belum disimpan. Lanjutkan?')) {
+                    e.preventDefault();
+                }
+            }
+        });
+    </script>
 }

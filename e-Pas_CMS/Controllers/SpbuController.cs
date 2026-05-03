@@ -5,7 +5,14 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.EntityFrameworkCore;
+using OfficeOpenXml;
+using OfficeOpenXml.Style;
+using System.Drawing;
 using System.Data;
+using ClosedXML.Excel;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using System.Globalization;
 
 [Authorize]
 public class SpbuController : Controller
@@ -295,6 +302,293 @@ public class SpbuController : Controller
         var spbu = await _context.spbus.FindAsync(id);
         if (spbu == null) return NotFound();
         return View(spbu);
+    }
+
+    public async Task<IActionResult> Export()
+    {
+        var data = await _context.spbus
+            .AsNoTracking()
+            .OrderBy(x => x.spbu_no)
+            .ToListAsync();
+
+        using var workbook = new XLWorkbook();
+        var ws = workbook.Worksheets.Add("SPBU");
+
+        var headers = GetSpbuHeaders();
+
+        for (int i = 0; i < headers.Count; i++)
+        {
+            ws.Cell(1, i + 1).Value = headers[i];
+            ws.Cell(1, i + 1).Style.Font.Bold = true;
+            ws.Cell(1, i + 1).Style.Fill.BackgroundColor = XLColor.FromHtml("#111827");
+            ws.Cell(1, i + 1).Style.Font.FontColor = XLColor.White;
+        }
+
+        int row = 2;
+
+        foreach (var item in data)
+        {
+            ws.Cell(row, 1).Value = item.spbu_no;
+            ws.Cell(row, 2).Value = item.region;
+            ws.Cell(row, 3).Value = item.province_name;
+            ws.Cell(row, 4).Value = item.city_name;
+            ws.Cell(row, 5).Value = item.address;
+            ws.Cell(row, 6).Value = item.owner_name;
+            ws.Cell(row, 7).Value = item.manager_name;
+            ws.Cell(row, 8).Value = item.owner_type;
+            ws.Cell(row, 9).Value = item.quater;
+            ws.Cell(row, 10).Value = item.year;
+            ws.Cell(row, 11).Value = item.mor;
+            ws.Cell(row, 12).Value = item.sales_area;
+            ws.Cell(row, 13).Value = item.sbm;
+            ws.Cell(row, 14).Value = item.sam;
+            ws.Cell(row, 15).Value = item.type;
+            ws.Cell(row, 16).Value = item.phone_number_1;
+            ws.Cell(row, 17).Value = item.phone_number_2;
+            ws.Cell(row, 18).Value = item.level;
+            ws.Cell(row, 19).Value = item.latitude;
+            ws.Cell(row, 20).Value = item.longitude;
+            ws.Cell(row, 21).Value = item.audit_current;
+            ws.Cell(row, 22).Value = item.audit_next;
+            ws.Cell(row, 23).Value = item.status_good;
+            ws.Cell(row, 24).Value = item.status_excellent;
+            ws.Cell(row, 25).Value = item.audit_current_score;
+            ws.Cell(row, 26).Value = item.audit_current_time;
+            ws.Cell(row, 27).Value = item.status;
+            ws.Cell(row, 28).Value = item.wtms;
+            ws.Cell(row, 29).Value = item.qq;
+            ws.Cell(row, 30).Value = item.wmef;
+            ws.Cell(row, 31).Value = item.format_fisik;
+            ws.Cell(row, 32).Value = item.cpo;
+
+            row++;
+        }
+
+        ws.Columns().AdjustToContents();
+
+        using var stream = new MemoryStream();
+        workbook.SaveAs(stream);
+
+        var fileName = $"SPBU_Export_{DateTime.Now:yyyyMMddHHmmss}.xlsx";
+
+        return File(
+            stream.ToArray(),
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            fileName
+        );
+    }
+
+    public IActionResult DownloadTemplate()
+    {
+        using var workbook = new XLWorkbook();
+        var ws = workbook.Worksheets.Add("Template Import SPBU");
+
+        var headers = GetSpbuHeaders();
+
+        for (int i = 0; i < headers.Count; i++)
+        {
+            ws.Cell(1, i + 1).Value = headers[i];
+            ws.Cell(1, i + 1).Style.Font.Bold = true;
+            ws.Cell(1, i + 1).Style.Fill.BackgroundColor = XLColor.FromHtml("#111827");
+            ws.Cell(1, i + 1).Style.Font.FontColor = XLColor.White;
+        }
+
+        ws.Cell(2, 1).Value = "34.12345";
+        ws.Cell(2, 2).Value = "1";
+        ws.Cell(2, 3).Value = "Jawa Barat";
+        ws.Cell(2, 4).Value = "Kota Bogor";
+        ws.Cell(2, 5).Value = "Jl. Contoh Alamat";
+        ws.Cell(2, 8).Value = "COCO";
+        ws.Cell(2, 9).Value = 1;
+        ws.Cell(2, 10).Value = DateTime.Now.Year;
+        ws.Cell(2, 18).Value = "GOOD";
+        ws.Cell(2, 19).Value = -6.200000;
+        ws.Cell(2, 20).Value = 106.800000;
+        ws.Cell(2, 25).Value = 95.50;
+        ws.Cell(2, 26).Value = DateTime.Now;
+        ws.Cell(2, 27).Value = "ACTIVE";
+
+        ws.Columns().AdjustToContents();
+
+        using var stream = new MemoryStream();
+        workbook.SaveAs(stream);
+
+        return File(
+            stream.ToArray(),
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            "Template_Import_SPBU.xlsx"
+        );
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> Import(IFormFile file)
+    {
+        if (file == null || file.Length == 0)
+        {
+            TempData["Error"] = "File import belum dipilih.";
+            return RedirectToAction(nameof(Index));
+        }
+
+        var username = User.Identity?.Name ?? "system";
+
+        using var stream = new MemoryStream();
+        await file.CopyToAsync(stream);
+
+        using var workbook = new XLWorkbook(stream);
+        var ws = workbook.Worksheets.First();
+
+        var rows = ws.RowsUsed().Skip(1);
+
+        int inserted = 0;
+        int updated = 0;
+
+        foreach (var row in rows)
+        {
+            var spbuNo = GetString(row.Cell(1));
+
+            if (string.IsNullOrWhiteSpace(spbuNo))
+                continue;
+
+            var entity = await _context.spbus
+                .FirstOrDefaultAsync(x => x.spbu_no == spbuNo);
+
+            bool isNew = entity == null;
+
+            if (isNew)
+            {
+                entity = new spbu
+                {
+                    id = Guid.NewGuid().ToString(),
+                    spbu_no = spbuNo,
+                    created_by = username,
+                    created_date = DateTime.Now
+                };
+
+                _context.spbus.Add(entity);
+                inserted++;
+            }
+            else
+            {
+                updated++;
+            }
+
+            entity.region = GetString(row.Cell(2));
+            entity.province_name = GetString(row.Cell(3));
+            entity.city_name = GetString(row.Cell(4));
+            entity.address = GetString(row.Cell(5));
+            entity.owner_name = GetString(row.Cell(6));
+            entity.manager_name = GetString(row.Cell(7));
+            entity.owner_type = GetString(row.Cell(8));
+            entity.quater = GetInt(row.Cell(9));
+            entity.year = GetInt(row.Cell(10));
+            entity.mor = GetString(row.Cell(11));
+            entity.sales_area = GetString(row.Cell(12));
+            entity.sbm = GetString(row.Cell(13));
+            entity.sam = GetString(row.Cell(14));
+            entity.type = GetString(row.Cell(15));
+            entity.phone_number_1 = GetString(row.Cell(16));
+            entity.phone_number_2 = GetString(row.Cell(17));
+            entity.level = GetString(row.Cell(18));
+            entity.latitude = GetDouble(row.Cell(19));
+            entity.longitude = GetDouble(row.Cell(20));
+            entity.audit_current = GetString(row.Cell(21));
+            entity.audit_next = GetString(row.Cell(22));
+            entity.status_good = GetString(row.Cell(23));
+            entity.status_excellent = GetString(row.Cell(24));
+            entity.audit_current_score = GetDecimal(row.Cell(25));
+            entity.audit_current_time = GetDateTime(row.Cell(26));
+            entity.status = GetString(row.Cell(27)) ?? "ACTIVE";
+            entity.wtms = GetDecimal(row.Cell(28)) ?? 0;
+            entity.qq = GetDecimal(row.Cell(29)) ?? 0;
+            entity.wmef = GetDecimal(row.Cell(30)) ?? 0;
+            entity.format_fisik = GetDecimal(row.Cell(31)) ?? 0;
+            entity.cpo = GetDecimal(row.Cell(32)) ?? 0;
+
+            entity.updated_by = username;
+            entity.updated_date = DateTime.Now;
+        }
+
+        await _context.SaveChangesAsync();
+
+        TempData["Success"] = $"Import berhasil. Insert: {inserted}, Update: {updated}.";
+        return RedirectToAction(nameof(Index));
+    }
+
+    private static List<string> GetSpbuHeaders()
+    {
+        return new List<string>
+    {
+        "spbu_no",
+        "region",
+        "province_name",
+        "city_name",
+        "address",
+        "owner_name",
+        "manager_name",
+        "owner_type",
+        "quater",
+        "year",
+        "mor",
+        "sales_area",
+        "sbm",
+        "sam",
+        "type",
+        "phone_number_1",
+        "phone_number_2",
+        "level",
+        "latitude",
+        "longitude",
+        "audit_current",
+        "audit_next",
+        "status_good",
+        "status_excellent",
+        "audit_current_score",
+        "audit_current_time",
+        "status",
+        "wtms",
+        "qq",
+        "wmef",
+        "format_fisik",
+        "cpo"
+    };
+    }
+
+    private static string? GetString(IXLCell cell)
+    {
+        var value = cell.GetString()?.Trim();
+        return string.IsNullOrWhiteSpace(value) ? null : value;
+    }
+
+    private static int? GetInt(IXLCell cell)
+    {
+        var value = GetString(cell);
+        return int.TryParse(value, out var result) ? result : null;
+    }
+
+    private static double? GetDouble(IXLCell cell)
+    {
+        var value = GetString(cell)?.Replace(",", ".");
+        return double.TryParse(value, NumberStyles.Any, CultureInfo.InvariantCulture, out var result) ? result : null;
+    }
+
+    private static decimal? GetDecimal(IXLCell cell)
+    {
+        var value = GetString(cell)?.Replace(",", ".");
+        return decimal.TryParse(value, NumberStyles.Any, CultureInfo.InvariantCulture, out var result) ? result : null;
+    }
+
+    private static DateTime? GetDateTime(IXLCell cell)
+    {
+        if (cell.DataType == XLDataType.DateTime)
+            return cell.GetDateTime();
+
+        var value = GetString(cell);
+
+        if (DateTime.TryParse(value, out var result))
+            return result;
+
+        return null;
     }
 
     [HttpPost, ActionName("Delete")]

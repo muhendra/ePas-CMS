@@ -1,0 +1,101 @@
+﻿@using e_Pas_CMS.ViewModels
+@model PaginationModel<AuditReportListViewModel>
+
+@{
+    ViewData["Title"] = "Audit Report CSV";
+    var currentPage = Model.PageNumber;
+    var totalPages = (int)Math.Ceiling((double)Model.TotalItems / Model.PageSize);
+}
+
+<h2>Audit Report</h2>
+
+<form method="get" asp-action="DownloadCsv" class="form-inline mb-3">
+    <input type="text" name="searchTerm" value="@ViewBag.SearchTerm" class="form-control mr-2" placeholder="Search...">
+    <button type="submit" class="btn btn-primary">Search</button>
+</form>
+
+<table class="table table-bordered table-striped">
+    <thead class="thead-dark">
+        <tr>
+            <th>send_date</th>
+            <th>Audit Date</th>
+            <th>spbu_no</th>
+            <th>region</th>
+            <th>year</th>
+            <th>address</th>
+            <th>city_name</th>
+            <th>tipe_spbu</th>
+            <th>rayon</th>
+            <th>audit_level</th>
+            <th>audit_next</th>
+            <th>good_status</th>
+            <th>excellent_status</th>
+            <th>total_score</th>
+            <th>sss</th>
+            <th>eqnq</th>
+            <th>rfs</th>
+            <th>vfc</th>
+            <th>epo</th>
+            <th>wtms</th>
+            <th>qq</th>
+            <th>wmef</th>
+            <th>format_fisik</th>
+            <th>cpo</th>
+            <th>kelas_spbu</th>
+            <th>penalty_good_alerts</th>
+            <th>penalty_excellent_alerts</th>
+        </tr>
+    </thead>
+    <tbody>
+        @if (Model.Items != null && Model.Items.Any())
+        {
+            foreach (var item in Model.Items)
+            {
+                <tr>
+                    <td>@item.SubmitDate</td>
+                    <td>@item.AuditDate</td>
+                    <td>@item.SpbuNo</td>
+                    <td>@item.Region</td>
+                    <td>@item.Year</td>
+                    <td>@item.Address</td>
+                    <td>@item.City</td>
+                    <td>@item.SBM</td>
+                    <td>@item.SAM</td>
+                    <td>@item.Auditlevel</td>
+                    <td>@item.AuditNext</td>
+                    <td>@item.GoodStatus</td>
+                    <td>@item.ExcellentStatus</td>
+                    <td>@item.Score</td>
+                    <td>@item.SSS</td>
+                    <td>@item.EQnQ</td>
+                    <td>@item.RFS</td>
+                    <td>@item.VFC</td>
+                    <td>@item.EPO</td>
+                    <td>@item.WTMS</td>
+                    <td>@item.QQ</td>
+                    <td>@item.WMEF</td>
+                    <td>@item.FormatFisik</td>
+                    <td>@item.CPO</td>
+                    <td>@item.KelasSpbu</td>
+                    <td>-</td> <!-- penalty_good_alerts, jika ingin tampilkan isi real, tambahkan ke model -->
+                    <td>-</td> <!-- penalty_excellent_alerts -->
+                </tr>
+            }
+        }
+        else
+        {
+            <tr><td colspan="27" class="text-center">No data available</td></tr>
+        }
+    </tbody>
+</table>
+
+<nav>
+    <ul class="pagination">
+        @for (int i = 1; i <= totalPages; i++)
+        {
+            <li class="page-item @(i == currentPage ? "active" : "")">
+                <a class="page-link" href="@Url.Action("DownloadCsv", new { pageNumber = i, pageSize = Model.PageSize, searchTerm = ViewBag.SearchTerm })">@i</a>
+            </li>
+        }
+    </ul>
+</nav>

@@ -21,5 +21,7 @@ namespace e_Pas_CMS.ViewModels
         [Required]
         [Display(Name = "SPBU yang dipilih")]
         public List<string> SpbuList { get; set; }
+
+        public string? Note { get; set; }
     }
 }

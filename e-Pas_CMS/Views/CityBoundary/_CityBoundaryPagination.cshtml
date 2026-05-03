@@ -1,0 +1,54 @@
+﻿@model dynamic
+
+@if (Model.TotalPages > 1)
+{
+    <nav class="mt-4">
+        <ul class="pagination justify-content-end">
+            @if (Model.PageNumber > 1)
+            {
+                <li class="page-item">
+                    <a class="page-link" href="@Url.Action(null, new {
+                        pageNumber = Model.PageNumber - 1,
+                        pageSize = Model.PageSize,
+                        searchTerm = ViewBag.SearchTerm,
+                        status = ViewBag.Status
+                    })">
+                        <i class="bi bi-chevron-left"></i>
+                    </a>
+                </li>
+            }
+
+            @{
+                int window = 5;
+                int start = Math.Max(1, Model.PageNumber - 2);
+                int end = Math.Min(Model.TotalPages, start + window - 1);
+            }
+
+            @for (int i = start; i <= end; i++)
+            {
+                <li class="page-item @(i == Model.PageNumber ? "active" : "")">
+                    <a class="page-link" href="@Url.Action(null, new {
+                        pageNumber = i,
+                        pageSize = Model.PageSize,
+                        searchTerm = ViewBag.SearchTerm,
+                        status = ViewBag.Status
+                    })">@i</a>
+                </li>
+            }
+
+            @if (Model.PageNumber < Model.TotalPages)
+            {
+                <li class="page-item">
+                    <a class="page-link" href="@Url.Action(null, new {
+                        pageNumber = Model.PageNumber + 1,
+                        pageSize = Model.PageSize,
+                        searchTerm = ViewBag.SearchTerm,
+                        status = ViewBag.Status
+                    })">
+                        <i class="bi bi-chevron-right"></i>
+                    </a>
+                </li>
+            }
+        </ul>
+    </nav>
+}
