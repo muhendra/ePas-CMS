@@ -186,6 +186,7 @@ namespace e_Pas_CMS.Controllers
                 {
                     audit.status = req.Status;
                     audit.form_status_auditor1 = req.Status;
+                    audit.form_status_auditor2 = req.Status;
 
                     if (oldStatus == "DRAFT" && req.Status == "NOT_STARTED")
                     {
@@ -540,6 +541,7 @@ namespace e_Pas_CMS.Controllers
             // ===== DETEKSI TRANSISI DRAFT -> NOT_STARTED (status & form_status_auditor1) =====
             var finalStatus = (audit.status ?? "").Trim().ToUpperInvariant();
             var finalFormStatusAud1 = (audit.form_status_auditor1 ?? "").Trim().ToUpperInvariant();
+            var finalFormStatusAud2= (audit.status ?? "").Trim().ToUpperInvariant();
 
             bool isDraftToNotStarted =
                 oldStatus == "DRAFT" && finalStatus == "NOT_STARTED";

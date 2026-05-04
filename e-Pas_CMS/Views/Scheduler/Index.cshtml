@@ -487,24 +487,23 @@
 
                             <tr data-id="@item.Id">
                                 <td class="text-center td-number">@index</td>
-
                                 <td class="text-center">
-                                    @if (canEdit)
-                                    {
-                                        <select class="form-select form-select-sm status-select status-dropdown">
-                                            @foreach (var status in statusOptions)
-                                            {
-                                                <option value="@status.Key" selected="@(item.Status == status.Value)">
-                                                    @status.Value
-                                                </option>
-                                            }
-                                        </select>
-                                    }
-                                    else
-                                    {
-                                        <span class="status-badge">@item.Status</span>
-                                    }
-                                </td>
+    @if (canEdit)
+    {
+        <select class="form-select form-select-sm status-select status-dropdown">
+            @foreach (var status in statusOptions.Where(x => x.Key == "DRAFT" || x.Key == "NOT_STARTED"))
+            {
+                <option value="@status.Key" selected="@(item.Status == status.Value)">
+                    @status.Value
+                </option>
+            }
+        </select>
+    }
+    else
+    {
+        <span class="status-badge">@item.Status</span>
+    }
+</td>
 
                                 <td>
                                     <div class="auditor-name">@item.AppUserName</div>
