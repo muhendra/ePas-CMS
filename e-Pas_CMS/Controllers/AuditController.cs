@@ -2645,7 +2645,9 @@ WHERE spbu_id = @spbuid
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> UpdateBeritaAcaraText(string id, string notes)
         {
-            var audit = await _context.trx_audits.AsNoTracking().FirstOrDefaultAsync(x => x.id == id);
+            var audit = await _context.trx_audits
+                .FirstOrDefaultAsync(x => x.id == id);
+
             if (audit == null) return NotFound();
 
             audit.audit_mom_final = notes;
@@ -2653,6 +2655,7 @@ WHERE spbu_id = @spbuid
             audit.updated_date = DateTime.Now;
 
             await _context.SaveChangesAsync();
+
             TempData["Success"] = "Teks Berita Acara berhasil diperbarui";
             return RedirectToAction("Detail", new { id });
         }

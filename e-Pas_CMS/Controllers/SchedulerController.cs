@@ -27,9 +27,13 @@ namespace e_Pas_CMS.Controllers
 
         [HttpGet("")]
         public async Task<IActionResult> Index(
-    int pageNumber = 1, int pageSize = 10,
-    string searchTerm = "", string? filterStatus = null,
-    int? filterMonth = null, int? filterYear = null)
+    int pageNumber = 1,
+    int pageSize = 10,
+    string searchTerm = "",
+    string? filterStatus = null,
+    string? filterSbm = null,
+    int? filterMonth = null,
+    int? filterYear = null)
         {
             var baseQuery = _context.trx_audits
                 .Include(a => a.app_user)
@@ -38,69 +42,92 @@ namespace e_Pas_CMS.Controllers
 
             if (!string.IsNullOrWhiteSpace(searchTerm))
             {
-                var st = searchTerm.ToLower();
+                var st = searchTerm.Trim().ToLower();
+
                 baseQuery = baseQuery.Where(a =>
                     (a.app_user.name ?? "").ToLower().Contains(st) ||
                     (a.spbu.spbu_no ?? "").ToLower().Contains(st));
             }
 
-            if (!string.IsNullOrEmpty(filterStatus))
+            if (!string.IsNullOrWhiteSpace(filterStatus))
+            {
                 baseQuery = baseQuery.Where(a => a.status == filterStatus);
+            }
+
+            if (!string.IsNullOrWhiteSpace(filterSbm))
+            {
+                baseQuery = baseQuery.Where(a => a.spbu.sbm == filterSbm);
+            }
 
             ViewBag.FilterStatus = filterStatus;
+            ViewBag.FilterSbm = filterSbm;
             ViewBag.FilterMonth = filterMonth;
             ViewBag.FilterYear = filterYear;
 
-            // AuditDate konsisten: execution > schedule > created
+            ViewBag.StatusOptions = GetSchedulerStatusOptions();
+
+            ViewBag.SbmOptions = await _context.trx_audits
+                .AsNoTracking()
+                .Include(a => a.spbu)
+                .Where(a => a.status != "DELETED"
+                    && a.spbu != null
+                    && !string.IsNullOrEmpty(a.spbu.sbm))
+                .Select(a => a.spbu.sbm)
+                .Distinct()
+                .OrderBy(x => x)
+                .ToListAsync();
+
             var shaped = baseQuery.Select(a => new
             {
                 a.id,
                 a.status,
                 AppUserName = a.app_user != null ? a.app_user.name : null,
                 AuditDate = a.audit_execution_time.HasValue
-                ? a.audit_execution_time.Value
-                : (a.audit_schedule_date.HasValue
-                    ? new DateTime(
-                        a.audit_schedule_date.Value.Year,
-                        a.audit_schedule_date.Value.Month,
-                        a.audit_schedule_date.Value.Day)
-                    : a.created_date),
+                    ? a.audit_execution_time.Value
+                    : (a.audit_schedule_date.HasValue
+                        ? new DateTime(
+                            a.audit_schedule_date.Value.Year,
+                            a.audit_schedule_date.Value.Month,
+                            a.audit_schedule_date.Value.Day)
+                        : a.created_date),
                 a.audit_type,
                 a.audit_level,
                 SpbuNo = a.spbu != null ? a.spbu.spbu_no : null,
-                SBM = a.spbu.sbm,
+                SBM = a.spbu != null ? a.spbu.sbm : null,
                 a.report_no,
                 a.note
             });
 
-            if (filterMonth.HasValue && filterYear.HasValue)
+            if (filterMonth.HasValue)
             {
-                int m = filterMonth.Value, y = filterYear.Value;
-                shaped = shaped.Where(x => x.AuditDate.Month == m && x.AuditDate.Year == y);
+                shaped = shaped.Where(x => x.AuditDate.Month == filterMonth.Value);
+            }
+
+            if (filterYear.HasValue)
+            {
+                shaped = shaped.Where(x => x.AuditDate.Year == filterYear.Value);
             }
 
             var totalItems = await shaped.CountAsync();
 
-            // Sampai sini masih full server-side.
-            // Baru materialisasi:
             var rows = await shaped
                 .OrderByDescending(x => x.AuditDate)
                 .Skip((pageNumber - 1) * pageSize)
                 .Take(pageSize)
                 .ToListAsync();
 
-            // Mapping client-side (boleh panggil method/logic bebas di sini)
             var items = rows.Select(x => new SchedulerItemViewModel
             {
                 Id = x.id,
-                Status = MapStatus(x.status),     // ← sudah aman, ini di memory
+                Status = MapStatus(x.status),
                 AppUserName = x.AppUserName,
                 AuditDate = x.AuditDate,
                 AuditType = x.audit_type,
                 AuditLevel = x.audit_level,
                 SpbuNo = x.SpbuNo,
                 SBM = x.SBM,
-                ReportNo = x.report_no
+                ReportNo = x.report_no,
+                Note = x.note
             }).ToList();
 
             var vm = new SchedulerIndexViewModel
@@ -114,6 +141,21 @@ namespace e_Pas_CMS.Controllers
             };
 
             return View(vm);
+        }
+
+        private Dictionary<string, string> GetSchedulerStatusOptions()
+        {
+            var statuses = new[]
+            {
+        "DRAFT",
+        "NOT_STARTED",
+        "IN_PROGRESS_INPUT",
+        "IN_PROGRESS_SUBMIT",
+        "UNDER_REVIEW",
+        "VERIFIED"
+    };
+
+            return statuses.ToDictionary(x => x, x => MapStatus(x));
         }
 
         [HttpPost("BulkInlineUpdate")]
