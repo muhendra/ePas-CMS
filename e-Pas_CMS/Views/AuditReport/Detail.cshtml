@@ -1,4 +1,4 @@
-﻿﻿﻿@using e_Pas_CMS.ViewModels
+﻿@using e_Pas_CMS.ViewModels
 @using Newtonsoft.Json
 @model DetailReportViewModel
 @using System.Text.RegularExpressions
@@ -27,7 +27,16 @@
 }
 
 <style>
-    .comment-line.comment-red { color: red !important; }
+    .comment-line.comment-red {
+        color: red !important;
+    }
+
+    .newline-text,
+    .comment-line {
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+    }
+
 
     .penalty-badge {
         display: inline-block;
@@ -440,7 +449,7 @@
                         <td>@qq.Mode</td>
                         <!-- Qty Var (m) -->
                         <td style="
-    background-color: @(qq.QuantityVariationWithMeasure < -60m ? "#ff0000" : "transparent");">
+            background-color: @(qq.QuantityVariationWithMeasure < -60m ? "#ff0000" : "transparent");">
                             @qq.QuantityVariationWithMeasure
                         </td>
 
@@ -449,8 +458,8 @@
                             var qtyVarPercent = (qq.QuantityVariationWithMeasure / 20000m) * 100m; // -120 -> -0.60%
                         }
                         <td style="
-    background-color: @(qtyVarPercent < -0.3m ? "#ff0000" :
-                        qtyVarPercent >  0.3m ? "#ffff00" : "transparent");">
+            background-color: @(qtyVarPercent < -0.3m ? "#ff0000" :
+                                                    qtyVarPercent > 0.3m ? "#ffff00" : "transparent");">
                             @($"{qtyVarPercent:0.00}%")
                         </td>
 
@@ -477,8 +486,8 @@
         {
             <div class="mb-3">
                 <label class="fw-semibold">Isi Catatan</label>
-                <div class="border rounded p-3 bg-light">
-                    @Model.Notes
+                <div class="border rounded p-3 bg-light newline-text">
+                    @Html.Raw(RenderTextWithNewLines(Model.Notes))
                 </div>
             </div>
         }
@@ -650,15 +659,15 @@
                 const minScoresExcellent = [85, 85, 85, 20, 50];
                 const minScores = mode === 'excellent' ? minScoresExcellent : minScoresGood;
 
-                const minPassingGood = @Model.MinPassingScoreGood;
-                const minPassingExcellent = @Model.MinPassingScore;
+                const minPassingGood = parseFloat('@Model.MinPassingScoreGood');
+                const minPassingExcellent = parseFloat('@Model.MinPassingScore');
 
-                const penaltyGood = "@Model.PenaltyAlertsGood".trim();
-                const penaltyExcellent = "@Model.PenaltyAlerts".trim();
+                const penaltyGood = @Html.Raw(JsonConvert.SerializeObject(Model.PenaltyAlertsGood ?? ""));
+                const penaltyExcellent = @Html.Raw(JsonConvert.SerializeObject(Model.PenaltyAlerts ?? ""));
 
                 const totalScore = parseFloat('@Model.TotalScore');
                 const minPassing = mode === 'excellent' ? minPassingExcellent : minPassingGood;
-                const penalty = mode === 'excellent' ? penaltyExcellent : penaltyGood;
+                const penalty = mode === 'excellent' ? penaltyExcellent.trim() : penaltyGood.trim();
 
                 // Elemen scores from Razor
                 const sss = parseFloat('@(Model.SSS ?? 0)');
@@ -1064,14 +1073,14 @@
                                             class="btn btn-sm btn-primary update-score-btn"
                                             data-node-id="@node.Id"
                                             data-audit-id="@ViewBag.AuditId"
-                                    @(isVerified ? "disabled" : "")>
+                                            @(isVerified ? "disabled" : "")>
                                         Update
                                     </button>
 
                                     <button type="button"
                                             class="btn btn-sm btn-secondary cancel-score-btn"
                                             data-node-id="@node.Id"
-                                    @(isVerified ? "disabled" : "")>
+                                            @(isVerified ? "disabled" : "")>
                                         Batal
                                     </button>
                                 </div>
@@ -1149,7 +1158,7 @@
                                 {
                                     <div class="alert alert-danger small mt-2">
                                         <i class="bi bi-exclamation-triangle-fill me-1"></i>
-                                        <strong>Penalti:</strong> @node.PenaltyAlert
+                                        <strong>Penalti:</strong> @Html.Raw(RenderTextWithNewLines(node.PenaltyAlert))
                                     </div>
                                 }
 
@@ -1158,7 +1167,7 @@
                                     <div class="mb-3">
                                         <label class="fw-semibold text-muted">Catatan Penilaian:</label>
                                         <div class="border rounded p-2 bg-light small js-comment">
-                                            @node.Comment
+                                            @Html.Raw(RenderPenaltyLines(node.Comment))
                                         </div>
                                     </div>
                                 }
@@ -1207,7 +1216,7 @@
                             <ul class="list-unstyled mt-3">
                                 @foreach (var child in node.Children)
                                 {
-                                    RenderChecklistNode(child, level + 1, isVerified, isReadonlyUser);
+                                    await RenderChecklistNode(child, level + 1, isVerified, isReadonlyUser);
                                 }
                             </ul>
                         }
@@ -1234,10 +1243,42 @@
             RegexOptions.IgnoreCase);
         return cleaned.Trim();
     }
+    string RenderTextWithNewLines(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return "-";
+        }
+
+        var normalized = text.Replace("\r\n", "\n").Replace("\r", "\n");
+        var lines = normalized.Split('\n');
+        var sb = new System.Text.StringBuilder();
+
+        foreach (var rawLine in lines)
+        {
+            var encodedLine = System.Net.WebUtility.HtmlEncode(rawLine ?? "");
+
+            if (string.IsNullOrEmpty(encodedLine))
+            {
+                encodedLine = "&nbsp;";
+            }
+
+            sb.Append("<div class=\"newline-text\">")
+              .Append(encodedLine)
+              .Append("</div>");
+        }
+
+        return sb.ToString();
+    }
+
     string RenderPenaltyLines(string? text)
     {
-        if (string.IsNullOrWhiteSpace(text)) return "";
-        var lines = text.Replace("\r\n", "\n").Split('\n');
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return "-";
+        }
+
+        var lines = text.Replace("\r\n", "\n").Replace("\r", "\n").Split('\n');
         var sb = new System.Text.StringBuilder();
 
         foreach (var raw0 in lines)
@@ -1245,9 +1286,9 @@
             var raw = raw0 ?? "";
 
             // Deteksi tag per-baris
-            bool hasGood = Regex.IsMatch(raw, @"\bpena[lI]ty\s+good\b", RegexOptions.IgnoreCase);
-            bool hasExcellent = Regex.IsMatch(raw, @"\bpena[lI]ty\s+excellent\b", RegexOptions.IgnoreCase);
-            bool hasRelax = Regex.IsMatch(raw, @"(^|\s)[-–/]?\s*\*?relaksasi\*?\b", RegexOptions.IgnoreCase);
+            bool hasGood = Regex.IsMatch(raw, @"\bpena[lI]ty\s+good\b|\[good\]|good penalty|pasti pas good", RegexOptions.IgnoreCase);
+            bool hasExcellent = Regex.IsMatch(raw, @"\bpena[lI]ty\s+excellent\b|\[excellent\]|excellent penalty|pasti pas excellent", RegexOptions.IgnoreCase);
+            bool hasRelax = Regex.IsMatch(raw, @"(^|\s)[-–/]?\s*\*?relaksasi\*?\b|\[relaksasi\]|\[relax\]", RegexOptions.IgnoreCase);
 
             // 1) Buang semua tag penalty (bisa multiple & mixed order, toleransi '-' atau '/')
             var cleaned = Regex.Replace(
@@ -1257,8 +1298,12 @@
                 RegexOptions.IgnoreCase
             );
 
-            // 2) Standarisasi semua variasi 'relaksasi' → " - Relaksasi"
-            //    (toleransi: awal/whitespace, opsional '/', '-', spasi, dan * di kiri/kanan kata)
+            // 2) Ubah tag bracket menjadi badge, tapi tetap encode teks lainnya nanti
+            cleaned = Regex.Replace(cleaned, @"\[(good)\]", "[GOOD]", RegexOptions.IgnoreCase);
+            cleaned = Regex.Replace(cleaned, @"\[(excellent)\]", "[EXCELLENT]", RegexOptions.IgnoreCase);
+            cleaned = Regex.Replace(cleaned, @"\[(relaksasi|relax)\]", "[RELAKSASI]", RegexOptions.IgnoreCase);
+
+            // 3) Standarisasi semua variasi 'relaksasi' → " - Relaksasi"
             cleaned = Regex.Replace(
                 cleaned,
                 @"(?:^|\s)(?:[-–/]\s*)?\*?relaksasi\*?(?=$|\b)",
@@ -1266,7 +1311,7 @@
                 RegexOptions.IgnoreCase
             );
 
-            // 3) Bersihkan sisa '/' yang mungkin menempel sebelum "- Relaksasi"
+            // 4) Bersihkan sisa '/' yang mungkin menempel sebelum "- Relaksasi"
             cleaned = Regex.Replace(
                 cleaned,
                 @"\s*/\s*(?=-\s*Relaksasi\b)",
@@ -1274,21 +1319,26 @@
                 RegexOptions.IgnoreCase
             );
 
-            // 4) Hilangkan bintang yang tersisa setelah normalisasi (contoh: "- Relaksasi*")
+            // 5) Hilangkan bintang yang tersisa setelah normalisasi
             cleaned = Regex.Replace(cleaned, @"- Relaksasi\*+", "- Relaksasi", RegexOptions.IgnoreCase);
             cleaned = Regex.Replace(cleaned, @"(Relaksasi)\s*\*+(?=\s|$|[.,;:)\]])", "$1", RegexOptions.IgnoreCase);
 
-            // 5) Rapikan duplikasi & spasi
+            // 6) Rapikan duplikasi & spasi, tapi jangan drop empty line
             cleaned = Regex.Replace(cleaned, @"(?:\s*-\s*Relaksasi)+", " - Relaksasi", RegexOptions.IgnoreCase);
             cleaned = Regex.Replace(cleaned, @"[ \t]{2,}", " ").TrimEnd();
 
-            // Jika kosong setelah dibersihkan, skip
-            if (string.IsNullOrWhiteSpace(cleaned)) continue;
-
-            // Encode aman HTML
             var encoded = System.Net.WebUtility.HtmlEncode(cleaned);
 
-            // Build line + atribut data
+            encoded = encoded
+                .Replace("[GOOD]", "<span class=\"penalty-badge\">GOOD</span>")
+                .Replace("[EXCELLENT]", "<span class=\"penalty-badge\">EXCELLENT</span>")
+                .Replace("[RELAKSASI]", "<span class=\"penalty-badge\">RELAKSASI</span>");
+
+            if (string.IsNullOrEmpty(encoded))
+            {
+                encoded = "&nbsp;";
+            }
+
             sb.Append("<div class=\"comment-line\"")
               .Append(" data-has-good=\"").Append(hasGood ? "true" : "false").Append("\"")
               .Append(" data-has-excellent=\"").Append(hasExcellent ? "true" : "false").Append("\"")
@@ -1299,8 +1349,10 @@
 
             sb.Append("</div>");
         }
+
         return sb.ToString();
     }
+
 
 
 

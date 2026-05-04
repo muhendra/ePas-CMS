@@ -148,6 +148,21 @@
     .modal {
         outline: none !important;
     }
+
+    .newline-text {
+        white-space: normal;
+        overflow-wrap: anywhere;
+    }
+
+    .comment-line {
+        white-space: normal;
+        overflow-wrap: anywhere;
+        margin-bottom: .25rem;
+    }
+
+        .comment-line:last-child {
+            margin-bottom: 0;
+        }
 </style>
 
 <div class="container-fluid">
@@ -540,8 +555,8 @@
             {
                 <div class="mb-3">
                     <label class="fw-semibold">Isi Catatan</label>
-                    <div class="border rounded p-3 bg-light" style="white-space: pre-line;">
-                        @Model.Notes
+                    <div class="border rounded p-3 bg-light newline-text">
+                        @Html.Raw(RenderTextWithNewLines(Model.Notes))
                     </div>
                 </div>
             }
@@ -890,6 +905,19 @@
 }
 
 @functions {
+    string RenderTextWithNewLines(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return "-";
+        }
+
+        var normalized = text.Replace("\r\n", "\n").Replace("\r", "\n");
+        var encoded = WebUtility.HtmlEncode(normalized);
+
+        return encoded.Replace("\n", "<br />");
+    }
+
     string RenderPenaltyLines(string text)
     {
         if (string.IsNullOrWhiteSpace(text))
@@ -908,11 +936,13 @@
             bool hasGood =
                 lower.Contains("[good]") ||
                 lower.Contains("good penalty") ||
+                lower.Contains("penalty good") ||
                 lower.Contains("pasti pas good");
 
             bool hasExcellent =
                 lower.Contains("[excellent]") ||
                 lower.Contains("excellent penalty") ||
+                lower.Contains("penalty excellent") ||
                 lower.Contains("pasti pas excellent");
 
             bool hasRelax =
@@ -930,12 +960,9 @@
                 .Replace("[RELAKSASI]", "<span class=\"penalty-badge\">RELAKSASI</span>")
                 .Replace("[relaksasi]", "<span class=\"penalty-badge\">RELAKSASI</span>");
 
-            html.Add($@"<div class=""comment-line""
-                            data-has-good=""{hasGood.ToString().ToLowerInvariant()}""
-                            data-has-excellent=""{hasExcellent.ToString().ToLowerInvariant()}""
-                            data-has-relax=""{hasRelax.ToString().ToLowerInvariant()}"">
-                            {encodedLine}
-                        </div>");
+            var displayLine = string.IsNullOrEmpty(encodedLine) ? "&nbsp;" : encodedLine;
+
+            html.Add($"<div class=\"comment-line\" data-has-good=\"{hasGood.ToString().ToLowerInvariant()}\" data-has-excellent=\"{hasExcellent.ToString().ToLowerInvariant()}\" data-has-relax=\"{hasRelax.ToString().ToLowerInvariant()}\">{displayLine}</div>");
         }
 
         return string.Join("", html);
@@ -1060,8 +1087,8 @@
                             {
                                 <div class="mb-3">
                                     <label class="fw-semibold text-muted">Catatan Penilaian:</label>
-                                    <div class="border rounded p-2 bg-light small">
-                                        @node.Comment
+                                    <div class="border rounded p-2 bg-light small js-comment">
+                                        @Html.Raw(RenderPenaltyLines(node.Comment))
                                     </div>
                                 </div>
                             }
