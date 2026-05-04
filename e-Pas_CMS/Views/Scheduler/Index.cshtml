@@ -14,9 +14,23 @@
     int endPage = Math.Min(startPage + windowSize - 1, totalPages);
 
     var selectedStatus = ViewBag.FilterStatus as string;
+    var selectedSbm = ViewBag.FilterSbm as string;
     var selectedMonth = ViewBag.FilterMonth as int?;
     var selectedYear = ViewBag.FilterYear as int?;
     var currentYear = DateTime.Now.Year;
+
+    var statusOptions = ViewBag.StatusOptions as Dictionary<string, string>
+        ?? new Dictionary<string, string>
+        {
+            { "DRAFT", "Draft" },
+            { "NOT_STARTED", "Belum Dimulai" },
+            { "IN_PROGRESS_INPUT", "Sedang Berlangsung (Input)" },
+            { "IN_PROGRESS_SUBMIT", "Sedang Berlangsung (Submit)" },
+            { "UNDER_REVIEW", "Sedang Ditinjau" },
+            { "VERIFIED", "Terverifikasi" }
+        };
+
+    var sbmOptions = ViewBag.SbmOptions as List<string> ?? new List<string>();
 }
 
 <style>
@@ -191,7 +205,7 @@
     }
 
     .status-select {
-        min-width: 150px;
+        min-width: 190px;
         font-weight: 700;
         font-size: 0.82rem;
     }
@@ -215,6 +229,18 @@
         color: #334155;
         font-weight: 700;
         font-size: 0.8rem;
+        white-space: nowrap;
+    }
+
+    .status-badge {
+        display: inline-flex;
+        align-items: center;
+        padding: 7px 12px;
+        border-radius: 999px;
+        background: #eef2ff;
+        color: #3730a3;
+        font-weight: 800;
+        font-size: 0.78rem;
         white-space: nowrap;
     }
 
@@ -336,7 +362,7 @@
         <div>
             <h3 class="page-title">Penjadwalan Audit</h3>
             <div class="page-subtitle">
-                Kelola jadwal audit, status, auditor, SPBU, dan catatan dalam satu halaman.
+                Kelola jadwal audit, status, auditor, SPBU, SBM, dan catatan dalam satu halaman.
             </div>
         </div>
 
@@ -358,7 +384,7 @@
 
     <div class="card-panel filter-panel">
         <form method="get" class="row g-2 align-items-center mb-0" id="filterForm">
-            <div class="col-md-4">
+            <div class="col-md-3">
                 <input type="text"
                        name="searchTerm"
                        value="@Model.SearchTerm"
@@ -366,11 +392,52 @@
                        placeholder="Cari SPBU atau Auditor..." />
             </div>
 
-            <div class="col-auto" style="min-width:200px;">
+            <div class="col-auto" style="min-width:220px;">
                 <select name="filterStatus" class="form-select">
                     <option value="">Semua Status</option>
-                    <option value="DRAFT" selected="@(ViewBag.FilterStatus == "DRAFT")">Draft</option>
-                    <option value="NOT_STARTED" selected="@(ViewBag.FilterStatus == "NOT_STARTED")">Belum Dimulai</option>
+                    @foreach (var status in statusOptions)
+                    {
+                        <option value="@status.Key" selected="@(selectedStatus == status.Key)">
+                            @status.Value
+                        </option>
+                    }
+                </select>
+            </div>
+
+            <div class="col-auto" style="min-width:180px;">
+                <select name="filterSbm" class="form-select">
+                    <option value="">Semua SBM</option>
+                    @foreach (var sbm in sbmOptions)
+                    {
+                        <option value="@sbm" selected="@(selectedSbm == sbm)">
+                            @sbm
+                        </option>
+                    }
+                </select>
+            </div>
+
+            <div class="col-auto" style="min-width:170px;">
+                <select name="filterMonth" class="form-select">
+                    <option value="">Semua Bulan</option>
+                    @for (int m = 1; m <= 12; m++)
+                    {
+                        var monthName = CultureInfo.CurrentCulture.DateTimeFormat.GetMonthName(m);
+                        <option value="@m" selected="@(selectedMonth == m)">
+                            @monthName
+                        </option>
+                    }
+                </select>
+            </div>
+
+            <div class="col-auto" style="min-width:140px;">
+                <select name="filterYear" class="form-select">
+                    <option value="">Semua Tahun</option>
+                    @for (int y = currentYear + 1; y >= currentYear - 5; y--)
+                    {
+                        <option value="@y" selected="@(selectedYear == y)">
+                            @y
+                        </option>
+                    }
                 </select>
             </div>
 
@@ -400,6 +467,8 @@
                         <th class="text-center">Tipe</th>
                         <th class="text-center">Level</th>
                         <th class="text-center">SPBU</th>
+                        <th class="text-center">SBM</th>
+                        <th class="text-center">No Report</th>
                         <th>Note</th>
                         <th class="text-center">Aksi</th>
                     </tr>
@@ -420,11 +489,21 @@
                                 <td class="text-center td-number">@index</td>
 
                                 <td class="text-center">
-                                    <select class="form-select form-select-sm status-select status-dropdown"
-                                            @(canEdit ? "" : "disabled")>
-                                        <option value="DRAFT" selected="@(item.Status == "Draft")">Draft</option>
-                                        <option value="NOT_STARTED" selected="@(item.Status == "Belum Dimulai")">Belum Dimulai</option>
-                                    </select>
+                                    @if (canEdit)
+                                    {
+                                        <select class="form-select form-select-sm status-select status-dropdown">
+                                            @foreach (var status in statusOptions)
+                                            {
+                                                <option value="@status.Key" selected="@(item.Status == status.Value)">
+                                                    @status.Value
+                                                </option>
+                                            }
+                                        </select>
+                                    }
+                                    else
+                                    {
+                                        <span class="status-badge">@item.Status</span>
+                                    }
                                 </td>
 
                                 <td>
@@ -447,6 +526,14 @@
                                     <span class="spbu-text">@item.SpbuNo</span>
                                 </td>
 
+                                <td class="text-center">
+                                    <span class="audit-pill">@item.SBM</span>
+                                </td>
+
+                                <td class="text-center">
+                                    <span class="audit-pill">@item.ReportNo</span>
+                                </td>
+
                                 <td>
                                     <input type="text"
                                            class="form-control form-control-sm note-input"
@@ -455,7 +542,7 @@
                                 </td>
 
                                 <td class="text-center">
-                                    <a href="@Url.Action("Detail", new { id = item.Id })"
+                                    <a href="@Url.Action("Detail", "Scheduler", new { id = item.Id })"
                                        class="btn btn-action">
                                         <i class="bi bi-eye me-1"></i> Detail
                                     </a>
@@ -468,7 +555,7 @@
                     else
                     {
                         <tr>
-                            <td colspan="9">
+                            <td colspan="11">
                                 <div class="empty-state">
                                     <div class="empty-icon">
                                         <i class="bi bi-calendar-x"></i>
@@ -497,7 +584,15 @@
                     {
                         <li class="page-item">
                             <a class="page-link"
-                               href="@Url.Action("Index", new { pageNumber = startPage - 1, searchTerm = Model.SearchTerm, pageSize = Model.PageSize, filterStatus = selectedStatus, filterMonth = selectedMonth, filterYear = selectedYear })">
+                               href="@Url.Action("Index", new {
+                                   pageNumber = startPage - 1,
+                                   searchTerm = Model.SearchTerm,
+                                   pageSize = Model.PageSize,
+                                   filterStatus = selectedStatus,
+                                   filterSbm = selectedSbm,
+                                   filterMonth = selectedMonth,
+                                   filterYear = selectedYear
+                               })">
                                 Prev
                             </a>
                         </li>
@@ -507,7 +602,15 @@
                     {
                         <li class="page-item @(i == currentPage ? "active" : "")">
                             <a class="page-link"
-                               href="@Url.Action("Index", new { pageNumber = i, searchTerm = Model.SearchTerm, pageSize = Model.PageSize, filterStatus = selectedStatus, filterMonth = selectedMonth, filterYear = selectedYear })">
+                               href="@Url.Action("Index", new {
+                                   pageNumber = i,
+                                   searchTerm = Model.SearchTerm,
+                                   pageSize = Model.PageSize,
+                                   filterStatus = selectedStatus,
+                                   filterSbm = selectedSbm,
+                                   filterMonth = selectedMonth,
+                                   filterYear = selectedYear
+                               })">
                                 @i
                             </a>
                         </li>
@@ -517,7 +620,15 @@
                     {
                         <li class="page-item">
                             <a class="page-link"
-                               href="@Url.Action("Index", new { pageNumber = endPage + 1, searchTerm = Model.SearchTerm, pageSize = Model.PageSize, filterStatus = selectedStatus, filterMonth = selectedMonth, filterYear = selectedYear })">
+                               href="@Url.Action("Index", new {
+                                   pageNumber = endPage + 1,
+                                   searchTerm = Model.SearchTerm,
+                                   pageSize = Model.PageSize,
+                                   filterStatus = selectedStatus,
+                                   filterSbm = selectedSbm,
+                                   filterMonth = selectedMonth,
+                                   filterYear = selectedYear
+                               })">
                                 Next
                             </a>
                         </li>
