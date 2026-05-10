@@ -380,7 +380,7 @@ WHERE
                         TanggalSubmit = (a.Audit.audit_execution_time == null || a.Audit.audit_execution_time.Value == DateTime.MinValue)
                             ? a.Audit.updated_date.Value
                             : a.Audit.audit_execution_time.Value,
-                        Status = a.Audit.status,
+                        Status = MapStatus(a.Audit.status),
                         Komplain = a.Audit.status == "FAIL" ? "ADA" : "TIDAK ADA",
                         Banding = a.Audit.audit_level == "Re-Audit" ? "ADA" : "TIDAK ADA",
                         Type = a.Spbu.audit_current,
@@ -584,7 +584,7 @@ WHERE
             var mediaList = await GetMediaPerNodeAsync(conn, idStr);
             model.Elements = BuildHierarchy(checklistData, mediaList);
             model.FotoTemuan = await GetMediaReportFAsync(conn, idStr);
-            _logger.LogInformation("FotoTemuan: {Path}", model.FotoTemuan);
+            //_logger.LogInformation("FotoTemuan: {Path}", model.FotoTemuan);
 
             foreach (var element in model.Elements)
                 AssignWeightRecursive(element);
@@ -1021,7 +1021,7 @@ WHERE
                     TanggalSubmit = (ta.audit_execution_time == null || ta.audit_execution_time.Value == DateTime.MinValue)
                                         ? ta.updated_date.Value
                                         : ta.audit_execution_time.Value,
-                    Status = ta.status,
+                    Status = MapStatus(ta.status),
                     SpbuNo = s.spbu_no,
                     Provinsi = s.province_name,
                     Kota = s.city_name,
@@ -2337,10 +2337,10 @@ WHERE spbu_id = @spbuid
             model.MinPassingScoreGood = 75.00m;
 
             // Log ke Output
-            System.Diagnostics.Debug.WriteLine("[DEBUG] Perhitungan Total Skor:");
-            foreach (var line in debug)
-                System.Diagnostics.Debug.WriteLine(line);
-            System.Diagnostics.Debug.WriteLine($"TOTAL: {totalScore:0.##} / {maxScore:0.##} = {model.FinalScore:0.##}%");
+            //System.Diagnostics.Debug.WriteLine("[DEBUG] Perhitungan Total Skor:");
+            //foreach (var line in debug)
+            //    System.Diagnostics.Debug.WriteLine(line);
+            //System.Diagnostics.Debug.WriteLine($"TOTAL: {totalScore:0.##} / {maxScore:0.##} = {model.FinalScore:0.##}%");
         }
         private async Task<List<ChecklistFlatItem>> GetChecklistDataAsync(IDbConnection conn, string id)
         {
@@ -2359,12 +2359,12 @@ WHERE spbu_id = @spbuid
             .Where(x => !string.IsNullOrWhiteSpace(x))
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
-            _logger.LogWarning(
-                "DEBUG BANDING IDS - AuditId={AuditId}, BandingNodeIdsCount={Count}, Ids={Ids}",
-                id,
-                bandingNodeIds.Count,
-                string.Join(",", bandingNodeIds)
-            );
+            //_logger.LogWarning(
+            //    "DEBUG BANDING IDS - AuditId={AuditId}, BandingNodeIdsCount={Count}, Ids={Ids}",
+            //    id,
+            //    bandingNodeIds.Count,
+            //    string.Join(",", bandingNodeIds)
+            //);
 
             var sql = @"
         SELECT
@@ -2423,26 +2423,26 @@ WHERE spbu_id = @spbuid
 
             var bandingRows = data.Where(x => x.IsBandingNode).ToList();
 
-            _logger.LogWarning(
-                "DEBUG BANDING - GetChecklistDataAsync AuditId={AuditId}, TotalRows={TotalRows}, BandingRows={BandingRows}",
-                id,
-                data.Count,
-                bandingRows.Count
-            );
+            //_logger.LogWarning(
+            //    "DEBUG BANDING - GetChecklistDataAsync AuditId={AuditId}, TotalRows={TotalRows}, BandingRows={BandingRows}",
+            //    id,
+            //    data.Count,
+            //    bandingRows.Count
+            //);
 
-            foreach (var x in bandingRows)
-            {
-                _logger.LogWarning(
-                    "DEBUG BANDING - FLAT Id={Id}, Number={Number}, Type={Type}, IsBandingNode={IsBandingNode}, PrevInput={PrevInput}, PrevValue={PrevValue}, Title={Title}",
-                    x.id,
-                    x.number,
-                    x.type,
-                    x.IsBandingNode,
-                    x.PreviousScoreInput,
-                    x.PreviousScoreValue,
-                    x.title
-                );
-            }
+            //foreach (var x in bandingRows)
+            //{
+            //    _logger.LogWarning(
+            //        "DEBUG BANDING - FLAT Id={Id}, Number={Number}, Type={Type}, IsBandingNode={IsBandingNode}, PrevInput={PrevInput}, PrevValue={PrevValue}, Title={Title}",
+            //        x.id,
+            //        x.number,
+            //        x.type,
+            //        x.IsBandingNode,
+            //        x.PreviousScoreInput,
+            //        x.PreviousScoreValue,
+            //        x.title
+            //    );
+            //}
 
             return data;
         }
@@ -2724,6 +2724,65 @@ VALUES
             return Ok();
         }
 
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> CancelReviewAudit([FromBody] CancelReviewAuditRequest request)
+        {
+            if (request == null || string.IsNullOrWhiteSpace(request.AuditId))
+                return BadRequest("Audit ID tidak valid.");
+
+            if (string.IsNullOrWhiteSpace(request.Note))
+                return BadRequest("Alasan pembatalan wajib diisi.");
+
+            var currentUser = User.Identity?.Name ?? "system";
+
+            var audit = await _context.trx_audits
+                .FirstOrDefaultAsync(x => x.id == request.AuditId);
+
+            if (audit == null)
+                return NotFound("Audit tidak ditemukan.");
+
+            if (audit.status == "VERIFIED")
+                return BadRequest("Audit yang sudah VERIFIED tidak bisa dibatalkan review-nya.");
+
+            await using var tx = await _context.Database.BeginTransactionAsync();
+
+            try
+            {
+                await _context.Database.ExecuteSqlRawAsync(@"
+            INSERT INTO trx_audit_cancel_review_log
+                (trx_audit_id, note, cancelreviewdate, cancelby)
+            VALUES
+                ({0}, {1}, NOW(), {2});
+        ",
+                request.AuditId,
+                request.Note.Trim(),
+                currentUser);
+
+                audit.review_audit_started_at = null;
+                audit.review_audit_started_by = null;
+                audit.review_audit_finished_at = null;
+                audit.review_audit_duration_seconds = null;
+
+                audit.updated_date = DateTime.Now;
+                audit.updated_by = currentUser;
+
+                await _context.SaveChangesAsync();
+                await tx.CommitAsync();
+
+                return Json(new
+                {
+                    success = true,
+                    message = "Review audit berhasil dibatalkan."
+                });
+            }
+            catch
+            {
+                await tx.RollbackAsync();
+                throw;
+            }
+        }
+
         private List<AuditChecklistNode> BuildHierarchy(
             List<ChecklistFlatItem> flatList,
             Dictionary<string, List<MediaItem>> mediaList)
@@ -2870,11 +2929,11 @@ VALUES
 
             var libraryDir = Path.Combine("/var/www/epas-asset", "wwwroot", "uploads", "library");
 
-            _logger.LogInformation("Gallery requested. Page: {Page}, PageSize: {PageSize}, Search: {Search}", page, pageSize, search);
+            //_logger.LogInformation("Gallery requested. Page: {Page}, PageSize: {PageSize}, Search: {Search}", page, pageSize, search);
 
             if (!Directory.Exists(libraryDir))
             {
-                _logger.LogWarning("Library directory not found: {Dir}", libraryDir);
+                //_logger.LogWarning("Library directory not found: {Dir}", libraryDir);
                 return Json(new { total = 0, data = new List<object>() });
             }
 
@@ -2896,7 +2955,7 @@ VALUES
             }
 
             var total = allFiles.Count();
-            _logger.LogInformation("Total media files found: {Total}", total);
+            //_logger.LogInformation("Total media files found: {Total}", total);
 
             var pagedFiles = allFiles
                 .Skip((page - 1) * pageSize)
@@ -2908,7 +2967,7 @@ VALUES
                 })
                 .ToList();
 
-            _logger.LogInformation("Returning {Count} media files for page {Page}", pagedFiles.Count, page);
+            //_logger.LogInformation("Returning {Count} media files for page {Page}", pagedFiles.Count, page);
 
             return Json(new { total, data = pagedFiles });
         }
@@ -2919,77 +2978,77 @@ VALUES
         {
             if (string.IsNullOrEmpty(request.NodeId) || string.IsNullOrEmpty(request.MediaPath))
             {
-                _logger.LogWarning("UpdateMediaPath: Invalid request - NodeId or MediaPath is empty");
+                //_logger.LogWarning("UpdateMediaPath: Invalid request - NodeId or MediaPath is empty");
                 return BadRequest("Data tidak lengkap");
             }
 
             if (request.AuditId.Contains("..") || request.NodeId.Contains(".."))
             {
-                _logger.LogWarning("UpdateMediaPath: Invalid audit ID or node ID - contains '..'");
+                //_logger.LogWarning("UpdateMediaPath: Invalid audit ID or node ID - contains '..'");
                 return BadRequest("Invalid audit ID or node ID");
             }
 
-            _logger.LogInformation("UpdateMediaPath: Searching for media entity with AuditId: {AuditId}, NodeId: {NodeId}", request.AuditId, request.NodeId);
+            //_logger.LogInformation("UpdateMediaPath: Searching for media entity with AuditId: {AuditId}, NodeId: {NodeId}", request.AuditId, request.NodeId);
             var entity = await _context.trx_audit_media
                 .FirstOrDefaultAsync(x => x.trx_audit_id == request.AuditId && x.master_questioner_detail_id == request.NodeId);
 
             if (entity == null)
             {
-                _logger.LogWarning("UpdateMediaPath: Media entity not found for AuditId: {AuditId}, NodeId: {NodeId}", request.AuditId, request.NodeId);
+                //_logger.LogWarning("UpdateMediaPath: Media entity not found for AuditId: {AuditId}, NodeId: {NodeId}", request.AuditId, request.NodeId);
                 return NotFound("Data tidak ditemukan");
             }
 
             try
             {
                 var fileName = Path.GetFileName(request.MediaPath);
-                _logger.LogInformation("UpdateMediaPath: Processing file: {FileName}", fileName);
+                //_logger.LogInformation("UpdateMediaPath: Processing file: {FileName}", fileName);
                 
                 var destinationDir = Path.Combine("/var/www/epas-asset", "wwwroot", "uploads", request.AuditId, request.NodeId);
-                _logger.LogInformation("UpdateMediaPath: Creating destination directory: {DestinationDir}", destinationDir);
+                //_logger.LogInformation("UpdateMediaPath: Creating destination directory: {DestinationDir}", destinationDir);
                 Directory.CreateDirectory(destinationDir);
                 
                 // var sourcePath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", request.MediaPath.TrimStart('/'));
                 var sourcePath = Path.Combine("/var/www/epas-asset", "wwwroot", "uploads", "library", fileName);
                 var destinationPath = Path.Combine(destinationDir, fileName);
-                _logger.LogInformation("UpdateMediaPath: Source path: {SourcePath}, Destination path: {DestinationPath}", sourcePath, destinationPath);
+                //_logger.LogInformation("UpdateMediaPath: Source path: {SourcePath}, Destination path: {DestinationPath}", sourcePath, destinationPath);
 
                 if (!System.IO.File.Exists(sourcePath))
                 {
-                    _logger.LogWarning("UpdateMediaPath: Source file not found: {SourcePath}", sourcePath);
+                    //_logger.LogWarning("UpdateMediaPath: Source file not found: {SourcePath}", sourcePath);
                     return BadRequest("Source file not found");
                 }
 
                 if (System.IO.File.Exists(destinationPath))
                 {
-                    _logger.LogInformation("UpdateMediaPath: Destination file exists, computing hashes for comparison");
+                    //_logger.LogInformation("UpdateMediaPath: Destination file exists, computing hashes for comparison");
                     var sourceHash = ComputeFileHash(sourcePath);
                     var destHash = ComputeFileHash(destinationPath);
                     
                     if (sourceHash == destHash)
                     {
-                        _logger.LogInformation("UpdateMediaPath: File already exists and is identical, skipping copy");
+                        //_logger.LogInformation("UpdateMediaPath: File already exists and is identical, skipping copy");
                         return Ok();
                     }
-                    _logger.LogInformation("UpdateMediaPath: File exists but is different, proceeding with copy");
+                    //_logger.LogInformation("UpdateMediaPath: File exists but is different, proceeding with copy");
                 }
 
                 System.IO.File.Copy(sourcePath, destinationPath, true);
-                _logger.LogInformation("UpdateMediaPath: File copied successfully from {SourcePath} to {DestinationPath}", sourcePath, destinationPath);
+                //_logger.LogInformation("UpdateMediaPath: File copied successfully from {SourcePath} to {DestinationPath}", sourcePath, destinationPath);
 
                 var newMediaPath = $"/uploads/{request.AuditId}/{request.NodeId}/{fileName}";
-                _logger.LogInformation("UpdateMediaPath: Updating entity with new media path: {NewMediaPath}", newMediaPath);
+                //_logger.LogInformation("UpdateMediaPath: Updating entity with new media path: {NewMediaPath}", newMediaPath);
                 entity.media_path = newMediaPath;
                 entity.media_type = request.MediaType;
                 entity.updated_by = User.Identity?.Name;
                 entity.updated_date = DateTime.Now;
 
                 await _context.SaveChangesAsync();
-                _logger.LogInformation("UpdateMediaPath: Successfully updated media entity in database");
+                //_logger.LogInformation("UpdateMediaPath: Successfully updated media entity in database");
                 return Ok();
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error copying file for audit {AuditId}, node {NodeId}", request.AuditId, request.NodeId);
+                //_logger.LogError(ex, "Error copying file for audit {AuditId}, node {NodeId}", request.AuditId, request.NodeId);
                 return BadRequest("Error copying file: " + ex.Message);
             }
         }
@@ -3075,6 +3134,17 @@ VALUES
 
             return auditDate.Value.Date >= PrimaryMediaMigrationDate.Date;
         }
+
+        private static string MapStatus(string status) => status switch
+        {
+            "DRAFT" => "Draft",
+            "NOT_STARTED" => "Belum Dimulai",
+            "IN_PROGRESS_INPUT" => "Sedang Berlangsung (Input)",
+            "IN_PROGRESS_SUBMIT" => "Sedang Berlangsung (Submit)",
+            "UNDER_REVIEW" => "Menunggu Verifikasi",
+            "VERIFIED" => "Terverifikasi",
+            _ => status
+        };
 
         private static string BuildUmkNoteFromAdditionalInfo(string additionalInfoJson)
         {

@@ -17,6 +17,12 @@
     var selectedSbm = ViewBag.FilterSbm as string;
     var selectedMonth = ViewBag.FilterMonth as int?;
     var selectedYear = ViewBag.FilterYear as int?;
+
+    var selectedAuditor = ViewBag.FilterAuditor as string;
+    var selectedDate = ViewBag.FilterDate as DateTime?;
+    var selectedAuditType = ViewBag.FilterAuditType as string;
+    var selectedAuditLevel = ViewBag.FilterAuditLevel as string;
+
     var currentYear = DateTime.Now.Year;
 
     var statusOptions = ViewBag.StatusOptions as Dictionary<string, string>
@@ -31,6 +37,9 @@
         };
 
     var sbmOptions = ViewBag.SbmOptions as List<string> ?? new List<string>();
+    var auditorOptions = ViewBag.AuditorOptions as List<string> ?? new List<string>();
+    var auditTypeOptions = ViewBag.AuditTypeOptions as List<string> ?? new List<string>();
+    var auditLevelOptions = ViewBag.AuditLevelOptions as List<string> ?? new List<string>();
 }
 
 <style>
@@ -83,6 +92,30 @@
     .filter-panel {
         padding: 18px;
         margin-bottom: 20px;
+    }
+
+    .filter-form {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        align-items: center;
+    }
+
+    .filter-search {
+        min-width: 240px;
+        flex: 1 1 240px;
+    }
+
+    .filter-item {
+        min-width: 170px;
+    }
+
+    .filter-item-wide {
+        min-width: 220px;
+    }
+
+    .filter-item-small {
+        min-width: 140px;
     }
 
     .form-control,
@@ -353,6 +386,21 @@
         .filter-panel {
             padding: 14px;
         }
+
+        .filter-form {
+            flex-direction: column;
+            align-items: stretch;
+        }
+
+        .filter-search,
+        .filter-item,
+        .filter-item-wide,
+        .filter-item-small,
+        .filter-form .btn,
+        .filter-form a.btn {
+            width: 100%;
+            min-width: 100%;
+        }
     }
 </style>
 
@@ -383,8 +431,8 @@
     </div>
 
     <div class="card-panel filter-panel">
-        <form method="get" class="row g-2 align-items-center mb-0" id="filterForm">
-            <div class="col-md-3">
+        <form method="get" class="filter-form mb-0" id="filterForm">
+            <div class="filter-search">
                 <input type="text"
                        name="searchTerm"
                        value="@Model.SearchTerm"
@@ -392,8 +440,31 @@
                        placeholder="Cari SPBU atau Auditor..." />
             </div>
 
-            <div class="col-auto" style="min-width:220px;">
-                <select name="filterStatus" class="form-select">
+            <div class="filter-item-wide">
+                <input type="text"
+                       name="filterAuditor"
+                       value="@selectedAuditor"
+                       class="form-control"
+                       placeholder="Nama Auditor..."
+                       list="auditorSuggestions" />
+
+                <datalist id="auditorSuggestions">
+                    @foreach (var auditor in auditorOptions)
+                    {
+                        <option value="@auditor"></option>
+                    }
+                </datalist>
+            </div>
+
+            <div class="filter-item">
+                <input type="date"
+                       name="filterDate"
+                       value="@(selectedDate.HasValue ? selectedDate.Value.ToString("yyyy-MM-dd") : "")"
+                       class="form-control" />
+            </div>
+
+            <div class="filter-item-wide">
+                <select name="filterStatus" class="form-select auto-submit-filter">
                     <option value="">Semua Status</option>
                     @foreach (var status in statusOptions)
                     {
@@ -404,8 +475,32 @@
                 </select>
             </div>
 
-            <div class="col-auto" style="min-width:180px;">
-                <select name="filterSbm" class="form-select">
+            <div class="filter-item">
+                <select name="filterAuditType" class="form-select auto-submit-filter">
+                    <option value="">Semua Tipe Audit</option>
+                    @foreach (var type in auditTypeOptions)
+                    {
+                        <option value="@type" selected="@(selectedAuditType == type)">
+                            @type
+                        </option>
+                    }
+                </select>
+            </div>
+
+            <div class="filter-item">
+                <select name="filterAuditLevel" class="form-select auto-submit-filter">
+                    <option value="">Semua Level Audit</option>
+                    @foreach (var level in auditLevelOptions)
+                    {
+                        <option value="@level" selected="@(selectedAuditLevel == level)">
+                            @level
+                        </option>
+                    }
+                </select>
+            </div>
+
+            <div class="filter-item">
+                <select name="filterSbm" class="form-select auto-submit-filter">
                     <option value="">Semua SBM</option>
                     @foreach (var sbm in sbmOptions)
                     {
@@ -416,8 +511,8 @@
                 </select>
             </div>
 
-            <div class="col-auto" style="min-width:170px;">
-                <select name="filterMonth" class="form-select">
+            <div class="filter-item">
+                <select name="filterMonth" class="form-select auto-submit-filter">
                     <option value="">Semua Bulan</option>
                     @for (int m = 1; m <= 12; m++)
                     {
@@ -429,8 +524,8 @@
                 </select>
             </div>
 
-            <div class="col-auto" style="min-width:140px;">
-                <select name="filterYear" class="form-select">
+            <div class="filter-item-small">
+                <select name="filterYear" class="form-select auto-submit-filter">
                     <option value="">Semua Tahun</option>
                     @for (int y = currentYear + 1; y >= currentYear - 5; y--)
                     {
@@ -441,13 +536,13 @@
                 </select>
             </div>
 
-            <div class="col-auto">
+            <div>
                 <button type="submit" class="btn btn-dark-blue">
                     <i class="bi bi-search me-1"></i> Cari
                 </button>
             </div>
 
-            <div class="col-auto">
+            <div>
                 <a href="@Url.Action("Index", "Scheduler")" class="btn btn-soft">
                     Reset
                 </a>
@@ -487,23 +582,24 @@
 
                             <tr data-id="@item.Id">
                                 <td class="text-center td-number">@index</td>
+
                                 <td class="text-center">
-    @if (canEdit)
-    {
-        <select class="form-select form-select-sm status-select status-dropdown">
-            @foreach (var status in statusOptions.Where(x => x.Key == "DRAFT" || x.Key == "NOT_STARTED"))
-            {
-                <option value="@status.Key" selected="@(item.Status == status.Value)">
-                    @status.Value
-                </option>
-            }
-        </select>
-    }
-    else
-    {
-        <span class="status-badge">@item.Status</span>
-    }
-</td>
+                                    @if (canEdit)
+                                    {
+                                        <select class="form-select form-select-sm status-select status-dropdown">
+                                            @foreach (var status in statusOptions.Where(x => x.Key == "DRAFT" || x.Key == "NOT_STARTED"))
+                                            {
+                                                <option value="@status.Key" selected="@(item.Status == status.Value)">
+                                                    @status.Value
+                                                </option>
+                                            }
+                                        </select>
+                                    }
+                                    else
+                                    {
+                                        <span class="status-badge">@item.Status</span>
+                                    }
+                                </td>
 
                                 <td>
                                     <div class="auditor-name">@item.AppUserName</div>
@@ -590,7 +686,11 @@
                                    filterStatus = selectedStatus,
                                    filterSbm = selectedSbm,
                                    filterMonth = selectedMonth,
-                                   filterYear = selectedYear
+                                   filterYear = selectedYear,
+                                   filterAuditor = selectedAuditor,
+                                   filterDate = selectedDate?.ToString("yyyy-MM-dd"),
+                                   filterAuditType = selectedAuditType,
+                                   filterAuditLevel = selectedAuditLevel
                                })">
                                 Prev
                             </a>
@@ -608,7 +708,11 @@
                                    filterStatus = selectedStatus,
                                    filterSbm = selectedSbm,
                                    filterMonth = selectedMonth,
-                                   filterYear = selectedYear
+                                   filterYear = selectedYear,
+                                   filterAuditor = selectedAuditor,
+                                   filterDate = selectedDate?.ToString("yyyy-MM-dd"),
+                                   filterAuditType = selectedAuditType,
+                                   filterAuditLevel = selectedAuditLevel
                                })">
                                 @i
                             </a>
@@ -626,7 +730,11 @@
                                    filterStatus = selectedStatus,
                                    filterSbm = selectedSbm,
                                    filterMonth = selectedMonth,
-                                   filterYear = selectedYear
+                                   filterYear = selectedYear,
+                                   filterAuditor = selectedAuditor,
+                                   filterDate = selectedDate?.ToString("yyyy-MM-dd"),
+                                   filterAuditType = selectedAuditType,
+                                   filterAuditLevel = selectedAuditLevel
                                })">
                                 Next
                             </a>
@@ -673,6 +781,18 @@
             }
         }
 
+        function hasUnsavedChanges() {
+            return Object.keys(changes).length > 0;
+        }
+
+        function confirmLeaveWithUnsavedChanges() {
+            if (hasUnsavedChanges()) {
+                return confirm('Ada perubahan belum disimpan. Lanjutkan?');
+            }
+
+            return true;
+        }
+
         document.querySelectorAll('.status-dropdown').forEach(el => {
             el.addEventListener('change', function () {
                 const row = this.closest('tr');
@@ -712,18 +832,37 @@
             });
         });
 
+        document.querySelectorAll('.auto-submit-filter').forEach(el => {
+            el.addEventListener('change', function () {
+                if (!confirmLeaveWithUnsavedChanges()) {
+                    return;
+                }
+
+                document.getElementById('filterForm').submit();
+            });
+        });
+
+        const filterDateInput = document.querySelector('input[name="filterDate"]');
+        if (filterDateInput) {
+            filterDateInput.addEventListener('change', function () {
+                if (!confirmLeaveWithUnsavedChanges()) {
+                    return;
+                }
+
+                document.getElementById('filterForm').submit();
+            });
+        }
+
         window.addEventListener('beforeunload', function (e) {
-            if (Object.keys(changes).length > 0) {
+            if (hasUnsavedChanges()) {
                 e.preventDefault();
                 e.returnValue = '';
             }
         });
 
         document.getElementById('filterForm').addEventListener('submit', function (e) {
-            if (Object.keys(changes).length > 0) {
-                if (!confirm('Ada perubahan belum disimpan. Lanjutkan?')) {
-                    e.preventDefault();
-                }
+            if (!confirmLeaveWithUnsavedChanges()) {
+                e.preventDefault();
             }
         });
     </script>

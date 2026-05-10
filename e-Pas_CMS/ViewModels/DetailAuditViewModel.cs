@@ -85,4 +85,10 @@
         public bool? IsRelaksasi { get; set; }
         public bool IsBandingNode { get; set; }
     }
+
+    public class CancelReviewAuditRequest
+    {
+        public string? AuditId { get; set; }
+        public string? Note { get; set; }
+    }
 }

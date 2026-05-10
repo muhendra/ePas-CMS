@@ -409,7 +409,15 @@ else if (!string.IsNullOrEmpty(Model.Notes) || (Model.FinalDocuments != null && 
        class="btn btn-outline-dark bg-light text-dark rounded-pill px-4 py-2 border border-dark-subtle">
         Preview report
     </a>
-
+    @if (ViewBag.ReviewAuditStartedAt != null && Model.Status != "VERIFIED" && currentUser != "usermanagement1")
+    {
+        <button type="button"
+                class="btn btn-outline-danger rounded-pill px-4 py-2"
+                id="btnCancelReviewAudit"
+                data-audit-id="@ViewBag.AuditId">
+            Batalkan Review Audit
+        </button>
+    }
     @if ((Model.Status != null && Model.Status.ToUpper() != "VERIFIED") && currentUser != "usermanagement1")
     {
         <button class="btn btn-primary rounded-pill px-4 py-2" data-bs-toggle="modal" data-bs-target="#confirmModal">
@@ -906,11 +914,11 @@ const usePrimaryMedia = @(((bool?)ViewBag.UsePrimaryMedia ?? false).ToString().T
                     return activeItem ? activeItem.querySelector('img, video') : null;
                 }
 
-                function clearAllFullScreenTransforms() {
-                    document
-                        .querySelectorAll('#fullSizeMediaModalBody img, #fullSizeMediaModalBody video')
-                        .forEach(el => el.style.transform = '');
-                }
+                // function clearAllFullScreenTransforms() {
+                //     document
+                //         .querySelectorAll('#fullSizeMediaModalBody img, #fullSizeMediaModalBody video')
+                //         .forEach(el => el.style.transform = '');
+                // }
 
                                 function getNaturalSize(el){
                   if (!el) return { w: 0, h: 0 };
@@ -1911,114 +1919,218 @@ const usePrimaryMedia = @(((bool?)ViewBag.UsePrimaryMedia ?? false).ToString().T
         function rotateLeft() { fsRotate -= 90; applyFullScreenTransform(); }
         function rotateRight() { fsRotate += 90; applyFullScreenTransform(); }
 
+                function runAfterFullScreenMediaReady(callback) {
+            const el = getActiveFullScreenMediaEl();
+
+            if (!el) {
+                setTimeout(() => runAfterFullScreenMediaReady(callback), 50);
+                return;
+            }
+
+            if (el.tagName === 'IMG') {
+                if (el.complete && el.naturalWidth > 0) {
+                    callback();
+                } else {
+                    el.onload = callback;
+                    el.onerror = callback;
+                }
+                return;
+            }
+
+            if (el.tagName === 'VIDEO') {
+                if (el.readyState >= 1 && el.videoWidth > 0) {
+                    callback();
+                } else {
+                    el.onloadedmetadata = callback;
+                    el.onerror = callback;
+                }
+                return;
+            }
+
+            callback();
+        }
+
                 function showFullScreenMedia(mediaItems) {
-          const normalizedItems = (mediaItems || []).map(item => ({
-            path: item.mediaPath || item.MediaPath,
-            type: (item.mediaType || item.MediaType || '').toUpperCase()
-          }));
+            const modalEl = document.getElementById('fullSizeMediaModal');
+            const container = document.getElementById('fullSizeMediaModalBody');
+            const useMediaBtn = document.getElementById('useMediaBtn');
 
-          const modalEl = document.getElementById('fullSizeMediaModal');
-          const container = document.getElementById('fullSizeMediaModalBody');
+            if (!modalEl || !container) {
+                console.error('Modal fullscreen atau container tidak ditemukan.');
+                return;
+            }
 
-          container.innerHTML = '';
+            container.innerHTML = '';
 
-          // bersihin backdrop lama kalau ada
-          document.body.classList.remove('modal-open');
-          document.body.style.overflow = '';
-          document.body.style.paddingRight = '';
-          document.querySelector('.modal-backdrop')?.remove();
+            // Bersihin backdrop lama kalau ada
+            document.body.classList.remove('modal-open');
+            document.body.style.overflow = '';
+            document.body.style.paddingRight = '';
+            document.querySelector('.modal-backdrop')?.remove();
 
-          if (normalizedItems.length > 1) {
+            // ✅ Normalize data + buang item null / undefined / path kosong
+            const normalizedItems = (Array.isArray(mediaItems) ? mediaItems : [])
+                .filter(item => item && (item.mediaPath || item.MediaPath))
+                .map(item => ({
+                    path: item.mediaPath || item.MediaPath,
+                    type: (item.mediaType || item.MediaType || '').toUpperCase()
+                }))
+                .filter(item => item.path);
+
+            // ✅ Kalau dokumentasi null / kosong, jangan error. Tampilkan info.
+            if (normalizedItems.length === 0) {
+                container.innerHTML = `
+                    <div class="w-100 h-100 d-flex align-items-center justify-content-center text-center p-4">
+                        <div class="text-white">
+                            <i class="bi bi-file-earmark-x" style="font-size: 3rem;"></i>
+                            <h5 class="mt-3 mb-2">Dokumentasi tidak tersedia</h5>
+                            <p class="mb-0 text-white-50">
+                                Belum ada foto atau video dokumentasi untuk item ini.
+                            </p>
+                        </div>
+                    </div>
+                `;
+
+                if (useMediaBtn) {
+                    useMediaBtn.style.display = 'none';
+                }
+
+                const modal = new bootstrap.Modal(modalEl);
+                modal.show();
+                return;
+            }
+
+            if (useMediaBtn) {
+                useMediaBtn.style.display = 'none';
+            }
+
+                    if (normalizedItems.length > 1) {
             const carouselId = 'fullScreenCarousel';
             const indicators = [];
             const innerItems = [];
 
             normalizedItems.forEach((item, index) => {
-              const isVideo = item.type === 'VIDEO' || item.path.toLowerCase().endsWith('.mp4');
-              const isActive = index === 0 ? 'active' : '';
-              const mediaTag = isVideo
-                ? `<video controls class="fs-media"><source src="${item.path}" type="video/mp4"></video>`
-                : `<img src="${item.path}" class="fs-media" alt="Dokumentasi">`;
+                const path = item.path || '';
+                const isVideo = item.type === 'VIDEO' || path.toLowerCase().endsWith('.mp4');
+                const isActive = index === 0 ? 'active' : '';
 
-              indicators.push(
-                `<button type="button"
-                         data-bs-target="#${carouselId}"
-                         data-bs-slide-to="${index}"
-                         class="${isActive}"
-                         aria-current="${index === 0 ? 'true' : 'false'}"
-                         aria-label="Slide ${index + 1}"></button>`
-              );
+                const mediaTag = isVideo
+                    ? `<video controls class="fs-media"><source src="${path}" type="video/mp4"></video>`
+                    : `<img src="${path}" class="fs-media" alt="Dokumentasi">`;
 
-              innerItems.push(`<div class="carousel-item ${isActive}">${mediaTag}</div>`);
+                indicators.push(
+                    `<button type="button"
+                             data-bs-target="#${carouselId}"
+                             data-bs-slide-to="${index}"
+                             class="${isActive}"
+                             aria-current="${index === 0 ? 'true' : 'false'}"
+                             aria-label="Slide ${index + 1}"></button>`
+                );
+
+                innerItems.push(`<div class="carousel-item ${isActive}">${mediaTag}</div>`);
             });
 
             container.innerHTML = `
-              <div id="${carouselId}" class="carousel slide" data-bs-ride="false">
-                <div class="carousel-indicators">${indicators.join('')}</div>
-                <div class="carousel-inner">${innerItems.join('')}</div>
-                <button class="carousel-control-prev" type="button" data-bs-target="#${carouselId}" data-bs-slide="prev">
-                  <span class="carousel-control-prev-icon" aria-hidden="true"></span>
-                  <span class="visually-hidden">Previous</span>
-                </button>
-                <button class="carousel-control-next" type="button" data-bs-target="#${carouselId}" data-bs-slide="next">
-                  <span class="carousel-control-next-icon" aria-hidden="true"></span>
-                  <span class="visually-hidden">Next</span>
-                </button>
-              </div>`;
+                <div id="${carouselId}" class="carousel slide" data-bs-ride="false">
+                    <div class="carousel-indicators">${indicators.join('')}</div>
+                    <div class="carousel-inner">${innerItems.join('')}</div>
+
+                    <button class="carousel-control-prev" type="button" data-bs-target="#${carouselId}" data-bs-slide="prev">
+                        <span class="carousel-control-prev-icon" aria-hidden="true"></span>
+                        <span class="visually-hidden">Previous</span>
+                    </button>
+
+                    <button class="carousel-control-next" type="button" data-bs-target="#${carouselId}" data-bs-slide="next">
+                        <span class="carousel-control-next-icon" aria-hidden="true"></span>
+                        <span class="visually-hidden">Next</span>
+                    </button>
+                </div>`;
 
             const modal = new bootstrap.Modal(modalEl);
+
+            modalEl.addEventListener('shown.bs.modal', function onShown() {
+                modalEl.removeEventListener('shown.bs.modal', onShown);
+
+                const carouselEl = document.getElementById(carouselId);
+                if (!carouselEl) return;
+
+                bootstrap.Carousel.getInstance(carouselEl)?.dispose();
+
+                window.bsCarousel = new bootstrap.Carousel(carouselEl, {
+                    interval: false,
+                    ride: false,
+                    wrap: false,
+                    touch: true
+                });
+
+                runAfterFullScreenMediaReady(() => {
+                    clearAllFullScreenTransforms();
+                    resetFullScreenTransform();
+                });
+
+                if (window.__fsCarouselOnSlide) {
+                    carouselEl.removeEventListener('slide.bs.carousel', window.__fsCarouselOnSlide);
+                }
+
+                if (window.__fsCarouselOnSlid) {
+                    carouselEl.removeEventListener('slid.bs.carousel', window.__fsCarouselOnSlid);
+                }
+
+                window.__fsCarouselOnSlide = function () {
+                    clearAllFullScreenTransforms();
+                };
+                carouselEl.addEventListener('slide.bs.carousel', window.__fsCarouselOnSlide);
+
+                window.__fsCarouselOnSlid = function () {
+                    runAfterFullScreenMediaReady(() => {
+                        resetFullScreenTransform();
+                    });
+                };
+                carouselEl.addEventListener('slid.bs.carousel', window.__fsCarouselOnSlid);
+
+                if (window.__fsCarouselKeydown) {
+                    document.removeEventListener('keydown', window.__fsCarouselKeydown);
+                }
+
+                window.__fsCarouselKeydown = function (e) {
+                    if (!modalEl.classList.contains('show')) return;
+
+                    if (e.key === 'ArrowLeft') {
+                        window.bsCarousel.prev();
+                    }
+
+                    if (e.key === 'ArrowRight') {
+                        window.bsCarousel.next();
+                    }
+                };
+
+                document.addEventListener('keydown', window.__fsCarouselKeydown);
+            });
+
+                    modal.show();
+
+        } else {
+            const item = normalizedItems[0];
+            const path = item.path || '';
+            const isVideo = item.type === 'VIDEO' || path.toLowerCase().endsWith('.mp4');
+
+            container.innerHTML = isVideo
+                ? `<video controls class="fs-media"><source src="${path}" type="video/mp4"></video>`
+                : `<img src="${path}" class="fs-media" alt="Dokumentasi">`;
+
+            const modal = new bootstrap.Modal(modalEl);
+
+            modalEl.addEventListener('shown.bs.modal', function onShown() {
+                modalEl.removeEventListener('shown.bs.modal', onShown);
+
+                runAfterFullScreenMediaReady(() => {
+                    clearAllFullScreenTransforms();
+                    resetFullScreenTransform();
+                });
+            });
+
             modal.show();
-
-            // ✅ INI YANG BENER: baru init carousel + listener setelah DOM siap
-            setTimeout(() => {
-              const carouselEl = document.getElementById(carouselId);
-
-              bootstrap.Carousel.getInstance(carouselEl)?.dispose();
-              window.bsCarousel = new bootstrap.Carousel(carouselEl, {
-                interval: false,
-                ride: false,
-                wrap: false,
-                touch: true
-              });
-
-              clearAllFullScreenTransforms();
-              resetFullScreenTransform();
-
-              carouselEl.removeEventListener('slide.bs.carousel', window.__fsCarouselOnSlide);
-              carouselEl.removeEventListener('slid.bs.carousel', window.__fsCarouselOnSlid);
-
-              window.__fsCarouselOnSlide = function () {
-                clearAllFullScreenTransforms();
-              };
-              carouselEl.addEventListener('slide.bs.carousel', window.__fsCarouselOnSlide);
-
-              window.__fsCarouselOnSlid = function () {
-                resetFullScreenTransform();
-              };
-              carouselEl.addEventListener('slid.bs.carousel', window.__fsCarouselOnSlid);
-
-              document.removeEventListener('keydown', window.__fsCarouselKeydown);
-              window.__fsCarouselKeydown = function (e) {
-                if (!modalEl.classList.contains('show')) return;
-                if (e.key === 'ArrowLeft') window.bsCarousel.prev();
-                if (e.key === 'ArrowRight') window.bsCarousel.next();
-              };
-              document.addEventListener('keydown', window.__fsCarouselKeydown);
-
-            }, 150);
-
-          }
-         else {
-                const item = normalizedItems[0];
-                const isVideo = item.type === 'VIDEO' || item.path.toLowerCase().endsWith('.mp4');
-                container.innerHTML = isVideo
-                    ? `<video controls class="fs-media"><source src="${item.path}" type="video/mp4"></video>`
-: `<img src="${item.path}" class="fs-media" alt="Dokumentasi">`;
-
-
-                const modal = new bootstrap.Modal(modalEl);
-                modal.show();
-            }
+        }
         }
 
         // Add click handler for the new view media button
@@ -2041,6 +2153,69 @@ const usePrimaryMedia = @(((bool?)ViewBag.UsePrimaryMedia ?? false).ToString().T
               function getToken() {
           return document.querySelector('input[name="__RequestVerificationToken"]')?.value || '';
         }
+
+        document.getElementById('btnCancelReviewAudit')?.addEventListener('click', function () {
+    const auditId = this.dataset.auditId;
+    const token = getToken();
+
+    if (!auditId) {
+        alert('Audit ID tidak ditemukan.');
+        return;
+    }
+
+    const note = prompt('Masukkan alasan pembatalan review audit:');
+
+    if (note === null) {
+        return;
+    }
+
+    if (!note.trim()) {
+        alert('Alasan pembatalan wajib diisi.');
+        return;
+    }
+
+    if (!confirm('Batalkan review audit ini? Counter waktu akan dihapus untuk audit ini saja.')) {
+        return;
+    }
+
+    fetch('/Audit/CancelReviewAudit', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'RequestVerificationToken': token
+        },
+        body: JSON.stringify({
+            AuditId: auditId,
+            Note: note.trim()
+        })
+    })
+    .then(res => {
+        if (!res.ok) return res.text().then(t => Promise.reject(t));
+        return res.json();
+    })
+    .then(data => {
+        if (data.success) {
+            alert('Review audit berhasil dibatalkan.');
+
+            if (auditTimerInterval) {
+                clearInterval(auditTimerInterval);
+            }
+
+            const timerEl = document.getElementById('auditTimer');
+            if (timerEl) {
+                timerEl.innerText = 'Belum dimulai';
+            }
+
+            location.reload();
+        } else {
+            alert(data.message || 'Gagal membatalkan review audit.');
+        }
+    })
+    .catch(err => {
+        console.error(err);
+        alert('Gagal membatalkan review audit: ' + err);
+    });
+});
 
                 let auditStartTime = null;
         let auditTimerInterval = null;
