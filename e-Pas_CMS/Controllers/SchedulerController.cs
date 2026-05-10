@@ -27,112 +27,275 @@ namespace e_Pas_CMS.Controllers
 
         [HttpGet("")]
         public async Task<IActionResult> Index(
-    int pageNumber = 1,
-    int pageSize = 10,
-    string searchTerm = "",
-    string? filterStatus = null,
-    string? filterSbm = null,
-    int? filterMonth = null,
-    int? filterYear = null)
+            int pageNumber = 1,
+            int pageSize = 10,
+            string searchTerm = "",
+            string? filterStatus = null,
+            string? filterSbm = null,
+            int? filterMonth = null,
+            int? filterYear = null,
+            string? filterAuditor = null,
+            DateTime? filterDate = null,
+            string? filterAuditType = null,
+            string? filterAuditLevel = null)
         {
-            var baseQuery = _context.trx_audits
-                .Include(a => a.app_user)
-                .Include(a => a.spbu)
-                .Where(a => a.status != "DELETED");
-
-            if (!string.IsNullOrWhiteSpace(searchTerm))
-            {
-                var st = searchTerm.Trim().ToLower();
-
-                baseQuery = baseQuery.Where(a =>
-                    (a.app_user.name ?? "").ToLower().Contains(st) ||
-                    (a.spbu.spbu_no ?? "").ToLower().Contains(st));
-            }
-
-            if (!string.IsNullOrWhiteSpace(filterStatus))
-            {
-                baseQuery = baseQuery.Where(a => a.status == filterStatus);
-            }
-
-            if (!string.IsNullOrWhiteSpace(filterSbm))
-            {
-                baseQuery = baseQuery.Where(a => a.spbu.sbm == filterSbm);
-            }
+            if (pageNumber < 1) pageNumber = 1;
+            if (pageSize <= 0) pageSize = 10;
 
             ViewBag.FilterStatus = filterStatus;
             ViewBag.FilterSbm = filterSbm;
             ViewBag.FilterMonth = filterMonth;
             ViewBag.FilterYear = filterYear;
+            ViewBag.FilterAuditor = filterAuditor;
+            ViewBag.FilterDate = filterDate;
+            ViewBag.FilterAuditType = filterAuditType;
+            ViewBag.FilterAuditLevel = filterAuditLevel;
 
             ViewBag.StatusOptions = GetSchedulerStatusOptions();
 
-            ViewBag.SbmOptions = await _context.trx_audits
-                .AsNoTracking()
-                .Include(a => a.spbu)
-                .Where(a => a.status != "DELETED"
-                    && a.spbu != null
-                    && !string.IsNullOrEmpty(a.spbu.sbm))
-                .Select(a => a.spbu.sbm)
-                .Distinct()
-                .OrderBy(x => x)
-                .ToListAsync();
+            await using var conn = new NpgsqlConnection(_context.Database.GetConnectionString());
+            await conn.OpenAsync();
 
-            var shaped = baseQuery.Select(a => new
-            {
-                a.id,
-                a.status,
-                AppUserName = a.app_user != null ? a.app_user.name : null,
-                AuditDate = a.audit_execution_time.HasValue
-                    ? a.audit_execution_time.Value
-                    : (a.audit_schedule_date.HasValue
-                        ? new DateTime(
-                            a.audit_schedule_date.Value.Year,
-                            a.audit_schedule_date.Value.Month,
-                            a.audit_schedule_date.Value.Day)
-                        : a.created_date),
-                a.audit_type,
-                a.audit_level,
-                SpbuNo = a.spbu != null ? a.spbu.spbu_no : null,
-                SBM = a.spbu != null ? a.spbu.sbm : null,
-                a.report_no,
-                a.note
-            });
+            ViewBag.SbmOptions = (await conn.QueryAsync<string>(@"
+        SELECT DISTINCT sbm
+        FROM spbu
+        WHERE sbm IS NOT NULL
+          AND sbm <> ''
+        ORDER BY sbm;
+    ")).ToList();
 
-            if (filterMonth.HasValue)
+            ViewBag.AuditorOptions = (await conn.QueryAsync<string>(@"
+        SELECT DISTINCT au.name
+        FROM trx_audit ta
+        LEFT JOIN app_user au ON au.id = ta.app_user_id
+        WHERE ta.status <> 'DELETED'
+          AND au.name IS NOT NULL
+          AND au.name <> ''
+        ORDER BY au.name;
+    ")).ToList();
+
+            ViewBag.AuditTypeOptions = (await conn.QueryAsync<string>(@"
+        SELECT DISTINCT ta.audit_type
+        FROM trx_audit ta
+        WHERE ta.status <> 'DELETED'
+          AND ta.audit_type IS NOT NULL
+          AND ta.audit_type <> ''
+        ORDER BY ta.audit_type;
+    ")).ToList();
+
+            ViewBag.AuditLevelOptions = (await conn.QueryAsync<string>(@"
+        SELECT DISTINCT ta.audit_level
+        FROM trx_audit ta
+        WHERE ta.status <> 'DELETED'
+          AND ta.audit_level IS NOT NULL
+          AND ta.audit_level <> ''
+        ORDER BY ta.audit_level;
+    ")).ToList();
+
+            var where = new List<string>
+    {
+        "ta.status <> 'DELETED'"
+    };
+
+            var p = new DynamicParameters();
+
+            if (!string.IsNullOrWhiteSpace(searchTerm))
             {
-                shaped = shaped.Where(x => x.AuditDate.Month == filterMonth.Value);
+                p.Add("search", $"%{searchTerm.Trim()}%");
+                where.Add(@"
+            (
+                au.name ILIKE @search
+                OR s.spbu_no ILIKE @search
+            )
+        ");
             }
 
-            if (filterYear.HasValue)
+            if (!string.IsNullOrWhiteSpace(filterStatus))
             {
-                shaped = shaped.Where(x => x.AuditDate.Year == filterYear.Value);
+                p.Add("filterStatus", filterStatus);
+                where.Add("ta.status = @filterStatus");
             }
 
-            var totalItems = await shaped.CountAsync();
-
-            var rows = await shaped
-                .OrderByDescending(x => x.AuditDate)
-                .Skip((pageNumber - 1) * pageSize)
-                .Take(pageSize)
-                .ToListAsync();
-
-            var items = rows.Select(x => new SchedulerItemViewModel
+            if (!string.IsNullOrWhiteSpace(filterSbm))
             {
-                Id = x.id,
-                Status = MapStatus(x.status),
-                AppUserName = x.AppUserName,
-                AuditDate = x.AuditDate,
-                AuditType = x.audit_type,
-                AuditLevel = x.audit_level,
-                SpbuNo = x.SpbuNo,
-                SBM = x.SBM,
-                ReportNo = x.report_no,
-                Note = x.note
-            }).ToList();
+                p.Add("filterSbm", filterSbm);
+                where.Add("s.sbm = @filterSbm");
+            }
+
+            if (!string.IsNullOrWhiteSpace(filterAuditor))
+            {
+                p.Add("filterAuditor", $"%{filterAuditor.Trim()}%");
+                where.Add("au.name ILIKE @filterAuditor");
+            }
+
+            if (filterDate.HasValue)
+            {
+                var startDate = filterDate.Value.Date;
+                var endDate = startDate.AddDays(1);
+
+                p.Add("filterDateStart", startDate);
+                p.Add("filterDateEnd", endDate);
+
+                where.Add(@"
+            COALESCE(
+                ta.audit_execution_time,
+                ta.audit_schedule_date::timestamp,
+                ta.created_date
+            ) >= @filterDateStart
+            AND COALESCE(
+                ta.audit_execution_time,
+                ta.audit_schedule_date::timestamp,
+                ta.created_date
+            ) < @filterDateEnd
+        ");
+            }
+
+            if (!string.IsNullOrWhiteSpace(filterAuditType))
+            {
+                p.Add("filterAuditType", filterAuditType);
+                where.Add("ta.audit_type = @filterAuditType");
+            }
+
+            if (!string.IsNullOrWhiteSpace(filterAuditLevel))
+            {
+                p.Add("filterAuditLevel", filterAuditLevel);
+                where.Add("ta.audit_level = @filterAuditLevel");
+            }
+
+            if (filterYear.HasValue && filterMonth.HasValue)
+            {
+                var startDate = new DateTime(filterYear.Value, filterMonth.Value, 1);
+                var endDate = startDate.AddMonths(1);
+
+                p.Add("startDate", startDate);
+                p.Add("endDate", endDate);
+
+                where.Add(@"
+            COALESCE(
+                ta.audit_execution_time,
+                ta.audit_schedule_date::timestamp,
+                ta.created_date
+            ) >= @startDate
+            AND COALESCE(
+                ta.audit_execution_time,
+                ta.audit_schedule_date::timestamp,
+                ta.created_date
+            ) < @endDate
+        ");
+            }
+            else if (filterYear.HasValue)
+            {
+                var startDate = new DateTime(filterYear.Value, 1, 1);
+                var endDate = startDate.AddYears(1);
+
+                p.Add("startDate", startDate);
+                p.Add("endDate", endDate);
+
+                where.Add(@"
+            COALESCE(
+                ta.audit_execution_time,
+                ta.audit_schedule_date::timestamp,
+                ta.created_date
+            ) >= @startDate
+            AND COALESCE(
+                ta.audit_execution_time,
+                ta.audit_schedule_date::timestamp,
+                ta.created_date
+            ) < @endDate
+        ");
+            }
+            else if (filterMonth.HasValue)
+            {
+                p.Add("filterMonth", filterMonth.Value);
+
+                where.Add(@"
+            EXTRACT(MONTH FROM COALESCE(
+                ta.audit_execution_time,
+                ta.audit_schedule_date::timestamp,
+                ta.created_date
+            )) = @filterMonth
+        ");
+            }
+
+            p.Add("limit", pageSize);
+            p.Add("offset", (pageNumber - 1) * pageSize);
+
+            var whereSql = string.Join("\nAND ", where);
+
+            var sql = $@"
+        WITH base AS (
+            SELECT
+                ta.id,
+                ta.status,
+                au.name AS app_user_name,
+                COALESCE(
+                    ta.audit_execution_time,
+                    ta.audit_schedule_date::timestamp,
+                    ta.created_date
+                ) AS audit_date,
+                ta.audit_type,
+                ta.audit_level,
+                s.spbu_no,
+                s.sbm,
+                ta.report_no,
+                ta.note
+            FROM trx_audit ta
+            LEFT JOIN app_user au ON au.id = ta.app_user_id
+            LEFT JOIN spbu s ON s.id = ta.spbu_id
+            WHERE {whereSql}
+        )
+        SELECT COUNT(*) FROM base;
+
+        WITH base AS (
+            SELECT
+                ta.id,
+                ta.status,
+                au.name AS app_user_name,
+                COALESCE(
+                    ta.audit_execution_time,
+                    ta.audit_schedule_date::timestamp,
+                    ta.created_date
+                ) AS audit_date,
+                ta.audit_type,
+                ta.audit_level,
+                s.spbu_no,
+                s.sbm,
+                ta.report_no,
+                ta.note
+            FROM trx_audit ta
+            LEFT JOIN app_user au ON au.id = ta.app_user_id
+            LEFT JOIN spbu s ON s.id = ta.spbu_id
+            WHERE {whereSql}
+        )
+        SELECT
+            id AS ""Id"",
+            status AS ""Status"",
+            app_user_name AS ""AppUserName"",
+            audit_date AS ""AuditDate"",
+            audit_type AS ""AuditType"",
+            audit_level AS ""AuditLevel"",
+            spbu_no AS ""SpbuNo"",
+            sbm AS ""SBM"",
+            report_no AS ""ReportNo"",
+            note AS ""Note""
+        FROM base
+        ORDER BY audit_date DESC
+        LIMIT @limit OFFSET @offset;
+    ";
+
+            using var multi = await conn.QueryMultipleAsync(sql, p);
+
+            var totalItems = await multi.ReadFirstAsync<int>();
+            var rows = (await multi.ReadAsync<SchedulerItemViewModel>()).ToList();
+
+            foreach (var row in rows)
+            {
+                row.Status = MapStatus(row.Status);
+            }
 
             var vm = new SchedulerIndexViewModel
             {
-                Items = items,
+                Items = rows,
                 CurrentPage = pageNumber,
                 PageSize = pageSize,
                 TotalItems = totalItems,
@@ -336,7 +499,7 @@ namespace e_Pas_CMS.Controllers
             "NOT_STARTED" => "Belum Dimulai",
             "IN_PROGRESS_INPUT" => "Sedang Berlangsung (Input)",
             "IN_PROGRESS_SUBMIT" => "Sedang Berlangsung (Submit)",
-            "UNDER_REVIEW" => "Sedang Ditinjau",
+            "UNDER_REVIEW" => "Menunggu Verifikasi",
             "VERIFIED" => "Terverifikasi",
             _ => status
         };
