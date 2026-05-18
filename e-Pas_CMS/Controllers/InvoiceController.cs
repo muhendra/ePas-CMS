@@ -418,7 +418,7 @@ public class InvoiceController : Controller
             return RedirectToAction(nameof(Detail), new { id });
         }
 
-        var now = DateTime.UtcNow;
+        var now = DateTime.Now;
         var currentUser = GetCurrentUser();
 
         // Setelah klik Proses:
@@ -503,15 +503,8 @@ public class InvoiceController : Controller
 
             ApplyFinanceAdjustment(invoiceDetails, model?.Items);
 
-            var approval = await BuildApprovalSnapshot(
-                invoice,
-                claim,
-                invoiceDetails,
-                "APPROVED",
-                null
-            );
-
-            var now = DateTime.UtcNow;
+            // Untuk kolom PostgreSQL timestamp without time zone
+            var now = DateTime.Now;
             var currentUser = GetCurrentUser();
 
             invoice.Status = InvoiceCompleted;
@@ -531,7 +524,16 @@ public class InvoiceController : Controller
                 detail.UpdatedDate = now;
             }
 
+            var approval = await BuildApprovalSnapshot(
+                invoice,
+                claim,
+                invoiceDetails,
+                "APPROVED",
+                null
+            );
             _context.TrxInvoiceApprovals.Add(approval);
+
+            NormalizeDateTimesForPostgres();
 
             await _context.SaveChangesAsync();
 
@@ -622,7 +624,7 @@ public class InvoiceController : Controller
             model.RejectionReason.Trim()
         );
 
-        var now = DateTime.UtcNow;
+        var now = DateTime.Now;
         var currentUser = GetCurrentUser();
 
         // Jika finance reject:
@@ -721,11 +723,11 @@ public class InvoiceController : Controller
     }
 
     private async Task<TrxInvoiceApproval> BuildApprovalSnapshot(
-        TrxInvoice invoice,
-        trx_claim claim,
-        List<TrxInvoiceDetail> invoiceDetails,
-        string action,
-        string rejectionReason)
+    TrxInvoice invoice,
+    trx_claim claim,
+    List<TrxInvoiceDetail> invoiceDetails,
+    string action,
+    string rejectionReason)
     {
         var claimExpenseAmount = await _context.TrxClaimDetails
             .Where(x => x.trx_claim_id == claim.id)
@@ -736,7 +738,9 @@ public class InvoiceController : Controller
         var totalExpense = claimExpenseAmount + totalAuditFee + totalLumpsumFee;
 
         var currentUser = GetCurrentUser();
-        var now = DateTime.UtcNow;
+
+        // Untuk kolom PostgreSQL timestamp with time zone
+        var now = DateTime.Now;
 
         return new TrxInvoiceApproval
         {
@@ -772,6 +776,52 @@ public class InvoiceController : Controller
         return User.Identity?.Name ?? "SYSTEM";
     }
 
+    private void NormalizeDateTimesForPostgres()
+    {
+        foreach (var entry in _context.ChangeTracker.Entries())
+        {
+            if (entry.State != EntityState.Added && entry.State != EntityState.Modified)
+                continue;
+
+            foreach (var property in entry.Properties)
+            {
+                var clrType = Nullable.GetUnderlyingType(property.Metadata.ClrType)
+                              ?? property.Metadata.ClrType;
+
+                if (clrType != typeof(DateTime))
+                    continue;
+
+                if (property.CurrentValue == null)
+                    continue;
+
+                var dateValue = (DateTime)property.CurrentValue;
+                var columnType = property.Metadata.GetColumnType()?.ToLowerInvariant() ?? "";
+
+                if (columnType.Contains("timestamp with time zone") ||
+                    columnType.Contains("timestamptz"))
+                {
+                    if (dateValue.Kind == DateTimeKind.Utc)
+                    {
+                        property.CurrentValue = dateValue;
+                    }
+                    else if (dateValue.Kind == DateTimeKind.Local)
+                    {
+                        property.CurrentValue = dateValue.ToUniversalTime();
+                    }
+                    else
+                    {
+                        property.CurrentValue = DateTime.SpecifyKind(dateValue, DateTimeKind.Local).ToUniversalTime();
+                    }
+                }
+                else if (columnType.Contains("timestamp without time zone") ||
+                         columnType.Contains("timestamp"))
+                {
+                    property.CurrentValue = DateTime.SpecifyKind(dateValue, DateTimeKind.Unspecified);
+                }
+            }
+        }
+    }
+
     private async Task<string> GetEmployeeName(string invoiceAppUserId, string claimAppUserId)
     {
         var userId = !string.IsNullOrWhiteSpace(invoiceAppUserId)
@@ -804,3 +854,4 @@ public class InvoiceApprovalDetailPostVM
     public decimal AuditFee { get; set; }
     public decimal LumpsumFee { get; set; }
 }
+
