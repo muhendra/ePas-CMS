@@ -1000,9 +1000,9 @@ namespace e_Pas_CMS.Controllers
                     ? (auditlevelClass.audit_level_class ?? "")
                     : "";
 
-                bool isBasicOperational = TipeAudit == "Basic Operational";
+                bool isBasicOperational = TipeAudit == "Auditor BOA";
 
-                if (TipeAudit == "Regular Audit")
+                if (TipeAudit == "Auditor Regular")
                 {
                     TipeAudit = "Mystery Audit";
                 }
@@ -1019,7 +1019,7 @@ namespace e_Pas_CMS.Controllers
                     var sqlChecklist = "select id from master_questioner where type = 'Basic Operational' and category = 'CHECKLIST' order by version desc limit 1";
                     checklistId = await conn2.QueryFirstOrDefaultAsync<string>(sqlChecklist);
                 }
-                else if (TipeAudit == "Mystery Guest")
+                else if (TipeAudit == "Auditor MGA")
                 {
                     // 🔥 FIX: khusus Mystery Guest
                     checklistId = "aa03815d-3672-4e27-b3df-27becb533938";
