@@ -484,8 +484,8 @@
                 <thead>
                     <tr>
                         <th>Invoice Number</th>
-                        <th>Invoice Date</th>
-                        <th>Employee ID</th>
+                        @* <th>Invoice Date</th> *@
+                        @* <th>Employee ID</th> *@
                         <th>Name of<br />Surveyor</th>
                         <th>Expected<br />Settlement Date</th>
                         <th>Total Expense</th>
@@ -516,7 +516,7 @@
                                     </a>
                                 </td>
 
-                                <td>
+                                @* <td>
                                     <div class="invoice-date-main">
                                         @(item.InvoiceDate?.ToString("dd/MM/yyyy") ?? "-")
                                     </div>
@@ -525,7 +525,7 @@
                                     </div>
                                 </td>
 
-                                <td>@(item.EmployeeId ?? "-")</td>
+                                <td>@(item.EmployeeId ?? "-")</td> *@
 
                                 <td>@(item.SurveyorName ?? "-")</td>
 

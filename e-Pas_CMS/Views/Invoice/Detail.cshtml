@@ -39,14 +39,30 @@
         return value.ToString("0.##", CultureInfo.InvariantCulture);
     }
 
+    const string AssetBaseUrl = "https://epas-assets.zarata.co.id/";
+
     string GetMediaPath(string key)
     {
         if (Model.AttachmentGroups != null && Model.AttachmentGroups.ContainsKey(key))
-            return Model.AttachmentGroups[key]?.media_path ?? "";
+        {
+            var path = Model.AttachmentGroups[key]?.media_path ?? "";
+
+            if (string.IsNullOrWhiteSpace(path))
+                return "";
+
+            // Kalau sudah full URL, jangan ditambah prefix lagi
+            if (path.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
+                path.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+                return path;
+
+            // Contoh:
+            // uploads/claim/xxx/file.jpg
+            // /uploads/claim/xxx/file.jpg
+            return AssetBaseUrl.TrimEnd('/') + "/" + path.TrimStart('/');
+        }
 
         return "";
     }
-
     string GetFileName(string path)
     {
         if (string.IsNullOrWhiteSpace(path))
@@ -71,6 +87,74 @@
 
 @section Styles {
     <style>
+
+        .approval-signature-box {
+            width: 180px;
+            min-height: 120px;
+            border: 1px dashed #d1d5db;
+            border-radius: 14px;
+            background: #f8fafc;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 16px;
+            margin: 10px 0 12px;
+        }
+
+        .approval-signature-placeholder {
+            text-align: center;
+            color: #94a3b8;
+            font-size: 13px;
+            line-height: 1.5;
+        }
+
+        .signed-stamp {
+            width: 135px;
+            height: 135px;
+            border: 4px solid #16a34a;
+            color: #16a34a;
+            border-radius: 50%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            transform: rotate(-12deg);
+            text-align: center;
+            background: rgba(34, 197, 94, 0.05);
+            box-shadow: inset 0 0 0 2px rgba(22, 163, 74, 0.15);
+        }
+
+        .signed-stamp-main {
+            font-size: 24px;
+            font-weight: 900;
+            letter-spacing: 2px;
+            line-height: 1;
+        }
+
+        .signed-stamp-sub {
+            font-size: 10px;
+            font-weight: 800;
+            letter-spacing: 1px;
+            margin-top: 6px;
+        }
+
+        .signed-stamp-date {
+            font-size: 10px;
+            font-weight: 700;
+            margin-top: 4px;
+        }
+
+        .approval-meta {
+            margin-top: 10px;
+            color: #334155;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+
+            .approval-meta strong {
+                color: #0f172a;
+            }
+
         :root {
             --invoice-bg: #f4f5f7;
             --invoice-card: #ffffff;
@@ -697,6 +781,42 @@
             .download-pdf-btn {
                 width: 100%;
             }
+
+            .requestor-stamp {
+                width: 135px;
+                height: 135px;
+                border: 4px solid #0891b2;
+                color: #0891b2;
+                border-radius: 50%;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+                transform: rotate(-10deg);
+                text-align: center;
+                background: rgba(8, 145, 178, 0.05);
+                box-shadow: inset 0 0 0 2px rgba(8, 145, 178, 0.15);
+            }
+
+            .requestor-stamp-main {
+                font-size: 17px;
+                font-weight: 900;
+                letter-spacing: 1px;
+                line-height: 1;
+            }
+
+            .requestor-stamp-sub {
+                font-size: 11px;
+                font-weight: 800;
+                letter-spacing: 1px;
+                margin-top: 7px;
+            }
+
+            .requestor-stamp-date {
+                font-size: 10px;
+                font-weight: 700;
+                margin-top: 5px;
+            }
         }
     </style>
 }
@@ -1147,27 +1267,32 @@
 
         <div class="approval-grid">
             <div>
-                <label class="field-label">Required by</label>
+                <label class="field-label">Requestor</label>
 
-                <div class="signature-box">
-                    <img src="~/images/images_ttd.jpg"
-                         onerror="this.onerror=null;this.src='/images/imagesttd.jpg';"
-                         alt="Signature" />
+                <div class="approval-signature-box">
+                    <div class="requestor-stamp">
+                        <div class="requestor-stamp-main">REQUESTOR</div>
+                        <div class="requestor-stamp-sub">SUBMITTED</div>
+                        <div class="requestor-stamp-date">
+                            @Model.ClaimDate.ToString("dd/MM/yyyy")
+                        </div>
+                    </div>
                 </div>
 
                 <div class="claimant-name">@Model.EmployeeName</div>
-                <div class="claimant-role">Claimant</div>
+                <div class="claimant-role">Requestor</div>
             </div>
-
             <div>
                 <label class="field-label">Finance / Accounting</label>
 
                 @if (isPendingApproval)
                 {
-                    <a href="#" class="approval-file">
-                        <i class="bi bi-file-earmark-text-fill"></i>
-                        ttd_digital.png
-                    </a>
+                    <div class="approval-signature-box">
+                        <div class="approval-signature-placeholder">
+                            <i class="bi bi-pen" style="font-size:22px;"></i>
+                            <div style="margin-top:8px;">Signature will be filled after approval</div>
+                        </div>
+                    </div>
 
                     <div class="approval-wait">@claimStatusLabel</div>
 
@@ -1193,45 +1318,51 @@
                               rows="4"
                               placeholder="Isi alasan jika invoice ditolak. Contoh: nominal tidak sesuai, dokumen kurang lengkap, atau perlu revisi audit fee.">@Model.RejectionReason</textarea>
 
-                        <div class="approval-action-row">
-                            <button type="submit"
-                                    form="approvalForm"
-                                    formaction="@Url.Action("Approve", "Invoice")"
-                                    class="btn-approve"
-                                    onclick="return confirmApprove();">
-                                <i class="bi bi-check-circle me-1"></i>
-                                Setuju
-                            </button>
-
-                            <button type="submit"
-                                    form="approvalForm"
-                                    formaction="@Url.Action("Reject", "Invoice")"
-                                    class="btn-reject"
-                                    onclick="return validateRejectReason();">
-                                <i class="bi bi-x-circle me-1"></i>
-                                Tidak Setuju
-                            </button>
-                        </div>
                     </div>
                 }
                 else if (isDone)
                 {
-                    <a href="#" class="approval-file">
-                        <i class="bi bi-file-earmark-text-fill"></i>
-                        ttd_digital.png
-                    </a>
+                    <div class="approval-signature-box">
+                        <div class="signed-stamp">
+                            <div class="signed-stamp-main">SIGNED</div>
+                            <div class="signed-stamp-sub">DIGITALLY APPROVED</div>
+                            @if (Model.ApprovedDate.HasValue)
+                            {
+                                <div class="signed-stamp-date">
+                                    @Model.ApprovedDate.Value.ToString("dd/MM/yyyy")
+                                </div>
+                            }
+                        </div>
+                    </div>
+
+                    <div class="approval-meta">
+                        <div>
+                            <strong>Approved By:</strong>
+                            @(string.IsNullOrWhiteSpace(Model.ApprovedBy) ? "Finance / Accounting" : Model.ApprovedBy)
+                        </div>
+
+                        @if (Model.ApprovedDate.HasValue)
+                        {
+                            <div>
+                                <strong>Approved Date:</strong>
+                                @Model.ApprovedDate.Value.ToString("dd/MM/yyyy HH:mm") WIB
+                            </div>
+                        }
+                    </div>
 
                     <div class="approval-done">
                         Setuju
-                        @if (Model.ApprovedDate.HasValue)
-                        {
-                            <br />
-                            <span class="date-sub">@Model.ApprovedDate.Value.ToString("dd/MM/yyyy HH:mm") WIB</span>
-                        }
                     </div>
                 }
                 else if (isRejected)
                 {
+                    <div class="approval-signature-box">
+                        <div class="approval-signature-placeholder">
+                            <i class="bi bi-x-circle" style="font-size:22px;color:#ef4444;"></i>
+                            <div style="margin-top:8px;color:#ef4444;">Approval rejected</div>
+                        </div>
+                    </div>
+
                     <div class="approval-rejected">Tidak Setuju</div>
 
                     @if (!string.IsNullOrWhiteSpace(Model.RejectionReason))
@@ -1244,6 +1375,13 @@
                 }
                 else
                 {
+                    <div class="approval-signature-box">
+                        <div class="approval-signature-placeholder">
+                            <i class="bi bi-clock-history" style="font-size:22px;"></i>
+                            <div style="margin-top:8px;">Menunggu proses finance</div>
+                        </div>
+                    </div>
+
                     <div class="approval-wait">Menunggu proses finance</div>
                 }
             </div>
@@ -1270,7 +1408,7 @@ else if (isPendingApproval)
     <div class="bottom-action-bar">
         <button type="submit"
                 form="approvalForm"
-                formaction="@Url.Action("Reject", "Invoice")"
+                formaction="@Url.Action("Reject", "Invoice", new { id = Model.Id })"
                 class="btn-reject"
                 onclick="return validateRejectReason();">
             Tidak Setuju
@@ -1278,7 +1416,7 @@ else if (isPendingApproval)
 
         <button type="submit"
                 form="approvalForm"
-                formaction="@Url.Action("Approve", "Invoice")"
+                formaction="@Url.Action("Approve", "Invoice", new { id = Model.Id })"
                 class="btn-approve"
                 onclick="return confirmApprove();">
             Setuju

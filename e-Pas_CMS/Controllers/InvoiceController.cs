@@ -451,99 +451,103 @@ public class InvoiceController : Controller
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Approve(string id, InvoiceApprovalPostVM model)
     {
-        var invoiceId = ResolveInvoiceId(id, model);
-
-        if (string.IsNullOrWhiteSpace(invoiceId))
-            return NotFound();
-
-        var invoice = await _context.TrxInvoices
-            .FirstOrDefaultAsync(x => x.Id == invoiceId);
-
-        if (invoice == null)
-            return NotFound();
-
-        var claim = await _context.TrxClaims
-            .FirstOrDefaultAsync(x => x.trx_invoice_id == invoiceId);
-
-        if (claim == null)
+        try
         {
-            TempData["Error"] = "Data claim tidak ditemukan.";
+            var invoiceId = ResolveInvoiceId(id, model);
+
+            if (string.IsNullOrWhiteSpace(invoiceId))
+                return NotFound();
+
+            var invoice = await _context.TrxInvoices
+                .FirstOrDefaultAsync(x => x.Id == invoiceId);
+
+            if (invoice == null)
+                return NotFound();
+
+            var claim = await _context.TrxClaims
+                .FirstOrDefaultAsync(x => x.trx_invoice_id == invoiceId);
+
+            if (claim == null)
+            {
+                TempData["Error"] = "Data claim tidak ditemukan.";
+                return RedirectToAction(nameof(Detail), new { id = invoiceId });
+            }
+
+            var invoiceDetails = await _context.TrxInvoiceDetails
+                .Where(x => x.TrxInvoiceId == invoiceId)
+                .ToListAsync();
+
+            if (!invoiceDetails.Any())
+            {
+                TempData["Error"] = "Detail invoice tidak ditemukan.";
+                return RedirectToAction(nameof(Detail), new { id = invoiceId });
+            }
+
+            if (invoice.Status != InvoiceInProgress)
+            {
+                TempData["Error"] = "Invoice belum masuk tahap in progress.";
+                return RedirectToAction(nameof(Detail), new { id = invoiceId });
+            }
+
+            if (invoiceDetails.Any(x => x.Status != InvoiceDetailNotClaimed))
+            {
+                TempData["Error"] = "Detail invoice belum masuk tahap not claimed.";
+                return RedirectToAction(nameof(Detail), new { id = invoiceId });
+            }
+
+            if (claim.status != ClaimPendingApproval)
+            {
+                TempData["Error"] = "Claim belum masuk tahap pending approval.";
+                return RedirectToAction(nameof(Detail), new { id = invoiceId });
+            }
+
+            ApplyFinanceAdjustment(invoiceDetails, model?.Items);
+
+            var approval = await BuildApprovalSnapshot(
+                invoice,
+                claim,
+                invoiceDetails,
+                "APPROVED",
+                null
+            );
+
+            var now = DateTime.UtcNow;
+            var currentUser = GetCurrentUser();
+
+            invoice.Status = InvoiceCompleted;
+            invoice.CompletedDate = now;
+            invoice.UpdatedBy = currentUser;
+            invoice.UpdatedDate = now;
+
+            claim.status = ClaimApproved;
+            claim.completed_date = now;
+            claim.updated_by = currentUser;
+            claim.updated_date = now;
+
+            foreach (var detail in invoiceDetails)
+            {
+                detail.Status = InvoiceDetailClaimed;
+                detail.UpdatedBy = currentUser;
+                detail.UpdatedDate = now;
+            }
+
+            _context.TrxInvoiceApprovals.Add(approval);
+
+            await _context.SaveChangesAsync();
+
+            TempData["Success"] = "Invoice berhasil disetujui dan data approval finance berhasil disimpan.";
+
             return RedirectToAction(nameof(Detail), new { id = invoiceId });
         }
-
-        var invoiceDetails = await _context.TrxInvoiceDetails
-            .Where(x => x.TrxInvoiceId == invoiceId)
-            .ToListAsync();
-
-        if (!invoiceDetails.Any())
+        catch (Exception ex)
         {
-            TempData["Error"] = "Detail invoice tidak ditemukan.";
-            return RedirectToAction(nameof(Detail), new { id = invoiceId });
+            TempData["Error"] = "Gagal approve invoice: " + ex.Message;
+
+            if (ex.InnerException != null)
+                TempData["Error"] += " | Inner: " + ex.InnerException.Message;
+
+            return RedirectToAction(nameof(Detail), new { id = id ?? model?.Id });
         }
-
-        // Finance hanya boleh approve status:
-        // trx_invoice        = IN_PROGRESS
-        // trx_invoice_detail = NOT_CLAIMED
-        // trx_claim          = PENDING_APPROVAL
-        if (invoice.Status != InvoiceInProgress)
-        {
-            TempData["Error"] = "Invoice belum masuk tahap in progress.";
-            return RedirectToAction(nameof(Detail), new { id = invoiceId });
-        }
-
-        if (invoiceDetails.Any(x => x.Status != InvoiceDetailNotClaimed))
-        {
-            TempData["Error"] = "Detail invoice belum masuk tahap not claimed.";
-            return RedirectToAction(nameof(Detail), new { id = invoiceId });
-        }
-
-        if (claim.status != ClaimPendingApproval)
-        {
-            TempData["Error"] = "Claim belum masuk tahap pending approval.";
-            return RedirectToAction(nameof(Detail), new { id = invoiceId });
-        }
-
-        ApplyFinanceAdjustment(invoiceDetails, model?.Items);
-
-        var approval = await BuildApprovalSnapshot(
-            invoice,
-            claim,
-            invoiceDetails,
-            "APPROVED",
-            null
-        );
-
-        var now = DateTime.UtcNow;
-        var currentUser = GetCurrentUser();
-
-        // Jika finance setuju:
-        // trx_invoice        = COMPLETED
-        // trx_invoice_detail = CLAIMED
-        // trx_claim          = APPROVED
-        invoice.Status = InvoiceCompleted;
-        invoice.CompletedDate = now;
-        invoice.UpdatedBy = currentUser;
-        invoice.UpdatedDate = now;
-
-        claim.status = ClaimApproved;
-        claim.completed_date = now;
-        claim.updated_by = currentUser;
-        claim.updated_date = now;
-
-        foreach (var detail in invoiceDetails)
-        {
-            detail.Status = InvoiceDetailClaimed;
-            detail.UpdatedBy = currentUser;
-            detail.UpdatedDate = now;
-        }
-
-        _context.TrxInvoiceApprovals.Add(approval);
-
-        await _context.SaveChangesAsync();
-
-        TempData["Success"] = "Invoice berhasil disetujui dan data approval finance berhasil disimpan.";
-
-        return RedirectToAction(nameof(Detail), new { id = invoiceId });
     }
 
     [HttpPost]
