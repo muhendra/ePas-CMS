@@ -829,7 +829,7 @@ namespace e_Pas_CMS.Controllers
                                    .Where(r => r != null)
                                    .ToListAsync();
 
-                var allowedStatuses = new[] { "VERIFIED", "UNDER_REVIEW" };
+                var allowedStatuses = new[] { "VERIFIED" };
 
                 var start = new DateTime(2026, 04, 01);
                 var end = new DateTime(2026, 04, 30);
@@ -839,8 +839,8 @@ namespace e_Pas_CMS.Controllers
     allowedStatuses.Contains(a.status) &&
     a.audit_type != "Basic Operational" &&
     (a.audit_execution_time ?? a.created_date) >= start &&
-    (a.audit_execution_time ?? a.created_date) < end &&
-    a.id == "89ac7143-bac3-4bf2-9b6b-b1f55f81602b"
+    (a.audit_execution_time ?? a.created_date) < end
+    //&& a.id == "89ac7143-bac3-4bf2-9b6b-b1f55f81602b"
 );
 
                 var lastAuditIdsQuery = baseQuery

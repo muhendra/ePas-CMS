@@ -586,69 +586,85 @@ public class ReportGoodTemplate : IDocument
                 HeaderCell("Density Var");
             });
 
-            // ISI DATA
             foreach (var qq in _model.QqChecks)
             {
-                void DataCell(string text) =>
+                var currentNumber = qq?.NozzleNumber?.ToString() ?? "-";
+
+                try
+                {
+                    void DataCell(string text) =>
+                        table.Cell()
+                             .Border(0.5f)
+                             .BorderColor(Colors.Black)
+                             .AlignCenter()
+                             .AlignMiddle()
+                             .Padding(2)
+                             .Text(text ?? "")
+                             .FontSize(8);
+
+                    DataCell(qq.NozzleNumber?.ToString() ?? "");
+                    DataCell(qq.DuMake);
+                    DataCell(qq.DuSerialNo);
+                    DataCell(qq.Product);
+                    DataCell(qq.Mode);
+
+                    // Qty Var (m)
+                    var qtyVarM = qq.QuantityVariationWithMeasure ?? 0m;
+
+                    var qtyVarMColor = qtyVarM < -60m ? "#ff0000" : "#ffffff";
+                    var qtyVarMTextColor = qtyVarM < -60m ? Colors.White : Colors.Black;
+
                     table.Cell()
-                         .Border(0.5f)
-                         .BorderColor(Colors.Black)
-                         .AlignCenter()
-                         .AlignMiddle()
-                         .Padding(2)
-                         .Text(text).FontSize(8);
+                        .Background(qtyVarMColor)
+                        .Border(0.5f)
+                        .BorderColor(Colors.Black)
+                        .AlignCenter()
+                        .AlignMiddle()
+                        .Padding(2)
+                        .Text($"{qtyVarM:0}")
+                            .FontColor(qtyVarMTextColor)
+                            .FontSize(8)
+                            .SemiBold();
 
-                DataCell(qq.NozzleNumber.ToString());
-                DataCell(qq.DuMake);
-                DataCell(qq.DuSerialNo);
-                DataCell(qq.Product);
-                DataCell(qq.Mode);
-                // Qty Var (m)
-                var qtyVarM = qq.QuantityVariationWithMeasure;
-                var qtyVarMColor = qtyVarM < -60m ? "#ff0000" : "#ffffff"; // merah jika < -60
-                var qtyVarMTextColor = qtyVarM < -60m ? Colors.White : Colors.Black;
+                    // Qty Var (%)
+                    decimal qtyVarPercent = (qtyVarM / 20000m) * 100m;
 
-                table.Cell()
-                    .Background(qtyVarMColor)
-                    .Border(0.5f)
-                    .BorderColor(Colors.Black)
-                    .AlignCenter()
-                    .AlignMiddle()
-                    .Padding(2)
-                    .Text($"{qtyVarM:0}")
-                        .FontColor(qtyVarMTextColor)
-                        .FontSize(8)
-                        .SemiBold();
+                    var qtyVarColor = qtyVarPercent < -0.3m ? "#ff0000" :
+                                      qtyVarPercent > 0.3m ? "#ffff00" :
+                                                              "#ffffff";
 
-                // Qty Var (%) dihitung dari Qty Var (m) / 20000 x 100%
-                decimal qtyVarPercent = (decimal)((qtyVarM / 20000m) * 100m); // -120 -> -0.60%
-                var qtyVarColor = qtyVarPercent < -0.3m ? "#ff0000" :  // merah jika kurang dari -0.3%
-                                  qtyVarPercent > 0.3m ? "#ffff00" :  // kuning jika lebih dari 0.3%
-                                                          "#ffffff";   // putih jika normal
-                var qtyTextColor = qtyVarPercent < -0.3m ? Colors.White : Colors.Black;
+                    var qtyTextColor = qtyVarPercent < -0.3m ? Colors.White : Colors.Black;
 
-                table.Cell()
-                    .Background(qtyVarColor)
-                    .Border(0.5f)
-                    .BorderColor(Colors.Black)
-                    .AlignCenter()
-                    .AlignMiddle()
-                    .Padding(2)
-                    .Text($"{qtyVarPercent:0.00}%") // tampilkan dengan tanda %
-                        .FontColor(qtyTextColor)
-                        .FontSize(8)
-                        .SemiBold();
+                    table.Cell()
+                        .Background(qtyVarColor)
+                        .Border(0.5f)
+                        .BorderColor(Colors.Black)
+                        .AlignCenter()
+                        .AlignMiddle()
+                        .Padding(2)
+                        .Text($"{qtyVarPercent:0.00}%")
+                            .FontColor(qtyTextColor)
+                            .FontSize(8)
+                            .SemiBold();
 
-                DataCell($"{qq.ObservedDensity:0.0000}");
-                DataCell($"{qq.ObservedTemp}");
-                DataCell($"{qq.ObservedDensity15Degree:0.0000}");
-                DataCell($"{qq.ReferenceDensity15Degree:0.0000}");
-                DataCell($"{qq.TankNumber}");
-                DataCell($"{qq.DensityVariation:0.0000}");
+                    DataCell($"{qq.ObservedDensity ?? 0m:0.0000}");
+                    DataCell($"{qq.ObservedTemp ?? 0m}");
+                    DataCell($"{qq.ObservedDensity15Degree ?? 0m:0.0000}");
+                    DataCell($"{qq.ReferenceDensity15Degree ?? 0m:0.0000}");
+                    DataCell($"{qq.TankNumber}");
+                    DataCell($"{qq.DensityVariation ?? 0m:0.0000}");
+                }
+                catch (Exception ex)
+                {
+                    throw new Exception(
+                        $"Error saat generate QQ Table. NozzleNumber/Number: {currentNumber}. " +
+                        $"Message: {ex.Message}",
+                        ex
+                    );
+                }
             }
         });
     }
-
 
     void ComposeInfoTable(IContainer container)
     {
