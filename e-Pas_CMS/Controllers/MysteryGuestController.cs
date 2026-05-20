@@ -48,7 +48,7 @@ namespace e_Pas_CMS.Controllers
                     .Distinct()
                     .ToListAsync();
 
-                var query = from a in _context.trx_audits.AsNoTracking()
+                var query = from a in _context.trx_audits
                             join s in _context.spbus on a.spbu_id equals s.id
                             join u in _context.app_users on a.app_user_id equals u.id into aud
                             from u in aud.DefaultIfEmpty()
@@ -103,42 +103,132 @@ namespace e_Pas_CMS.Controllers
                 await using var conn = new NpgsqlConnection(connectionString);
                 await conn.OpenAsync();
 
-                var auditIds = items
-                    .Select(x => x.Audit.id)
-                    .Where(id => !string.IsNullOrWhiteSpace(id))
-                    .Distinct(StringComparer.OrdinalIgnoreCase)
-                    .ToArray();
-
-                var checklistByAudit = await GetMysteryGuestIndexChecklistDataAsync(conn, auditIds);
-                var penaltyFlagsByAudit = await GetMysteryGuestIndexPenaltyFlagsAsync(conn, auditIds);
-
-                var result = new List<SpbuViewModel>(items.Count);
+                var result = new List<SpbuViewModel>();
 
                 foreach (var a in items)
                 {
-                    var checklistData = checklistByAudit.TryGetValue(a.Audit.id, out var auditChecklist)
-                        ? auditChecklist
-                        : new List<MysteryGuestIndexChecklistRow>();
-                    var questionRows = checklistData
-                        .Where(x => string.Equals(x.type, "QUESTION", StringComparison.OrdinalIgnoreCase))
+                    var sql = @"
+                    SELECT 
+                        mqd.weight, 
+                        tac.score_input, 
+                        tac.score_x, 
+                        mqd.is_relaksasi
+                    FROM master_questioner_detail mqd
+                    LEFT JOIN trx_audit_checklist tac 
+                        ON tac.master_questioner_detail_id = mqd.id 
+                        AND tac.trx_audit_id = @id
+                    WHERE mqd.master_questioner_id = (
+                        SELECT master_questioner_checklist_id 
+                        FROM trx_audit 
+                        WHERE id = @id
+                    )
+                    AND mqd.type = 'QUESTION'";
+
+                    var checklist = (await conn.QueryAsync<(decimal? weight, string score_input, decimal? score_x, bool? is_relaksasi)>(sql, new { id = a.Audit.id }))
                         .ToList();
 
-                    decimal finalScore = CalculateMysteryGuestIndexFinalScore(questionRows);
+                    decimal sumAF = 0, sumWeight = 0, sumX = 0;
+
+                    foreach (var item in checklist)
+                    {
+                        decimal w = item.weight ?? 0;
+                        string input = item.score_input?.Trim().ToUpperInvariant() ?? "";
+
+                        if (input == "X")
+                        {
+                            sumX += w;
+                            sumAF += item.score_x ?? 0;
+                        }
+                        else if (input == "F" && item.is_relaksasi == true)
+                        {
+                            sumAF += 1.00m * w;
+                        }
+                        else
+                        {
+                            decimal af = input switch
+                            {
+                                "A" => 1.00m,
+                                "B" => 0.80m,
+                                "C" => 0.60m,
+                                "D" => 0.40m,
+                                "E" => 0.20m,
+                                "F" => 0.00m,
+                                _ => 0.00m
+                            };
+                            sumAF += af * w;
+                        }
+
+                        sumWeight += w;
+                    }
+
+                    decimal finalScore = (sumWeight - sumX) > 0
+                        ? (sumAF / (sumWeight - sumX)) * sumWeight
+                        : 0m;
 
                     // === Hitung Compliance
-                    var flatChecklistData = checklistData.Cast<ChecklistFlatItem>().ToList();
-                    var elements = BuildHierarchy(flatChecklistData, new Dictionary<string, List<MediaItem>>());
+                    var checklistData = await GetChecklistDataAsync(conn, a.Audit.id);
+                    var mediaList = await GetMediaPerNodeAsync(conn, a.Audit.id);
+                    var elements = BuildHierarchy(checklistData, mediaList);
                     foreach (var element in elements) AssignWeightRecursive(element);
                     CalculateChecklistScores(elements);
+                    CalculateOverallScore(new DetailReportViewModel { Elements = elements }, checklistData);
                     var modelstotal = new DetailReportViewModel { Elements = elements };
-                    CalculateOverallScore(modelstotal, flatChecklistData);
+                    CalculateOverallScore(modelstotal, checklistData);
                     decimal? totalScore = modelstotal.TotalScore;
+                    var compliance = HitungComplianceLevelDariElements(elements);
 
-                    bool hasGoodPenalty = penaltyFlagsByAudit.TryGetValue(a.Audit.id, out var hasPenalty) && hasPenalty;
+                    // === Compliance validation
+                    var sss = Math.Round(compliance.SSS ?? 0, 2);
+                    var eqnq = Math.Round(compliance.EQnQ ?? 0, 2);
+                    var rfs = Math.Round(compliance.RFS ?? 0, 2);
+
+                    var penaltyGoodQuery = @"SELECT STRING_AGG(mqd.penalty_alert, ', ') AS penalty_alerts
+            FROM trx_audit_checklist tac
+            INNER JOIN master_questioner_detail mqd ON mqd.id = tac.master_questioner_detail_id
+            WHERE tac.trx_audit_id = @id AND
+              tac.score_input = 'F' AND
+              mqd.is_penalty = true AND 
+              (mqd.is_relaksasi = false OR mqd.is_relaksasi IS NULL);";
+                    var penaltyGoodResult = await conn.ExecuteScalarAsync<string>(penaltyGoodQuery, new { id = a.Audit.id });
+
+                    bool hasGoodPenalty = !string.IsNullOrEmpty(penaltyGoodResult);
 
                     string goodStatus = (finalScore >= 75 && !hasGoodPenalty)
                         ? "CERTIFIED"
                         : "NOT CERTIFIED";
+
+                    bool failGood = sss < 80 || eqnq < 85 || rfs < 85;
+                    bool failExcellent = sss < 85 || eqnq < 85 || rfs < 85;
+
+                    // === Audit Next
+                    string auditNext = null;
+                    string levelspbu = null;
+
+                    var auditFlowSql = @"SELECT * FROM master_audit_flow WHERE audit_level = @level LIMIT 1;";
+                    var auditFlow = await conn.QueryFirstOrDefaultAsync<dynamic>(auditFlowSql, new { level = a.Audit.audit_level });
+
+                    if (auditFlow != null)
+                    {
+                        string passedGood = auditFlow.passed_good;
+                        string passedExcellent = auditFlow.passed_excellent;
+                        string passedAuditLevel = auditFlow.passed_audit_level;
+                        string failed_audit_level = auditFlow.failed_audit_level;
+
+                        if (string.IsNullOrWhiteSpace(passedGood) && string.IsNullOrWhiteSpace(passedExcellent) && finalScore >= 75)
+                        {
+                            auditNext = passedAuditLevel;
+                        }
+                        else
+                        {
+                            auditNext = failed_audit_level;
+                        }
+
+                        var auditlevelClassSql = @"SELECT audit_level_class FROM master_audit_flow WHERE audit_level = @level LIMIT 1;";
+                        var auditlevelClass = await conn.QueryFirstOrDefaultAsync<dynamic>(auditlevelClassSql, new { level = auditNext });
+                        levelspbu = auditlevelClass != null
+                        ? (auditlevelClass.audit_level_class ?? "")
+                        : "";
+                    }
 
 
                     result.Add(new SpbuViewModel
@@ -220,124 +310,6 @@ namespace e_Pas_CMS.Controllers
                 EQnQ: Ambil("Elemen 2"),
                 RFS: Ambil("Elemen 3")
             );
-        }
-
-        private sealed class MysteryGuestIndexChecklistRow : ChecklistFlatItem
-        {
-            public string TrxAuditId { get; set; }
-        }
-
-        private async Task<Dictionary<string, List<MysteryGuestIndexChecklistRow>>> GetMysteryGuestIndexChecklistDataAsync(
-            IDbConnection conn,
-            string[] auditIds)
-        {
-            if (auditIds.Length == 0)
-                return new Dictionary<string, List<MysteryGuestIndexChecklistRow>>(StringComparer.OrdinalIgnoreCase);
-
-            const string sql = @"
-                SELECT
-                  ta.id AS ""TrxAuditId"",
-                  mqd.id,
-                  mqd.title,
-                  mqd.description,
-                  mqd.parent_id,
-                  mqd.type,
-                  mqd.weight,
-                  mqd.score_option,
-                  tac.score_input,
-                  tac.score_af,
-                  tac.score_x,
-                  mqd.order_no,
-                  COALESCE(mqd.is_relaksasi, false) AS is_relaksasi,
-                  mqd.number
-                FROM trx_audit ta
-                JOIN master_questioner_detail mqd
-                  ON mqd.master_questioner_id = ta.master_questioner_checklist_id
-                LEFT JOIN trx_audit_checklist tac
-                  ON tac.master_questioner_detail_id = mqd.id
-                 AND tac.trx_audit_id = ta.id
-                WHERE ta.id = ANY(@auditIds)
-                ORDER BY ta.id, mqd.order_no;";
-
-            var rows = (await conn.QueryAsync<MysteryGuestIndexChecklistRow>(sql, new { auditIds })).ToList();
-
-            return rows
-                .GroupBy(x => x.TrxAuditId, StringComparer.OrdinalIgnoreCase)
-                .ToDictionary(g => g.Key, g => g.ToList(), StringComparer.OrdinalIgnoreCase);
-        }
-
-        private async Task<Dictionary<string, bool>> GetMysteryGuestIndexPenaltyFlagsAsync(
-            IDbConnection conn,
-            string[] auditIds)
-        {
-            if (auditIds.Length == 0)
-                return new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
-
-            const string sql = @"
-                SELECT
-                    ta.id AS ""TrxAuditId"",
-                    EXISTS (
-                        SELECT 1
-                        FROM trx_audit_checklist tac
-                        INNER JOIN master_questioner_detail mqd
-                          ON mqd.id = tac.master_questioner_detail_id
-                        WHERE tac.trx_audit_id = ta.id
-                          AND tac.score_input = 'F'
-                          AND mqd.is_penalty = true
-                          AND (mqd.is_relaksasi = false OR mqd.is_relaksasi IS NULL)
-                    ) AS ""HasPenalty""
-                FROM trx_audit ta
-                WHERE ta.id = ANY(@auditIds);";
-
-            var rows = await conn.QueryAsync<(string TrxAuditId, bool HasPenalty)>(sql, new { auditIds });
-
-            return rows.ToDictionary(x => x.TrxAuditId, x => x.HasPenalty, StringComparer.OrdinalIgnoreCase);
-        }
-
-        private static decimal CalculateMysteryGuestIndexFinalScore(IEnumerable<MysteryGuestIndexChecklistRow> questionRows)
-        {
-            decimal sumAF = 0, sumWeight = 0, sumX = 0;
-
-            foreach (var item in questionRows)
-            {
-                decimal w = item.weight ?? 0;
-                string input = NormalizeMysteryGuestIndexScore(item.score_input);
-
-                if (input == "X")
-                {
-                    sumX += w;
-                    sumAF += item.score_x ?? 0;
-                }
-                else if (input == "F" && item.is_relaksasi)
-                {
-                    sumAF += 1.00m * w;
-                }
-                else
-                {
-                    decimal af = input switch
-                    {
-                        "A" => 1.00m,
-                        "B" => 0.80m,
-                        "C" => 0.60m,
-                        "D" => 0.40m,
-                        "E" => 0.20m,
-                        "F" => 0.00m,
-                        _ => 0.00m
-                    };
-                    sumAF += af * w;
-                }
-
-                sumWeight += w;
-            }
-
-            return (sumWeight - sumX) > 0
-                ? (sumAF / (sumWeight - sumX)) * sumWeight
-                : 0m;
-        }
-
-        private static string NormalizeMysteryGuestIndexScore(string score)
-        {
-            return score?.Trim().ToUpperInvariant() ?? "";
         }
 
         [HttpGet("MysteryGuest/Detail/{id}")]
