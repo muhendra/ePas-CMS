@@ -27,12 +27,6 @@ namespace e_Pas_CMS.Controllers
         private readonly ILogger<BasicOperationalReportController> _logger;
         private readonly IConfiguration _configuration;
         private readonly IWebHostEnvironment _env;
-        private static readonly string[] BasicOperationalReportIndexSpecialNodeIds =
-        {
-            "555fe2e4-b95b-461b-9c92-ad8b5c837119",
-            "bafc206f-ed29-4bbc-8053-38799e186fb0",
-            "d26f4caa-e849-4ab4-9372-298693247272"
-        };
 
         public BasicOperationalReportController(EpasDbContext context, ILogger<BasicOperationalReportController> logger, IConfiguration configuration, IWebHostEnvironment env)
         {
@@ -112,56 +106,161 @@ namespace e_Pas_CMS.Controllers
             if (conn.State != ConnectionState.Open)
                 await conn.OpenAsync();
 
-            var auditIds = pagedAudits
-                .Select(x => x.id)
-                .Where(id => !string.IsNullOrWhiteSpace(id))
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .ToArray();
-
-            var checklistByAudit = await GetBasicOperationalReportIndexChecklistDataAsync(conn, auditIds);
-            var specialScoresByAudit = await GetBasicOperationalReportIndexSpecialScoresAsync(conn, auditIds);
-            var penaltyFlagsByAudit = await GetBasicOperationalReportIndexPenaltyFlagsAsync(conn, auditIds);
-            var auditFlows = await GetBasicOperationalReportIndexAuditFlowsAsync(conn);
-
-            var result = new List<AuditReportListViewModel>(pagedAudits.Count);
-            var boaStatusUpdates = new List<(string AuditId, string Status)>(pagedAudits.Count);
+            var result = new List<AuditReportListViewModel>();
 
             foreach (var a in pagedAudits)
             {
-                var checklistData = checklistByAudit.TryGetValue(a.id, out var auditChecklist)
-                    ? auditChecklist
-                    : new List<BasicOperationalReportIndexChecklistRow>();
-                var questionRows = checklistData
-                    .Where(x => string.Equals(x.type, "QUESTION", StringComparison.OrdinalIgnoreCase))
+                var sql = @"
+        SELECT 
+            mqd.weight, 
+            tac.score_input, 
+            tac.score_x, 
+            mqd.is_relaksasi
+        FROM master_questioner_detail mqd
+        LEFT JOIN trx_audit_checklist tac 
+            ON tac.master_questioner_detail_id = mqd.id 
+            AND tac.trx_audit_id = @id
+        WHERE mqd.master_questioner_id = (
+            SELECT master_questioner_checklist_id 
+            FROM trx_audit 
+            WHERE id = @id
+        )
+        AND mqd.type = 'QUESTION'";
+
+                var checklist = (await conn.QueryAsync<(decimal? weight, string score_input, decimal? score_x, bool? is_relaksasi)>(sql, new { id = a.id }))
                     .ToList();
 
-                decimal finalScore = CalculateBasicOperationalReportIndexFinalScore(questionRows);
+                decimal sumAF = 0, sumWeight = 0, sumX = 0;
 
-                var specialScores = specialScoresByAudit.TryGetValue(a.id, out var auditSpecialScores)
-                    ? auditSpecialScores
-                    : new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-                var (forceGoodOnly, forceNotCertified) = GetBasicOperationalReportIndexSpecialScoreFlags(specialScores);
+                foreach (var item in checklist)
+                {
+                    decimal w = item.weight ?? 0;
+                    string input = item.score_input?.Trim().ToUpperInvariant() ?? "";
 
-                var penaltyFlags = penaltyFlagsByAudit.TryGetValue(a.id, out var auditPenaltyFlags)
-                    ? auditPenaltyFlags
-                    : new BasicOperationalReportIndexPenaltyFlags();
-                bool hasExcellentPenalty = penaltyFlags.HasExcellentPenalty;
-                bool hasGoodPenalty = penaltyFlags.HasGoodPenalty;
+                    if (input == "X")
+                    {
+                        sumX += w;
+                        sumAF += item.score_x ?? 0;
+                    }
+                    else if (input == "F" && item.is_relaksasi == true)
+                    {
+                        sumAF += 1.00m * w;
+                    }
+                    else
+                    {
+                        decimal af = input switch
+                        {
+                            "A" => 1.00m,
+                            "B" => 0.80m,
+                            "C" => 0.60m,
+                            "D" => 0.40m,
+                            "E" => 0.20m,
+                            "F" => 0.00m,
+                            _ => 0.00m
+                        };
+                        sumAF += af * w;
+                    }
+
+                    sumWeight += w;
+                }
+
+                decimal finalScore = (sumWeight - sumX) > 0
+                    ? (sumAF / (sumWeight - sumX)) * sumWeight
+                    : 0m;
+
+                // === Special Node Score Check ===
+                var specialNodeIds = new Guid[]
+                {
+                    Guid.Parse("555fe2e4-b95b-461b-9c92-ad8b5c837119"),
+                    Guid.Parse("bafc206f-ed29-4bbc-8053-38799e186fb0"),
+                    Guid.Parse("d26f4caa-e849-4ab4-9372-298693247272")
+                };
+
+                var specialScoreSql = @"
+                SELECT mqd.id, tac.score_input
+                FROM master_questioner_detail mqd
+                LEFT JOIN trx_audit_checklist tac 
+                    ON tac.master_questioner_detail_id = mqd.id 
+                    AND tac.trx_audit_id = @id
+                WHERE mqd.id IN (
+                    '555fe2e4-b95b-461b-9c92-ad8b5c837119',
+                    'bafc206f-ed29-4bbc-8053-38799e186fb0',
+                    'd26f4caa-e849-4ab4-9372-298693247272'
+                );";
+
+                var specialScores = (await conn.QueryAsync<(string id, string score_input)>(
+                    specialScoreSql, new { id = a.id }))
+                    .ToDictionary(x => x.id, x => x.score_input?.Trim().ToUpperInvariant());
+
+                bool forceGoodOnly = false;
+                bool forceNotCertified = false;
+
+                foreach (var score in specialScores.Values)
+                {
+                    if (score == "C")
+                        forceGoodOnly = true;
+                    else if (score != "A")
+                        forceNotCertified = true;
+                }
+
+                // === Penalty Check
+                var penaltyExcellentQuery = @"SELECT STRING_AGG(mqd.penalty_alert, ', ') AS penalty_alerts
+            FROM trx_audit_checklist tac
+            INNER JOIN master_questioner_detail mqd ON mqd.id = tac.master_questioner_detail_id
+            WHERE 
+                tac.trx_audit_id = @id
+                AND (
+                    (tac.master_questioner_detail_id IN (
+                        '555fe2e4-b95b-461b-9c92-ad8b5c837119',
+                        'bafc206f-ed29-4bbc-8053-38799e186fb0',
+                        'd26f4caa-e849-4ab4-9372-298693247272'
+                    ) AND tac.score_input <> 'A')
+                    OR
+                    (
+                        ((mqd.penalty_excellent_criteria = 'LT_1' AND tac.score_input <> 'A') OR
+                         (mqd.penalty_excellent_criteria = 'EQ_0' AND tac.score_input = 'F'))
+                        AND (mqd.is_relaksasi = false OR mqd.is_relaksasi IS NULL)
+                        AND mqd.is_penalty = true
+                    )
+            );";
+
+                var penaltyGoodQuery = @"SELECT STRING_AGG(mqd.penalty_alert, ', ') AS penalty_alerts
+            FROM trx_audit_checklist tac
+            INNER JOIN master_questioner_detail mqd ON mqd.id = tac.master_questioner_detail_id
+            WHERE tac.trx_audit_id = @id AND
+              tac.score_input = 'F' AND
+              mqd.is_penalty = true AND 
+              (mqd.is_relaksasi = false OR mqd.is_relaksasi IS NULL);";
+
+                var penaltyExcellentResult = await conn.ExecuteScalarAsync<string>(penaltyExcellentQuery, new { id = a.id });
+                var penaltyGoodResult = await conn.ExecuteScalarAsync<string>(penaltyGoodQuery, new { id = a.id });
+
+                bool hasExcellentPenalty = !string.IsNullOrEmpty(penaltyExcellentResult);
+                bool hasGoodPenalty = !string.IsNullOrEmpty(penaltyGoodResult);
+
+                //string goodStatus = (finalScore >= 75 && !hasGoodPenalty) ? "CERTIFIED" : "NOT CERTIFIED";
+
+                //string excellentStatus = (finalScore >= 80 && !hasExcellentPenalty && !forceNotCertified)
+                //    ? (forceGoodOnly ? "GOOD" : "CERTIFIED")
+                //    : "NOT CERTIFIED";
 
                 // === Audit Next
                 string auditNext = null;
                 string levelspbu = null;
 
-                auditFlows.TryGetValue(a.audit_level ?? "", out var auditFlow);
+                var auditFlowSql = @"SELECT * FROM master_audit_flow WHERE audit_level = @level LIMIT 1;";
+                var auditFlow = await conn.QueryFirstOrDefaultAsync<dynamic>(auditFlowSql, new { level = a.audit_level });
 
 
                 // === Hitung Compliance
-                var flatChecklistData = checklistData.Cast<ChecklistFlatItem>().ToList();
-                var elements = BuildHierarchy(flatChecklistData, new Dictionary<string, List<MediaItem>>());
+                var checklistData = await GetChecklistDataAsync(conn, a.id);
+                var mediaList = await GetMediaPerNodeAsync(conn, a.id);
+                var elements = BuildHierarchy(checklistData, mediaList);
                 foreach (var element in elements) AssignWeightRecursive(element);
                 CalculateChecklistScores(elements);
+                CalculateOverallScore(new DetailReportViewModel { Elements = elements }, checklistData);
                 var modelstotal = new DetailReportViewModel { Elements = elements };
-                CalculateOverallScore(modelstotal, flatChecklistData);
+                CalculateOverallScore(modelstotal, checklistData);
                 decimal? totalScore = modelstotal.TotalScore;
                 var compliance = HitungComplianceLevelDariElements(elements);
 
@@ -184,12 +283,19 @@ namespace e_Pas_CMS.Controllers
                     ? (forceGoodOnly ? "GOOD" : "CERTIFIED")
                     : "NOT CERTIFIED";
 
-                boaStatusUpdates.Add((a.id, goodStatus));
+                var updateSqltrx_audit = @"UPDATE trx_audit SET boa_status = @status WHERE id = @id";
+                await conn.ExecuteAsync(updateSqltrx_audit, new
+                {
+                    status = goodStatus,
+                    id = a.id
+                });
 
                 if (auditFlow != null)
                 {
-                    string passedAuditLevel = auditFlow.PassedAuditLevel;
-                    string failed_audit_level = auditFlow.FailedAuditLevel;
+                    string passedGood = auditFlow.passed_good;
+                    string passedExcellent = auditFlow.passed_excellent;
+                    string passedAuditLevel = auditFlow.passed_audit_level;
+                    string failed_audit_level = auditFlow.failed_audit_level;
 
                     if (passedAuditLevel != null && goodStatus == "CERTIFIED")
                     {
@@ -200,9 +306,11 @@ namespace e_Pas_CMS.Controllers
                         auditNext = failed_audit_level;
                     }
 
-                    levelspbu = auditFlows.TryGetValue(auditNext ?? "", out var auditNextFlow)
-                        ? auditNextFlow.AuditLevelClass ?? ""
-                        : "";
+                    var auditlevelClassSql = @"SELECT audit_level_class FROM master_audit_flow WHERE audit_level = @level LIMIT 1;";
+                    var auditlevelClass = await conn.QueryFirstOrDefaultAsync<dynamic>(auditlevelClassSql, new { level = auditNext });
+                    levelspbu = auditlevelClass != null
+                    ? (auditlevelClass.audit_level_class ?? "")
+                    : "";
                 }
 
                 result.Add(new AuditReportListViewModel
@@ -242,8 +350,6 @@ namespace e_Pas_CMS.Controllers
                 });
             }
 
-            await UpdateBasicOperationalReportBoaStatusesAsync(conn, boaStatusUpdates);
-
             var model = new PaginationModel<AuditReportListViewModel>
             {
                 Items = result,
@@ -254,285 +360,6 @@ namespace e_Pas_CMS.Controllers
 
             ViewBag.SearchTerm = searchTerm;
             return View(model);
-        }
-
-        private sealed class BasicOperationalReportIndexChecklistRow : ChecklistFlatItem
-        {
-            public string TrxAuditId { get; set; }
-        }
-
-        private sealed class BasicOperationalReportIndexSpecialScoreRow
-        {
-            public string TrxAuditId { get; set; }
-            public string NodeId { get; set; }
-            public string ScoreInput { get; set; }
-        }
-
-        private sealed class BasicOperationalReportIndexPenaltyFlags
-        {
-            public bool HasExcellentPenalty { get; set; }
-            public bool HasGoodPenalty { get; set; }
-        }
-
-        private sealed class BasicOperationalReportIndexPenaltyFlagRow
-        {
-            public string TrxAuditId { get; set; }
-            public bool HasExcellentPenalty { get; set; }
-            public bool HasGoodPenalty { get; set; }
-        }
-
-        private sealed class BasicOperationalReportIndexFlowRow
-        {
-            public string AuditLevel { get; set; }
-            public string PassedAuditLevel { get; set; }
-            public string FailedAuditLevel { get; set; }
-            public string AuditLevelClass { get; set; }
-        }
-
-        private async Task<Dictionary<string, List<BasicOperationalReportIndexChecklistRow>>> GetBasicOperationalReportIndexChecklistDataAsync(
-            IDbConnection conn,
-            string[] auditIds)
-        {
-            if (auditIds.Length == 0)
-                return new Dictionary<string, List<BasicOperationalReportIndexChecklistRow>>(StringComparer.OrdinalIgnoreCase);
-
-            const string sql = @"
-                SELECT
-                  ta.id AS ""TrxAuditId"",
-                  mqd.id,
-                  mqd.title,
-                  mqd.description,
-                  mqd.parent_id,
-                  mqd.type,
-                  mqd.weight,
-                  mqd.score_option,
-                  tac.score_input,
-                  tac.score_af,
-                  tac.score_x,
-                  mqd.order_no,
-                  COALESCE(mqd.is_relaksasi, false) AS is_relaksasi,
-                  mqd.number
-                FROM trx_audit ta
-                JOIN master_questioner_detail mqd
-                  ON mqd.master_questioner_id = ta.master_questioner_checklist_id
-                LEFT JOIN trx_audit_checklist tac
-                  ON tac.master_questioner_detail_id = mqd.id
-                 AND tac.trx_audit_id = ta.id
-                WHERE ta.id = ANY(@auditIds)
-                ORDER BY ta.id, mqd.order_no;";
-
-            var rows = (await conn.QueryAsync<BasicOperationalReportIndexChecklistRow>(sql, new { auditIds })).ToList();
-
-            return rows
-                .GroupBy(x => x.TrxAuditId, StringComparer.OrdinalIgnoreCase)
-                .ToDictionary(g => g.Key, g => g.ToList(), StringComparer.OrdinalIgnoreCase);
-        }
-
-        private async Task<Dictionary<string, Dictionary<string, string>>> GetBasicOperationalReportIndexSpecialScoresAsync(
-            IDbConnection conn,
-            string[] auditIds)
-        {
-            if (auditIds.Length == 0)
-                return new Dictionary<string, Dictionary<string, string>>(StringComparer.OrdinalIgnoreCase);
-
-            const string sql = @"
-                SELECT
-                    ta.id AS ""TrxAuditId"",
-                    mqd.id AS ""NodeId"",
-                    tac.score_input AS ""ScoreInput""
-                FROM trx_audit ta
-                CROSS JOIN master_questioner_detail mqd
-                LEFT JOIN trx_audit_checklist tac
-                  ON tac.master_questioner_detail_id = mqd.id
-                 AND tac.trx_audit_id = ta.id
-                WHERE ta.id = ANY(@auditIds)
-                  AND mqd.id = ANY(@specialNodeIds);";
-
-            var rows = await conn.QueryAsync<BasicOperationalReportIndexSpecialScoreRow>(
-                sql,
-                new
-                {
-                    auditIds,
-                    specialNodeIds = BasicOperationalReportIndexSpecialNodeIds
-                });
-
-            return rows
-                .GroupBy(x => x.TrxAuditId, StringComparer.OrdinalIgnoreCase)
-                .ToDictionary(
-                    g => g.Key,
-                    g => g.ToDictionary(
-                        x => x.NodeId,
-                        x => NormalizeBasicOperationalReportIndexScore(x.ScoreInput),
-                        StringComparer.OrdinalIgnoreCase),
-                    StringComparer.OrdinalIgnoreCase);
-        }
-
-        private async Task<Dictionary<string, BasicOperationalReportIndexPenaltyFlags>> GetBasicOperationalReportIndexPenaltyFlagsAsync(
-            IDbConnection conn,
-            string[] auditIds)
-        {
-            if (auditIds.Length == 0)
-                return new Dictionary<string, BasicOperationalReportIndexPenaltyFlags>(StringComparer.OrdinalIgnoreCase);
-
-            const string sql = @"
-                SELECT
-                    ta.id AS ""TrxAuditId"",
-                    EXISTS (
-                        SELECT 1
-                        FROM trx_audit_checklist tac
-                        INNER JOIN master_questioner_detail mqd
-                          ON mqd.id = tac.master_questioner_detail_id
-                        WHERE tac.trx_audit_id = ta.id
-                          AND (
-                              (
-                                  tac.master_questioner_detail_id = ANY(@specialNodeIds)
-                                  AND tac.score_input <> 'A'
-                              )
-                              OR
-                              (
-                                  (
-                                      (mqd.penalty_excellent_criteria = 'LT_1' AND tac.score_input <> 'A')
-                                      OR
-                                      (mqd.penalty_excellent_criteria = 'EQ_0' AND tac.score_input = 'F')
-                                  )
-                                  AND (mqd.is_relaksasi = false OR mqd.is_relaksasi IS NULL)
-                                  AND mqd.is_penalty = true
-                              )
-                          )
-                    ) AS ""HasExcellentPenalty"",
-                    EXISTS (
-                        SELECT 1
-                        FROM trx_audit_checklist tac
-                        INNER JOIN master_questioner_detail mqd
-                          ON mqd.id = tac.master_questioner_detail_id
-                        WHERE tac.trx_audit_id = ta.id
-                          AND tac.score_input = 'F'
-                          AND mqd.is_penalty = true
-                          AND (mqd.is_relaksasi = false OR mqd.is_relaksasi IS NULL)
-                    ) AS ""HasGoodPenalty""
-                FROM trx_audit ta
-                WHERE ta.id = ANY(@auditIds);";
-
-            var rows = await conn.QueryAsync<BasicOperationalReportIndexPenaltyFlagRow>(
-                sql,
-                new
-                {
-                    auditIds,
-                    specialNodeIds = BasicOperationalReportIndexSpecialNodeIds
-                });
-
-            return rows.ToDictionary(
-                x => x.TrxAuditId,
-                x => new BasicOperationalReportIndexPenaltyFlags
-                {
-                    HasExcellentPenalty = x.HasExcellentPenalty,
-                    HasGoodPenalty = x.HasGoodPenalty
-                },
-                StringComparer.OrdinalIgnoreCase);
-        }
-
-        private async Task<Dictionary<string, BasicOperationalReportIndexFlowRow>> GetBasicOperationalReportIndexAuditFlowsAsync(IDbConnection conn)
-        {
-            const string sql = @"
-                SELECT
-                    audit_level AS ""AuditLevel"",
-                    passed_audit_level AS ""PassedAuditLevel"",
-                    failed_audit_level AS ""FailedAuditLevel"",
-                    audit_level_class AS ""AuditLevelClass""
-                FROM master_audit_flow;";
-
-            var rows = await conn.QueryAsync<BasicOperationalReportIndexFlowRow>(sql);
-
-            return rows
-                .Where(x => !string.IsNullOrWhiteSpace(x.AuditLevel))
-                .GroupBy(x => x.AuditLevel, StringComparer.OrdinalIgnoreCase)
-                .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
-        }
-
-        private async Task UpdateBasicOperationalReportBoaStatusesAsync(
-            IDbConnection conn,
-            List<(string AuditId, string Status)> updates)
-        {
-            if (updates.Count == 0)
-                return;
-
-            const string sql = @"
-                UPDATE trx_audit AS ta
-                SET boa_status = v.status
-                FROM (
-                    SELECT unnest(@auditIds) AS id,
-                           unnest(@statuses) AS status
-                ) AS v
-                WHERE ta.id = v.id;";
-
-            await conn.ExecuteAsync(sql, new
-            {
-                auditIds = updates.Select(x => x.AuditId).ToArray(),
-                statuses = updates.Select(x => x.Status).ToArray()
-            });
-        }
-
-        private static decimal CalculateBasicOperationalReportIndexFinalScore(IEnumerable<BasicOperationalReportIndexChecklistRow> questionRows)
-        {
-            decimal sumAF = 0, sumWeight = 0, sumX = 0;
-
-            foreach (var item in questionRows)
-            {
-                decimal w = item.weight ?? 0;
-                string input = NormalizeBasicOperationalReportIndexScore(item.score_input);
-
-                if (input == "X")
-                {
-                    sumX += w;
-                    sumAF += item.score_x ?? 0;
-                }
-                else if (input == "F" && item.is_relaksasi)
-                {
-                    sumAF += 1.00m * w;
-                }
-                else
-                {
-                    decimal af = input switch
-                    {
-                        "A" => 1.00m,
-                        "B" => 0.80m,
-                        "C" => 0.60m,
-                        "D" => 0.40m,
-                        "E" => 0.20m,
-                        "F" => 0.00m,
-                        _ => 0.00m
-                    };
-                    sumAF += af * w;
-                }
-
-                sumWeight += w;
-            }
-
-            return (sumWeight - sumX) > 0
-                ? (sumAF / (sumWeight - sumX)) * sumWeight
-                : 0m;
-        }
-
-        private static (bool ForceGoodOnly, bool ForceNotCertified) GetBasicOperationalReportIndexSpecialScoreFlags(
-            Dictionary<string, string> specialScores)
-        {
-            bool forceGoodOnly = false;
-            bool forceNotCertified = false;
-
-            foreach (var score in specialScores.Values)
-            {
-                if (score == "C")
-                    forceGoodOnly = true;
-                else if (score != "A")
-                    forceNotCertified = true;
-            }
-
-            return (forceGoodOnly, forceNotCertified);
-        }
-
-        private static string NormalizeBasicOperationalReportIndexScore(string score)
-        {
-            return score?.Trim().ToUpperInvariant() ?? "";
         }
 
         [HttpGet]
