@@ -22,6 +22,7 @@ public class InvoiceController : Controller
     private const string ClaimPendingApproval = "PENDING_APPROVAL";
     private const string ClaimApproved = "APPROVED";
     private const string ClaimRejected = "REJECTED";
+    private const string InvoiceDetailInProgress = "IN_PROGRESS";
 
     public InvoiceController(EpasDbContext context)
     {
@@ -76,33 +77,45 @@ public class InvoiceController : Controller
         on aud.app_user_id equals usr.id into audUser
     from usr in audUser.DefaultIfEmpty()
     where
-        (
-            // Belum diproses finance
-            claim.status == ClaimUnderReview
-            && inv.Status == InvoiceInProgress
-            && det.Status == InvoiceDetailNotClaimed
-        )
-        ||
-        (
-            // Sedang menunggu approval finance
-            claim.status == ClaimPendingApproval
-            && inv.Status == InvoiceInProgress
-            && det.Status == InvoiceDetailNotClaimed
-        )
-        ||
-        (
-            // Sudah approve finance
-            claim.status == ClaimApproved
-            && inv.Status == InvoiceCompleted
-            && det.Status == InvoiceDetailClaimed
-        )
-        ||
-        (
-            // Ditolak finance
-            claim.status == ClaimRejected
-            && inv.Status == InvoiceRejected
-            && det.Status == InvoiceDetailNotClaimed
-        )
+     (
+         // Mobile Submit
+         // trx_invoice        = IN_PROGRESS
+         // trx_invoice_detail = IN_PROGRESS
+         // trx_claim          = UNDER_REVIEW
+         claim.status == ClaimUnderReview
+         && inv.Status == InvoiceInProgress
+         && det.Status == InvoiceDetailInProgress
+     )
+     ||
+     (
+         // CMS Klik Proses
+         // trx_invoice        = IN_PROGRESS
+         // trx_invoice_detail = IN_PROGRESS
+         // trx_claim          = PENDING_APPROVAL
+         claim.status == ClaimPendingApproval
+         && inv.Status == InvoiceInProgress
+         && det.Status == InvoiceDetailInProgress
+     )
+     ||
+     (
+         // CMS Setuju
+         // trx_invoice        = COMPLETED
+         // trx_invoice_detail = CLAIMED
+         // trx_claim          = APPROVED
+         claim.status == ClaimApproved
+         && inv.Status == InvoiceCompleted
+         && det.Status == InvoiceDetailClaimed
+     )
+     ||
+     (
+         // CMS Tidak Setuju
+         // trx_invoice        = REJECTED
+         // trx_invoice_detail = NOT_CLAIMED
+         // trx_claim          = REJECTED
+         claim.status == ClaimRejected
+         && inv.Status == InvoiceRejected
+         && det.Status == InvoiceDetailNotClaimed
+     )
     select new
     {
         Invoice = inv,
@@ -429,9 +442,9 @@ public class InvoiceController : Controller
             return RedirectToAction(nameof(Detail), new { id });
         }
 
-        // Flow awal yang boleh masuk tombol Proses:
+        // Flow awal yang boleh klik tombol Proses:
         // trx_invoice        = IN_PROGRESS
-        // trx_invoice_detail = NOT_CLAIMED
+        // trx_invoice_detail = IN_PROGRESS
         // trx_claim          = UNDER_REVIEW
         if (invoice.Status != InvoiceInProgress)
         {
@@ -439,7 +452,7 @@ public class InvoiceController : Controller
             return RedirectToAction(nameof(Detail), new { id });
         }
 
-        if (invoiceDetails.Any(x => x.Status != InvoiceInProgress))
+        if (invoiceDetails.Any(x => x.Status != InvoiceDetailInProgress))
         {
             TempData["Error"] = "Detail invoice belum masuk tahap in progress.";
             return RedirectToAction(nameof(Detail), new { id });
@@ -456,7 +469,7 @@ public class InvoiceController : Controller
 
         // Setelah klik Proses:
         // trx_invoice        = IN_PROGRESS
-        // trx_invoice_detail = NOT_CLAIMED
+        // trx_invoice_detail = IN_PROGRESS
         // trx_claim          = PENDING_APPROVAL
         invoice.Status = InvoiceInProgress;
         invoice.UpdatedBy = currentUser;
@@ -468,10 +481,13 @@ public class InvoiceController : Controller
 
         foreach (var detail in invoiceDetails)
         {
-            detail.Status = InvoiceDetailNotClaimed;
+            detail.Status = InvoiceDetailInProgress;
             detail.UpdatedBy = currentUser;
             detail.UpdatedDate = now;
         }
+
+        // WAJIB sebelum SaveChangesAsync agar DateTime Local/UTC sesuai tipe kolom PostgreSQL
+        NormalizeDateTimesForPostgres();
 
         await _context.SaveChangesAsync();
 
@@ -635,7 +651,7 @@ public class InvoiceController : Controller
             return RedirectToAction(nameof(Detail), new { id = invoiceId });
         }
 
-        if (invoiceDetails.Any(x => x.Status != InvoiceDetailNotClaimed))
+        if (invoiceDetails.Any(x => x.Status != InvoiceInProgress))
         {
             TempData["Error"] = "Detail invoice belum masuk tahap not claimed.";
             return RedirectToAction(nameof(Detail), new { id = invoiceId });
