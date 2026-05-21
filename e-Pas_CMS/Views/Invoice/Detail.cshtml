@@ -34,6 +34,14 @@
 
     var amountDue = Model.TotalExpense - Model.LessDirectCharges - Model.LessAdvances;
 
+    string DistanceDisplay(decimal? value)
+    {
+        if (!value.HasValue)
+            return "-";
+
+        return $"{value.Value:N0} KM";
+    }
+
     string MoneyInputValue(decimal value)
     {
         return value.ToString("0.##", CultureInfo.InvariantCulture);
@@ -41,24 +49,28 @@
 
     const string AssetBaseUrl = "https://epas-assets.zarata.co.id/";
 
+    string BuildAssetUrl(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+            return "";
+
+        // Kalau sudah full URL, jangan ditambah prefix lagi
+        if (path.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
+            path.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+            return path;
+
+        // Contoh:
+        // uploads/signature/xxx/file.png
+        // /uploads/signature/xxx/file.png
+        return AssetBaseUrl.TrimEnd('/') + "/" + path.TrimStart('/');
+    }
+
     string GetMediaPath(string key)
     {
         if (Model.AttachmentGroups != null && Model.AttachmentGroups.ContainsKey(key))
         {
             var path = Model.AttachmentGroups[key]?.media_path ?? "";
-
-            if (string.IsNullOrWhiteSpace(path))
-                return "";
-
-            // Kalau sudah full URL, jangan ditambah prefix lagi
-            if (path.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
-                path.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
-                return path;
-
-            // Contoh:
-            // uploads/claim/xxx/file.jpg
-            // /uploads/claim/xxx/file.jpg
-            return AssetBaseUrl.TrimEnd('/') + "/" + path.TrimStart('/');
+            return BuildAssetUrl(path);
         }
 
         return "";
@@ -83,6 +95,7 @@
     var vehicle = GetMediaPath("VEHICLE_MAINTENANCE");
     var internet = GetMediaPath("INTERNET");
     var other = GetMediaPath("OTHER");
+    var requestorSignatureUrl = BuildAssetUrl(Model.RequestorSignaturePath);
 }
 
 @section Styles {
@@ -106,6 +119,49 @@
             color: #94a3b8;
             font-size: 13px;
             line-height: 1.5;
+        }
+
+        .requestor-signature-img {
+            max-width: 150px;
+            max-height: 100px;
+            object-fit: contain;
+            display: block;
+        }
+
+        .requestor-stamp {
+            width: 135px;
+            height: 135px;
+            border: 4px solid #0891b2;
+            color: #0891b2;
+            border-radius: 50%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            transform: rotate(-10deg);
+            text-align: center;
+            background: rgba(8, 145, 178, 0.05);
+            box-shadow: inset 0 0 0 2px rgba(8, 145, 178, 0.15);
+        }
+
+        .requestor-stamp-main {
+            font-size: 17px;
+            font-weight: 900;
+            letter-spacing: 1px;
+            line-height: 1;
+        }
+
+        .requestor-stamp-sub {
+            font-size: 11px;
+            font-weight: 800;
+            letter-spacing: 1px;
+            margin-top: 7px;
+        }
+
+        .requestor-stamp-date {
+            font-size: 10px;
+            font-weight: 700;
+            margin-top: 5px;
         }
 
         .signed-stamp {
@@ -279,7 +335,7 @@
 
         .info-grid {
             display: grid;
-            grid-template-columns: repeat(5, minmax(130px, 1fr));
+            grid-template-columns: repeat(6, minmax(130px, 1fr));
             gap: 28px 42px;
             width: 100%;
         }
@@ -835,12 +891,12 @@
 
         @if (isDone)
         {
-            <a asp-action="DownloadPdf"
-               asp-route-id="@Model.Id"
-               class="download-pdf-btn">
-                <i class="bi bi-file-earmark-arrow-down-fill"></i>
-                Download PDF
-            </a>
+            // <a asp-action="DownloadPdf"
+            //    asp-route-id="@Model.Id"
+            //    class="download-pdf-btn">
+            //     <i class="bi bi-file-earmark-arrow-down-fill"></i>
+            //     Download PDF
+            // </a>
         }
     </div>
 
@@ -927,6 +983,18 @@
                 else
                 {
                     <div class="field-value">@Model.Homebase</div>
+                }
+            </div>
+
+            <div>
+                <label class="field-label">Jumlah Jarak</label>
+                @if (isEditableView)
+                {
+                    <input class="form-control invoice-input" value="@DistanceDisplay(Model.TotalKmRange)" readonly />
+                }
+                else
+                {
+                    <div class="field-value">@DistanceDisplay(Model.TotalKmRange)</div>
                 }
             </div>
         </div>
@@ -1270,13 +1338,22 @@
                 <label class="field-label">Requestor</label>
 
                 <div class="approval-signature-box">
-                    <div class="requestor-stamp">
-                        <div class="requestor-stamp-main">REQUESTOR</div>
-                        <div class="requestor-stamp-sub">SUBMITTED</div>
-                        <div class="requestor-stamp-date">
-                            @Model.ClaimDate.ToString("dd/MM/yyyy")
+                    @if (!string.IsNullOrWhiteSpace(requestorSignatureUrl))
+                    {
+                        <img src="@requestorSignatureUrl"
+                             alt="Requestor Signature"
+                             class="requestor-signature-img" />
+                    }
+                    else
+                    {
+                        <div class="requestor-stamp">
+                            <div class="requestor-stamp-main">REQUESTOR</div>
+                            <div class="requestor-stamp-sub">SUBMITTED</div>
+                            <div class="requestor-stamp-date">
+                                @Model.ClaimDate.ToString("dd/MM/yyyy")
+                            </div>
                         </div>
-                    </div>
+                    }
                 </div>
 
                 <div class="claimant-name">@Model.EmployeeName</div>

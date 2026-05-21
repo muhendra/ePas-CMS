@@ -74,6 +74,8 @@ public partial class trx_audit
     public string? report_file_boa { get; set; }
 
     public string? note { get; set; }
+
+    public decimal km_range { get; set; }
     public DateTime? review_audit_started_at { get; set; }
 
     public string? review_audit_started_by { get; set; }

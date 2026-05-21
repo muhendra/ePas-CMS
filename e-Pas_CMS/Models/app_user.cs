@@ -35,6 +35,8 @@ public partial class app_user
 
     public DateTime? updated_date { get; set; }
 
+    public string? signature_path { get; set; }
+
     public virtual ICollection<app_user_role> app_user_roles { get; set; } = new List<app_user_role>();
 
     public virtual ICollection<Notification> Notifications { get; set; } = new List<Notification>();

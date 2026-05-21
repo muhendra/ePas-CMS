@@ -63,35 +63,55 @@ public class InvoiceController : Controller
             .ToListAsync();
 
             var query =
-                from inv in _context.TrxInvoices.AsNoTracking()
-                join claim in _context.TrxClaims.AsNoTracking()
-                    on inv.Id equals claim.trx_invoice_id
-                join det in _context.TrxInvoiceDetails.AsNoTracking()
-                    on inv.Id equals det.TrxInvoiceId
-                join aud in _context.trx_audits.AsNoTracking()
-                    on det.TrxAuditId equals aud.id
-                join sp in _context.spbus.AsNoTracking()
-                    on aud.spbu_id equals sp.id
-                join usr in _context.app_users.AsNoTracking()
-                    on aud.app_user_id equals usr.id into audUser
-                from usr in audUser.DefaultIfEmpty()
-                where inv.Status == InvoiceInProgress
-                   && det.Status == InvoiceDetailNotClaimed
-                   && (
-                        claim.status == ClaimUnderReview
-                        || claim.status == ClaimPendingApproval
-                        || claim.status == ClaimApproved
-                        || claim.status == ClaimRejected
-                   )
-                select new
-                {
-                    Invoice = inv,
-                    Claim = claim,
-                    Detail = det,
-                    Audit = aud,
-                    Spbu = sp,
-                    SurveyorName = usr != null ? usr.name : "-"
-                };
+    from inv in _context.TrxInvoices.AsNoTracking()
+    join claim in _context.TrxClaims.AsNoTracking()
+        on inv.Id equals claim.trx_invoice_id
+    join det in _context.TrxInvoiceDetails.AsNoTracking()
+        on inv.Id equals det.TrxInvoiceId
+    join aud in _context.trx_audits.AsNoTracking()
+        on det.TrxAuditId equals aud.id
+    join sp in _context.spbus.AsNoTracking()
+        on aud.spbu_id equals sp.id
+    join usr in _context.app_users.AsNoTracking()
+        on aud.app_user_id equals usr.id into audUser
+    from usr in audUser.DefaultIfEmpty()
+    where
+        (
+            // Belum diproses finance
+            claim.status == ClaimUnderReview
+            && inv.Status == InvoiceInProgress
+            && det.Status == InvoiceDetailNotClaimed
+        )
+        ||
+        (
+            // Sedang menunggu approval finance
+            claim.status == ClaimPendingApproval
+            && inv.Status == InvoiceInProgress
+            && det.Status == InvoiceDetailNotClaimed
+        )
+        ||
+        (
+            // Sudah approve finance
+            claim.status == ClaimApproved
+            && inv.Status == InvoiceCompleted
+            && det.Status == InvoiceDetailClaimed
+        )
+        ||
+        (
+            // Ditolak finance
+            claim.status == ClaimRejected
+            && inv.Status == InvoiceRejected
+            && det.Status == InvoiceDetailNotClaimed
+        )
+    select new
+    {
+        Invoice = inv,
+        Claim = claim,
+        Detail = det,
+        Audit = aud,
+        Spbu = sp,
+        SurveyorName = usr != null ? usr.name : "-"
+    };
 
             if (userRegion.Any() || userSbm.Any())
             {
@@ -282,6 +302,14 @@ public class InvoiceController : Controller
             details[0].Amount = details[0].Amount + claimExpenseAmount;
         }
 
+        var totalKmRange = await (
+        from det in _context.TrxInvoiceDetails.AsNoTracking()
+        join aud in _context.trx_audits.AsNoTracking()
+            on det.TrxAuditId equals aud.id
+        where det.TrxInvoiceId == id
+        select (decimal?)aud.km_range
+        ).SumAsync() ?? 0;
+
         var totalAuditFee = details.Sum(x => x.AuditFee);
         var totalLumpsum = details.Sum(x => x.Lumpsum);
         var totalExpense = claimExpenseAmount + totalAuditFee + totalLumpsum;
@@ -308,6 +336,8 @@ public class InvoiceController : Controller
             claim.status == ClaimApproved ||
             claim.status == ClaimRejected;
 
+        var requestorUser = await GetRequestorUser(invoice.AppUserId, claim.app_user_id);
+
         var vm = new InvoiceDetailViewModel
         {
             Id = invoice.Id,
@@ -315,9 +345,12 @@ public class InvoiceController : Controller
             Status = invoice.Status,
             ClaimDate = claim.claim_date,
 
-            EmployeeName = await GetEmployeeName(invoice.AppUserId, claim.app_user_id),
+            EmployeeName = requestorUser.Name,
+            RequestorSignaturePath = requestorUser.SignaturePath,
+
             Period = $"{invoice.InvoicePeriodStart:dd MMM yyyy} - {invoice.InvoicePeriodEnd:dd MMM yyyy}",
             Homebase = "-",
+            TotalKmRange = totalKmRange,
             Job = "Audit SPBU",
 
             Items = details,
@@ -821,23 +854,34 @@ public class InvoiceController : Controller
             }
         }
     }
-
-    private async Task<string> GetEmployeeName(string invoiceAppUserId, string claimAppUserId)
+    private async Task<(string Name, string SignaturePath)> GetRequestorUser(
+    string invoiceAppUserId,
+    string claimAppUserId)
     {
         var userId = !string.IsNullOrWhiteSpace(invoiceAppUserId)
             ? invoiceAppUserId
             : claimAppUserId;
 
         if (string.IsNullOrWhiteSpace(userId))
-            return "-";
+            return ("-", "");
 
-        var name = await _context.app_users
+        var user = await _context.app_users
             .AsNoTracking()
             .Where(x => x.id == userId)
-            .Select(x => x.name)
+            .Select(x => new
+            {
+                x.name,
+                x.signature_path
+            })
             .FirstOrDefaultAsync();
 
-        return string.IsNullOrWhiteSpace(name) ? "-" : name;
+        if (user == null)
+            return ("-", "");
+
+        return (
+            string.IsNullOrWhiteSpace(user.name) ? "-" : user.name,
+            user.signature_path ?? ""
+        );
     }
 }
 

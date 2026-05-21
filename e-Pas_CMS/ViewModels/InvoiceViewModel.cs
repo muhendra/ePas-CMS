@@ -47,6 +47,9 @@ namespace e_Pas_CMS.ViewModels
         public string Id { get; set; } = null!;
 
         public string InvoiceNo { get; set; } = null!;
+        public string RequestorSignaturePath { get; set; }
+
+        public decimal TotalKmRange { get; set; }
 
         public string Status { get; set; } = null!;
 
