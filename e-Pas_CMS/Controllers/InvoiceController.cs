@@ -439,9 +439,9 @@ public class InvoiceController : Controller
             return RedirectToAction(nameof(Detail), new { id });
         }
 
-        if (invoiceDetails.Any(x => x.Status != InvoiceDetailNotClaimed))
+        if (invoiceDetails.Any(x => x.Status != InvoiceInProgress))
         {
-            TempData["Error"] = "Detail invoice belum masuk tahap not claimed.";
+            TempData["Error"] = "Detail invoice belum masuk tahap in progress.";
             return RedirectToAction(nameof(Detail), new { id });
         }
 
