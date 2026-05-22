@@ -538,9 +538,9 @@ public class InvoiceController : Controller
                 return RedirectToAction(nameof(Detail), new { id = invoiceId });
             }
 
-            if (invoiceDetails.Any(x => x.Status != InvoiceDetailNotClaimed))
+            if (invoiceDetails.Any(x => x.Status != InvoiceDetailInProgress))
             {
-                TempData["Error"] = "Detail invoice belum masuk tahap not claimed.";
+                TempData["Error"] = "Detail invoice belum masuk tahap in progress.";
                 return RedirectToAction(nameof(Detail), new { id = invoiceId });
             }
 
@@ -607,102 +607,117 @@ public class InvoiceController : Controller
     {
         var invoiceId = ResolveInvoiceId(id, model);
 
-        if (string.IsNullOrWhiteSpace(invoiceId))
-            return NotFound();
-
-        if (string.IsNullOrWhiteSpace(model?.RejectionReason))
+        try
         {
-            TempData["Error"] = "Alasan ditolak wajib diisi.";
+            if (string.IsNullOrWhiteSpace(invoiceId))
+                return NotFound();
+
+            if (string.IsNullOrWhiteSpace(model?.RejectionReason))
+            {
+                TempData["Error"] = "Alasan ditolak wajib diisi.";
+                return RedirectToAction(nameof(Detail), new { id = invoiceId });
+            }
+
+            var invoice = await _context.TrxInvoices
+                .FirstOrDefaultAsync(x => x.Id == invoiceId);
+
+            if (invoice == null)
+                return NotFound();
+
+            var claim = await _context.TrxClaims
+                .FirstOrDefaultAsync(x => x.trx_invoice_id == invoiceId);
+
+            if (claim == null)
+            {
+                TempData["Error"] = "Data claim tidak ditemukan.";
+                return RedirectToAction(nameof(Detail), new { id = invoiceId });
+            }
+
+            var invoiceDetails = await _context.TrxInvoiceDetails
+                .Where(x => x.TrxInvoiceId == invoiceId)
+                .ToListAsync();
+
+            if (!invoiceDetails.Any())
+            {
+                TempData["Error"] = "Detail invoice tidak ditemukan.";
+                return RedirectToAction(nameof(Detail), new { id = invoiceId });
+            }
+
+            // Finance hanya boleh reject saat invoice berada di tahap pending approval:
+            // trx_invoice        = IN_PROGRESS
+            // trx_invoice_detail = IN_PROGRESS
+            // trx_claim          = PENDING_APPROVAL
+            if (invoice.Status != InvoiceInProgress)
+            {
+                TempData["Error"] = "Invoice belum masuk tahap in progress.";
+                return RedirectToAction(nameof(Detail), new { id = invoiceId });
+            }
+
+            if (invoiceDetails.Any(x => x.Status != InvoiceDetailInProgress))
+            {
+                TempData["Error"] = "Detail invoice belum masuk tahap in progress.";
+                return RedirectToAction(nameof(Detail), new { id = invoiceId });
+            }
+
+            if (claim.status != ClaimPendingApproval)
+            {
+                TempData["Error"] = "Claim belum masuk tahap pending approval.";
+                return RedirectToAction(nameof(Detail), new { id = invoiceId });
+            }
+
+            ApplyFinanceAdjustment(invoiceDetails, model?.Items);
+
+            var approval = await BuildApprovalSnapshot(
+                invoice,
+                claim,
+                invoiceDetails,
+                "REJECTED",
+                model.RejectionReason.Trim()
+            );
+
+            var now = DateTime.Now;
+            var currentUser = GetCurrentUser();
+
+            // Jika finance reject:
+            // trx_invoice        = REJECTED
+            // trx_invoice_detail = NOT_CLAIMED
+            // trx_claim          = REJECTED
+            invoice.Status = InvoiceRejected;
+            invoice.UpdatedBy = currentUser;
+            invoice.UpdatedDate = now;
+
+            claim.status = ClaimRejected;
+            claim.completed_date = now;
+            claim.updated_by = currentUser;
+            claim.updated_date = now;
+
+            foreach (var detail in invoiceDetails)
+            {
+                detail.Status = InvoiceDetailNotClaimed;
+                detail.UpdatedBy = currentUser;
+                detail.UpdatedDate = now;
+            }
+
+            _context.TrxInvoiceApprovals.Add(approval);
+
+            // WAJIB sebelum SaveChangesAsync agar DateTime Local/UTC sesuai tipe kolom PostgreSQL
+            NormalizeDateTimesForPostgres();
+
+            await _context.SaveChangesAsync();
+
+            TempData["Success"] = "Invoice berhasil ditolak dan alasan penolakan berhasil disimpan.";
+
             return RedirectToAction(nameof(Detail), new { id = invoiceId });
         }
-
-        var invoice = await _context.TrxInvoices
-            .FirstOrDefaultAsync(x => x.Id == invoiceId);
-
-        if (invoice == null)
-            return NotFound();
-
-        var claim = await _context.TrxClaims
-            .FirstOrDefaultAsync(x => x.trx_invoice_id == invoiceId);
-
-        if (claim == null)
+        catch (Exception ex)
         {
-            TempData["Error"] = "Data claim tidak ditemukan.";
-            return RedirectToAction(nameof(Detail), new { id = invoiceId });
+            TempData["Error"] = "Gagal reject invoice: " + ex.Message;
+
+            if (ex.InnerException != null)
+                TempData["Error"] += " | Inner: " + ex.InnerException.Message;
+
+            return RedirectToAction(nameof(Detail), new { id = invoiceId ?? id ?? model?.Id });
         }
-
-        var invoiceDetails = await _context.TrxInvoiceDetails
-            .Where(x => x.TrxInvoiceId == invoiceId)
-            .ToListAsync();
-
-        if (!invoiceDetails.Any())
-        {
-            TempData["Error"] = "Detail invoice tidak ditemukan.";
-            return RedirectToAction(nameof(Detail), new { id = invoiceId });
-        }
-
-        // Finance hanya boleh reject status:
-        // trx_invoice        = IN_PROGRESS
-        // trx_invoice_detail = NOT_CLAIMED
-        // trx_claim          = PENDING_APPROVAL
-        if (invoice.Status != InvoiceInProgress)
-        {
-            TempData["Error"] = "Invoice belum masuk tahap in progress.";
-            return RedirectToAction(nameof(Detail), new { id = invoiceId });
-        }
-
-        if (invoiceDetails.Any(x => x.Status != InvoiceInProgress))
-        {
-            TempData["Error"] = "Detail invoice belum masuk tahap not claimed.";
-            return RedirectToAction(nameof(Detail), new { id = invoiceId });
-        }
-
-        if (claim.status != ClaimPendingApproval)
-        {
-            TempData["Error"] = "Claim belum masuk tahap pending approval.";
-            return RedirectToAction(nameof(Detail), new { id = invoiceId });
-        }
-
-        ApplyFinanceAdjustment(invoiceDetails, model?.Items);
-
-        var approval = await BuildApprovalSnapshot(
-            invoice,
-            claim,
-            invoiceDetails,
-            "REJECTED",
-            model.RejectionReason.Trim()
-        );
-
-        var now = DateTime.Now;
-        var currentUser = GetCurrentUser();
-
-        // Jika finance reject:
-        // trx_invoice        = REJECTED
-        // trx_invoice_detail = NOT_CLAIMED
-        // trx_claim          = REJECTED
-        invoice.Status = InvoiceRejected;
-        invoice.UpdatedBy = currentUser;
-        invoice.UpdatedDate = now;
-
-        claim.status = ClaimRejected;
-        claim.completed_date = now;
-        claim.updated_by = currentUser;
-        claim.updated_date = now;
-
-        foreach (var detail in invoiceDetails)
-        {
-            detail.Status = InvoiceDetailNotClaimed;
-            detail.UpdatedBy = currentUser;
-            detail.UpdatedDate = now;
-        }
-
-        _context.TrxInvoiceApprovals.Add(approval);
-
-        await _context.SaveChangesAsync();
-
-        TempData["Success"] = "Invoice berhasil ditolak dan alasan penolakan berhasil disimpan.";
-
-        return RedirectToAction(nameof(Detail), new { id = invoiceId });
     }
 
     public IActionResult DownloadPdf(string id)

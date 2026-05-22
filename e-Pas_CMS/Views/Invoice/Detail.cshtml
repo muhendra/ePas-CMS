@@ -96,6 +96,17 @@
     var internet = GetMediaPath("INTERNET");
     var other = GetMediaPath("OTHER");
     var requestorSignatureUrl = BuildAssetUrl(Model.RequestorSignaturePath);
+
+    var attachmentItems = new[]
+    {
+        new { Title = "BPJS Kesehatan", Path = bpjsKesehatan, Description = "" },
+        new { Title = "BPJS Ketenagakerjaan", Path = bpjsKetenagakerjaan, Description = "" },
+        new { Title = "Vehicle maintenance", Path = vehicle, Description = "" },
+        new { Title = "Internet data", Path = internet, Description = "" },
+        new { Title = "Others", Path = other, Description = "Biaya makan" }
+    }
+    .Where(x => !string.IsNullOrWhiteSpace(x.Path))
+    .ToList();
 }
 
 @section Styles {
@@ -1194,99 +1205,28 @@
             </table>
         </div>
 
-        <h2 class="section-title" style="margin-top:28px;margin-bottom:22px;">Lampiran-lampiran</h2>
+        @if (attachmentItems.Any())
+        {
+            <h2 class="section-title" style="margin-top:28px;margin-bottom:22px;">Lampiran-lampiran</h2>
 
-        <div class="attachment-grid">
-            <div>
-                <div class="attachment-title">BPJS Kesehatan</div>
-                @if (isEditableView)
+            <div class="attachment-grid">
+                @foreach (var attachment in attachmentItems)
                 {
-                    <div class="upload-box"><span>Pilih file</span><i class="bi bi-upload"></i></div>
-                }
+                    <div>
+                        <div class="attachment-title">@attachment.Title</div>
 
-                @if (!string.IsNullOrWhiteSpace(bpjsKesehatan))
-                {
-                    <a href="@bpjsKesehatan" target="_blank" class="attachment-link">@GetFileName(bpjsKesehatan)</a>
-                }
-                else
-                {
-                    <a href="#" class="attachment-link">Dokumen Pendukung 1.pdf</a>
+                        @if (!string.IsNullOrWhiteSpace(attachment.Description))
+                        {
+                            <p class="attachment-desc">@attachment.Description</p>
+                        }
+
+                        <a href="@attachment.Path" target="_blank" class="attachment-link">
+                            @GetFileName(attachment.Path)
+                        </a>
+                    </div>
                 }
             </div>
-
-            <div>
-                <div class="attachment-title">BPJS Ketenagakerjaan</div>
-                @if (isEditableView)
-                {
-                    <div class="upload-box"><span>Pilih file</span><i class="bi bi-upload"></i></div>
-                }
-
-                @if (!string.IsNullOrWhiteSpace(bpjsKetenagakerjaan))
-                {
-                    <a href="@bpjsKetenagakerjaan" target="_blank" class="attachment-link">@GetFileName(bpjsKetenagakerjaan)</a>
-                }
-                else
-                {
-                    <a href="#" class="attachment-link">Dokumen Pendukung 1.pdf</a>
-                }
-            </div>
-
-            <div>
-                <div class="attachment-title">Vehicle maintenance</div>
-                @if (isEditableView)
-                {
-                    <div class="upload-box"><span>Pilih file</span><i class="bi bi-upload"></i></div>
-                }
-
-                @if (!string.IsNullOrWhiteSpace(vehicle))
-                {
-                    <a href="@vehicle" target="_blank" class="attachment-link">@GetFileName(vehicle)</a>
-                }
-                else
-                {
-                    <a href="#" class="attachment-link">Dokumen Pendukung 1.pdf</a>
-                }
-            </div>
-
-            <div>
-                <div class="attachment-title">Internet data</div>
-                @if (isEditableView)
-                {
-                    <div class="upload-box"><span>Pilih file</span><i class="bi bi-upload"></i></div>
-                }
-
-                @if (!string.IsNullOrWhiteSpace(internet))
-                {
-                    <a href="@internet" target="_blank" class="attachment-link">@GetFileName(internet)</a>
-                }
-                else
-                {
-                    <a href="#" class="attachment-link">Dokumen Pendukung 1.pdf</a>
-                }
-            </div>
-
-            <div>
-                <div class="attachment-title">Others</div>
-                @if (isEditableView)
-                {
-                    <div class="upload-box"><span>Pilih file</span><i class="bi bi-upload"></i></div>
-                    <input class="cell-input" value="Biaya makan" readonly style="max-width:180px;margin-bottom:6px;" />
-                }
-                else
-                {
-                    <p class="attachment-desc">Biaya makan</p>
-                }
-
-                @if (!string.IsNullOrWhiteSpace(other))
-                {
-                    <a href="@other" target="_blank" class="attachment-link">@GetFileName(other)</a>
-                }
-                else
-                {
-                    <a href="#" class="attachment-link">Dokumen Pendukung 1.pdf</a>
-                }
-            </div>
-        </div>
+        }
 
         <h2 class="section-title" style="margin-bottom:22px;">Informasi Bank</h2>
 
@@ -1391,6 +1331,7 @@
                         <label class="field-label mt-3">Alasan Ditolak</label>
                         <textarea form="approvalForm"
                               name="RejectionReason"
+                              required
                               class="finance-reject-textarea"
                               rows="4"
                               placeholder="Isi alasan jika invoice ditolak. Contoh: nominal tidak sesuai, dokumen kurang lengkap, atau perlu revisi audit fee.">@Model.RejectionReason</textarea>
@@ -1485,6 +1426,7 @@ else if (isPendingApproval)
     <div class="bottom-action-bar">
         <button type="submit"
                 form="approvalForm"
+                formmethod="post"
                 formaction="@Url.Action("Reject", "Invoice", new { id = Model.Id })"
                 class="btn-reject"
                 onclick="return validateRejectReason();">
@@ -1493,6 +1435,7 @@ else if (isPendingApproval)
 
         <button type="submit"
                 form="approvalForm"
+                formmethod="post"
                 formaction="@Url.Action("Approve", "Invoice", new { id = Model.Id })"
                 class="btn-approve"
                 onclick="return confirmApprove();">
