@@ -17,15 +17,15 @@
         {
             <div class="form-floating mb-3" id="StatusSelectWrap">
                 @Html.DropDownListFor(m => m.Status,
-                         new SelectList(new[]
-                         {
-            new { Value = "DRAFT",       Text = "Draft" },
-            new { Value = "NOT_STARTED", Text = "Belum Dimulai" }
-            }, "Value", "Text", Model.Status),
-                         new { @class = "form-select", id = "StatusSelect" })
-                <label for="StatusSelect">Status</label>
-            </div>
-        }
+                new SelectList(new[]
+                {
+                        new { Value = "DRAFT",       Text = "Draft" },
+                        new { Value = "NOT_STARTED", Text = "Belum Dimulai" }
+                        }, "Value", "Text", Model.Status),
+                        new { @class = "form-select", id = "StatusSelect" })
+            <label for="StatusSelect">Status</label>
+        </div>
+                }
 
         <div class="card shadow-sm rounded-4 p-4 mb-4">
             <h5 class="fw-semibold mb-3 text-primary">Informasi SPBU & Auditor</h5>
@@ -33,13 +33,13 @@
             <label class="form-label">Status</label>
             <div class="form-floating mb-3">
                 @Html.TextBoxFor(m => m.Status, new
-                    {
-                        @class = "form-control",
-                        id = "StatusReadonly",
-                        @readonly = "readonly",
-                        disabled = "disabled",
-                        placeholder = "Status"
-                    })
+                {
+                    @class = "form-control",
+                                id = "StatusReadonly",
+                                @readonly = "readonly",
+                                disabled = "disabled",
+                                placeholder = "Status"
+                                })
                 <label for="StatusReadonly">Status</label>
             </div>
 
@@ -72,10 +72,16 @@
                 <div class="input-group">
                     <input type="text" class="form-control" id="Auditor2Info"
                            value="@Model.UserList.FirstOrDefault(x => x.Value == Model.AppUserIdAuditor2)?.Text" readonly />
+
                     <button type="button" class="btn btn-outline-primary"
                             data-bs-toggle="modal" data-bs-target="#auditorModal"
                             onclick="setCurrentAuditorSlot(2)">
                         Pilih Auditor 2
+                    </button>
+
+                    <button type="button" class="btn btn-outline-danger"
+                            onclick="clearAuditor2()">
+                        Kosongkan
                     </button>
                 </div>
             </div>
@@ -86,25 +92,25 @@
 
             <div class="form-floating mb-3">
                 @Html.DropDownListFor(m => m.AuditLevel, Model.AuditLevelList, "Pilih Audit Level",
-                         new { @class = "form-select", id = "AuditLevel" })
+                                new { @class = "form-select", id = "AuditLevel" })
                 <label for="AuditLevel">Audit Level</label>
             </div>
 
             <div class="form-floating mb-3">
                 @Html.DropDownListFor(m => m.AuditType,
-                         new SelectList(new[]
-                         {
-                new { Value = "Regular Audit",     Text = "Regular Audit" },
-                new { Value = "Mystery Audit",     Text = "Mystery Audit" },
-                new { Value = "Basic Operational", Text = "Basic Operational" }
-                }, "Value", "Text", Model.AuditType),
-                         new { @class = "form-select", id = "AuditType" })
+                                new SelectList(new[]
+                                {
+                                new { Value = "Regular Audit",     Text = "Regular Audit" },
+                                new { Value = "Mystery Audit",     Text = "Mystery Audit" },
+                                new { Value = "Basic Operational", Text = "Basic Operational" }
+                                }, "Value", "Text", Model.AuditType),
+                                new { @class = "form-select", id = "AuditType" })
                 <label for="AuditType">Audit Type</label>
             </div>
 
             <div class="form-floating mb-3">
                 @Html.TextBoxFor(m => m.AuditScheduleDate, "{0:yyyy-MM-dd}",
-                         new { @class = "form-control", type = "date", placeholder = "Tanggal Audit" })
+                                new { @class = "form-control", type = "date", placeholder = "Tanggal Audit" })
                 <label>Tanggal Audit</label>
             </div>
         </div>
@@ -172,12 +178,14 @@
                 { search: search, page: spbuPage },
                 function (data) {
                     let html = "<ul class='list-group'>";
+
                     (data.items || []).forEach(item => {
                         const text = `${item.spbu_no} - ${item.address}`;
                         html += `<li class='list-group-item list-group-item-action' style='cursor:pointer'
                                     onclick="selectSpbu('${item.id}', '${text.replace(/'/g, "\\'")}')">
                                     ${text}</li>`;
                     });
+
                     html += "</ul>";
                     $("#spbuList").html(html);
                 });
@@ -207,12 +215,14 @@
                 { search: search, page: auditorPage },
                 function (data) {
                     let html = "<ul class='list-group'>";
+
                     (data.items || []).forEach(item => {
                         const text = item.text || "";
                         html += `<li class='list-group-item list-group-item-action' style='cursor:pointer'
                                     onclick="selectAuditor('${item.id}', '${text.replace(/'/g, "\\'")}')">
                                     ${text}</li>`;
                     });
+
                     html += "</ul>";
                     $("#auditorList").html(html);
                 });
@@ -226,7 +236,13 @@
                 $("#AppUserIdAuditor2").val(id);
                 $("#Auditor2Info").val(text);
             }
+
             bootstrap.Modal.getInstance(document.getElementById('auditorModal')).hide();
+        }
+
+        function clearAuditor2() {
+            $("#AppUserIdAuditor2").val("");
+            $("#Auditor2Info").val("");
         }
 
         function nextAuditor() {

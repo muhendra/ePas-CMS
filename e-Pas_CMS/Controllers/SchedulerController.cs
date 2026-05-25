@@ -634,9 +634,11 @@ namespace e_Pas_CMS.Controllers
             audit.app_user_id = model.AppUserId;
 
             // ===== AUDITOR 2 =====
-            if (!string.IsNullOrWhiteSpace(model.AppUserIdAuditor2))
+            var auditor2Id = (model.AppUserIdAuditor2 ?? "").Trim();
+
+            if (!string.IsNullOrWhiteSpace(auditor2Id))
             {
-                audit.app_user_id_auditor2 = model.AppUserIdAuditor2;
+                audit.app_user_id_auditor2 = auditor2Id;
 
                 if (string.IsNullOrEmpty(audit.form_type_auditor2))
                     audit.form_type_auditor2 = "QQ";
@@ -647,6 +649,8 @@ namespace e_Pas_CMS.Controllers
             else
             {
                 audit.app_user_id_auditor2 = null;
+                audit.form_type_auditor2 = null;
+                audit.form_status_auditor2 = null;
             }
 
             audit.audit_level = model.AuditLevel;
@@ -704,7 +708,6 @@ namespace e_Pas_CMS.Controllers
             // ===== DETEKSI TRANSISI DRAFT -> NOT_STARTED (status & form_status_auditor1) =====
             var finalStatus = (audit.status ?? "").Trim().ToUpperInvariant();
             var finalFormStatusAud1 = (audit.form_status_auditor1 ?? "").Trim().ToUpperInvariant();
-            var finalFormStatusAud2= (audit.status ?? "").Trim().ToUpperInvariant();
 
             bool isDraftToNotStarted =
                 oldStatus == "DRAFT" && finalStatus == "NOT_STARTED";
@@ -717,7 +720,7 @@ namespace e_Pas_CMS.Controllers
             {
                 _context.trx_audit_not_started_logs.Add(new trx_audit_not_started_log
                 {
-                    id = Guid.NewGuid().ToString(), // ✅ wajib isi supaya EF bisa track
+                    id = Guid.NewGuid().ToString(),
                     trx_audit_id = audit.id,
                     spbu_id = audit.spbu_id,
                     old_status = oldStatus,
