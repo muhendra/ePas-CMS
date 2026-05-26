@@ -962,13 +962,17 @@ namespace e_Pas_CMS.Controllers
             return View(model);
         }
 
-
         [HttpGet]
-        public async Task<IActionResult> DownloadCsv(string searchTerm = "")
+        public async Task<IActionResult> DownloadCsv(string searchTerm = "", DateTime? filterDate = null)
         {
             try
             {
                 var currentUser = User.Identity?.Name;
+
+                if (!filterDate.HasValue)
+                {
+                    return BadRequest("Filter date wajib diisi.");
+                }
 
                 _context.Database.SetCommandTimeout(123600);
 
@@ -982,17 +986,45 @@ namespace e_Pas_CMS.Controllers
 
                 var allowedStatuses = new[] { "VERIFIED" };
 
-                var start = new DateTime(2026, 04, 01);
-                var end = new DateTime(2026, 04, 30);
+                var start = filterDate.Value.Date;
+                var end = start.AddDays(1);
 
                 var baseQuery = _context.trx_audits.AsNoTracking()
-.Where(a =>
-    allowedStatuses.Contains(a.status) &&
-    a.audit_type != "Basic Operational" &&
-    (a.audit_execution_time ?? a.created_date) >= start &&
-    (a.audit_execution_time ?? a.created_date) < end
-    //&& a.id == "89ac7143-bac3-4bf2-9b6b-b1f55f81602b"
-);
+                    .Where(a =>
+                        allowedStatuses.Contains(a.status) &&
+                        a.audit_type != "Basic Operational" &&
+                        (a.audit_execution_time ?? a.created_date) >= start &&
+                        (a.audit_execution_time ?? a.created_date) < end
+                    );
+
+                if (!string.IsNullOrWhiteSpace(searchTerm))
+                {
+                    var term = searchTerm.Trim().ToLower();
+
+                    baseQuery = baseQuery.Where(a =>
+                        (
+                            a.spbu != null &&
+                            (
+                                (a.spbu.spbu_no ?? "").ToLower().Contains(term) ||
+                                (a.spbu.region ?? "").ToLower().Contains(term) ||
+                                (a.spbu.sbm ?? "").ToLower().Contains(term) ||
+                                (a.spbu.city_name ?? "").ToLower().Contains(term) ||
+                                (a.spbu.address ?? "").ToLower().Contains(term)
+                            )
+                        )
+                        ||
+                        (
+                            a.app_user != null &&
+                            (a.app_user.name ?? "").ToLower().Contains(term)
+                        )
+                        ||
+                        (a.status ?? "").ToLower().Contains(term)
+                        ||
+                        (a.audit_level ?? "").ToLower().Contains(term)
+                        ||
+                        (a.audit_type ?? "").ToLower().Contains(term)
+                    );
+                }
 
                 var lastAuditIdsQuery = baseQuery
                     .GroupBy(a => a.spbu_id)
@@ -1032,8 +1064,7 @@ namespace e_Pas_CMS.Controllers
             "kelas_spbu","penalty_good_alerts","penalty_excellent_alerts"
         };
 
-                // === STREAM HEADER
-                var fileName = $"Audit_Summary_{DateTime.Now:yyyyMMddHHmmss}.csv";
+                var fileName = $"Audit_Summary_SuperAdmin_{start:yyyyMMdd}_{DateTime.Now:HHmmss}.csv";
                 Response.Headers.Add("Content-Disposition", $"attachment; filename={fileName}");
                 Response.ContentType = "text/csv";
 
@@ -1100,6 +1131,7 @@ namespace e_Pas_CMS.Controllers
                                 "F" => 0.00m,
                                 _ => 0.00m
                             };
+
                             sumAF += af * w;
                         }
 
@@ -1110,13 +1142,12 @@ namespace e_Pas_CMS.Controllers
                         ? (sumAF / (sumWeight - sumX)) * sumWeight
                         : 0m;
 
-                    // === Special Node Score Check ===
                     var specialNodeIds = new List<Guid>
-                    {
-                        Guid.Parse("555fe2e4-b95b-461b-9c92-ad8b5c837119"),
-                        Guid.Parse("bafc206f-ed29-4bbc-8053-38799e186fb0"),
-                        Guid.Parse("d26f4caa-e849-4ab4-9372-298693247272")
-                    };
+            {
+                Guid.Parse("555fe2e4-b95b-461b-9c92-ad8b5c837119"),
+                Guid.Parse("bafc206f-ed29-4bbc-8053-38799e186fb0"),
+                Guid.Parse("d26f4caa-e849-4ab4-9372-298693247272")
+            };
 
                     if (a.created_date > new DateTime(2025, 5, 31))
                     {
@@ -1155,7 +1186,6 @@ namespace e_Pas_CMS.Controllers
                             forceNotCertified = true;
                     }
 
-                    // === Penalty Check
                     var penaltyExcellentQuery = @"SELECT STRING_AGG(mqd.penalty_alert, ', ') AS penalty_alerts
                     FROM trx_audit_checklist tac
                     INNER JOIN master_questioner_detail mqd ON mqd.id = tac.master_questioner_detail_id
@@ -1202,14 +1232,12 @@ namespace e_Pas_CMS.Controllers
 
                     try
                     {
-                        // === Query penalty excellent
                         penaltyExcellentResult = await conn.ExecuteScalarAsync<string>(
                             penaltyExcellentQuery,
                             new { id = a.id },
                             commandTimeout: 60000
                         );
 
-                        // === Query penalty good
                         penaltyGoodResult = await conn.ExecuteScalarAsync<string>(
                             penaltyGoodQuery,
                             new { id = a.id },
@@ -1218,12 +1246,8 @@ namespace e_Pas_CMS.Controllers
                     }
                     catch (Exception ex)
                     {
-                        // Logging optional
                         Console.WriteLine($"[ERROR] AuditID: {a.id} gagal ambil penalty. Reason: {ex.Message}");
 
-                        // Kamu bisa simpan ke database audit log kalau perlu
-
-                        // Supaya CSV tetap lanjut, jangan throw — set value khusus
                         penaltyExcellentResult = $"ERROR-{a.id}";
                         penaltyGoodResult = $"ERROR-{a.id}";
                     }
@@ -1231,22 +1255,27 @@ namespace e_Pas_CMS.Controllers
                     bool hasExcellentPenalty = !string.IsNullOrEmpty(penaltyExcellentResult);
                     bool hasGoodPenalty = !string.IsNullOrEmpty(penaltyGoodResult);
 
-                    // === Audit Next
                     string auditNext = null;
                     string levelspbu = null;
 
                     var auditFlowSql = @"SELECT * FROM master_audit_flow WHERE audit_level = @level LIMIT 1;";
                     var auditFlow = await conn.QueryFirstOrDefaultAsync<dynamic>(auditFlowSql, new { level = a.audit_level });
 
-                    // === Hitung Compliance
                     var checklistData = await GetChecklistDataAsync(conn, a.id);
                     var mediaList = await GetMediaPerNodeAsync(conn, a.id);
                     var elements = BuildHierarchy(checklistData, mediaList);
-                    foreach (var element in elements) AssignWeightRecursive(element);
+
+                    foreach (var element in elements)
+                    {
+                        AssignWeightRecursive(element);
+                    }
+
                     CalculateChecklistScores(elements);
                     CalculateOverallScore(new DetailReportViewModel { Elements = elements }, checklistData);
+
                     var modelstotal = new DetailReportViewModel { Elements = elements };
                     CalculateOverallScore(modelstotal, checklistData);
+
                     decimal? totalScore = modelstotal.TotalScore;
                     var compliance = HitungComplianceLevelDariElements(elements);
 
@@ -1256,7 +1285,6 @@ namespace e_Pas_CMS.Controllers
                         ? a.updated_date
                         : a.approval_date;
 
-                    // === Compliance validation
                     var sss = Math.Round(compliance.SSS ?? 0, 2);
                     var eqnq = Math.Round(compliance.EQnQ ?? 0, 2);
                     var rfs = Math.Round(compliance.RFS ?? 0, 2);
@@ -1266,7 +1294,6 @@ namespace e_Pas_CMS.Controllers
                     bool failGood = sss < 80 || eqnq < 85 || rfs < 85 || vfc < 15 || epo < 25;
                     bool failExcellent = sss < 85 || eqnq < 85 || rfs < 85 || vfc < 20 || epo < 50;
 
-                    // === Update status with compliance logic
                     string goodStatus = (finalScore >= 75 && !hasGoodPenalty && !failGood)
                         ? "CERTIFIED"
                         : "NOT CERTIFIED";
@@ -1317,12 +1344,12 @@ namespace e_Pas_CMS.Controllers
 
                         var auditlevelClassSql = @"SELECT audit_level_class FROM master_audit_flow WHERE audit_level = @level LIMIT 1;";
                         var auditlevelClass = await conn.QueryFirstOrDefaultAsync<dynamic>(auditlevelClassSql, new { level = auditNext });
+
                         levelspbu = auditlevelClass != null
                             ? (auditlevelClass.audit_level_class ?? "")
                             : "";
                     }
 
-                    // === UPDATE AUDIT_NEXT & LEVEL SPBU KE TABEL SPBU
                     var updateSpbuSql = @"
                     UPDATE spbu 
                     SET 
@@ -1356,7 +1383,9 @@ namespace e_Pas_CMS.Controllers
                             g => g.First().score_input?.Trim().ToUpperInvariant() ?? ""
                         );
 
-                    var checklistValues = numberList.Select(number => $"\"{(checklistMap.TryGetValue(number, out var val) ? val : "")}\"");
+                    var checklistValues = numberList.Select(number =>
+                        $"\"{(checklistMap.TryGetValue(number, out var val) ? val : "")}\""
+                    );
 
                     decimal scores = (decimal)(totalScore ?? a.score);
 
@@ -1391,7 +1420,6 @@ namespace e_Pas_CMS.Controllers
                 $"\"{penaltyExcellentResult}\""
             }.Concat(checklistValues)));
 
-                    // === FLUSH PER ROW (INI KUNCI BIAR NGGAK DELAY)
                     await writer.FlushAsync();
                     await Response.Body.FlushAsync();
                 }

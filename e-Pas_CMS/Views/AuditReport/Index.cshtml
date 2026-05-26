@@ -15,6 +15,11 @@
     var selectedMonth = ViewBag.FilterMonth as int?;
     var selectedYear = ViewBag.FilterYear as int?;
     var currentYear = DateTime.Now.Year;
+
+    bool isSuperAdmin =
+        User.IsInRole("SuperAdmin") ||
+        User.IsInRole("Superadmin") ||
+        User.IsInRole("SUPERADMIN");
 }
 
 @section Styles {
@@ -116,6 +121,21 @@
             .btn-success:hover {
                 background: #16a34a;
             }
+
+        .btn-superadmin-download {
+            background: #111827;
+            border: none;
+            color: #ffffff;
+        }
+
+            .btn-superadmin-download:hover {
+                background: #1f2937;
+                color: #ffffff;
+            }
+
+        .superadmin-download-date {
+            min-width: 180px;
+        }
 
         /* ===== TABLE MODERN ===== */
         .table {
@@ -276,6 +296,24 @@
             <i class="bi bi-download"></i> Download Summary
         </button>
     </div>
+
+    @if (isSuperAdmin)
+    {
+        <div class="col-auto superadmin-download-date">
+            <input type="date"
+                   id="downloadReportSuperAdminDate"
+                   class="form-control w-100"
+                   title="Tanggal Report Superadmin" />
+        </div>
+
+        <div class="col-auto">
+            <button type="button"
+                    id="btnDownloadReportSuperAdmin"
+                    class="btn btn-superadmin-download d-flex align-items-center gap-1">
+                <i class="bi bi-file-earmark-arrow-down"></i> Download Report Superadmin
+            </button>
+        </div>
+    }
 </form>
 
 <table id="audit-table" class="table table-bordered table-hover align-middle nowrap w-100">
@@ -404,6 +442,30 @@
 
                 const url = '@Url.Action("DownloadCsvByDate", "AuditReport")'
                     + `?month=${encodeURIComponent(mVal)}&year=${encodeURIComponent(yVal)}`;
+
+                window.location.href = url;
+            });
+        })();
+
+        (function () {
+            const btn = document.getElementById('btnDownloadReportSuperAdmin');
+            if (!btn) return;
+
+            btn.addEventListener('click', function () {
+                const dateInput = document.getElementById('downloadReportSuperAdminDate');
+                const searchInput = document.querySelector('input[name="searchTerm"]');
+
+                const filterDate = dateInput ? dateInput.value : "";
+                const searchTerm = searchInput ? searchInput.value : "";
+
+                if (!filterDate) {
+                    alert("Silakan pilih tanggal report terlebih dahulu.");
+                    return;
+                }
+
+                const url = '@Url.Action("DownloadCsv", "AuditReport")'
+                    + `?filterDate=${encodeURIComponent(filterDate)}`
+                    + `&searchTerm=${encodeURIComponent(searchTerm)}`;
 
                 window.location.href = url;
             });

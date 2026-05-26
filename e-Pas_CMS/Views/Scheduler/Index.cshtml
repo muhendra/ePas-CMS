@@ -191,6 +191,29 @@
         margin-bottom: 12px;
     }
 
+    .scheduler-alert {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 12px 14px;
+        border-radius: 14px;
+        margin-bottom: 14px;
+        font-size: 0.88rem;
+        font-weight: 700;
+    }
+
+    .scheduler-alert.success {
+        background: #ecfdf3;
+        color: #027a48;
+        border: 1px solid #abefc6;
+    }
+
+    .scheduler-alert.error {
+        background: #fef3f2;
+        color: #b42318;
+        border: 1px solid #fecdca;
+    }
+
     .table-card {
         padding: 0;
     }
@@ -305,6 +328,36 @@
             color: #ffffff;
         }
 
+    .btn-delete {
+        background: #ffffff;
+        border: 1px solid #fecdca;
+        color: #b42318;
+        padding: 7px 11px;
+        border-radius: 10px;
+        font-weight: 700;
+        font-size: 0.82rem;
+        white-space: nowrap;
+    }
+
+        .btn-delete:hover {
+            background: #b42318;
+            border-color: #b42318;
+            color: #ffffff;
+        }
+
+    .action-buttons {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        flex-wrap: nowrap;
+    }
+
+    .delete-scheduler-form {
+        display: inline;
+        margin: 0;
+    }
+
     .empty-state {
         padding: 44px 20px;
         text-align: center;
@@ -383,6 +436,17 @@
                 width: 100%;
             }
 
+        .action-buttons {
+            flex-direction: column;
+            width: 100%;
+        }
+
+            .action-buttons .btn,
+            .action-buttons form,
+            .action-buttons button {
+                width: 100%;
+            }
+
         .filter-panel {
             padding: 14px;
         }
@@ -424,6 +488,22 @@
             </a>
         </div>
     </div>
+
+    @if (TempData["Success"] != null)
+    {
+        <div class="scheduler-alert success">
+            <i class="bi bi-check-circle"></i>
+            <span>@TempData["Success"]</span>
+        </div>
+    }
+
+    @if (TempData["Error"] != null)
+    {
+        <div class="scheduler-alert error">
+            <i class="bi bi-exclamation-triangle"></i>
+            <span>@TempData["Error"]</span>
+        </div>
+    }
 
     <div id="dirtyInfo" class="dirty-info d-none">
         <i class="bi bi-exclamation-circle"></i>
@@ -637,10 +717,24 @@
                                 </td>
 
                                 <td class="text-center">
-                                    <a href="@Url.Action("Detail", "Scheduler", new { id = item.Id })"
-                                       class="btn btn-action">
-                                        <i class="bi bi-eye me-1"></i> Detail
-                                    </a>
+                                    <div class="action-buttons">
+                                        <a href="@Url.Action("Detail", "Scheduler", new { id = item.Id })"
+                                           class="btn btn-action">
+                                            <i class="bi bi-eye me-1"></i> Detail
+                                        </a>
+
+                                        <form asp-controller="Scheduler"
+                                              asp-action="Delete"
+                                              asp-route-id="@item.Id"
+                                              method="post"
+                                              class="delete-scheduler-form">
+                                            @Html.AntiForgeryToken()
+
+                                            <button type="submit" class="btn btn-delete">
+                                                <i class="bi bi-trash me-1"></i> Delete
+                                            </button>
+                                        </form>
+                                    </div>
                                 </td>
                             </tr>
 
@@ -749,6 +843,7 @@
 @section Scripts {
     <script>
         let changes = {};
+        let allowPageLeave = false;
 
         function markDirty(row, field, value) {
             const id = row.dataset.id;
@@ -822,6 +917,8 @@
             .then(res => res.json())
             .then(res => {
                 if (res.success) {
+                    allowPageLeave = true;
+                    changes = {};
                     location.reload();
                 } else {
                     alert('Gagal save');
@@ -838,6 +935,7 @@
                     return;
                 }
 
+                allowPageLeave = true;
                 document.getElementById('filterForm').submit();
             });
         });
@@ -849,12 +947,30 @@
                     return;
                 }
 
+                allowPageLeave = true;
                 document.getElementById('filterForm').submit();
             });
         }
 
+        document.querySelectorAll('.delete-scheduler-form').forEach(form => {
+            form.addEventListener('submit', function (e) {
+                if (!confirmLeaveWithUnsavedChanges()) {
+                    e.preventDefault();
+                    return;
+                }
+
+                const isConfirmed = confirm('Yakin ingin menghapus scheduler ini? Data akan diubah menjadi DELETED.');
+                if (!isConfirmed) {
+                    e.preventDefault();
+                    return;
+                }
+
+                allowPageLeave = true;
+            });
+        });
+
         window.addEventListener('beforeunload', function (e) {
-            if (hasUnsavedChanges()) {
+            if (!allowPageLeave && hasUnsavedChanges()) {
                 e.preventDefault();
                 e.returnValue = '';
             }
@@ -863,7 +979,10 @@
         document.getElementById('filterForm').addEventListener('submit', function (e) {
             if (!confirmLeaveWithUnsavedChanges()) {
                 e.preventDefault();
+                return;
             }
+
+            allowPageLeave = true;
         });
     </script>
 }

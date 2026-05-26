@@ -1897,7 +1897,7 @@ WHERE spbu_id = @spbuid
             await GenerateAllVerifiedPdfReportsGood(id);
 
             TempData["Success"] = "Laporan audit telah disetujui.";
-            return RedirectToAction("Detail", new { id });
+            return RedirectToAction("Index");
         }
 
         private async Task<AuditHeaderDto> GetAuditHeaderAsync(IDbConnection conn, string id)
