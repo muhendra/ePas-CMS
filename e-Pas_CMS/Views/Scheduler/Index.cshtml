@@ -353,7 +353,8 @@
         flex-wrap: nowrap;
     }
 
-    .delete-scheduler-form {
+    .delete-scheduler-form,
+    .run-scheduler-form {
         display: inline;
         margin: 0;
     }
@@ -432,7 +433,12 @@
             flex-direction: column;
         }
 
-            .header-actions .btn {
+            .header-actions .btn,
+            .header-actions form {
+                width: 100%;
+            }
+
+            .header-actions form .btn {
                 width: 100%;
             }
 
@@ -482,6 +488,18 @@
             <button id="btnSaveChanges" class="btn btn-save d-none">
                 <i class="bi bi-save me-1"></i> Save Changes
             </button>
+
+            <form asp-controller="Scheduler"
+                  asp-action="RunAutoSchedule"
+                  method="post"
+                  class="run-scheduler-form"
+                  id="runSchedulerForm">
+                @Html.AntiForgeryToken()
+
+                <button type="submit" class="btn btn-soft">
+                    <i class="bi bi-play-circle me-1"></i> Run Scheduler
+                </button>
+            </form>
 
             <a href="@Url.Action("Add", "Scheduler")" class="btn btn-dark-blue">
                 <i class="bi bi-plus-lg me-1"></i> Add Scheduler
@@ -968,6 +986,24 @@
                 allowPageLeave = true;
             });
         });
+
+        const runSchedulerForm = document.getElementById('runSchedulerForm');
+        if (runSchedulerForm) {
+            runSchedulerForm.addEventListener('submit', function (e) {
+                if (!confirmLeaveWithUnsavedChanges()) {
+                    e.preventDefault();
+                    return;
+                }
+
+                const isConfirmed = confirm('Yakin ingin menjalankan scheduler? Data DRAFT akan dihapus dan scheduler baru akan dibuat.');
+                if (!isConfirmed) {
+                    e.preventDefault();
+                    return;
+                }
+
+                allowPageLeave = true;
+            });
+        }
 
         window.addEventListener('beforeunload', function (e) {
             if (!allowPageLeave && hasUnsavedChanges()) {
