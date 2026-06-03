@@ -1540,6 +1540,7 @@ namespace e_Pas_CMS.Controllers
         }
 
         [HttpPost("audit/approve/{id}")]
+        [ValidateAntiForgeryToken]
         public async Task<IActionResult> Approve(string id)
         {
             var currentUser = User?.Identity?.Name ?? "system";
@@ -1897,7 +1898,7 @@ WHERE spbu_id = @spbuid
             await GenerateAllVerifiedPdfReportsGood(id);
 
             TempData["Success"] = "Laporan audit telah disetujui.";
-            return RedirectToAction("Index");
+            return RedirectToAction("Detail", new { id, approved = 1 });
         }
 
         private async Task<AuditHeaderDto> GetAuditHeaderAsync(IDbConnection conn, string id)

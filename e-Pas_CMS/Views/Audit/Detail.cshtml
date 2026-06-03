@@ -10,13 +10,18 @@
     var batasTanggal = new DateTime(2025, 5, 11);
     bool hideUploadButton = Model.TanggalSubmit.HasValue && Model.TanggalSubmit.Value > batasTanggal;
     bool isSuperadmin = (ViewBag.IsSuperadmin as bool?) ?? false;
+    
+    var showApproveAlert = Context.Request.Query["approved"].ToString() == "1";
 }
 
 @Html.AntiForgeryToken()
 
-@if (TempData["Success"] != null)
+@if (showApproveAlert && TempData["ApproveSuccess"] != null)
 {
-    <div class="alert alert-success">@TempData["Success"]</div>
+    <div class="alert alert-success alert-dismissible fade show" role="alert">
+        @TempData["ApproveSuccess"]
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
 }
 
 <!-- Header Detail -->
