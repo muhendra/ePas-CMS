@@ -74,7 +74,7 @@ public class InvoiceController : Controller
     join sp in _context.spbus.AsNoTracking()
         on aud.spbu_id equals sp.id
     join usr in _context.app_users.AsNoTracking()
-        on aud.app_user_id equals usr.id into audUser
+        on inv.AppUserId equals usr.id into audUser
     from usr in audUser.DefaultIfEmpty()
     where
      (
@@ -123,7 +123,7 @@ public class InvoiceController : Controller
         Detail = det,
         Audit = aud,
         Spbu = sp,
-        SurveyorName = usr != null ? usr.name : "-"
+        SurveyorName = usr.name != null ? usr.name : "-"
     };
 
             if (userRegion.Any() || userSbm.Any())
@@ -156,33 +156,32 @@ public class InvoiceController : Controller
                     x.Invoice.DueDate,
                     ClaimId = x.Claim.id,
                     ClaimStatus = x.Claim.status,
+                    ClaimCreatedDate = x.Claim.created_date,
                     x.SurveyorName
                 })
-                .Select(g => new InvoiceVM
-                {
-                    Id = g.Key.Id,
-                    InvoiceNo = g.Key.InvoiceNo,
-                    InvoiceDate = g.Key.IssuedDate,
-                    EmployeeId = g.Key.AppUserId,
-                    ExpectedDate = g.Key.DueDate,
+.Select(g => new InvoiceVM
+{
+    Id = g.Key.Id,
+    InvoiceNo = g.Key.InvoiceNo,
+    InvoiceDate = g.Key.IssuedDate,
+    EmployeeId = g.Key.AppUserId,
+    ExpectedDate = g.Key.DueDate,
 
-                    // Status list pakai status claim:
-                    // UNDER_REVIEW = tombol Proses
-                    // PENDING_APPROVAL = finance approval
-                    // APPROVED / REJECTED = hasil finance
-                    Status = g.Key.ClaimStatus,
+    Status = g.Key.ClaimStatus,
 
-                    SurveyorName = g.Key.SurveyorName,
+    ClaimSubmittedDate = g.Key.ClaimCreatedDate,
 
-                    TotalAmount =
-                        (
-                            _context.TrxClaimDetails
-                                .Where(cd => cd.trx_claim_id == g.Key.ClaimId)
-                                .Sum(cd => (decimal?)cd.amount) ?? 0
-                        )
-                        + g.Sum(x => x.Detail.AuditFee)
-                        + g.Sum(x => x.Detail.LumpsumFee ?? 0)
-                });
+    SurveyorName = g.Key.SurveyorName,
+
+    TotalAmount =
+        (
+            _context.TrxClaimDetails
+                .Where(cd => cd.trx_claim_id == g.Key.ClaimId)
+                .Sum(cd => (decimal?)cd.amount) ?? 0
+        )
+        + g.Sum(x => x.Detail.AuditFee)
+        + g.Sum(x => x.Detail.LumpsumFee ?? 0)
+});
 
             grouped = sortColumn switch
             {

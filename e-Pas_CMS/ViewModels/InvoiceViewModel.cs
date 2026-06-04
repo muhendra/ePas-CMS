@@ -19,6 +19,8 @@ namespace e_Pas_CMS.ViewModels
         public string Status { get; set; } = null!;
 
         public string SurveyorName { get; set; } = "-";
+
+        public DateTime? ClaimSubmittedDate { get; set; }
     }
 
     public class InvoiceDetailVM
@@ -30,6 +32,7 @@ namespace e_Pas_CMS.ViewModels
         public decimal Amount { get; set; }
 
         public string Status { get; set; } = null!;
+
     }
 
     public class InvoiceDetailPageVM
