@@ -157,11 +157,18 @@
             color: #64748b;
         }
 
-        .pagination-soft {
+        /* Pagination seperti contoh gambar: < 1 2 3 4 5 > */
+        .pagination-wrap {
             display: flex;
+            justify-content: flex-start;
             align-items: center;
-            gap: 8px;
-            margin: 14px 0 8px;
+            margin: 12px 0 18px;
+        }
+
+        .pagination-soft {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
             color: #94a3b8;
         }
 
@@ -169,10 +176,14 @@
             border: none;
             background: transparent;
             color: #111827;
-            min-width: 28px;
-            height: 28px;
-            border-radius: 8px;
-            font-weight: 700;
+            min-width: 24px;
+            height: 24px;
+            padding: 0 6px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 800;
+            line-height: 24px;
+            text-align: center;
             cursor: pointer;
         }
 
@@ -184,7 +195,21 @@
             .page-btn:disabled {
                 color: #cbd5e1;
                 cursor: not-allowed;
+                opacity: .75;
             }
+
+            .page-btn.page-arrow {
+                color: #94a3b8;
+                min-width: 18px;
+                padding: 0 2px;
+                font-size: 13px;
+            }
+
+                .page-btn.page-arrow:not(:disabled):hover,
+                .page-btn:not(.active):not(:disabled):hover {
+                    background: #eaf8fc;
+                    color: #21B6D7;
+                }
 
         @@media (max-width: 992px) {
             .donut-wrap {
@@ -350,7 +375,9 @@
         </div>
     </div>
 
-    <div id="rankingPagination" class="pagination-soft"></div>
+    <div class="pagination-wrap">
+        <div id="rankingPagination" class="pagination-soft"></div>
+    </div>
 
     <h4 class="section-title">Performa Verifikator</h4>
 
@@ -397,7 +424,9 @@
         </div>
     </div>
 
-    <div id="performancePagination" class="pagination-soft"></div>
+    <div class="pagination-wrap">
+        <div id="performancePagination" class="pagination-soft"></div>
+    </div>
 </div>
 
 @section Scripts {
@@ -408,13 +437,14 @@
         let rankingData = [];
         let performanceData = [];
 
-        const pageSize = 10;
+        // Jumlah row per halaman. Dibuat 7 agar pagination langsung tampil seperti contoh desain.
+        const pageSize = 7;
 
         let rankingCurrentPage = 1;
         let performanceCurrentPage = 1;
 
         let rankingSort = {
-            field: 'speedSeconds',
+            field: 'rank',
             direction: 'asc'
         };
 
@@ -518,39 +548,45 @@
 
             if (!container) return;
 
-            const totalPages = Math.ceil(totalItems / pageSize);
+            totalItems = Number(totalItems || 0);
 
-            if (totalPages <= 1) {
+            if (totalItems <= 0) {
                 container.innerHTML = '';
                 return;
             }
+
+            const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
+            const safeCurrentPage = Math.min(Math.max(Number(currentPage || 1), 1), totalPages);
+            const pages = getCompactPaginationPages(safeCurrentPage, totalPages);
 
             let html = '';
 
             html += `
                 <button type="button"
-                        class="page-btn"
-                        ${currentPage === 1 ? 'disabled' : ''}
-                        data-page="${currentPage - 1}">
+                        class="page-btn page-arrow"
+                        ${safeCurrentPage === 1 ? 'disabled' : ''}
+                        data-page="${safeCurrentPage - 1}"
+                        aria-label="Previous page">
                     <i class="bi bi-chevron-left"></i>
                 </button>
             `;
 
-            for (let i = 1; i <= totalPages; i++) {
+            pages.forEach(page => {
                 html += `
                     <button type="button"
-                            class="page-btn ${i === currentPage ? 'active' : ''}"
-                            data-page="${i}">
-                        ${i}
+                            class="page-btn ${page === safeCurrentPage ? 'active' : ''}"
+                            data-page="${page}">
+                        ${page}
                     </button>
                 `;
-            }
+            });
 
             html += `
                 <button type="button"
-                        class="page-btn"
-                        ${currentPage === totalPages ? 'disabled' : ''}
-                        data-page="${currentPage + 1}">
+                        class="page-btn page-arrow"
+                        ${safeCurrentPage === totalPages ? 'disabled' : ''}
+                        data-page="${safeCurrentPage + 1}"
+                        aria-label="Next page">
                     <i class="bi bi-chevron-right"></i>
                 </button>
             `;
@@ -561,11 +597,37 @@
                 btn.addEventListener('click', function () {
                     const page = Number(this.dataset.page);
 
-                    if (!page || page < 1 || page > totalPages) return;
+                    if (!page || page < 1 || page > totalPages || page === safeCurrentPage) return;
 
                     onPageClick(page);
                 });
             });
+        }
+
+        function getCompactPaginationPages(currentPage, totalPages) {
+            const maxVisiblePages = 5;
+
+            if (totalPages <= maxVisiblePages) {
+                return Array.from({ length: totalPages }, (_, i) => i + 1);
+            }
+
+            let startPage = currentPage - Math.floor(maxVisiblePages / 2);
+            let endPage = currentPage + Math.floor(maxVisiblePages / 2);
+
+            if (startPage < 1) {
+                startPage = 1;
+                endPage = maxVisiblePages;
+            }
+
+            if (endPage > totalPages) {
+                endPage = totalPages;
+                startPage = totalPages - maxVisiblePages + 1;
+            }
+
+            return Array.from(
+                { length: endPage - startPage + 1 },
+                (_, i) => startPage + i
+            );
         }
 
         function refreshSortIcons(tableName, field, direction) {
@@ -584,12 +646,9 @@
         function applyRankingSort() {
             const sorted = sortItems(rankingData, rankingSort.field, rankingSort.direction);
 
-            sorted.forEach((item, index) => {
-                item.rank = index + 1;
-            });
 
-            const totalPages = Math.ceil(sorted.length / pageSize);
-            if (rankingCurrentPage > totalPages && totalPages > 0) {
+            const totalPages = Math.max(1, Math.ceil(sorted.length / pageSize));
+            if (rankingCurrentPage > totalPages) {
                 rankingCurrentPage = totalPages;
             }
 
@@ -607,8 +666,8 @@
         function applyPerformanceSort() {
             const sorted = sortItems(performanceData, performanceSort.field, performanceSort.direction);
 
-            const totalPages = Math.ceil(sorted.length / pageSize);
-            if (performanceCurrentPage > totalPages && totalPages > 0) {
+            const totalPages = Math.max(1, Math.ceil(sorted.length / pageSize));
+            if (performanceCurrentPage > totalPages) {
                 performanceCurrentPage = totalPages;
             }
 
@@ -636,7 +695,7 @@
                             rankingSort.direction = rankingSort.direction === 'asc' ? 'desc' : 'asc';
                         } else {
                             rankingSort.field = field;
-                            rankingSort.direction = field === 'speedSeconds' ? 'asc' : 'desc';
+                            rankingSort.direction = (field === 'speedSeconds' || field === 'rank') ? 'asc' : 'desc';
                         }
 
                         applyRankingSort();

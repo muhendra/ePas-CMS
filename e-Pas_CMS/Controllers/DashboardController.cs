@@ -281,10 +281,10 @@ namespace e_Pas_CMS.Controllers
 
         [HttpGet]
         public async Task<IActionResult> VerifierPerformanceSummary(
-    string region = "",
-    int? month = null,
-    int? year = null,
-    int? day = null)
+            string region = "",
+            int? month = null,
+            int? year = null,
+            int? day = null)
         {
             var conn = _context.Database.GetDbConnection();
 
@@ -444,6 +444,7 @@ namespace e_Pas_CMS.Controllers
             COUNT(*)::int AS total
         FROM base;
     ", param);
+
             var ranking = (await conn.QueryAsync(@"
     WITH base AS (
         SELECT
@@ -485,7 +486,7 @@ namespace e_Pas_CMS.Controllers
         FROM trx_audit ta
         INNER JOIN spbu s ON s.id = ta.spbu_id
         LEFT JOIN app_user vu_username ON vu_username.username = ta.approval_by
-        LEFT JOIN app_user vu_id ON vu_id.id = ta.approval_by
+        LEFT JOIN app_user vu_id ON vu_id.id::text = ta.approval_by
         WHERE COALESCE(ta.audit_type, '') <> 'Basic Operational'
           AND ta.approval_by IS NOT NULL
           AND ta.approval_by <> ''
@@ -523,18 +524,22 @@ namespace e_Pas_CMS.Controllers
     grouped AS (
         SELECT
             verifier,
-            ROUND(AVG(verification_seconds)) AS avg_seconds,
+            ROUND(
+                AVG(verification_seconds) FILTER (
+                    WHERE status = 'VERIFIED'
+                      AND verification_seconds IS NOT NULL
+                      AND verification_seconds > 0
+                )
+            ) AS avg_seconds,
             COUNT(id) FILTER (WHERE status = 'VERIFIED')::int AS verified_audit,
-            COUNT(id) FILTER (
-                WHERE status = 'UNDER_REVIEW'
-            )::int AS missed_audit,
+            COUNT(id) FILTER (WHERE status = 'UNDER_REVIEW')::int AS missed_audit,
             COUNT(id) FILTER (
                 WHERE status IN ('CANCELLED', 'CANCELED', 'DIBATALKAN')
             )::int AS cancelled_audit,
             MAX(approval_date) FILTER (WHERE status = 'VERIFIED') AS last_verified_date
         FROM base
-        WHERE status = 'VERIFIED'
         GROUP BY verifier
+        HAVING COUNT(id) FILTER (WHERE status = 'VERIFIED') > 0
     )
     SELECT
         ROW_NUMBER() OVER (
@@ -547,9 +552,9 @@ namespace e_Pas_CMS.Controllers
         cancelled_audit,
         last_verified_date
     FROM grouped
-    ORDER BY avg_seconds ASC NULLS LAST, verified_audit DESC, last_verified_date DESC NULLS LAST
-    LIMIT 100;
+    ORDER BY avg_seconds ASC NULLS LAST, verified_audit DESC, last_verified_date DESC NULLS LAST;
 ", param)).ToList();
+
             var performance = (await conn.QueryAsync(@"
     WITH base AS (
         SELECT
@@ -557,7 +562,7 @@ namespace e_Pas_CMS.Controllers
             ta.spbu_id,
             ta.status,
             ta.approval_by,
-            COALESCE(vu.name, ta.approval_by, 'Unknown') AS verifier,
+            COALESCE(vu_username.name, vu_id.name, ta.approval_by, 'Unknown') AS verifier,
             ta.approval_date,
             COALESCE(
                 ta.approval_date,
@@ -567,9 +572,8 @@ namespace e_Pas_CMS.Controllers
             ) AS audit_date
         FROM trx_audit ta
         INNER JOIN spbu s ON s.id = ta.spbu_id
-        LEFT JOIN app_user vu 
-            ON vu.username = ta.approval_by
-            OR vu.id = ta.approval_by
+        LEFT JOIN app_user vu_username ON vu_username.username = ta.approval_by
+        LEFT JOIN app_user vu_id ON vu_id.id::text = ta.approval_by
         WHERE COALESCE(ta.audit_type, '') <> 'Basic Operational'
           AND ta.approval_by IS NOT NULL
           AND ta.approval_by <> ''
@@ -611,7 +615,7 @@ namespace e_Pas_CMS.Controllers
             WHERE status IN ('UNDER_REVIEW', 'IN_PROGRESS_SUBMIT', 'IN_PROGRESS_INPUT')
         )::int AS under_verified,
         COUNT(id) FILTER (WHERE status = 'VERIFIED')::int AS done_verified,
-        CASE 
+        CASE
             WHEN COUNT(id) = 0 THEN 0
             ELSE ROUND(
                 (
@@ -620,7 +624,7 @@ namespace e_Pas_CMS.Controllers
                 ) * 100
             )::int
         END AS verified_percent,
-        CASE 
+        CASE
             WHEN COUNT(DISTINCT DATE(approval_date)) FILTER (WHERE status = 'VERIFIED') = 0 THEN 0
             ELSE ROUND(
                 COUNT(id) FILTER (WHERE status = 'VERIFIED')::numeric
@@ -635,9 +639,9 @@ namespace e_Pas_CMS.Controllers
         )::int AS remaining_spbu
     FROM base
     GROUP BY verifier
-    ORDER BY done_verified DESC, total_audited DESC
-    LIMIT 100;
+    ORDER BY done_verified DESC, total_audited DESC, verifier ASC;
 ", param)).ToList();
+
             return Json(new
             {
                 monthly = new
