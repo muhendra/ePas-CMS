@@ -39,9 +39,10 @@ namespace e_Pas_CMS.Controllers
 
         [HttpGet]
         public async Task<IActionResult> AuditorPerformanceSummary(
-            string region = "",
-            int? month = null,
-            int? year = null)
+    string region = "",
+    int? month = null,
+    int? year = null,
+    int? day = null)
         {
             var conn = _context.Database.GetDbConnection();
 
@@ -50,83 +51,200 @@ namespace e_Pas_CMS.Controllers
 
             year ??= DateTime.Now.Year;
 
+            var currentUser = User.Identity?.Name ?? "";
+
+            var userRegion = await (
+                from aur in _context.app_user_roles
+                join au in _context.app_users on aur.app_user_id equals au.id
+                where au.username == currentUser
+                select aur.region
+            )
+            .Where(r => r != null && r != "")
+            .Distinct()
+            .ToArrayAsync();
+
+            var userSbm = await (
+                from aur in _context.app_user_roles
+                join au in _context.app_users on aur.app_user_id equals au.id
+                where au.username == currentUser
+                select aur.sbm
+            )
+            .Where(s => s != null && s != "")
+            .Distinct()
+            .ToArrayAsync();
+
+            var param = new
+            {
+                region = region ?? "",
+                month,
+                year,
+                day,
+                userRegions = userRegion,
+                userSbms = userSbm
+            };
+
             var monthly = await conn.QueryFirstOrDefaultAsync(@"
+        WITH base AS (
+            SELECT
+                ta.id,
+                ta.status,
+                COALESCE(ta.audit_execution_time, ta.audit_schedule_date::timestamp, ta.created_date) AS audit_date
+            FROM trx_audit ta
+            INNER JOIN spbu s ON s.id = ta.spbu_id
+            WHERE COALESCE(ta.audit_type, '') <> 'Basic Operational'
+              AND EXTRACT(YEAR FROM COALESCE(ta.audit_execution_time, ta.audit_schedule_date::timestamp, ta.created_date)) = @year
+              AND (@region = '' OR s.region = @region)
+              AND (
+                    (array_length(@userRegions, 1) IS NULL AND array_length(@userSbms, 1) IS NULL)
+                    OR s.region = ANY(@userRegions)
+                    OR s.sbm = ANY(@userSbms)
+                  )
+              AND (
+                    @day IS NULL
+                    OR EXTRACT(DOW FROM COALESCE(ta.audit_execution_time, ta.audit_schedule_date::timestamp, ta.created_date)) = @day
+                  )
+        )
         SELECT
             ARRAY_AGG(total_audit ORDER BY bulan) AS total_audit,
             ARRAY_AGG(verified_audit ORDER BY bulan) AS verified_audit
         FROM (
             SELECT
                 m.bulan,
-                COUNT(ta.id) AS total_audit,
-                COUNT(ta.id) FILTER (WHERE ta.status = 'VERIFIED') AS verified_audit
+                COUNT(b.id)::int AS total_audit,
+                COUNT(b.id) FILTER (WHERE b.status = 'VERIFIED')::int AS verified_audit
             FROM generate_series(1, 12) m(bulan)
-            LEFT JOIN trx_audit ta 
-                ON EXTRACT(MONTH FROM COALESCE(ta.audit_execution_time, ta.created_date)) = m.bulan
-               AND EXTRACT(YEAR FROM COALESCE(ta.audit_execution_time, ta.created_date)) = @year
-            LEFT JOIN spbu s ON s.id = ta.spbu_id
-            WHERE (@region = '' OR s.region = @region)
+            LEFT JOIN base b
+              ON EXTRACT(MONTH FROM b.audit_date) = m.bulan
             GROUP BY m.bulan
         ) x;
-    ", new { region = region ?? "", year });
+    ", param);
 
             var status = await conn.QueryFirstOrDefaultAsync(@"
+        WITH base AS (
+            SELECT
+                ta.id,
+                ta.status,
+                COALESCE(ta.is_revision, false) AS is_revision,
+                COALESCE(ta.audit_execution_time, ta.audit_schedule_date::timestamp, ta.created_date) AS audit_date
+            FROM trx_audit ta
+            INNER JOIN spbu s ON s.id = ta.spbu_id
+            WHERE COALESCE(ta.audit_type, '') <> 'Basic Operational'
+              AND EXTRACT(YEAR FROM COALESCE(ta.audit_execution_time, ta.audit_schedule_date::timestamp, ta.created_date)) = @year
+              AND (@region = '' OR s.region = @region)
+              AND (
+                    (array_length(@userRegions, 1) IS NULL AND array_length(@userSbms, 1) IS NULL)
+                    OR s.region = ANY(@userRegions)
+                    OR s.sbm = ANY(@userSbms)
+                  )
+              AND (
+                    @month IS NULL
+                    OR EXTRACT(MONTH FROM COALESCE(ta.audit_execution_time, ta.audit_schedule_date::timestamp, ta.created_date)) = @month
+                  )
+              AND (
+                    @day IS NULL
+                    OR EXTRACT(DOW FROM COALESCE(ta.audit_execution_time, ta.audit_schedule_date::timestamp, ta.created_date)) = @day
+                  )
+        ),
+        summary AS (
+            SELECT
+                COUNT(*) FILTER (WHERE status = 'VERIFIED')::int AS verified,
+                COUNT(*) FILTER (
+                    WHERE status IN ('UNDER_REVIEW', 'IN_PROGRESS_SUBMIT', 'IN_PROGRESS_INPUT')
+                      AND is_revision = false
+                )::int AS review,
+                COUNT(*) FILTER (
+                    WHERE is_revision = true
+                       OR status IN ('REVISION', 'REVISED', 'NEED_REVISION')
+                )::int AS revision
+            FROM base
+        )
         SELECT
-            COUNT(*) FILTER (WHERE ta.status = 'VERIFIED') AS verified,
-            COUNT(*) FILTER (WHERE ta.status IN ('UNDER_REVIEW', 'IN_PROGRESS_SUBMIT', 'IN_PROGRESS_INPUT')) AS review,
-            COUNT(*) FILTER (WHERE COALESCE(ta.is_revision, false) = true) AS revision,
-            COUNT(*) AS total
-        FROM trx_audit ta
-        LEFT JOIN spbu s ON s.id = ta.spbu_id
-        WHERE EXTRACT(YEAR FROM COALESCE(ta.audit_execution_time, ta.created_date)) = @year
-          AND (@month IS NULL OR EXTRACT(MONTH FROM COALESCE(ta.audit_execution_time, ta.created_date)) = @month)
-          AND (@region = '' OR s.region = @region);
-    ", new { region = region ?? "", month, year });
+            verified,
+            review,
+            revision,
+            (verified + review + revision)::int AS total
+        FROM summary;
+    ", param);
 
             var ranking = (await conn.QueryAsync(@"
+        WITH base AS (
+            SELECT
+                ta.id,
+                ta.app_user_id,
+                ta.status,
+                COALESCE(ta.is_revision, false) AS is_revision,
+                ta.audit_schedule_date,
+                ta.audit_execution_time,
+                ta.approval_date,
+                COALESCE(ta.audit_execution_time, ta.audit_schedule_date::timestamp, ta.created_date) AS audit_date,
+                COALESCE(tid.audit_fee, 0) + COALESCE(tid.lumpsum_fee, 0) AS commission
+            FROM trx_audit ta
+            INNER JOIN spbu s ON s.id = ta.spbu_id
+            LEFT JOIN trx_invoice_detail tid ON tid.trx_audit_id = ta.id
+            WHERE COALESCE(ta.audit_type, '') <> 'Basic Operational'
+              AND ta.app_user_id IS NOT NULL
+              AND EXTRACT(YEAR FROM COALESCE(ta.audit_execution_time, ta.audit_schedule_date::timestamp, ta.created_date)) = @year
+              AND (@region = '' OR s.region = @region)
+              AND (
+                    (array_length(@userRegions, 1) IS NULL AND array_length(@userSbms, 1) IS NULL)
+                    OR s.region = ANY(@userRegions)
+                    OR s.sbm = ANY(@userSbms)
+                  )
+              AND (
+                    @month IS NULL
+                    OR EXTRACT(MONTH FROM COALESCE(ta.audit_execution_time, ta.audit_schedule_date::timestamp, ta.created_date)) = @month
+                  )
+              AND (
+                    @day IS NULL
+                    OR EXTRACT(DOW FROM COALESCE(ta.audit_execution_time, ta.audit_schedule_date::timestamp, ta.created_date)) = @day
+                  )
+        ),
+        grouped AS (
+            SELECT
+                au.id AS auditor_id,
+                au.name AS auditor,
+                ROUND(
+                    AVG(
+                        EXTRACT(EPOCH FROM (b.approval_date - b.audit_execution_time)) / 60
+                    ) FILTER (
+                        WHERE b.approval_date IS NOT NULL
+                          AND b.audit_execution_time IS NOT NULL
+                          AND b.approval_date > b.audit_execution_time
+                    )
+                ) AS avg_minutes,
+                COUNT(b.id) FILTER (
+                    WHERE b.status NOT IN ('NOT_STARTED', 'CANCELLED', 'CANCELED', 'DIBATALKAN')
+                )::int AS total_audit,
+                COUNT(b.id) FILTER (
+                    WHERE b.status = 'VERIFIED'
+                )::int AS verified_audit,
+                COALESCE(SUM(b.commission), 0) AS total_commission,
+                COUNT(b.id) FILTER (
+                    WHERE b.status = 'NOT_STARTED'
+                      AND b.audit_schedule_date < CURRENT_DATE
+                )::int AS missed_audit,
+                COUNT(b.id) FILTER (
+                    WHERE b.status IN ('CANCELLED', 'CANCELED', 'DIBATALKAN')
+                )::int AS cancelled_audit
+            FROM base b
+            INNER JOIN app_user au ON au.id = b.app_user_id
+            WHERE au.status = 'ACTIVE'
+            GROUP BY au.id, au.name
+        )
         SELECT
             ROW_NUMBER() OVER (
-                ORDER BY 
-                    COUNT(ta.id) FILTER (WHERE ta.status = 'VERIFIED') DESC,
-                    COALESCE(SUM(tid.amount), 0) DESC
+                ORDER BY verified_audit DESC, total_audit DESC, total_commission DESC
             ) AS rank,
-            au.name AS auditor,
-            ROUND(
-                AVG(
-                    EXTRACT(EPOCH FROM (ta.approval_date - ta.audit_execution_time)) / 60
-                ) FILTER (
-                    WHERE ta.approval_date IS NOT NULL 
-                      AND ta.audit_execution_time IS NOT NULL
-                      AND ta.approval_date > ta.audit_execution_time
-                )
-            ) AS avg_minutes,
-            COUNT(ta.id) AS total_audit,
-            COALESCE(SUM(tid.amount), 0) AS total_commission,
-            COUNT(ta.id) FILTER (
-                WHERE ta.status = 'NOT_STARTED'
-                  AND ta.audit_schedule_date < CURRENT_DATE
-            ) AS missed_audit,
-            COUNT(ta.id) FILTER (
-                WHERE ta.status IN ('CANCELLED', 'CANCELED', 'DIBATALKAN')
-            ) AS cancelled_audit
-        FROM app_user au
-        LEFT JOIN trx_audit ta ON ta.app_user_id = au.id
-        LEFT JOIN spbu s ON s.id = ta.spbu_id
-        LEFT JOIN trx_invoice_detail tid ON tid.trx_audit_id = ta.id
-        WHERE au.status = 'ACTIVE'
-          AND (@region = '' OR s.region = @region)
-          AND (
-                ta.id IS NULL
-                OR EXTRACT(YEAR FROM COALESCE(ta.audit_execution_time, ta.created_date)) = @year
-              )
-          AND (
-                @month IS NULL
-                OR ta.id IS NULL
-                OR EXTRACT(MONTH FROM COALESCE(ta.audit_execution_time, ta.created_date)) = @month
-              )
-        GROUP BY au.id, au.name
-        ORDER BY rank
+            auditor,
+            avg_minutes,
+            total_audit,
+            total_commission,
+            missed_audit,
+            cancelled_audit
+        FROM grouped
+        ORDER BY verified_audit DESC, total_audit DESC, total_commission DESC
         LIMIT 20;
-    ", new { region = region ?? "", month, year })).ToList();
+    ", param)).ToList();
 
             return Json(new
             {
@@ -163,18 +281,92 @@ namespace e_Pas_CMS.Controllers
 
         [HttpGet]
         public async Task<IActionResult> VerifierPerformanceSummary(
-            string region = "",
-            int? month = null,
-            int? year = null)
+    string region = "",
+    int? month = null,
+    int? year = null,
+    int? day = null)
         {
             var conn = _context.Database.GetDbConnection();
 
-            if (conn.State != System.Data.ConnectionState.Open)
+            if (conn.State != ConnectionState.Open)
                 await conn.OpenAsync();
 
             year ??= DateTime.Now.Year;
 
+            var currentUser = User.Identity?.Name ?? "";
+
+            var userRegion = await (
+                from aur in _context.app_user_roles
+                join au in _context.app_users on aur.app_user_id equals au.id
+                where au.username == currentUser
+                select aur.region
+            )
+            .Where(r => r != null && r != "")
+            .Distinct()
+            .ToArrayAsync();
+
+            var userSbm = await (
+                from aur in _context.app_user_roles
+                join au in _context.app_users on aur.app_user_id equals au.id
+                where au.username == currentUser
+                select aur.sbm
+            )
+            .Where(s => s != null && s != "")
+            .Distinct()
+            .ToArrayAsync();
+
+            var param = new
+            {
+                region = region ?? "",
+                month,
+                year,
+                day,
+                userRegions = userRegion,
+                userSbms = userSbm
+            };
+
             var monthly = await conn.QueryFirstOrDefaultAsync(@"
+        WITH base AS (
+            SELECT
+                ta.id,
+                ta.status,
+                COALESCE(
+                    ta.approval_date,
+                    ta.audit_execution_time,
+                    ta.audit_schedule_date::timestamp,
+                    ta.created_date
+                ) AS audit_date,
+                EXISTS (
+                    SELECT 1
+                    FROM trx_feedback tf
+                    WHERE tf.trx_audit_id = ta.id
+                      AND tf.feedback_type = 'BANDING'
+                ) AS has_appeal
+            FROM trx_audit ta
+            INNER JOIN spbu s ON s.id = ta.spbu_id
+            WHERE COALESCE(ta.audit_type, '') <> 'Basic Operational'
+              AND EXTRACT(YEAR FROM COALESCE(
+                    ta.approval_date,
+                    ta.audit_execution_time,
+                    ta.audit_schedule_date::timestamp,
+                    ta.created_date
+                  )) = @year
+              AND (@region = '' OR s.region = @region)
+              AND (
+                    (array_length(@userRegions, 1) IS NULL AND array_length(@userSbms, 1) IS NULL)
+                    OR s.region = ANY(@userRegions)
+                    OR s.sbm = ANY(@userSbms)
+                  )
+              AND (
+                    @day IS NULL
+                    OR EXTRACT(DOW FROM COALESCE(
+                        ta.approval_date,
+                        ta.audit_execution_time,
+                        ta.audit_schedule_date::timestamp,
+                        ta.created_date
+                    )) = @day
+                  )
+        )
         SELECT
             ARRAY_AGG(total_audit ORDER BY bulan) AS total_audit,
             ARRAY_AGG(verified_audit ORDER BY bulan) AS verified_audit,
@@ -182,95 +374,270 @@ namespace e_Pas_CMS.Controllers
         FROM (
             SELECT
                 m.bulan,
-                COUNT(ta.id) AS total_audit,
-                COUNT(ta.id) FILTER (WHERE ta.status = 'VERIFIED') AS verified_audit,
-                COUNT(tf.id) FILTER (WHERE tf.feedback_type = 'BANDING') AS appeal_audit
+                COUNT(b.id)::int AS total_audit,
+                COUNT(b.id) FILTER (WHERE b.status = 'VERIFIED')::int AS verified_audit,
+                COUNT(b.id) FILTER (WHERE b.has_appeal = true)::int AS appeal_audit
             FROM generate_series(1, 12) m(bulan)
-            LEFT JOIN trx_audit ta 
-                ON EXTRACT(MONTH FROM COALESCE(ta.approval_date, ta.audit_execution_time, ta.created_date)) = m.bulan
-               AND EXTRACT(YEAR FROM COALESCE(ta.approval_date, ta.audit_execution_time, ta.created_date)) = @year
-            LEFT JOIN spbu s ON s.id = ta.spbu_id
-            LEFT JOIN trx_feedback tf ON tf.trx_audit_id = ta.id
-            WHERE (@region = '' OR s.region = @region)
+            LEFT JOIN base b
+              ON EXTRACT(MONTH FROM b.audit_date) = m.bulan
             GROUP BY m.bulan
         ) x;
-    ", new { region = region ?? "", year });
+    ", param);
 
             var status = await conn.QueryFirstOrDefaultAsync(@"
+        WITH base AS (
+            SELECT
+                ta.id,
+                ta.status,
+                COALESCE(
+                    ta.approval_date,
+                    ta.audit_execution_time,
+                    ta.audit_schedule_date::timestamp,
+                    ta.created_date
+                ) AS audit_date,
+                EXISTS (
+                    SELECT 1
+                    FROM trx_feedback tf
+                    WHERE tf.trx_audit_id = ta.id
+                      AND tf.feedback_type = 'BANDING'
+                ) AS has_appeal
+            FROM trx_audit ta
+            INNER JOIN spbu s ON s.id = ta.spbu_id
+            WHERE COALESCE(ta.audit_type, '') <> 'Basic Operational'
+              AND EXTRACT(YEAR FROM COALESCE(
+                    ta.approval_date,
+                    ta.audit_execution_time,
+                    ta.audit_schedule_date::timestamp,
+                    ta.created_date
+                  )) = @year
+              AND (@region = '' OR s.region = @region)
+              AND (
+                    (array_length(@userRegions, 1) IS NULL AND array_length(@userSbms, 1) IS NULL)
+                    OR s.region = ANY(@userRegions)
+                    OR s.sbm = ANY(@userSbms)
+                  )
+              AND (
+                    @month IS NULL
+                    OR EXTRACT(MONTH FROM COALESCE(
+                        ta.approval_date,
+                        ta.audit_execution_time,
+                        ta.audit_schedule_date::timestamp,
+                        ta.created_date
+                    )) = @month
+                  )
+              AND (
+                    @day IS NULL
+                    OR EXTRACT(DOW FROM COALESCE(
+                        ta.approval_date,
+                        ta.audit_execution_time,
+                        ta.audit_schedule_date::timestamp,
+                        ta.created_date
+                    )) = @day
+                  )
+        )
         SELECT
-            COUNT(*) FILTER (WHERE ta.status = 'VERIFIED') AS verified,
-            COUNT(*) FILTER (WHERE ta.status IN ('UNDER_REVIEW', 'IN_PROGRESS_SUBMIT', 'IN_PROGRESS_INPUT')) AS review,
-            COUNT(tf.id) FILTER (WHERE tf.feedback_type = 'BANDING') AS appeal,
-            COUNT(*) AS total
-        FROM trx_audit ta
-        LEFT JOIN spbu s ON s.id = ta.spbu_id
-        LEFT JOIN trx_feedback tf ON tf.trx_audit_id = ta.id
-        WHERE EXTRACT(YEAR FROM COALESCE(ta.approval_date, ta.audit_execution_time, ta.created_date)) = @year
-          AND (@month IS NULL OR EXTRACT(MONTH FROM COALESCE(ta.approval_date, ta.audit_execution_time, ta.created_date)) = @month)
-          AND (@region = '' OR s.region = @region);
-    ", new { region = region ?? "", month, year });
-
+            COUNT(*) FILTER (WHERE status = 'VERIFIED')::int AS verified,
+            COUNT(*) FILTER (
+                WHERE status IN ('UNDER_REVIEW', 'IN_PROGRESS_SUBMIT', 'IN_PROGRESS_INPUT')
+            )::int AS review,
+            COUNT(*) FILTER (WHERE has_appeal = true)::int AS appeal,
+            COUNT(*)::int AS total
+        FROM base;
+    ", param);
             var ranking = (await conn.QueryAsync(@"
+    WITH base AS (
         SELECT
-            ROW_NUMBER() OVER (
-                ORDER BY COUNT(ta.id) FILTER (WHERE ta.status = 'VERIFIED') DESC
-            ) AS rank,
-            COALESCE(NULLIF(ta.approval_by, ''), 'Unknown') AS verifier,
-            ROUND(
-                AVG(EXTRACT(EPOCH FROM (ta.approval_date - ta.audit_execution_time)) / 60)
-            ) FILTER (
-                WHERE ta.approval_date IS NOT NULL
-                  AND ta.audit_execution_time IS NOT NULL
-                  AND ta.approval_date > ta.audit_execution_time
-            ) AS avg_minutes,
-            COUNT(ta.id) FILTER (WHERE ta.status = 'VERIFIED') AS verified_audit,
-            COUNT(ta.id) FILTER (
-                WHERE ta.status = 'UNDER_REVIEW'
-            ) AS missed_audit,
-            COUNT(ta.id) FILTER (
-                WHERE ta.status IN ('CANCELLED', 'CANCELED', 'DIBATALKAN')
-            ) AS cancelled_audit,
-            MAX(ta.approval_date) AS last_verified_date
-        FROM trx_audit ta
-        LEFT JOIN spbu s ON s.id = ta.spbu_id
-        WHERE ta.approval_by IS NOT NULL
-          AND ta.approval_by <> ''
-          AND EXTRACT(YEAR FROM COALESCE(ta.approval_date, ta.audit_execution_time, ta.created_date)) = @year
-          AND (@month IS NULL OR EXTRACT(MONTH FROM COALESCE(ta.approval_date, ta.audit_execution_time, ta.created_date)) = @month)
-          AND (@region = '' OR s.region = @region)
-        GROUP BY ta.approval_by
-        ORDER BY verified_audit DESC
-        LIMIT 20;
-    ", new { region = region ?? "", month, year })).ToList();
+            ta.id,
+            ta.spbu_id,
+            ta.status,
+            ta.approval_by,
+            COALESCE(vu_username.name, vu_id.name, ta.approval_by, 'Unknown') AS verifier,
+            ta.approval_date,
+            ta.audit_execution_time,
+            ta.audit_schedule_date,
+            ta.created_date,
+            ta.review_audit_started_at,
+            ta.review_audit_finished_at,
+            ta.review_audit_duration_seconds,
+            CASE
+                WHEN ta.review_audit_duration_seconds IS NOT NULL
+                     AND ta.review_audit_duration_seconds > 0
+                    THEN ta.review_audit_duration_seconds
 
+                WHEN ta.review_audit_started_at IS NOT NULL
+                     AND ta.review_audit_finished_at IS NOT NULL
+                     AND ta.review_audit_finished_at > ta.review_audit_started_at
+                    THEN EXTRACT(EPOCH FROM (ta.review_audit_finished_at - ta.review_audit_started_at))::int
+
+                WHEN ta.review_audit_started_at IS NOT NULL
+                     AND ta.approval_date IS NOT NULL
+                     AND ta.approval_date > ta.review_audit_started_at
+                    THEN EXTRACT(EPOCH FROM (ta.approval_date - ta.review_audit_started_at))::int
+
+                ELSE NULL
+            END AS verification_seconds,
+            COALESCE(
+                ta.approval_date,
+                ta.audit_execution_time,
+                ta.audit_schedule_date::timestamp,
+                ta.created_date
+            ) AS audit_date
+        FROM trx_audit ta
+        INNER JOIN spbu s ON s.id = ta.spbu_id
+        LEFT JOIN app_user vu_username ON vu_username.username = ta.approval_by
+        LEFT JOIN app_user vu_id ON vu_id.id = ta.approval_by
+        WHERE COALESCE(ta.audit_type, '') <> 'Basic Operational'
+          AND ta.approval_by IS NOT NULL
+          AND ta.approval_by <> ''
+          AND EXTRACT(YEAR FROM COALESCE(
+                ta.approval_date,
+                ta.audit_execution_time,
+                ta.audit_schedule_date::timestamp,
+                ta.created_date
+              )) = @year
+          AND (@region = '' OR s.region = @region)
+          AND (
+                (array_length(@userRegions, 1) IS NULL AND array_length(@userSbms, 1) IS NULL)
+                OR s.region = ANY(@userRegions)
+                OR s.sbm = ANY(@userSbms)
+              )
+          AND (
+                @month IS NULL
+                OR EXTRACT(MONTH FROM COALESCE(
+                    ta.approval_date,
+                    ta.audit_execution_time,
+                    ta.audit_schedule_date::timestamp,
+                    ta.created_date
+                )) = @month
+              )
+          AND (
+                @day IS NULL
+                OR EXTRACT(DOW FROM COALESCE(
+                    ta.approval_date,
+                    ta.audit_execution_time,
+                    ta.audit_schedule_date::timestamp,
+                    ta.created_date
+                )) = @day
+              )
+    ),
+    grouped AS (
+        SELECT
+            verifier,
+            ROUND(AVG(verification_seconds)) AS avg_seconds,
+            COUNT(id) FILTER (WHERE status = 'VERIFIED')::int AS verified_audit,
+            COUNT(id) FILTER (
+                WHERE status = 'UNDER_REVIEW'
+            )::int AS missed_audit,
+            COUNT(id) FILTER (
+                WHERE status IN ('CANCELLED', 'CANCELED', 'DIBATALKAN')
+            )::int AS cancelled_audit,
+            MAX(approval_date) FILTER (WHERE status = 'VERIFIED') AS last_verified_date
+        FROM base
+        WHERE status = 'VERIFIED'
+        GROUP BY verifier
+    )
+    SELECT
+        ROW_NUMBER() OVER (
+            ORDER BY avg_seconds ASC NULLS LAST, verified_audit DESC, last_verified_date DESC NULLS LAST
+        ) AS rank,
+        verifier,
+        avg_seconds,
+        verified_audit,
+        missed_audit,
+        cancelled_audit,
+        last_verified_date
+    FROM grouped
+    ORDER BY avg_seconds ASC NULLS LAST, verified_audit DESC, last_verified_date DESC NULLS LAST
+    LIMIT 100;
+", param)).ToList();
             var performance = (await conn.QueryAsync(@"
+    WITH base AS (
         SELECT
-            COALESCE(NULLIF(ta.approval_by, ''), 'Unknown') AS verifier,
-            COUNT(ta.id) AS total_audited,
-            COUNT(ta.id) FILTER (WHERE ta.status = 'UNDER_REVIEW') AS under_verified,
-            COUNT(ta.id) FILTER (WHERE ta.status = 'VERIFIED') AS done_verified,
-            CASE 
-                WHEN COUNT(ta.id) = 0 THEN 0
-                ELSE ROUND((COUNT(ta.id) FILTER (WHERE ta.status = 'VERIFIED')::numeric / COUNT(ta.id)::numeric) * 100)
-            END AS verified_percent,
-            CASE 
-                WHEN COUNT(DISTINCT DATE(ta.approval_date)) = 0 THEN 0
-                ELSE ROUND(COUNT(ta.id) FILTER (WHERE ta.status = 'VERIFIED')::numeric / COUNT(DISTINCT DATE(ta.approval_date))::numeric)
-            END AS perday,
-            COUNT(DISTINCT ta.spbu_id) AS total_spbu,
-            GREATEST(COUNT(DISTINCT ta.spbu_id) - COUNT(DISTINCT ta.spbu_id) FILTER (WHERE ta.status = 'VERIFIED'), 0) AS remaining_spbu
+            ta.id,
+            ta.spbu_id,
+            ta.status,
+            ta.approval_by,
+            COALESCE(vu.name, ta.approval_by, 'Unknown') AS verifier,
+            ta.approval_date,
+            COALESCE(
+                ta.approval_date,
+                ta.audit_execution_time,
+                ta.audit_schedule_date::timestamp,
+                ta.created_date
+            ) AS audit_date
         FROM trx_audit ta
-        LEFT JOIN spbu s ON s.id = ta.spbu_id
-        WHERE ta.approval_by IS NOT NULL
+        INNER JOIN spbu s ON s.id = ta.spbu_id
+        LEFT JOIN app_user vu 
+            ON vu.username = ta.approval_by
+            OR vu.id = ta.approval_by
+        WHERE COALESCE(ta.audit_type, '') <> 'Basic Operational'
+          AND ta.approval_by IS NOT NULL
           AND ta.approval_by <> ''
-          AND EXTRACT(YEAR FROM COALESCE(ta.approval_date, ta.audit_execution_time, ta.created_date)) = @year
-          AND (@month IS NULL OR EXTRACT(MONTH FROM COALESCE(ta.approval_date, ta.audit_execution_time, ta.created_date)) = @month)
+          AND EXTRACT(YEAR FROM COALESCE(
+                ta.approval_date,
+                ta.audit_execution_time,
+                ta.audit_schedule_date::timestamp,
+                ta.created_date
+              )) = @year
           AND (@region = '' OR s.region = @region)
-        GROUP BY ta.approval_by
-        ORDER BY done_verified DESC
-        LIMIT 20;
-    ", new { region = region ?? "", month, year })).ToList();
-
+          AND (
+                (array_length(@userRegions, 1) IS NULL AND array_length(@userSbms, 1) IS NULL)
+                OR s.region = ANY(@userRegions)
+                OR s.sbm = ANY(@userSbms)
+              )
+          AND (
+                @month IS NULL
+                OR EXTRACT(MONTH FROM COALESCE(
+                    ta.approval_date,
+                    ta.audit_execution_time,
+                    ta.audit_schedule_date::timestamp,
+                    ta.created_date
+                )) = @month
+              )
+          AND (
+                @day IS NULL
+                OR EXTRACT(DOW FROM COALESCE(
+                    ta.approval_date,
+                    ta.audit_execution_time,
+                    ta.audit_schedule_date::timestamp,
+                    ta.created_date
+                )) = @day
+              )
+    )
+    SELECT
+        verifier,
+        COUNT(id)::int AS total_audited,
+        COUNT(id) FILTER (
+            WHERE status IN ('UNDER_REVIEW', 'IN_PROGRESS_SUBMIT', 'IN_PROGRESS_INPUT')
+        )::int AS under_verified,
+        COUNT(id) FILTER (WHERE status = 'VERIFIED')::int AS done_verified,
+        CASE 
+            WHEN COUNT(id) = 0 THEN 0
+            ELSE ROUND(
+                (
+                    COUNT(id) FILTER (WHERE status = 'VERIFIED')::numeric
+                    / COUNT(id)::numeric
+                ) * 100
+            )::int
+        END AS verified_percent,
+        CASE 
+            WHEN COUNT(DISTINCT DATE(approval_date)) FILTER (WHERE status = 'VERIFIED') = 0 THEN 0
+            ELSE ROUND(
+                COUNT(id) FILTER (WHERE status = 'VERIFIED')::numeric
+                / COUNT(DISTINCT DATE(approval_date)) FILTER (WHERE status = 'VERIFIED')::numeric
+            )::int
+        END AS perday,
+        COUNT(DISTINCT spbu_id)::int AS total_spbu,
+        GREATEST(
+            COUNT(DISTINCT spbu_id)
+            - COUNT(DISTINCT spbu_id) FILTER (WHERE status = 'VERIFIED'),
+            0
+        )::int AS remaining_spbu
+    FROM base
+    GROUP BY verifier
+    ORDER BY done_verified DESC, total_audited DESC
+    LIMIT 100;
+", param)).ToList();
             return Json(new
             {
                 monthly = new
@@ -290,7 +657,8 @@ namespace e_Pas_CMS.Controllers
                 {
                     rank = x.rank,
                     verifier = x.verifier,
-                    speed = FormatMinutes(x.avg_minutes),
+                    speed = FormatSeconds(x.avg_seconds),
+                    speedSeconds = x.avg_seconds == null ? null : Convert.ToInt32(x.avg_seconds),
                     verifiedAudit = x.verified_audit,
                     missedAudit = x.missed_audit,
                     cancelledAudit = x.cancelled_audit,
@@ -325,6 +693,28 @@ namespace e_Pas_CMS.Controllers
             return $"{menit} Menit";
         }
 
+        private static string FormatSeconds(dynamic secondsObj)
+        {
+            if (secondsObj == null)
+                return "-";
+
+            int totalSeconds = Convert.ToInt32(secondsObj);
+
+            if (totalSeconds <= 0)
+                return "-";
+
+            int jam = totalSeconds / 3600;
+            int menit = (totalSeconds % 3600) / 60;
+            int detik = totalSeconds % 60;
+
+            if (jam > 0)
+                return $"{jam} Jam {menit} Menit {detik} Detik";
+
+            if (menit > 0)
+                return $"{menit} Menit {detik} Detik";
+
+            return $"{detik} Detik";
+        }
         public async Task<IActionResult> Nasional(int pageNumber = 1, int pageSize = 10, string searchTerm = "", int? filterMonth = null, int? filterYear = null)
         {
             var currentUser = User.Identity?.Name;

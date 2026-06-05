@@ -136,6 +136,11 @@
             font-weight: 900;
         }
 
+        .sortable {
+            cursor: pointer;
+            user-select: none;
+        }
+
         .sort-icon {
             color: #21B6D7;
             font-size: 15px;
@@ -155,21 +160,30 @@
         .pagination-soft {
             display: flex;
             align-items: center;
-            gap: 12px;
+            gap: 8px;
             margin: 14px 0 8px;
             color: #94a3b8;
         }
 
-            .pagination-soft span {
-                color: #111827;
-            }
+        .page-btn {
+            border: none;
+            background: transparent;
+            color: #111827;
+            min-width: 28px;
+            height: 28px;
+            border-radius: 8px;
+            font-weight: 700;
+            cursor: pointer;
+        }
 
-            .pagination-soft .active {
+            .page-btn.active {
                 background: #21B6D7;
                 color: #fff;
-                border-radius: 8px;
-                padding: 4px 9px;
-                font-weight: 800;
+            }
+
+            .page-btn:disabled {
+                color: #cbd5e1;
+                cursor: not-allowed;
             }
 
         @@media (max-width: 992px) {
@@ -301,13 +315,27 @@
             <table class="table">
                 <thead>
                     <tr>
-                        <th>Peringkat Verifikator</th>
-                        <th>Verifikator</th>
-                        <th>Kecepatan<br />Verifikasi Audit <i class="bi bi-arrow-down-up sort-icon"></i></th>
-                        <th>Total Audit yang<br />Diverifikasi <i class="bi bi-arrow-down-up sort-icon"></i></th>
-                        <th>Total Audit yang<br />Terlewat <i class="bi bi-arrow-down-up sort-icon"></i></th>
-                        <th>Total Audit yang<br />Dibatalkan</th>
-                        <th>Verifikasi<br />Audit Terakhir</th>
+                        <th class="sortable" data-table="ranking" data-field="rank">
+                            Peringkat Verifikator <i class="bi bi-arrow-down-up sort-icon"></i>
+                        </th>
+                        <th class="sortable" data-table="ranking" data-field="verifier">
+                            Verifikator <i class="bi bi-arrow-down-up sort-icon"></i>
+                        </th>
+                        <th class="sortable" data-table="ranking" data-field="speedSeconds">
+                            Kecepatan<br />Verifikasi Audit <i class="bi bi-arrow-down-up sort-icon"></i>
+                        </th>
+                        <th class="sortable" data-table="ranking" data-field="verifiedAudit">
+                            Total Audit yang<br />Diverifikasi <i class="bi bi-arrow-down-up sort-icon"></i>
+                        </th>
+                        <th class="sortable" data-table="ranking" data-field="missedAudit">
+                            Total Audit yang<br />Terlewat <i class="bi bi-arrow-down-up sort-icon"></i>
+                        </th>
+                        <th class="sortable" data-table="ranking" data-field="cancelledAudit">
+                            Total Audit yang<br />Dibatalkan <i class="bi bi-arrow-down-up sort-icon"></i>
+                        </th>
+                        <th class="sortable" data-table="ranking" data-field="lastVerifiedDate">
+                            Verifikasi<br />Audit Terakhir <i class="bi bi-arrow-down-up sort-icon"></i>
+                        </th>
                     </tr>
                 </thead>
 
@@ -322,15 +350,7 @@
         </div>
     </div>
 
-    <div class="pagination-soft">
-        <i class="bi bi-chevron-left"></i>
-        <span class="active">1</span>
-        <span>2</span>
-        <span>3</span>
-        <span>4</span>
-        <span>5</span>
-        <i class="bi bi-chevron-right"></i>
-    </div>
+    <div id="rankingPagination" class="pagination-soft"></div>
 
     <h4 class="section-title">Performa Verifikator</h4>
 
@@ -339,14 +359,30 @@
             <table class="table">
                 <thead>
                     <tr>
-                        <th>Verifikator</th>
-                        <th>Total<br />Audited</th>
-                        <th>Under Verified <i class="bi bi-arrow-down-up sort-icon"></i></th>
-                        <th>Done Verified <i class="bi bi-arrow-down-up sort-icon"></i></th>
-                        <th>% verified <i class="bi bi-arrow-down-up sort-icon"></i></th>
-                        <th>PERDAY <i class="bi bi-arrow-down-up sort-icon"></i></th>
-                        <th>Total SPBU <i class="bi bi-arrow-down-up sort-icon"></i></th>
-                        <th>Sisa SPBU <i class="bi bi-arrow-down-up sort-icon"></i></th>
+                        <th class="sortable" data-table="performance" data-field="verifier">
+                            Verifikator <i class="bi bi-arrow-down-up sort-icon"></i>
+                        </th>
+                        <th class="sortable" data-table="performance" data-field="totalAudited">
+                            Total<br />Audited <i class="bi bi-arrow-down-up sort-icon"></i>
+                        </th>
+                        <th class="sortable" data-table="performance" data-field="underVerified">
+                            Under Verified <i class="bi bi-arrow-down-up sort-icon"></i>
+                        </th>
+                        <th class="sortable" data-table="performance" data-field="doneVerified">
+                            Done Verified <i class="bi bi-arrow-down-up sort-icon"></i>
+                        </th>
+                        <th class="sortable" data-table="performance" data-field="verifiedPercent">
+                            % verified <i class="bi bi-arrow-down-up sort-icon"></i>
+                        </th>
+                        <th class="sortable" data-table="performance" data-field="perday">
+                            PERDAY <i class="bi bi-arrow-down-up sort-icon"></i>
+                        </th>
+                        <th class="sortable" data-table="performance" data-field="totalSpbu">
+                            Total SPBU <i class="bi bi-arrow-down-up sort-icon"></i>
+                        </th>
+                        <th class="sortable" data-table="performance" data-field="remainingSpbu">
+                            Sisa SPBU <i class="bi bi-arrow-down-up sort-icon"></i>
+                        </th>
                     </tr>
                 </thead>
 
@@ -361,15 +397,7 @@
         </div>
     </div>
 
-    <div class="pagination-soft">
-        <i class="bi bi-chevron-left"></i>
-        <span class="active">1</span>
-        <span>2</span>
-        <span>3</span>
-        <span>4</span>
-        <span>5</span>
-        <i class="bi bi-chevron-right"></i>
-    </div>
+    <div id="performancePagination" class="pagination-soft"></div>
 </div>
 
 @section Scripts {
@@ -377,35 +405,22 @@
         let verifierBarChart = null;
         let verifierDonutChart = null;
 
-        const dummyVerifierData = {
-            monthly: {
-                totalAudit: [140, 138, 136, 137, 138, 138, 137, 139, 138, 140, 139, 141],
-                verifiedAudit: [115, 114, 116, 115, 116, 116, 115, 116, 116, 117, 116, 118],
-                appealAudit: [25, 24, 25, 25, 24, 24, 25, 25, 24, 25, 25, 25]
-            },
-            status: {
-                verified: 2419,
-                review: 244,
-                appeal: 25,
-                total: 2688
-            },
-            ranking: [
-                { rank: 1, verifier: 'Muhammad Ramadan', speed: '15 Menit 32 Detik', verifiedAudit: 92, missedAudit: 0, cancelledAudit: 3, lastVerifiedDate: '2022-10-09T16:00:00' },
-                { rank: 2, verifier: 'Muhammad Ramadan', speed: '15 Menit 32 Detik', verifiedAudit: 92, missedAudit: 0, cancelledAudit: 3, lastVerifiedDate: '2022-10-09T16:00:00' },
-                { rank: 3, verifier: 'Muhammad Ramadan', speed: '15 Menit 32 Detik', verifiedAudit: 92, missedAudit: 0, cancelledAudit: 3, lastVerifiedDate: '2022-10-09T16:00:00' },
-                { rank: 4, verifier: 'Muhammad Ramadan', speed: '15 Menit 32 Detik', verifiedAudit: 92, missedAudit: 0, cancelledAudit: 3, lastVerifiedDate: '2022-10-09T16:00:00' },
-                { rank: 5, verifier: 'Muhammad Ramadan', speed: '15 Menit 32 Detik', verifiedAudit: 92, missedAudit: 0, cancelledAudit: 3, lastVerifiedDate: '2022-10-09T16:00:00' },
-                { rank: 6, verifier: 'Muhammad Ramadan', speed: '15 Menit 32 Detik', verifiedAudit: 92, missedAudit: 0, cancelledAudit: 3, lastVerifiedDate: '2022-10-09T16:00:00' },
-                { rank: 7, verifier: 'Muhammad Ramadan', speed: '15 Menit 32 Detik', verifiedAudit: 92, missedAudit: 0, cancelledAudit: 3, lastVerifiedDate: '2022-10-09T16:00:00' }
-            ],
-            performance: [
-                { verifier: 'Hendra', totalAudited: 482, underVerified: 39, doneVerified: 443, verifiedPercent: 92, perday: 38, totalSpbu: 585, remainingSpbu: 103 },
-                { verifier: 'Bambang', totalAudited: 482, underVerified: 39, doneVerified: 443, verifiedPercent: 92, perday: 38, totalSpbu: 585, remainingSpbu: 103 },
-                { verifier: 'Alvan', totalAudited: 482, underVerified: 39, doneVerified: 443, verifiedPercent: 92, perday: 38, totalSpbu: 585, remainingSpbu: 103 },
-                { verifier: 'Rimbo', totalAudited: 482, underVerified: 39, doneVerified: 443, verifiedPercent: 92, perday: 38, totalSpbu: 585, remainingSpbu: 103 },
-                { verifier: 'Hendri', totalAudited: 482, underVerified: 39, doneVerified: 443, verifiedPercent: 92, perday: 38, totalSpbu: 585, remainingSpbu: 103 },
-                { verifier: 'Fajar', totalAudited: 482, underVerified: 39, doneVerified: 443, verifiedPercent: 92, perday: 38, totalSpbu: 585, remainingSpbu: 103 }
-            ]
+        let rankingData = [];
+        let performanceData = [];
+
+        const pageSize = 10;
+
+        let rankingCurrentPage = 1;
+        let performanceCurrentPage = 1;
+
+        let rankingSort = {
+            field: 'speedSeconds',
+            direction: 'asc'
+        };
+
+        let performanceSort = {
+            field: 'doneVerified',
+            direction: 'desc'
         };
 
         function normalizeArray(arr) {
@@ -433,6 +448,216 @@
             return `${date}<br><small class="text-muted">${time} WIB</small>`;
         }
 
+        function parseSpeedToSeconds(speed) {
+            if (!speed || speed === '-') return null;
+
+            let total = 0;
+
+            const jam = speed.match(/(\d+)\s*Jam/i);
+            const menit = speed.match(/(\d+)\s*Menit/i);
+            const detik = speed.match(/(\d+)\s*Detik/i);
+
+            if (jam) total += Number(jam[1]) * 3600;
+            if (menit) total += Number(menit[1]) * 60;
+            if (detik) total += Number(detik[1]);
+
+            return total > 0 ? total : null;
+        }
+
+        function getSortValue(row, field) {
+            if (field === 'speedSeconds') {
+                const value = row.speedSeconds ?? parseSpeedToSeconds(row.speed);
+                return value === null || value === undefined ? Number.MAX_SAFE_INTEGER : Number(value);
+            }
+
+            if (field === 'lastVerifiedDate') {
+                if (!row.lastVerifiedDate) return 0;
+
+                const date = new Date(row.lastVerifiedDate);
+                return isNaN(date.getTime()) ? 0 : date.getTime();
+            }
+
+            const value = row[field];
+
+            if (typeof value === 'number') return value;
+
+            if (value === null || value === undefined) return '';
+
+            const numericValue = Number(value);
+            if (!isNaN(numericValue) && value !== '') return numericValue;
+
+            return String(value).toLowerCase();
+        }
+
+        function sortItems(items, field, direction) {
+            const sorted = [...items];
+
+            sorted.sort((a, b) => {
+                const av = getSortValue(a, field);
+                const bv = getSortValue(b, field);
+
+                if (typeof av === 'number' && typeof bv === 'number') {
+                    return direction === 'asc' ? av - bv : bv - av;
+                }
+
+                return direction === 'asc'
+                    ? String(av).localeCompare(String(bv))
+                    : String(bv).localeCompare(String(av));
+            });
+
+            return sorted;
+        }
+
+        function paginateItems(items, currentPage) {
+            const start = (currentPage - 1) * pageSize;
+            return items.slice(start, start + pageSize);
+        }
+
+        function renderPagination(containerId, totalItems, currentPage, onPageClick) {
+            const container = document.getElementById(containerId);
+
+            if (!container) return;
+
+            const totalPages = Math.ceil(totalItems / pageSize);
+
+            if (totalPages <= 1) {
+                container.innerHTML = '';
+                return;
+            }
+
+            let html = '';
+
+            html += `
+                <button type="button"
+                        class="page-btn"
+                        ${currentPage === 1 ? 'disabled' : ''}
+                        data-page="${currentPage - 1}">
+                    <i class="bi bi-chevron-left"></i>
+                </button>
+            `;
+
+            for (let i = 1; i <= totalPages; i++) {
+                html += `
+                    <button type="button"
+                            class="page-btn ${i === currentPage ? 'active' : ''}"
+                            data-page="${i}">
+                        ${i}
+                    </button>
+                `;
+            }
+
+            html += `
+                <button type="button"
+                        class="page-btn"
+                        ${currentPage === totalPages ? 'disabled' : ''}
+                        data-page="${currentPage + 1}">
+                    <i class="bi bi-chevron-right"></i>
+                </button>
+            `;
+
+            container.innerHTML = html;
+
+            container.querySelectorAll('.page-btn').forEach(btn => {
+                btn.addEventListener('click', function () {
+                    const page = Number(this.dataset.page);
+
+                    if (!page || page < 1 || page > totalPages) return;
+
+                    onPageClick(page);
+                });
+            });
+        }
+
+        function refreshSortIcons(tableName, field, direction) {
+            document.querySelectorAll(`.sortable[data-table="${tableName}"] .sort-icon`).forEach(icon => {
+                icon.className = 'bi bi-arrow-down-up sort-icon';
+            });
+
+            const activeIcon = document.querySelector(`.sortable[data-table="${tableName}"][data-field="${field}"] .sort-icon`);
+            if (!activeIcon) return;
+
+            activeIcon.className = direction === 'asc'
+                ? 'bi bi-sort-up sort-icon'
+                : 'bi bi-sort-down sort-icon';
+        }
+
+        function applyRankingSort() {
+            const sorted = sortItems(rankingData, rankingSort.field, rankingSort.direction);
+
+            sorted.forEach((item, index) => {
+                item.rank = index + 1;
+            });
+
+            const totalPages = Math.ceil(sorted.length / pageSize);
+            if (rankingCurrentPage > totalPages && totalPages > 0) {
+                rankingCurrentPage = totalPages;
+            }
+
+            const pagedItems = paginateItems(sorted, rankingCurrentPage);
+
+            renderRanking(pagedItems);
+            renderPagination('rankingPagination', sorted.length, rankingCurrentPage, function (page) {
+                rankingCurrentPage = page;
+                applyRankingSort();
+            });
+
+            refreshSortIcons('ranking', rankingSort.field, rankingSort.direction);
+        }
+
+        function applyPerformanceSort() {
+            const sorted = sortItems(performanceData, performanceSort.field, performanceSort.direction);
+
+            const totalPages = Math.ceil(sorted.length / pageSize);
+            if (performanceCurrentPage > totalPages && totalPages > 0) {
+                performanceCurrentPage = totalPages;
+            }
+
+            const pagedItems = paginateItems(sorted, performanceCurrentPage);
+
+            renderPerformance(pagedItems, sorted);
+            renderPagination('performancePagination', sorted.length, performanceCurrentPage, function (page) {
+                performanceCurrentPage = page;
+                applyPerformanceSort();
+            });
+
+            refreshSortIcons('performance', performanceSort.field, performanceSort.direction);
+        }
+
+        function bindSortEvents() {
+            document.querySelectorAll('.sortable').forEach(th => {
+                th.addEventListener('click', function () {
+                    const table = this.dataset.table;
+                    const field = this.dataset.field;
+
+                    if (table === 'ranking') {
+                        rankingCurrentPage = 1;
+
+                        if (rankingSort.field === field) {
+                            rankingSort.direction = rankingSort.direction === 'asc' ? 'desc' : 'asc';
+                        } else {
+                            rankingSort.field = field;
+                            rankingSort.direction = field === 'speedSeconds' ? 'asc' : 'desc';
+                        }
+
+                        applyRankingSort();
+                    }
+
+                    if (table === 'performance') {
+                        performanceCurrentPage = 1;
+
+                        if (performanceSort.field === field) {
+                            performanceSort.direction = performanceSort.direction === 'asc' ? 'desc' : 'asc';
+                        } else {
+                            performanceSort.field = field;
+                            performanceSort.direction = 'desc';
+                        }
+
+                        applyPerformanceSort();
+                    }
+                });
+            });
+        }
+
         async function loadVerifierPerformance() {
             const loadingBox = document.getElementById('loadingBox');
 
@@ -441,24 +666,43 @@
 
                 const region = document.getElementById('filterRegion').value;
                 const month = document.getElementById('filterMonth').value;
+                const day = document.getElementById('filterDay').value;
                 const year = document.getElementById('filterYear').value;
 
-                const url = `/Dashboard/VerifierPerformanceSummary?region=${encodeURIComponent(region)}&month=${encodeURIComponent(month)}&year=${encodeURIComponent(year)}`;
-                const res = await fetch(url);
+                const params = new URLSearchParams();
 
-                let data;
+                if (region) params.append('region', region);
+                if (month) params.append('month', month);
+                if (day !== '') params.append('day', day);
+                if (year) params.append('year', year);
+
+                const res = await fetch(`/Dashboard/VerifierPerformanceSummary?${params.toString()}`);
 
                 if (!res.ok) {
-                    data = dummyVerifierData;
-                } else {
-                    data = await res.json();
-                    if (!data || !data.status) data = dummyVerifierData;
+                    throw new Error(`HTTP ${res.status}`);
                 }
+
+                const data = await res.json();
 
                 renderDashboard(data);
             } catch (e) {
                 console.error(e);
-                renderDashboard(dummyVerifierData);
+
+                renderDashboard({
+                    monthly: {
+                        totalAudit: Array(12).fill(0),
+                        verifiedAudit: Array(12).fill(0),
+                        appealAudit: Array(12).fill(0)
+                    },
+                    status: {
+                        verified: 0,
+                        review: 0,
+                        appeal: 0,
+                        total: 0
+                    },
+                    ranking: [],
+                    performance: []
+                });
             } finally {
                 loadingBox.style.display = 'none';
             }
@@ -479,10 +723,21 @@
             document.getElementById('reviewVal').innerText = review;
             document.getElementById('appealVal').innerText = appeal;
 
+            rankingData = (data.ranking || []).map(x => ({
+                ...x,
+                speedSeconds: x.speedSeconds ?? parseSpeedToSeconds(x.speed)
+            }));
+
+            performanceData = data.performance || [];
+
+            rankingCurrentPage = 1;
+            performanceCurrentPage = 1;
+
             renderBar(totalAudit, verifiedAudit, appealAudit);
             renderDonut(verified, review, appeal, total);
-            renderRanking(data.ranking || []);
-            renderPerformance(data.performance || []);
+
+            applyRankingSort();
+            applyPerformanceSort();
         }
 
         function renderBar(totalAudit, verifiedAudit, appealAudit) {
@@ -616,7 +871,7 @@
             `).join('');
         }
 
-        function renderPerformance(items) {
+        function renderPerformance(items, allItems) {
             const tbody = document.getElementById('performanceBody');
 
             if (!items || items.length === 0) {
@@ -636,27 +891,29 @@
             let totalSpbu = 0;
             let totalRemaining = 0;
 
-            const rows = items.map(x => {
+            const sourceTotal = allItems || items;
+
+            sourceTotal.forEach(x => {
                 totalAudited += Number(x.totalAudited || 0);
                 totalUnder += Number(x.underVerified || 0);
                 totalDone += Number(x.doneVerified || 0);
                 totalPerday += Number(x.perday || 0);
                 totalSpbu += Number(x.totalSpbu || 0);
                 totalRemaining += Number(x.remainingSpbu || 0);
+            });
 
-                return `
-                    <tr>
-                        <td>${x.verifier ?? '-'}</td>
-                        <td>${x.totalAudited ?? 0}</td>
-                        <td>${x.underVerified ?? 0}</td>
-                        <td>${x.doneVerified ?? 0}</td>
-                        <td>${x.verifiedPercent ?? 0}%</td>
-                        <td>${x.perday ?? 0}</td>
-                        <td>${x.totalSpbu ?? 0}</td>
-                        <td>${x.remainingSpbu ?? 0}</td>
-                    </tr>
-                `;
-            }).join('');
+            const rows = items.map(x => `
+                <tr>
+                    <td>${x.verifier ?? '-'}</td>
+                    <td>${x.totalAudited ?? 0}</td>
+                    <td>${x.underVerified ?? 0}</td>
+                    <td>${x.doneVerified ?? 0}</td>
+                    <td>${x.verifiedPercent ?? 0}%</td>
+                    <td>${x.perday ?? 0}</td>
+                    <td>${x.totalSpbu ?? 0}</td>
+                    <td>${x.remainingSpbu ?? 0}</td>
+                </tr>
+            `).join('');
 
             const percent = totalAudited === 0
                 ? 0
@@ -677,6 +934,7 @@
         }
 
         document.addEventListener("DOMContentLoaded", function () {
+            bindSortEvents();
             loadVerifierPerformance();
 
             document.getElementById('filterRegion').addEventListener('change', loadVerifierPerformance);

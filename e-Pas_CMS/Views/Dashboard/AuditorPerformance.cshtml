@@ -331,7 +331,7 @@
             return arr.map(x => Number(x || 0));
         }
 
-        async function loadAuditorPerformance() {
+                async function loadAuditorPerformance() {
             const loadingBox = document.getElementById('loadingBox');
 
             try {
@@ -339,24 +339,41 @@
 
                 const region = document.getElementById('filterRegion').value;
                 const month = document.getElementById('filterMonth').value;
+                const day = document.getElementById('filterDay').value;
                 const year = document.getElementById('filterYear').value;
 
-                const url = `/Dashboard/AuditorPerformanceSummary?region=${encodeURIComponent(region)}&month=${encodeURIComponent(month)}&year=${encodeURIComponent(year)}`;
+                const params = new URLSearchParams();
 
-                const res = await fetch(url);
+                if (region) params.append('region', region);
+                if (month) params.append('month', month);
+                if (day !== '') params.append('day', day);
+                if (year) params.append('year', year);
 
-                let data;
+                const res = await fetch(`/Dashboard/AuditorPerformanceSummary?${params.toString()}`);
+
                 if (!res.ok) {
-                    data = dummyData;
-                } else {
-                    data = await res.json();
-                    if (!data || !data.status) data = dummyData;
+                    throw new Error(`HTTP ${res.status}`);
                 }
+
+                const data = await res.json();
 
                 renderDashboard(data);
             } catch (e) {
                 console.error(e);
-                renderDashboard(dummyData);
+
+                renderDashboard({
+                    monthly: {
+                        totalAudit: Array(12).fill(0),
+                        verifiedAudit: Array(12).fill(0)
+                    },
+                    status: {
+                        verified: 0,
+                        review: 0,
+                        revision: 0,
+                        total: 0
+                    },
+                    ranking: []
+                });
             } finally {
                 loadingBox.style.display = 'none';
             }
