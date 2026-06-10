@@ -1,6 +1,7 @@
 ﻿using Dapper;
 using e_Pas_CMS.Data;
 using e_Pas_CMS.ViewModels;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
@@ -21,6 +22,7 @@ namespace e_Pas_CMS.Controllers
             _context = context;
         }
 
+        [Authorize]
         public IActionResult Index()
         {
             return View();
@@ -1091,6 +1093,7 @@ namespace e_Pas_CMS.Controllers
             return View(model);
         }
 
+        [Authorize]
         public async Task<IActionResult> Province(
     int pageNumber = 1, int pageSize = 10, string searchTerm = "",
     int? filterMonth = null, int? filterYear = null, string filterProvince = ""
@@ -1497,6 +1500,7 @@ namespace e_Pas_CMS.Controllers
             return View(model);
         }
 
+        [Authorize]
         public async Task<IActionResult> Regional(
     int pageNumber = 1, int pageSize = 10, string searchTerm = "",
     int? filterMonth = null, int? filterYear = null, string filterregion = ""
