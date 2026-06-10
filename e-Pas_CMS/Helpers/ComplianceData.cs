@@ -511,7 +511,7 @@ comment_per_elemen AS (
                                 ' / ',
                                 CASE WHEN pf.is_penalty_excellent THEN 'penalty excellent' END,
                                 CASE WHEN pf.is_penalty_good THEN 'penalty good' END,
-                                CASE WHEN pf.is_penalty_relaksasi THEN '*relaksasi*' END
+                                CASE WHEN pf.is_penalty_relaksasi THEN '' END
                             )
                         )
                     ELSE ''

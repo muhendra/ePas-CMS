@@ -985,11 +985,11 @@ namespace e_Pas_CMS.Controllers
                 var end = new DateTime(2026, 05, 31);
 
                 var baseQuery = _context.trx_audits.AsNoTracking()
-.Where(a =>
-    allowedStatuses.Contains(a.status) &&
-    a.audit_type != "Basic Operational" &&
-    (a.audit_execution_time ?? a.created_date) >= start &&
-    (a.audit_execution_time ?? a.created_date) < end
+                .Where(a =>
+                    allowedStatuses.Contains(a.status) &&
+                    a.audit_type != "Basic Operational" &&
+                    (a.audit_execution_time ?? a.created_date) >= start &&
+                    (a.audit_execution_time ?? a.created_date) < end
 //&& a.id == "89ac7143-bac3-4bf2-9b6b-b1f55f81602b"
 );
 
@@ -3801,7 +3801,7 @@ AND mqd.type = 'QUESTION'";
                                                         ' / ',
                                                         CASE WHEN pf.is_penalty_excellent THEN 'penalty excellent' END,
                                                         CASE WHEN pf.is_penalty_good THEN 'penalty good' END,
-                                                        CASE WHEN pf.is_penalty_relaksasi THEN '*relaksasi*' END
+                                                        CASE WHEN pf.is_penalty_relaksasi THEN '' END
                                                     )
                                                 )
                                             ELSE ''
