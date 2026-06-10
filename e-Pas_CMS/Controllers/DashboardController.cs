@@ -275,6 +275,8 @@ namespace e_Pas_CMS.Controllers
             });
         }
 
+        [Authorize]
+
         [HttpGet]
         public IActionResult VerifierPerformance()
         {
