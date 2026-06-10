@@ -1,8 +1,9 @@
-﻿using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
-using e_Pas_CMS.Data;
+﻿using e_Pas_CMS.Data;
 using e_Pas_CMS.Models;
 using e_Pas_CMS.ViewModels;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 
 public class InvoiceController : Controller
 {
@@ -29,6 +30,7 @@ public class InvoiceController : Controller
         _context = context;
     }
 
+    [Authorize]
     public async Task<IActionResult> Index(
         int pageNumber = 1,
         int pageSize = DefaultPageSize,

@@ -1,5 +1,6 @@
 ﻿using e_Pas_CMS.Data;
 using e_Pas_CMS.ViewModels;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using System.Security.Cryptography;
@@ -17,6 +18,7 @@ public class ProfileController : Controller
     // ========================
     // GET PROFILE
     // ========================
+    [Authorize]
     public async Task<IActionResult> Index()
     {
         var username = User.Identity.Name;
@@ -62,6 +64,7 @@ public class ProfileController : Controller
     // ========================
     // CHANGE PASSWORD PAGE
     // ========================
+    [Authorize]
     public IActionResult ChangePassword()
     {
         return View();
@@ -70,6 +73,7 @@ public class ProfileController : Controller
     // ========================
     // CHANGE PASSWORD POST
     // ========================
+    [Authorize]
     [HttpPost]
     public async Task<IActionResult> ChangePassword(ChangePasswordViewModel vm)
     {

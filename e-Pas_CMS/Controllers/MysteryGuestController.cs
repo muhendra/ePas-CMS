@@ -24,7 +24,7 @@ namespace e_Pas_CMS.Controllers
             _logger = logger;
             _configuration = configuration;
         }
-
+        [Authorize]
         public async Task<IActionResult> Index(int pageNumber = 1, int pageSize = DefaultPageSize, string searchTerm = "", string sortColumn = "TanggalAudit", string sortDirection = "desc")
         {
             try

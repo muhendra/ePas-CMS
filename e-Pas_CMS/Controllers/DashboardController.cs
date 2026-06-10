@@ -27,18 +27,18 @@ namespace e_Pas_CMS.Controllers
         {
             return View();
         }
-
+        [Authorize]
         public IActionResult DashboardAnalytics()
         {
             return View();
         }
-
+        [Authorize]
         [HttpGet]
         public IActionResult AuditorPerformance()
         {
             return View();
         }
-
+        [Authorize]
         [HttpGet]
         public async Task<IActionResult> AuditorPerformanceSummary(
     string region = "",
@@ -1906,7 +1906,7 @@ namespace e_Pas_CMS.Controllers
             ViewBag.SearchTerm = searchTerm;
             return View(model);
         }
-
+        [Authorize]
         public async Task<IActionResult> Spbu(
         int pageNumber = 1,
         int pageSize = 10,

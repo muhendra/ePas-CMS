@@ -1,9 +1,10 @@
 ﻿using Dapper;
+using e_Pas_CMS.Data;
+using e_Pas_CMS.ViewModels;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
-using e_Pas_CMS.Data;
-using e_Pas_CMS.ViewModels;
 
 namespace e_Pas_CMS.Controllers
 {
@@ -23,6 +24,7 @@ namespace e_Pas_CMS.Controllers
         // ============================================================
         [HttpGet("")]
         [HttpGet("Index")]
+        [Authorize]
         public async Task<IActionResult> Index(
             string searchTerm = "",
             int pageNumber = 1,
@@ -297,6 +299,7 @@ namespace e_Pas_CMS.Controllers
         // DETAIL (COMPLAINT ONLY)
         // ============================================================
         [HttpGet("Detail/{id}")]
+        [Authorize]
         public async Task<IActionResult> Detail(string id)
         {
             if (string.IsNullOrWhiteSpace(id))
