@@ -175,6 +175,9 @@ namespace e_Pas_CMS.ViewModels
         public decimal AuditFee { get; set; }
 
         public decimal Lumpsum { get; set; }
+
+        public decimal DistanceKm { get; set; }
+        public bool IsDeleted { get; set; }
     }
 
     public class InvoiceApprovalPostVM
@@ -188,10 +191,11 @@ namespace e_Pas_CMS.ViewModels
 
     public class InvoiceApprovalDetailPostVM
     {
-        public string TrxInvoiceDetailId { get; set; } = null!;
-
+        public string TrxInvoiceDetailId { get; set; }
         public decimal AuditFee { get; set; }
-
         public decimal LumpsumFee { get; set; }
+        public bool IsDeleted { get; set; }
     }
+
+
 }

@@ -1,7 +1,7 @@
 ﻿@model e_Pas_CMS.ViewModels.PaginationModel<e_Pas_CMS.ViewModels.CityBoundaryListVm>
 
 @{
-    ViewData["Title"] = "List Batas Kota Auditor";
+    ViewData["Title"] = "List Homebase Auditor";
 }
 
 @section Styles {
@@ -14,11 +14,20 @@
             padding: 28px 22px;
         }
 
+        .page-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 16px;
+            flex-wrap: wrap;
+            margin-bottom: 28px;
+        }
+
         .page-title {
             font-size: 28px;
             font-weight: 800;
             color: #111827;
-            margin-bottom: 28px;
+            margin: 0;
         }
 
         .filter-card {
@@ -46,7 +55,37 @@
             padding: 0 22px;
             height: 48px;
             font-weight: 700;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            text-decoration: none;
         }
+
+            .btn-cyan:hover {
+                background: #159fc0;
+                color: #fff;
+            }
+
+        .btn-outline-cyan {
+            background: #fff;
+            border: 1px solid #21B6D7;
+            color: #21B6D7;
+            border-radius: 10px;
+            padding: 0 18px;
+            height: 48px;
+            font-weight: 800;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            text-decoration: none;
+        }
+
+            .btn-outline-cyan:hover {
+                background: #eaf8fc;
+                color: #159fc0;
+            }
 
         .table-card {
             background: #fff;
@@ -97,6 +136,11 @@
             text-decoration: none;
         }
 
+            .btn-icon:hover {
+                background: #159fc0;
+                color: #fff;
+            }
+
         .pagination .page-link {
             border: 0;
             color: #111827;
@@ -114,11 +158,25 @@
 
 <div class="boundary-page">
 
-    <h3 class="page-title">List Batas Kota Auditor</h3>
+    <div class="page-header">
+        <h3 class="page-title">List Homebase Auditor</h3>
+
+        <a class="btn-outline-cyan"
+           asp-controller="CityBoundary"
+           asp-action="Approval">
+            <i class="bi bi-check2-square"></i>
+            Approval Batas Kota
+        </a>
+    </div>
 
     @if (TempData["Success"] != null)
     {
         <div class="alert alert-success rounded-3">@TempData["Success"]</div>
+    }
+
+    @if (TempData["Error"] != null)
+    {
+        <div class="alert alert-danger rounded-3">@TempData["Error"]</div>
     }
 
     <form method="get" class="filter-card">
@@ -126,7 +184,7 @@
                name="searchTerm"
                value="@ViewBag.SearchTerm"
                class="search-input"
-               placeholder="Cari nama auditor" />
+               placeholder="Cari nama auditor / username / homebase" />
 
         <select name="pageSize" class="search-input" style="width:180px;">
             @{
@@ -139,6 +197,7 @@
         </select>
 
         <button class="btn-cyan" type="submit">
+            <i class="bi bi-search"></i>
             Cari
         </button>
     </form>
@@ -148,13 +207,13 @@
             <table class="table">
                 <thead>
                     <tr>
+                        <th class="text-center">Action</th>
                         <th>Auditor</th>
                         <th>Tanggal Audit<br />Terakhir</th>
-                        <th>Batas Kota 1</th>
-                        <th>Batas Kota 2</th>
-                        <th>Batas Kota 3</th>
-                        <th>Batas Kota 4</th>
-                        <th class="text-center">Action</th>
+                        <th>Homebase 1</th>
+                        <th>Homebase 2</th>
+                        <th>Homebase 3</th>
+                        <th>Homebase 4</th>
                     </tr>
                 </thead>
 
@@ -164,12 +223,6 @@
                         foreach (var item in Model.Items)
                         {
                             <tr>
-                                <td>@item.AuditorName</td>
-                                <td>@(item.LastAuditDate?.ToString("dd/MM/yyyy") ?? "-")</td>
-                                <td>@(item.BoundaryCity1 ?? "-")</td>
-                                <td>@(item.BoundaryCity2 ?? "-")</td>
-                                <td>@(item.BoundaryCity3 ?? "-")</td>
-                                <td>@(item.BoundaryCity4 ?? "-")</td>
                                 <td class="text-center">
                                     <a class="btn-icon"
                                        asp-controller="CityBoundary"
@@ -179,6 +232,12 @@
                                         <i class="bi bi-eye-fill"></i>
                                     </a>
                                 </td>
+                                <td>@item.AuditorName</td>
+                                <td>@(item.LastAuditDate?.ToString("dd/MM/yyyy") ?? "-")</td>
+                                <td>@(item.BoundaryCity1 ?? "-")</td>
+                                <td>@(item.BoundaryCity2 ?? "-")</td>
+                                <td>@(item.BoundaryCity3 ?? "-")</td>
+                                <td>@(item.BoundaryCity4 ?? "-")</td>
                             </tr>
                         }
                     }
@@ -186,7 +245,7 @@
                     {
                         <tr>
                             <td colspan="7" class="text-center py-5 text-muted">
-                                Data tidak ditemukan
+                                Data homebase auditor belum tersedia
                             </td>
                         </tr>
                     }

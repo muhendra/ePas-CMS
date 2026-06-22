@@ -1,4 +1,5 @@
 ﻿@using e_Pas_CMS.ViewModels
+@using System.Collections.Generic
 @model e_Pas_CMS.ViewModels.PaginationModel<InvoiceVM>
 
 @section Styles {
@@ -16,6 +17,7 @@
             --invoice-red: #ef4444;
             --invoice-blue: #2563eb;
             --invoice-orange: #f97316;
+            --invoice-dark: #111827;
         }
 
         body {
@@ -41,54 +43,89 @@
             margin-bottom: 28px;
         }
 
-        .invoice-toolbar {
+        .summary-filter-card {
+            background: #ffffff;
+            border: 1px solid #e9ecef;
+            border-radius: 16px;
+            box-shadow: 0 14px 34px rgba(15, 23, 42, .06);
+            padding: 22px;
+            margin-bottom: 24px;
+        }
+
+        .summary-filter-head {
             display: flex;
-            align-items: center;
-            gap: 12px;
-            margin-bottom: 26px;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 18px;
+            margin-bottom: 18px;
             flex-wrap: wrap;
         }
 
-        .invoice-search-wrap {
-            position: relative;
-            width: 100%;
-            max-width: 520px;
+        .summary-filter-title {
+            font-size: 22px;
+            font-weight: 900;
+            letter-spacing: -0.3px;
+            margin: 0 0 4px;
+            color: #111827;
         }
 
-        .invoice-search-icon {
-            position: absolute;
-            left: 18px;
-            top: 50%;
-            transform: translateY(-50%);
-            color: #4b5563;
-            font-size: 18px;
-            z-index: 2;
+        .summary-filter-subtitle {
+            color: #7b8490;
+            font-size: 13px;
+            margin: 0;
         }
 
-        .invoice-search {
-            height: 50px;
+        .summary-filter-form {
+            display: grid;
+            grid-template-columns: minmax(220px, 1.1fr) minmax(170px, .8fr) minmax(260px, 1.2fr) auto auto;
+            gap: 12px;
+            align-items: end;
+        }
+
+        .summary-field label {
+            display: block;
+            font-size: 12px;
+            font-weight: 800;
+            margin-bottom: 7px;
+            color: #111827;
+        }
+
+        .summary-control {
+            height: 46px;
             width: 100%;
             border-radius: 12px;
             border: 1px solid #e1e5ea;
             background: #fff;
-            padding: 0 18px 0 48px;
-            font-size: 15px;
+            padding: 0 14px;
+            font-size: 14px;
             color: #111827;
             outline: none;
             box-shadow: none;
         }
 
-        .invoice-search::placeholder {
-            color: #9aa3ad;
+            .summary-control:focus {
+                border-color: var(--invoice-cyan);
+                box-shadow: 0 0 0 3px rgba(34,184,212,.12);
+            }
+
+        .summary-search-wrap {
+            position: relative;
         }
 
-        .invoice-search:focus {
-            border-color: var(--invoice-cyan);
-            box-shadow: 0 0 0 3px rgba(34,184,212,.12);
+        .summary-search-wrap i {
+            position: absolute;
+            left: 14px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #6b7280;
+        }
+
+        .summary-search-wrap .summary-control {
+            padding-left: 40px;
         }
 
         .invoice-search-btn {
-            height: 50px;
+            height: 46px;
             border: 0;
             border-radius: 999px;
             background: var(--invoice-cyan);
@@ -98,15 +135,16 @@
             font-weight: 800;
             cursor: pointer;
             transition: all .15s ease;
+            white-space: nowrap;
         }
 
-        .invoice-search-btn:hover {
-            background: #19a8c3;
-            transform: translateY(-1px);
-        }
+            .invoice-search-btn:hover {
+                background: #19a8c3;
+                transform: translateY(-1px);
+            }
 
         .invoice-reset-btn {
-            height: 50px;
+            height: 46px;
             border-radius: 999px;
             border: 1px solid #d7dde5;
             background: #fff;
@@ -117,11 +155,53 @@
             text-decoration: none;
             display: inline-flex;
             align-items: center;
+            justify-content: center;
+            white-space: nowrap;
         }
 
-        .invoice-reset-btn:hover {
-            color: #111827;
+            .invoice-reset-btn:hover {
+                color: #111827;
+                background: #f8fafc;
+            }
+
+        .summary-grid {
+            display: grid;
+            grid-template-columns: repeat(5, minmax(150px, 1fr));
+            gap: 12px;
+            margin-top: 20px;
+        }
+
+        .summary-card {
             background: #f8fafc;
+            border: 1px solid #edf0f2;
+            border-radius: 14px;
+            padding: 16px;
+            min-height: 94px;
+        }
+
+        .summary-card-label {
+            color: #6b7280;
+            font-size: 12px;
+            font-weight: 800;
+            margin-bottom: 8px;
+        }
+
+        .summary-card-value {
+            color: #111827;
+            font-size: 24px;
+            font-weight: 900;
+            letter-spacing: -0.3px;
+        }
+
+        .summary-card-value.money {
+            font-size: 18px;
+            line-height: 1.3;
+        }
+
+        .summary-card-note {
+            color: #9aa3ad;
+            font-size: 11px;
+            margin-top: 6px;
         }
 
         .invoice-card-table {
@@ -140,33 +220,33 @@
             min-width: 1080px;
         }
 
-        .invoice-table thead th {
-            background: var(--invoice-head);
-            border: 0;
-            padding: 12px 16px;
-            font-size: 12px;
-            font-weight: 800;
-            color: #111827;
-            vertical-align: middle;
-            white-space: nowrap;
-        }
+            .invoice-table thead th {
+                background: var(--invoice-head);
+                border: 0;
+                padding: 12px 16px;
+                font-size: 12px;
+                font-weight: 800;
+                color: #111827;
+                vertical-align: middle;
+                white-space: nowrap;
+            }
 
-        .invoice-table tbody td {
-            background: #fff;
-            border-top: 1px dashed #e8ebef;
-            padding: 13px 16px;
-            font-size: 12px;
-            vertical-align: middle;
-            color: #111827;
-        }
+            .invoice-table tbody td {
+                background: #fff;
+                border-top: 1px dashed #e8ebef;
+                padding: 13px 16px;
+                font-size: 12px;
+                vertical-align: middle;
+                color: #111827;
+            }
 
-        .invoice-table tbody tr:first-child td {
-            border-top: 0;
-        }
+            .invoice-table tbody tr:first-child td {
+                border-top: 0;
+            }
 
-        .invoice-table tbody tr:hover td {
-            background: #fcfdff;
-        }
+            .invoice-table tbody tr:hover td {
+                background: #fcfdff;
+            }
 
         .invoice-number-link {
             color: #13b5d1;
@@ -176,10 +256,10 @@
             font-size: 12px;
         }
 
-        .invoice-number-link:hover {
-            color: #0ea5bd;
-            text-decoration: underline;
-        }
+            .invoice-number-link:hover {
+                color: #0ea5bd;
+                text-decoration: underline;
+            }
 
         .invoice-date-main {
             font-weight: 600;
@@ -265,19 +345,19 @@
             transition: all .15s ease;
         }
 
-        .invoice-btn:hover {
-            background: #19a8c3;
-            color: #fff;
-            transform: translateY(-1px);
-        }
+            .invoice-btn:hover {
+                background: #19a8c3;
+                color: #fff;
+                transform: translateY(-1px);
+            }
 
-        .invoice-btn.process {
-            background: #111827;
-        }
+            .invoice-btn.process {
+                background: #111827;
+            }
 
-        .invoice-btn.process:hover {
-            background: #1f2937;
-        }
+                .invoice-btn.process:hover {
+                    background: #1f2937;
+                }
 
         .invoice-empty {
             text-align: center;
@@ -295,13 +375,13 @@
             overflow: hidden;
         }
 
-        .invoice-scrollbar span {
-            display: block;
-            width: 35%;
-            height: 100%;
-            background: #e9e9ea;
-            border-radius: 999px;
-        }
+            .invoice-scrollbar span {
+                display: block;
+                width: 35%;
+                height: 100%;
+                background: #e9e9ea;
+                border-radius: 999px;
+            }
 
         .invoice-pagination-wrap {
             display: flex;
@@ -335,11 +415,11 @@
             font-weight: 700;
         }
 
-        .invoice-page-link.active {
-            background: var(--invoice-cyan);
-            color: #fff;
-            font-weight: 800;
-        }
+            .invoice-page-link.active {
+                background: var(--invoice-cyan);
+                color: #fff;
+                font-weight: 800;
+            }
 
         .invoice-page-arrow {
             color: #a6adb5;
@@ -348,9 +428,9 @@
             line-height: 1;
         }
 
-        .invoice-page-arrow:hover {
-            color: #111827;
-        }
+            .invoice-page-arrow:hover {
+                color: #111827;
+            }
 
         .invoice-alert {
             border-radius: 12px;
@@ -359,16 +439,26 @@
             font-weight: 700;
         }
 
-        .invoice-alert.success {
-            background: #ecfdf5;
-            color: #047857;
-            border: 1px solid #bbf7d0;
-        }
+            .invoice-alert.success {
+                background: #ecfdf5;
+                color: #047857;
+                border: 1px solid #bbf7d0;
+            }
 
-        .invoice-alert.error {
-            background: #fef2f2;
-            color: #b91c1c;
-            border: 1px solid #fecaca;
+            .invoice-alert.error {
+                background: #fef2f2;
+                color: #b91c1c;
+                border: 1px solid #fecaca;
+            }
+
+        @@media (max-width: 1200px) {
+            .summary-filter-form {
+                grid-template-columns: repeat(2, minmax(220px, 1fr));
+            }
+
+            .summary-grid {
+                grid-template-columns: repeat(2, minmax(150px, 1fr));
+            }
         }
 
         @@media (max-width: 991px) {
@@ -378,6 +468,11 @@
 
             .invoice-title {
                 font-size: 26px;
+            }
+
+            .summary-filter-form,
+            .summary-grid {
+                grid-template-columns: 1fr;
             }
 
             .invoice-table thead th,
@@ -398,10 +493,6 @@
                 font-size: 12px;
             }
 
-            .invoice-search-wrap {
-                max-width: none;
-            }
-
             .invoice-search-btn,
             .invoice-reset-btn {
                 width: 100%;
@@ -415,6 +506,19 @@
     var totalPages = Model.TotalPages;
     var prevPage = Model.PageNumber > 1 ? Model.PageNumber - 1 : 1;
     var nextPage = Model.PageNumber < totalPages ? Model.PageNumber + 1 : totalPages;
+
+    var auditorOptions = ViewBag.AuditorOptions as IEnumerable<InvoiceAuditorOptionVM>
+        ?? new List<InvoiceAuditorOptionVM>();
+
+    var selectedAuditorId = ViewBag.AuditorId as string ?? "";
+    var selectedPeriodClaim = ViewBag.PeriodClaim as string ?? "";
+    var searchTerm = ViewBag.SearchTerm as string ?? "";
+
+    var summaryTotalInvoice = ViewBag.SummaryTotalInvoice is int sti ? sti : 0;
+    var summaryTotalExpense = ViewBag.SummaryTotalExpense is decimal ste ? ste : 0m;
+    var summaryApproved = ViewBag.SummaryApproved is int sa ? sa : 0;
+    var summaryPending = ViewBag.SummaryPending is int sp ? sp : 0;
+    var summaryRejected = ViewBag.SummaryRejected is int sr ? sr : 0;
 
     string GetStatusText(string status)
     {
@@ -454,7 +558,7 @@
 <div class="invoice-page">
     <h1 class="invoice-title">Invoice Management</h1>
     <div class="invoice-subtitle">
-        Kelola invoice finance, proses review, approval, reject, dan total expense auditor.
+        Summary Invoice dan pengelolaan proses review, approval, reject, serta total expense auditor.
     </div>
 
     @if (TempData["Success"] != null)
@@ -467,32 +571,108 @@
         <div class="invoice-alert error">@TempData["Error"]</div>
     }
 
-    <form method="get" asp-action="Index" class="invoice-toolbar">
-        <div class="invoice-search-wrap">
-            <span class="invoice-search-icon">
-                <i class="bi bi-search"></i>
-            </span>
+    <div class="summary-filter-card">
+        <div class="summary-filter-head">
+            <div>
+                <h2 class="summary-filter-title">Summary Invoice</h2>
+                <p class="summary-filter-subtitle">
+                    Filter berdasarkan auditor dan periode claim untuk melihat ringkasan invoice.
+                </p>
+            </div>
+        </div>
 
-            <input type="text"
-                   name="searchTerm"
-                   value="@ViewBag.SearchTerm"
-                   class="invoice-search"
-                   placeholder="Cari invoice, SPBU, employee, atau surveyor..." />
+        <form method="get" asp-action="Index" class="summary-filter-form">
+            <div class="summary-field">
+                <label>Auditor</label>
+                <select name="auditorId" class="summary-control">
+                    <option value="">Semua Auditor</option>
+                    @foreach (var auditor in auditorOptions)
+                    {
+                        var auditorId = Convert.ToString(auditor.Id) ?? "";
+                        var auditorName = string.IsNullOrWhiteSpace(auditor.Name) ? "-" : auditor.Name;
+
+                        if (selectedAuditorId == auditorId)
+                        {
+                            <option value="@auditorId" selected="selected">
+                                @auditorName
+                            </option>
+                        }
+                        else
+                        {
+                            <option value="@auditorId">
+                                @auditorName
+                            </option>
+                        }
+                    }
+                </select>
+            </div>
+
+            <div class="summary-field">
+                <label>Months / Periode Claim</label>
+                <input type="month"
+                       name="periodClaim"
+                       value="@selectedPeriodClaim"
+                       class="summary-control" />
+            </div>
+
+            <div class="summary-field">
+                <label>Keyword</label>
+                <div class="summary-search-wrap">
+                    <i class="bi bi-search"></i>
+                    <input type="text"
+                           name="searchTerm"
+                           value="@searchTerm"
+                           class="summary-control"
+                           placeholder="Cari invoice, SPBU, employee, atau surveyor..." />
+                </div>
+            </div>
 
             <input type="hidden" name="pageNumber" value="1" />
             <input type="hidden" name="pageSize" value="@Model.PageSize" />
             <input type="hidden" name="sortColumn" value="@ViewBag.SortColumn" />
             <input type="hidden" name="sortDirection" value="@ViewBag.SortDirection" />
+
+            <button type="submit" class="invoice-search-btn">
+                Filter
+            </button>
+
+            <a asp-action="Index" class="invoice-reset-btn">
+                Reset
+            </a>
+        </form>
+
+        <div class="summary-grid">
+            <div class="summary-card">
+                <div class="summary-card-label">Total Invoice</div>
+                <div class="summary-card-value">@summaryTotalInvoice.ToString("N0")</div>
+                <div class="summary-card-note">Sesuai filter aktif</div>
+            </div>
+
+            <div class="summary-card">
+                <div class="summary-card-label">Total Expense</div>
+                <div class="summary-card-value money">Rp @summaryTotalExpense.ToString("N0")</div>
+                <div class="summary-card-note">Akumulasi invoice</div>
+            </div>
+
+            <div class="summary-card">
+                <div class="summary-card-label">Disetujui</div>
+                <div class="summary-card-value">@summaryApproved.ToString("N0")</div>
+                <div class="summary-card-note">Status approved</div>
+            </div>
+
+            <div class="summary-card">
+                <div class="summary-card-label">Menunggu / Review</div>
+                <div class="summary-card-value">@summaryPending.ToString("N0")</div>
+                <div class="summary-card-note">Under review & pending approval</div>
+            </div>
+
+            <div class="summary-card">
+                <div class="summary-card-label">Ditolak</div>
+                <div class="summary-card-value">@summaryRejected.ToString("N0")</div>
+                <div class="summary-card-note">Status rejected</div>
+            </div>
         </div>
-
-        <button type="submit" class="invoice-search-btn">
-            Cari
-        </button>
-
-        <a asp-action="Index" class="invoice-reset-btn">
-            Reset
-        </a>
-    </form>
+    </div>
 
     <div class="invoice-card-table">
         <div class="table-responsive">
@@ -500,10 +680,7 @@
                 <thead>
                     <tr>
                         <th>Invoice Number</th>
-                        @* <th>Invoice Date</th> *@
-                        @* <th>Employee ID</th> *@
                         <th>Name of<br />Surveyor</th>
-                        @* <th>Expected<br />Settlement Date</th> *@
                         <th>Total Expense</th>
                         <th>Status</th>
                         <th>Tanggal<br />Pengajuan Claim</th>
@@ -519,9 +696,6 @@
                             var status = item.Status ?? "";
                             var statusText = GetStatusText(status);
                             var statusClass = GetStatusClass(status);
-
-                            // item.Status dari controller adalah trx_claim.status.
-                            // Tombol Proses hanya muncul saat claim UNDER_REVIEW.
                             var canProcess = status == "UNDER_REVIEW";
 
                             <tr>
@@ -533,27 +707,7 @@
                                     </a>
                                 </td>
 
-                                @* <td>
-                                    <div class="invoice-date-main">
-                                        @(item.InvoiceDate?.ToString("dd/MM/yyyy") ?? "-")
-                                    </div>
-                                    <div class="invoice-date-sub">
-                                        @(item.InvoiceDate?.ToString("HH:mm") ?? "--:--") WIB
-                                    </div>
-                                </td>
-
-                                <td>@(item.EmployeeId ?? "-")</td> *@
-
                                 <td>@(item.SurveyorName ?? "-")</td>
-
-                                @* <td>
-                                    <div class="invoice-date-main">
-                                        @(item.ExpectedDate?.ToString("dd/MM/yyyy") ?? "-")
-                                    </div>
-                                    <div class="invoice-date-sub">
-                                        @(item.ExpectedDate?.ToString("HH:mm") ?? "--:--") WIB
-                                    </div>
-                                </td> *@
 
                                 <td>
                                     <span class="invoice-amount">
@@ -624,7 +778,9 @@
                href="@Url.Action("Index", new {
                    pageNumber = prevPage,
                    pageSize = Model.PageSize,
-                   searchTerm = ViewBag.SearchTerm,
+                   searchTerm = searchTerm,
+                   auditorId = selectedAuditorId,
+                   periodClaim = selectedPeriodClaim,
                    sortColumn = ViewBag.SortColumn,
                    sortDirection = ViewBag.SortDirection
                })">
@@ -639,7 +795,9 @@
                            href="@Url.Action("Index", new {
                                pageNumber = i,
                                pageSize = Model.PageSize,
-                               searchTerm = ViewBag.SearchTerm,
+                               searchTerm = searchTerm,
+                               auditorId = selectedAuditorId,
+                               periodClaim = selectedPeriodClaim,
                                sortColumn = ViewBag.SortColumn,
                                sortDirection = ViewBag.SortDirection
                            })">
@@ -653,7 +811,9 @@
                href="@Url.Action("Index", new {
                    pageNumber = nextPage,
                    pageSize = Model.PageSize,
-                   searchTerm = ViewBag.SearchTerm,
+                   searchTerm = searchTerm,
+                   auditorId = selectedAuditorId,
+                   periodClaim = selectedPeriodClaim,
                    sortColumn = ViewBag.SortColumn,
                    sortDirection = ViewBag.SortDirection
                })">

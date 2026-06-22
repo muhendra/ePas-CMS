@@ -1,10 +1,13 @@
-﻿using e_Pas_CMS.Data;
+﻿using System.Globalization;
+using System.Text;
+using e_Pas_CMS.Data;
 using e_Pas_CMS.Models;
 using e_Pas_CMS.ViewModels;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
+[Authorize]
 public class InvoiceController : Controller
 {
     private readonly EpasDbContext _context;
@@ -30,11 +33,12 @@ public class InvoiceController : Controller
         _context = context;
     }
 
-    [Authorize]
     public async Task<IActionResult> Index(
         int pageNumber = 1,
         int pageSize = DefaultPageSize,
         string searchTerm = "",
+        string auditorId = "",
+        string periodClaim = "",
         string sortColumn = "InvoiceDate",
         string sortDirection = "desc")
     {
@@ -42,6 +46,10 @@ public class InvoiceController : Controller
         {
             if (pageNumber < 1) pageNumber = 1;
             if (pageSize < 1) pageSize = DefaultPageSize;
+
+            searchTerm = (searchTerm ?? "").Trim();
+            auditorId = (auditorId ?? "").Trim();
+            periodClaim = (periodClaim ?? "").Trim();
 
             var currentUser = User.Identity?.Name ?? "";
 
@@ -66,67 +74,67 @@ public class InvoiceController : Controller
             .ToListAsync();
 
             var query =
-    from inv in _context.TrxInvoices.AsNoTracking()
-    join claim in _context.TrxClaims.AsNoTracking()
-        on inv.Id equals claim.trx_invoice_id
-    join det in _context.TrxInvoiceDetails.AsNoTracking()
-        on inv.Id equals det.TrxInvoiceId
-    join aud in _context.trx_audits.AsNoTracking()
-        on det.TrxAuditId equals aud.id
-    join sp in _context.spbus.AsNoTracking()
-        on aud.spbu_id equals sp.id
-    join usr in _context.app_users.AsNoTracking()
-        on inv.AppUserId equals usr.id into audUser
-    from usr in audUser.DefaultIfEmpty()
-    where
-     (
-         // Mobile Submit
-         // trx_invoice        = IN_PROGRESS
-         // trx_invoice_detail = IN_PROGRESS
-         // trx_claim          = UNDER_REVIEW
-         claim.status == ClaimUnderReview
-         && inv.Status == InvoiceInProgress
-         && det.Status == InvoiceDetailInProgress
-     )
-     ||
-     (
-         // CMS Klik Proses
-         // trx_invoice        = IN_PROGRESS
-         // trx_invoice_detail = IN_PROGRESS
-         // trx_claim          = PENDING_APPROVAL
-         claim.status == ClaimPendingApproval
-         && inv.Status == InvoiceInProgress
-         && det.Status == InvoiceDetailInProgress
-     )
-     ||
-     (
-         // CMS Setuju
-         // trx_invoice        = COMPLETED
-         // trx_invoice_detail = CLAIMED
-         // trx_claim          = APPROVED
-         claim.status == ClaimApproved
-         && inv.Status == InvoiceCompleted
-         && det.Status == InvoiceDetailClaimed
-     )
-     ||
-     (
-         // CMS Tidak Setuju
-         // trx_invoice        = REJECTED
-         // trx_invoice_detail = NOT_CLAIMED
-         // trx_claim          = REJECTED
-         claim.status == ClaimRejected
-         && inv.Status == InvoiceRejected
-         && det.Status == InvoiceDetailNotClaimed
-     )
-    select new
-    {
-        Invoice = inv,
-        Claim = claim,
-        Detail = det,
-        Audit = aud,
-        Spbu = sp,
-        SurveyorName = usr.name != null ? usr.name : "-"
-    };
+                from inv in _context.TrxInvoices.AsNoTracking()
+                join claim in _context.TrxClaims.AsNoTracking()
+                    on inv.Id equals claim.trx_invoice_id
+                join det in _context.TrxInvoiceDetails.AsNoTracking()
+                    on inv.Id equals det.TrxInvoiceId
+                join aud in _context.trx_audits.AsNoTracking()
+                    on det.TrxAuditId equals aud.id
+                join sp in _context.spbus.AsNoTracking()
+                    on aud.spbu_id equals sp.id
+                join usr in _context.app_users.AsNoTracking()
+                    on inv.AppUserId equals usr.id into audUser
+                from usr in audUser.DefaultIfEmpty()
+                where
+                    (
+                        // Mobile Submit
+                        // trx_invoice        = IN_PROGRESS
+                        // trx_invoice_detail = IN_PROGRESS
+                        // trx_claim          = UNDER_REVIEW
+                        claim.status == ClaimUnderReview
+                        && inv.Status == InvoiceInProgress
+                        && det.Status == InvoiceDetailInProgress
+                    )
+                    ||
+                    (
+                        // CMS Klik Proses
+                        // trx_invoice        = IN_PROGRESS
+                        // trx_invoice_detail = IN_PROGRESS
+                        // trx_claim          = PENDING_APPROVAL
+                        claim.status == ClaimPendingApproval
+                        && inv.Status == InvoiceInProgress
+                        && det.Status == InvoiceDetailInProgress
+                    )
+                    ||
+                    (
+                        // CMS Setuju
+                        // trx_invoice        = COMPLETED
+                        // trx_invoice_detail = CLAIMED
+                        // trx_claim          = APPROVED
+                        claim.status == ClaimApproved
+                        && inv.Status == InvoiceCompleted
+                        && det.Status == InvoiceDetailClaimed
+                    )
+                    ||
+                    (
+                        // CMS Tidak Setuju
+                        // trx_invoice        = REJECTED
+                        // trx_invoice_detail = NOT_CLAIMED
+                        // trx_claim          = REJECTED
+                        claim.status == ClaimRejected
+                        && inv.Status == InvoiceRejected
+                        && det.Status == InvoiceDetailNotClaimed
+                    )
+                select new
+                {
+                    Invoice = inv,
+                    Claim = claim,
+                    Detail = det,
+                    Audit = aud,
+                    Spbu = sp,
+                    SurveyorName = usr.name != null ? usr.name : "-"
+                };
 
             if (userRegion.Any() || userSbm.Any())
             {
@@ -134,6 +142,49 @@ public class InvoiceController : Controller
                     (x.Spbu.region != null && userRegion.Contains(x.Spbu.region)) ||
                     (x.Spbu.sbm != null && userSbm.Contains(x.Spbu.sbm))
                 );
+            }
+
+            var auditorOptions = await query
+                .Where(x => x.Invoice.AppUserId != null && x.Invoice.AppUserId != "")
+                .GroupBy(x => new
+                {
+                    Id = x.Invoice.AppUserId,
+                    Name = x.SurveyorName
+                })
+                .Select(g => new InvoiceAuditorOptionVM
+                {
+                    Id = g.Key.Id,
+                    Name = string.IsNullOrWhiteSpace(g.Key.Name) ? g.Key.Id : g.Key.Name
+                })
+                .OrderBy(x => x.Name)
+                .ToListAsync();
+
+            if (!string.IsNullOrWhiteSpace(auditorId))
+            {
+                query = query.Where(x => x.Invoice.AppUserId == auditorId);
+            }
+
+            if (!string.IsNullOrWhiteSpace(periodClaim))
+            {
+                if (DateTime.TryParseExact(
+                    periodClaim + "-01",
+                    "yyyy-MM-dd",
+                    CultureInfo.InvariantCulture,
+                    DateTimeStyles.None,
+                    out var monthDate))
+                {
+                    // claim_date di PostgreSQL kamu terbaca sebagai timestamptz.
+                    // Npgsql wajib menerima parameter DateTime dengan Kind=Utc untuk timestamptz.
+                    // Jangan pakai DateTimeKind.Unspecified di filter, karena akan error:
+                    // Cannot write DateTime with Kind=Unspecified to PostgreSQL type 'timestamp with time zone'.
+                    var monthStart = DateTime.SpecifyKind(monthDate.Date, DateTimeKind.Utc);
+                    var monthEnd = monthStart.AddMonths(1);
+
+                    query = query.Where(x =>
+                        x.Claim.claim_date >= monthStart &&
+                        x.Claim.claim_date < monthEnd
+                    );
+                }
             }
 
             if (!string.IsNullOrWhiteSpace(searchTerm))
@@ -159,31 +210,34 @@ public class InvoiceController : Controller
                     ClaimId = x.Claim.id,
                     ClaimStatus = x.Claim.status,
                     ClaimCreatedDate = x.Claim.created_date,
+                    ClaimDate = x.Claim.claim_date,
                     x.SurveyorName
                 })
-.Select(g => new InvoiceVM
-{
-    Id = g.Key.Id,
-    InvoiceNo = g.Key.InvoiceNo,
-    InvoiceDate = g.Key.IssuedDate,
-    EmployeeId = g.Key.AppUserId,
-    ExpectedDate = g.Key.DueDate,
+                .Select(g => new InvoiceVM
+                {
+                    Id = g.Key.Id,
+                    InvoiceNo = g.Key.InvoiceNo,
+                    InvoiceDate = g.Key.IssuedDate,
+                    EmployeeId = g.Key.AppUserId,
+                    ExpectedDate = g.Key.DueDate,
+                    Status = g.Key.ClaimStatus,
+                    ClaimSubmittedDate = g.Key.ClaimCreatedDate,
+                    SurveyorName = g.Key.SurveyorName,
+                    TotalAmount =
+                        (
+                            _context.TrxClaimDetails
+                                .Where(cd => cd.trx_claim_id == g.Key.ClaimId)
+                                .Sum(cd => (decimal?)cd.amount) ?? 0
+                        )
+                        + g.Sum(x => x.Detail.AuditFee)
+                        + g.Sum(x => x.Detail.LumpsumFee ?? (x.Audit.km_range > 80 ? 400000m : 0m))
+                });
 
-    Status = g.Key.ClaimStatus,
-
-    ClaimSubmittedDate = g.Key.ClaimCreatedDate,
-
-    SurveyorName = g.Key.SurveyorName,
-
-    TotalAmount =
-        (
-            _context.TrxClaimDetails
-                .Where(cd => cd.trx_claim_id == g.Key.ClaimId)
-                .Sum(cd => (decimal?)cd.amount) ?? 0
-        )
-        + g.Sum(x => x.Detail.AuditFee)
-        + g.Sum(x => x.Detail.LumpsumFee ?? 0)
-});
+            ViewBag.SummaryTotalInvoice = await grouped.CountAsync();
+            ViewBag.SummaryTotalExpense = await grouped.SumAsync(x => (decimal?)x.TotalAmount) ?? 0m;
+            ViewBag.SummaryApproved = await grouped.CountAsync(x => x.Status == ClaimApproved);
+            ViewBag.SummaryPending = await grouped.CountAsync(x => x.Status == ClaimUnderReview || x.Status == ClaimPendingApproval);
+            ViewBag.SummaryRejected = await grouped.CountAsync(x => x.Status == ClaimRejected);
 
             grouped = sortColumn switch
             {
@@ -226,14 +280,29 @@ public class InvoiceController : Controller
             };
 
             ViewBag.SearchTerm = searchTerm;
+            ViewBag.AuditorId = auditorId;
+            ViewBag.PeriodClaim = periodClaim;
             ViewBag.SortColumn = sortColumn;
             ViewBag.SortDirection = sortDirection;
+            ViewBag.AuditorOptions = auditorOptions;
 
             return View(model);
         }
         catch (Exception ex)
         {
             TempData["Error"] = "Gagal load invoice: " + ex.Message;
+
+            ViewBag.SearchTerm = searchTerm;
+            ViewBag.AuditorId = auditorId;
+            ViewBag.PeriodClaim = periodClaim;
+            ViewBag.SortColumn = sortColumn;
+            ViewBag.SortDirection = sortDirection;
+            ViewBag.AuditorOptions = new List<InvoiceAuditorOptionVM>();
+            ViewBag.SummaryTotalInvoice = 0;
+            ViewBag.SummaryTotalExpense = 0m;
+            ViewBag.SummaryApproved = 0;
+            ViewBag.SummaryPending = 0;
+            ViewBag.SummaryRejected = 0;
 
             return View(new PaginationModel<InvoiceVM>
             {
@@ -250,156 +319,25 @@ public class InvoiceController : Controller
         if (string.IsNullOrWhiteSpace(id))
             return NotFound();
 
-        var invoice = await _context.TrxInvoices
-            .AsNoTracking()
-            .FirstOrDefaultAsync(x => x.Id == id);
+        var vm = await BuildInvoiceDetailViewModel(id, setViewBag: true);
 
-        if (invoice == null)
+        if (vm == null)
             return NotFound();
 
-        var claim = await _context.TrxClaims
-            .AsNoTracking()
-            .FirstOrDefaultAsync(x => x.trx_invoice_id == id);
+        return View(vm);
+    }
 
-        if (claim == null)
+    public async Task<IActionResult> Preview(string id, bool print = false)
+    {
+        if (string.IsNullOrWhiteSpace(id))
             return NotFound();
 
-        var claimExpenseAmount = await _context.TrxClaimDetails
-            .AsNoTracking()
-            .Where(x => x.trx_claim_id == claim.id)
-            .SumAsync(x => (decimal?)x.amount) ?? 0;
+        var vm = await BuildInvoiceDetailViewModel(id, setViewBag: true);
 
-        var firstClaimDescription = await _context.TrxClaimDetails
-            .AsNoTracking()
-            .Where(x => x.trx_claim_id == claim.id)
-            .OrderBy(x => x.created_date)
-            .Select(x => x.description)
-            .FirstOrDefaultAsync();
+        if (vm == null)
+            return NotFound();
 
-        var details = await (
-            from det in _context.TrxInvoiceDetails.AsNoTracking()
-            join aud in _context.trx_audits.AsNoTracking()
-                on det.TrxAuditId equals aud.id
-            join sp in _context.spbus.AsNoTracking()
-                on aud.spbu_id equals sp.id
-            where det.TrxInvoiceId == id
-            orderby aud.audit_execution_time descending,
-                    aud.audit_schedule_date descending,
-                    det.CreatedDate descending
-            select new InvoiceDetailItemVM
-            {
-                TrxInvoiceDetailId = det.Id,
-                TrxAuditId = det.TrxAuditId,
-
-                Date = DateTime.SpecifyKind(
-                    aud.audit_execution_time
-                        ?? (
-                            aud.audit_schedule_date.HasValue
-                                ? aud.audit_schedule_date.Value.ToDateTime(TimeOnly.MinValue)
-                                : aud.created_date
-                        ),
-                    DateTimeKind.Utc
-                ),
-
-                Description = firstClaimDescription ?? ("Audit SPBU " + sp.spbu_no),
-
-                ClaimAmount = 0,
-                AuditFee = det.AuditFee,
-                Lumpsum = det.LumpsumFee ?? 0,
-                Amount = det.AuditFee + (det.LumpsumFee ?? 0)
-            }
-        ).ToListAsync();
-
-        if (details.Any())
-        {
-            details[0].ClaimAmount = claimExpenseAmount;
-            details[0].Amount = details[0].Amount + claimExpenseAmount;
-        }
-
-        var totalKmRange = await (
-        from det in _context.TrxInvoiceDetails.AsNoTracking()
-        join aud in _context.trx_audits.AsNoTracking()
-            on det.TrxAuditId equals aud.id
-        where det.TrxInvoiceId == id
-        select (decimal?)aud.km_range
-        ).SumAsync() ?? 0;
-
-        var totalAuditFee = details.Sum(x => x.AuditFee);
-        var totalLumpsum = details.Sum(x => x.Lumpsum);
-        var totalExpense = claimExpenseAmount + totalAuditFee + totalLumpsum;
-
-        var attachments = await _context.TrxClaimMedias
-            .AsNoTracking()
-            .Where(x => x.trx_claim_id == claim.id)
-            .ToListAsync();
-
-        var attachmentGroups = attachments
-            .Where(x => !string.IsNullOrWhiteSpace(x.claim_item_type))
-            .GroupBy(x => x.claim_item_type)
-            .ToDictionary(g => g.Key, g => g.First());
-
-        var latestApproval = await _context.TrxInvoiceApprovals
-            .AsNoTracking()
-            .Where(x => x.TrxInvoiceId == invoice.Id)
-            .OrderByDescending(x => x.ApprovedDate)
-            .FirstOrDefaultAsync();
-
-        var isProcessOrDone =
-            claim.status == ClaimUnderReview ||
-            claim.status == ClaimPendingApproval ||
-            claim.status == ClaimApproved ||
-            claim.status == ClaimRejected;
-
-        var requestorUser = await GetRequestorUser(invoice.AppUserId, claim.app_user_id);
-
-        var vm = new InvoiceDetailViewModel
-        {
-            Id = invoice.Id,
-            InvoiceNo = invoice.InvoiceNo,
-            Status = invoice.Status,
-            ClaimDate = claim.claim_date,
-
-            EmployeeName = requestorUser.Name,
-            RequestorSignaturePath = requestorUser.SignaturePath,
-
-            Period = $"{invoice.InvoicePeriodStart:dd MMM yyyy} - {invoice.InvoicePeriodEnd:dd MMM yyyy}",
-            Homebase = "-",
-            TotalKmRange = totalKmRange,
-            Job = "Audit SPBU",
-
-            Items = details,
-
-            ClaimExpenseAmount = claimExpenseAmount,
-            TotalExpense = totalExpense,
-            TotalAuditFee = totalAuditFee,
-            TotalLumpsum = totalLumpsum,
-
-            LessDirectCharges = totalExpense,
-            LessAdvances = 0,
-
-            Attachments = attachments,
-            AttachmentGroups = attachmentGroups,
-
-            BankName = isProcessOrDone ? "Bank Mandiri" : "",
-            BankAccount = isProcessOrDone ? "129383481" : "",
-            BankOwner = "Deswantri Alfariza. H",
-
-            ApprovedBy = latestApproval != null
-                ? latestApproval.ApprovedBy
-                : claim.status == ClaimApproved
-                    ? "Finance / Accounting"
-                    : null,
-
-            ApprovedDate = latestApproval?.ApprovedDate,
-
-            RejectionReason = latestApproval?.RejectionReason
-        };
-
-        ViewBag.InvoiceStatus = invoice.Status;
-        ViewBag.InvoiceStatusLabel = GetInvoiceStatusLabel(invoice.Status);
-
-        ViewBag.ClaimStatus = claim.status;
-        ViewBag.ClaimStatusLabel = GetClaimStatusLabel(claim.status);
+        ViewBag.AutoPrint = print;
 
         return View(vm);
     }
@@ -487,7 +425,6 @@ public class InvoiceController : Controller
             detail.UpdatedDate = now;
         }
 
-        // WAJIB sebelum SaveChangesAsync agar DateTime Local/UTC sesuai tipe kolom PostgreSQL
         NormalizeDateTimesForPostgres();
 
         await _context.SaveChangesAsync();
@@ -553,7 +490,6 @@ public class InvoiceController : Controller
 
             ApplyFinanceAdjustment(invoiceDetails, model?.Items);
 
-            // Untuk kolom PostgreSQL timestamp without time zone
             var now = DateTime.Now;
             var currentUser = GetCurrentUser();
 
@@ -567,20 +503,36 @@ public class InvoiceController : Controller
             claim.updated_by = currentUser;
             claim.updated_date = now;
 
+            var postedMap = model?.Items?
+                .Where(x => !string.IsNullOrWhiteSpace(x.TrxInvoiceDetailId))
+                .GroupBy(x => x.TrxInvoiceDetailId)
+                .ToDictionary(x => x.Key, x => x.First())
+                ?? new Dictionary<string, InvoiceApprovalDetailPostVM>();
+
             foreach (var detail in invoiceDetails)
             {
-                detail.Status = InvoiceDetailClaimed;
+                var isDeleted = postedMap.TryGetValue(detail.Id, out var posted) && posted.IsDeleted;
+
+                detail.Status = isDeleted
+                    ? InvoiceDetailNotClaimed
+                    : InvoiceDetailClaimed;
+
                 detail.UpdatedBy = currentUser;
                 detail.UpdatedDate = now;
             }
 
+            var activeInvoiceDetails = invoiceDetails
+                .Where(x => x.Status == InvoiceDetailClaimed)
+                .ToList();
+
             var approval = await BuildApprovalSnapshot(
                 invoice,
                 claim,
-                invoiceDetails,
+                activeInvoiceDetails,
                 "APPROVED",
                 null
             );
+
             _context.TrxInvoiceApprovals.Add(approval);
 
             NormalizeDateTimesForPostgres();
@@ -701,7 +653,6 @@ public class InvoiceController : Controller
 
             _context.TrxInvoiceApprovals.Add(approval);
 
-            // WAJIB sebelum SaveChangesAsync agar DateTime Local/UTC sesuai tipe kolom PostgreSQL
             NormalizeDateTimesForPostgres();
 
             await _context.SaveChangesAsync();
@@ -721,10 +672,80 @@ public class InvoiceController : Controller
         }
     }
 
+    public async Task<IActionResult> Export(string id)
+    {
+        if (string.IsNullOrWhiteSpace(id))
+            return NotFound();
+
+        var vm = await BuildInvoiceDetailViewModel(id, setViewBag: true);
+
+        if (vm == null)
+            return NotFound();
+
+        var claimExpenseAmounts = ViewBag.ClaimExpenseAmounts as Dictionary<string, decimal>
+            ?? new Dictionary<string, decimal>(StringComparer.OrdinalIgnoreCase);
+
+        decimal ExpenseAmount(string key)
+        {
+            return claimExpenseAmounts.TryGetValue(key, out var amount) ? amount : 0m;
+        }
+
+        var sb = new StringBuilder();
+        sb.AppendLine("Invoice No,Name,Period,Kind Of Job,Homebase,Claim Date,Status");
+        sb.AppendLine(string.Join(",", new[]
+        {
+            Csv(vm.InvoiceNo),
+            Csv(vm.EmployeeName),
+            Csv(vm.Period),
+            Csv(vm.Job),
+            Csv(vm.Homebase),
+            Csv(vm.ClaimDate.ToString("dd/MM/yyyy")),
+            Csv(vm.Status)
+        }));
+
+        sb.AppendLine();
+        sb.AppendLine("No,Date,Details of Expense,Distance KM,Audit Fee,Lumpsum,Line Total");
+
+        if (vm.Items != null)
+        {
+            for (var i = 0; i < vm.Items.Count; i++)
+            {
+                var item = vm.Items[i];
+                sb.AppendLine(string.Join(",", new[]
+                {
+                    Csv((i + 1).ToString()),
+                    Csv(item.Date.ToString("dd/MM/yyyy")),
+                    Csv(item.Description),
+                    Csv(item.DistanceKm.ToString("0.##", CultureInfo.InvariantCulture)),
+                    Csv(item.AuditFee.ToString("0.##", CultureInfo.InvariantCulture)),
+                    Csv(item.Lumpsum.ToString("0.##", CultureInfo.InvariantCulture)),
+                    Csv((item.AuditFee + item.Lumpsum).ToString("0.##", CultureInfo.InvariantCulture))
+                }));
+            }
+        }
+
+        sb.AppendLine();
+        sb.AppendLine("Summary,Amount");
+        sb.AppendLine($"{Csv("Claim Expense")},{vm.ClaimExpenseAmount.ToString("0.##", CultureInfo.InvariantCulture)}");
+        sb.AppendLine($"{Csv("Total Audit Fee")},{vm.TotalAuditFee.ToString("0.##", CultureInfo.InvariantCulture)}");
+        sb.AppendLine($"{Csv("Total Lumpsum")},{vm.TotalLumpsum.ToString("0.##", CultureInfo.InvariantCulture)}");
+        sb.AppendLine($"{Csv("BPJS Kesehatan")},{ExpenseAmount("BPJS_KESEHATAN").ToString("0.##", CultureInfo.InvariantCulture)}");
+        sb.AppendLine($"{Csv("BPJS Ketenagakerjaan")},{ExpenseAmount("BPJS_KETENAGAKERJAAN").ToString("0.##", CultureInfo.InvariantCulture)}");
+        sb.AppendLine($"{Csv("Vehicle Maintenance")},{ExpenseAmount("VEHICLE_MAINTENANCE").ToString("0.##", CultureInfo.InvariantCulture)}");
+        sb.AppendLine($"{Csv("Internet Data")},{ExpenseAmount("INTERNET").ToString("0.##", CultureInfo.InvariantCulture)}");
+        sb.AppendLine($"{Csv("Others")},{ExpenseAmount("OTHER").ToString("0.##", CultureInfo.InvariantCulture)}");
+        sb.AppendLine($"{Csv("Total Expense")},{vm.TotalExpense.ToString("0.##", CultureInfo.InvariantCulture)}");
+
+        var bytes = Encoding.UTF8.GetPreamble()
+            .Concat(Encoding.UTF8.GetBytes(sb.ToString()))
+            .ToArray();
+
+        return File(bytes, "text/csv", $"invoice-{SanitizeFileName(vm.InvoiceNo)}.csv");
+    }
+
     public IActionResult DownloadPdf(string id)
     {
-        TempData["Error"] = "Fitur download PDF belum tersedia.";
-        return RedirectToAction(nameof(Detail), new { id });
+        return RedirectToAction(nameof(Preview), new { id, print = true });
     }
 
     public string GetInvoiceStatusLabel(string status)
@@ -757,6 +778,201 @@ public class InvoiceController : Controller
         };
     }
 
+    private async Task<InvoiceDetailViewModel> BuildInvoiceDetailViewModel(string id, bool setViewBag)
+    {
+        var invoice = await _context.TrxInvoices
+            .AsNoTracking()
+            .FirstOrDefaultAsync(x => x.Id == id);
+
+        if (invoice == null)
+            return null;
+
+        var claim = await _context.TrxClaims
+            .AsNoTracking()
+            .FirstOrDefaultAsync(x => x.trx_invoice_id == id);
+
+        if (claim == null)
+            return null;
+
+        var claimExpenseDetails = await _context.TrxClaimDetails
+            .AsNoTracking()
+            .Where(x => x.trx_claim_id == claim.id)
+            .OrderBy(x => x.created_date)
+            .Select(x => new
+            {
+                x.description,
+                amount = (decimal?)x.amount ?? 0m
+            })
+            .ToListAsync();
+
+        var claimExpenseAmount = claimExpenseDetails.Sum(x => x.amount);
+
+        var claimExpenseAmounts = claimExpenseDetails
+            .GroupBy(x => GetClaimExpenseCategory(x.description))
+            .ToDictionary(
+                x => x.Key,
+                x => x.Sum(y => y.amount),
+                StringComparer.OrdinalIgnoreCase
+            );
+
+        var rawDetails = await (
+            from det in _context.TrxInvoiceDetails.AsNoTracking()
+            join aud in _context.trx_audits.AsNoTracking()
+                on det.TrxAuditId equals aud.id
+            join sp in _context.spbus.AsNoTracking()
+                on aud.spbu_id equals sp.id
+            where det.TrxInvoiceId == id
+            orderby aud.audit_execution_time descending,
+                    aud.audit_schedule_date descending,
+                    det.CreatedDate descending
+            select new
+            {
+                TrxInvoiceDetailId = det.Id,
+                TrxAuditId = det.TrxAuditId,
+                AuditDate = aud.audit_execution_time
+                    ?? (
+                        aud.audit_schedule_date.HasValue
+                            ? aud.audit_schedule_date.Value.ToDateTime(TimeOnly.MinValue)
+                            : aud.created_date
+                    ),
+                Description = "Audit SPBU " + sp.spbu_no,
+                AuditFee = det.AuditFee,
+                LumpsumFee = det.LumpsumFee,
+                DistanceKm = aud.km_range
+            }
+        ).ToListAsync();
+
+        var details = rawDetails.Select(x =>
+        {
+            var distanceKm = x.DistanceKm;
+            var lumpsum = x.LumpsumFee ?? GetLumpsumFeeByDistance(distanceKm);
+
+            return new InvoiceDetailItemVM
+            {
+                TrxInvoiceDetailId = x.TrxInvoiceDetailId,
+                TrxAuditId = x.TrxAuditId,
+                Date = DateTime.SpecifyKind(x.AuditDate, DateTimeKind.Utc),
+                Description = x.Description,
+                DistanceKm = distanceKm,
+                ClaimAmount = 0,
+                AuditFee = x.AuditFee,
+                Lumpsum = lumpsum,
+                Amount = x.AuditFee + lumpsum
+            };
+        }).ToList();
+
+        var totalKmRange = details.Sum(x => x.DistanceKm);
+        var totalAuditFee = details.Sum(x => x.AuditFee);
+        var totalLumpsum = details.Sum(x => x.Lumpsum);
+        var totalExpense = claimExpenseAmount + totalAuditFee + totalLumpsum;
+
+        var attachments = await _context.TrxClaimMedias
+            .AsNoTracking()
+            .Where(x => x.trx_claim_id == claim.id)
+            .ToListAsync();
+
+        var attachmentGroups = attachments
+            .Where(x => !string.IsNullOrWhiteSpace(x.claim_item_type))
+            .GroupBy(x => x.claim_item_type)
+            .ToDictionary(g => g.Key, g => g.First());
+
+        var latestApproval = await _context.TrxInvoiceApprovals
+            .AsNoTracking()
+            .Where(x => x.TrxInvoiceId == invoice.Id)
+            .OrderByDescending(x => x.ApprovedDate)
+            .FirstOrDefaultAsync();
+
+        var isProcessOrDone =
+            claim.status == ClaimUnderReview ||
+            claim.status == ClaimPendingApproval ||
+            claim.status == ClaimApproved ||
+            claim.status == ClaimRejected;
+
+        var requestorUser = await GetRequestorUser(invoice.AppUserId, claim.app_user_id);
+
+        var vm = new InvoiceDetailViewModel
+        {
+            Id = invoice.Id,
+            InvoiceNo = invoice.InvoiceNo,
+            Status = invoice.Status,
+            ClaimDate = claim.claim_date,
+
+            EmployeeName = requestorUser.Name,
+            RequestorSignaturePath = requestorUser.SignaturePath,
+
+            Period = $"{invoice.InvoicePeriodStart:dd MMM yyyy} - {invoice.InvoicePeriodEnd:dd MMM yyyy}",
+            Homebase = "-",
+            TotalKmRange = totalKmRange,
+            Job = "Audit SPBU",
+
+            Items = details,
+
+            ClaimExpenseAmount = claimExpenseAmount,
+            TotalExpense = totalExpense,
+            TotalAuditFee = totalAuditFee,
+            TotalLumpsum = totalLumpsum,
+
+            LessDirectCharges = 0,
+            LessAdvances = 0,
+
+            Attachments = attachments,
+            AttachmentGroups = attachmentGroups,
+
+            BankName = isProcessOrDone ? "Bank Mandiri" : "",
+            BankAccount = isProcessOrDone ? "129383481" : "",
+            BankOwner = string.IsNullOrWhiteSpace(requestorUser.Name) ? "-" : requestorUser.Name,
+
+            ApprovedBy = latestApproval != null
+                ? latestApproval.ApprovedBy
+                : claim.status == ClaimApproved
+                    ? "Finance / Accounting"
+                    : null,
+
+            ApprovedDate = latestApproval?.ApprovedDate,
+            RejectionReason = latestApproval?.RejectionReason
+        };
+
+        if (setViewBag)
+        {
+            ViewBag.ClaimExpenseAmounts = claimExpenseAmounts;
+            ViewBag.InvoiceStatus = invoice.Status;
+            ViewBag.InvoiceStatusLabel = GetInvoiceStatusLabel(invoice.Status);
+            ViewBag.ClaimStatus = claim.status;
+            ViewBag.ClaimStatusLabel = GetClaimStatusLabel(claim.status);
+        }
+
+        return vm;
+    }
+
+    private static decimal GetLumpsumFeeByDistance(decimal kmRange)
+    {
+        return kmRange > 80 ? 400000m : 0m;
+    }
+
+    private static string GetClaimExpenseCategory(string description)
+    {
+        var value = (description ?? "").Trim().ToUpperInvariant();
+
+        if (value.Contains("BPJS") && value.Contains("KESEHATAN"))
+            return "BPJS_KESEHATAN";
+
+        if (value.Contains("BPJS") &&
+            (value.Contains("KETENAGAKERJAAN") || value.Contains("TK")))
+            return "BPJS_KETENAGAKERJAAN";
+
+        if (value.Contains("VEHICLE") ||
+            value.Contains("MAINTENANCE") ||
+            value.Contains("KENDARAAN") ||
+            value.Contains("SERVICE") ||
+            value.Contains("SERVIS"))
+            return "VEHICLE_MAINTENANCE";
+
+        if (value.Contains("INTERNET") || value.Contains("KUOTA") || value.Contains("PULSA") || value.Contains("DATA"))
+            return "INTERNET";
+
+        return "OTHER";
+    }
+
     private static string ResolveInvoiceId(string id, InvoiceApprovalPostVM model)
     {
         if (!string.IsNullOrWhiteSpace(model?.Id))
@@ -782,17 +998,24 @@ public class InvoiceController : Controller
             if (!postedMap.TryGetValue(detail.Id, out var posted))
                 continue;
 
+            if (posted.IsDeleted)
+            {
+                detail.AuditFee = 0;
+                detail.LumpsumFee = 0;
+                continue;
+            }
+
             detail.AuditFee = posted.AuditFee < 0 ? 0 : posted.AuditFee;
             detail.LumpsumFee = posted.LumpsumFee < 0 ? 0 : posted.LumpsumFee;
         }
     }
 
     private async Task<TrxInvoiceApproval> BuildApprovalSnapshot(
-    TrxInvoice invoice,
-    trx_claim claim,
-    List<TrxInvoiceDetail> invoiceDetails,
-    string action,
-    string rejectionReason)
+        TrxInvoice invoice,
+        trx_claim claim,
+        List<TrxInvoiceDetail> invoiceDetails,
+        string action,
+        string rejectionReason)
     {
         var claimExpenseAmount = await _context.TrxClaimDetails
             .Where(x => x.trx_claim_id == claim.id)
@@ -803,8 +1026,6 @@ public class InvoiceController : Controller
         var totalExpense = claimExpenseAmount + totalAuditFee + totalLumpsumFee;
 
         var currentUser = GetCurrentUser();
-
-        // Untuk kolom PostgreSQL timestamp with time zone
         var now = DateTime.Now;
 
         return new TrxInvoiceApproval
@@ -886,9 +1107,10 @@ public class InvoiceController : Controller
             }
         }
     }
+
     private async Task<(string Name, string SignaturePath)> GetRequestorUser(
-    string invoiceAppUserId,
-    string claimAppUserId)
+        string invoiceAppUserId,
+        string claimAppUserId)
     {
         var userId = !string.IsNullOrWhiteSpace(invoiceAppUserId)
             ? invoiceAppUserId
@@ -915,6 +1137,22 @@ public class InvoiceController : Controller
             user.signature_path ?? ""
         );
     }
+
+    private static string Csv(string value)
+    {
+        value ??= "";
+        return "\"" + value.Replace("\"", "\"\"") + "\"";
+    }
+
+    private static string SanitizeFileName(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return Guid.NewGuid().ToString("N");
+
+        var invalid = Path.GetInvalidFileNameChars();
+        var clean = new string(value.Select(ch => invalid.Contains(ch) ? '-' : ch).ToArray());
+        return string.IsNullOrWhiteSpace(clean) ? Guid.NewGuid().ToString("N") : clean;
+    }
 }
 
 public class InvoiceApprovalPostVM
@@ -929,5 +1167,11 @@ public class InvoiceApprovalDetailPostVM
     public string TrxInvoiceDetailId { get; set; }
     public decimal AuditFee { get; set; }
     public decimal LumpsumFee { get; set; }
+    public bool IsDeleted { get; set; }
 }
 
+public class InvoiceAuditorOptionVM
+{
+    public string Id { get; set; }
+    public string Name { get; set; }
+}

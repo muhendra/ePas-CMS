@@ -326,27 +326,118 @@ namespace e_Pas_CMS.Controllers
             if (conn.State != ConnectionState.Open)
                 await conn.OpenAsync();
 
-            await conn.ExecuteAsync(@"
-                UPDATE trx_city_boundary_request
-                SET 
-                    status = 'APPROVED',
-                    approval_notes = @notes,
-                    approved_by = @user,
-                    approved_date = CURRENT_TIMESTAMP,
-                    updated_by = @user,
-                    updated_date = CURRENT_TIMESTAMP
-                WHERE id = @id;
-            ", new
+            using var tran = conn.BeginTransaction();
+
+            try
             {
-                id = model.Id,
-                notes = model.ApprovalNotes,
-                user = currentUser
-            });
+                var request = await conn.QueryFirstOrDefaultAsync<dynamic>(@"
+            SELECT
+                id,
+                app_user_id,
+                boundary_city_1,
+                boundary_city_2,
+                boundary_city_3,
+                boundary_city_4,
+                status
+            FROM trx_city_boundary_request
+            WHERE id = @id
+            LIMIT 1;
+        ", new { id = model.Id }, tran);
 
-            TempData["Success"] = "Batas kota berhasil disetujui.";
-            return RedirectToAction(nameof(Approval));
+                if (request == null)
+                {
+                    tran.Rollback();
+                    TempData["Error"] = "Data approval batas kota tidak ditemukan.";
+                    return RedirectToAction(nameof(Approval));
+                }
+
+                if ((string)request.status != "WAITING_APPROVAL")
+                {
+                    tran.Rollback();
+                    TempData["Error"] = "Data batas kota sudah diproses sebelumnya.";
+                    return RedirectToAction(nameof(Approval));
+                }
+
+                await conn.ExecuteAsync(@"
+            UPDATE trx_city_boundary_request
+            SET 
+                status = 'APPROVED',
+                approval_notes = @notes,
+                approved_by = @user,
+                approved_date = CURRENT_TIMESTAMP,
+                updated_by = @user,
+                updated_date = CURRENT_TIMESTAMP
+            WHERE id = @id;
+        ", new
+                {
+                    id = model.Id,
+                    notes = model.ApprovalNotes,
+                    user = currentUser
+                }, tran);
+
+                await conn.ExecuteAsync(@"
+            DELETE FROM app_user_city_boundary
+            WHERE app_user_id = @appUserId;
+        ", new
+                {
+                    appUserId = request.app_user_id
+                }, tran);
+
+                var cities = new[]
+                {
+            request.boundary_city_1 as string,
+            request.boundary_city_2 as string,
+            request.boundary_city_3 as string,
+            request.boundary_city_4 as string
         }
+                .Where(x => !string.IsNullOrWhiteSpace(x))
+                .Select(x => x!.Trim())
+                .Distinct()
+                .ToList();
 
+                foreach (var city in cities)
+                {
+                    await conn.ExecuteAsync(@"
+                INSERT INTO app_user_city_boundary
+                (
+                    id,
+                    app_user_id,
+                    address,
+                    created_by,
+                    created_date,
+                    updated_by,
+                    updated_date
+                )
+                VALUES
+                (
+                    uuid_generate_v4(),
+                    @appUserId,
+                    @address,
+                    @user,
+                    CURRENT_TIMESTAMP,
+                    @user,
+                    CURRENT_TIMESTAMP
+                );
+            ", new
+                    {
+                        appUserId = request.app_user_id,
+                        address = city,
+                        user = currentUser
+                    }, tran);
+                }
+
+                tran.Commit();
+
+                TempData["Success"] = "Batas kota berhasil disetujui dan homebase auditor sudah diperbarui.";
+                return RedirectToAction(nameof(Approval));
+            }
+            catch
+            {
+                tran.Rollback();
+                TempData["Error"] = "Terjadi kesalahan saat menyetujui batas kota.";
+                return RedirectToAction(nameof(Approval));
+            }
+        }
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Reject(CityBoundaryApprovalVm model)
@@ -360,24 +451,31 @@ namespace e_Pas_CMS.Controllers
             if (conn.State != ConnectionState.Open)
                 await conn.OpenAsync();
 
-            await conn.ExecuteAsync(@"
-                UPDATE trx_city_boundary_request
-                SET 
-                    status = 'REJECTED',
-                    approval_notes = @notes,
-                    approved_by = @user,
-                    approved_date = CURRENT_TIMESTAMP,
-                    updated_by = @user,
-                    updated_date = CURRENT_TIMESTAMP
-                WHERE id = @id;
-            ", new
+            var affected = await conn.ExecuteAsync(@"
+        UPDATE trx_city_boundary_request
+        SET 
+            status = 'REJECTED',
+            approval_notes = @notes,
+            approved_by = @user,
+            approved_date = CURRENT_TIMESTAMP,
+            updated_by = @user,
+            updated_date = CURRENT_TIMESTAMP
+        WHERE id = @id
+          AND status = 'WAITING_APPROVAL';
+    ", new
             {
                 id = model.Id,
                 notes = model.ApprovalNotes,
                 user = currentUser
             });
 
-            TempData["Success"] = "Batas kota berhasil ditolak.";
+            if (affected == 0)
+            {
+                TempData["Error"] = "Data batas kota tidak ditemukan atau sudah diproses sebelumnya.";
+                return RedirectToAction(nameof(Approval));
+            }
+
+            TempData["Success"] = "Batas kota berhasil ditolak. Auditor dapat submit ulang batas kota.";
             return RedirectToAction(nameof(Approval));
         }
 

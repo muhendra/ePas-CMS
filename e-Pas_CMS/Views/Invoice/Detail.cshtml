@@ -1,5 +1,6 @@
 ﻿@using e_Pas_CMS.ViewModels
 @using System.Globalization
+@using System.Collections.Generic
 @model InvoiceDetailViewModel
 
 @{
@@ -97,15 +98,23 @@
     var other = GetMediaPath("OTHER");
     var requestorSignatureUrl = BuildAssetUrl(Model.RequestorSignaturePath);
 
+    var claimExpenseAmounts = ViewBag.ClaimExpenseAmounts as Dictionary<string, decimal>
+        ?? new Dictionary<string, decimal>(StringComparer.OrdinalIgnoreCase);
+
+    decimal ExpenseAmount(string key)
+    {
+        return claimExpenseAmounts.TryGetValue(key, out var amount) ? amount : 0m;
+    }
+
     var attachmentItems = new[]
     {
-        new { Title = "BPJS Kesehatan", Path = bpjsKesehatan, Description = "" },
-        new { Title = "BPJS Ketenagakerjaan", Path = bpjsKetenagakerjaan, Description = "" },
-        new { Title = "Vehicle maintenance", Path = vehicle, Description = "" },
-        new { Title = "Internet data", Path = internet, Description = "" },
-        new { Title = "Others", Path = other, Description = "Biaya makan" }
+        new { Title = "BPJS Kesehatan", Path = bpjsKesehatan, Amount = ExpenseAmount("BPJS_KESEHATAN"), Description = "" },
+        new { Title = "BPJS Ketenagakerjaan", Path = bpjsKetenagakerjaan, Amount = ExpenseAmount("BPJS_KETENAGAKERJAAN"), Description = "" },
+        new { Title = "Vehicle maintenance", Path = vehicle, Amount = ExpenseAmount("VEHICLE_MAINTENANCE"), Description = "" },
+        new { Title = "Internet data", Path = internet, Amount = ExpenseAmount("INTERNET"), Description = "" },
+        new { Title = "Others", Path = other, Amount = ExpenseAmount("OTHER"), Description = "Biaya lainnya" }
     }
-    .Where(x => !string.IsNullOrWhiteSpace(x.Path))
+    .Where(x => !string.IsNullOrWhiteSpace(x.Path) || x.Amount > 0)
     .ToList();
 }
 
@@ -309,6 +318,35 @@
                 background: #18a8c3;
             }
 
+        .invoice-action-buttons {
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .download-pdf-btn.secondary {
+            background: #ffffff;
+            color: #0f172a;
+            border: 1px solid #d7dde5;
+        }
+
+            .download-pdf-btn.secondary:hover {
+                background: #f8fafc;
+                color: #0f172a;
+            }
+
+        .download-pdf-btn.dark {
+            background: #111827;
+            color: #ffffff;
+        }
+
+            .download-pdf-btn.dark:hover {
+                background: #1f2937;
+                color: #ffffff;
+            }
+
         .status-banner {
             width: 100%;
             min-height: 58px;
@@ -397,7 +435,7 @@
 
         .detail-table {
             width: 100%;
-            min-width: 1120px;
+            min-width: 1280px;
             border-collapse: separate;
             border-spacing: 0;
             margin: 0;
@@ -553,6 +591,36 @@
             font-size: 14px;
             color: #555d66;
             margin: 6px 0 0;
+        }
+
+        .attachment-amount {
+            display: block;
+            font-size: 14px;
+            font-weight: 900;
+            color: #111827;
+            margin-top: 8px;
+        }
+
+        .btn-delete-row {
+            width: 34px;
+            height: 34px;
+            border-radius: 50%;
+            border: 0;
+            background: #ef4444;
+            color: #fff;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+            .btn-delete-row:hover {
+                background: #dc2626;
+            }
+
+        .invoice-detail-row.is-deleted td {
+            background: #fef2f2 !important;
+            opacity: .65;
+            text-decoration: line-through;
         }
 
         .upload-box {
@@ -849,6 +917,10 @@
                 width: 100%;
             }
 
+            .invoice-action-buttons {
+                width: 100%;
+            }
+
             .requestor-stamp {
                 width: 135px;
                 height: 135px;
@@ -902,12 +974,31 @@
 
         @if (isDone)
         {
-            // <a asp-action="DownloadPdf"
-            //    asp-route-id="@Model.Id"
-            //    class="download-pdf-btn">
-            //     <i class="bi bi-file-earmark-arrow-down-fill"></i>
-            //     Download PDF
-            // </a>
+            <div class="invoice-action-buttons">
+                <a asp-action="Preview"
+                   asp-route-id="@Model.Id"
+                   target="_blank"
+                   class="download-pdf-btn secondary">
+                    <i class="bi bi-eye-fill"></i>
+                    Preview
+                </a>
+
+                <a asp-action="Export"
+                   asp-route-id="@Model.Id"
+                   class="download-pdf-btn dark">
+                    <i class="bi bi-file-earmark-arrow-down-fill"></i>
+                    Export
+                </a>
+
+                <a asp-action="Preview"
+                   asp-route-id="@Model.Id"
+                   asp-route-print="true"
+                   target="_blank"
+                   class="download-pdf-btn">
+                    <i class="bi bi-printer-fill"></i>
+                    Print
+                </a>
+            </div>
         }
     </div>
 
@@ -998,14 +1089,18 @@
             </div>
 
             <div>
-                <label class="field-label">Jumlah Jarak</label>
+                <label class="field-label">Tanggal Pengajuan</label>
                 @if (isEditableView)
                 {
-                    <input class="form-control invoice-input" value="@DistanceDisplay(Model.TotalKmRange)" readonly />
+                    <div class="position-relative">
+                        <input class="form-control invoice-input" value="@Model.ClaimDate.ToString("dd/MM/yyyy")" readonly />
+                        <i class="bi bi-calendar3 position-absolute"
+                           style="right:14px;top:50%;transform:translateY(-50%);color:#6b7280;"></i>
+                    </div>
                 }
                 else
                 {
-                    <div class="field-value">@DistanceDisplay(Model.TotalKmRange)</div>
+                    <div class="field-value">@Model.ClaimDate.ToString("dd/MM/yyyy")</div>
                 }
             </div>
         </div>
@@ -1021,10 +1116,11 @@
                         <th class="no-col">No</th>
                         <th class="date-col">Date</th>
                         <th class="expense-col">Details of Expense</th>
-                        <th>Contract or Cost<br />Centre</th>
+                        <th>Jarak</th>
                         <th>TOTAL<br />EXPENSE</th>
                         <th>Audit Fee</th>
                         <th>Lumpsum</th>
+                        <th>Action</th>
                     </tr>
                 </thead>
 
@@ -1035,7 +1131,7 @@
                         {
                             var item = Model.Items[i];
 
-                            <tr>
+                            <tr class="invoice-detail-row">
                                 <td class="no-col">@(i + 1)</td>
 
                                 <td class="date-col">
@@ -1066,14 +1162,7 @@
                                 </td>
 
                                 <td class="center-col">
-                                    @if (isEditableView)
-                                    {
-                                        <input class="cell-input" value="102" readonly />
-                                    }
-                                    else
-                                    {
-                                        <span>102</span>
-                                    }
+                                    <span>@DistanceDisplay(item.DistanceKm)</span>
                                 </td>
 
                                 <td class="amount-col">
@@ -1090,6 +1179,12 @@
                                                name="Items[@i].TrxInvoiceDetailId"
                                                value="@item.TrxInvoiceDetailId" />
 
+                                        <input type="hidden"
+                                               form="approvalForm"
+                                               name="Items[@i].IsDeleted"
+                                               value="false"
+                                               class="js-is-deleted" />
+
                                         <input type="number"
                                                form="approvalForm"
                                                name="Items[@i].AuditFee"
@@ -1097,7 +1192,6 @@
                                                min="0"
                                                step="1000"
                                                class="cell-input amount editable js-money js-audit-fee"
-                                               data-claim-amount="@MoneyInputValue(item.ClaimAmount)"
                                                data-row-index="@i" />
                                     }
                                     else
@@ -1109,18 +1203,33 @@
                                 <td class="amount-col">
                                     @if (isPendingApproval)
                                     {
-                                        <input type="number"
+                                        <input type="hidden"
                                                form="approvalForm"
                                                name="Items[@i].LumpsumFee"
                                                value="@MoneyInputValue(item.Lumpsum)"
-                                               min="0"
-                                               step="1000"
-                                               class="cell-input amount editable js-money js-lumpsum-fee"
+                                               class="js-lumpsum-fee"
                                                data-row-index="@i" />
+
+                                        <span>Rp @item.Lumpsum.ToString("N0")</span>
                                     }
                                     else
                                     {
                                         <span>Rp @item.Lumpsum.ToString("N0")</span>
+                                    }
+                                </td>
+
+                                <td class="center-col">
+                                    @if (isPendingApproval)
+                                    {
+                                        <button type="button"
+                                                class="btn-delete-row js-delete-row"
+                                                title="Delete row">
+                                            <i class="bi bi-trash-fill"></i>
+                                        </button>
+                                    }
+                                    else
+                                    {
+                                        <span>-</span>
                                     }
                                 </td>
                             </tr>
@@ -1129,7 +1238,7 @@
                     else
                     {
                         <tr>
-                            <td colspan="7" class="text-center text-muted py-4">
+                            <td colspan="8" class="text-center text-muted py-4">
                                 Tidak ada rincian item
                             </td>
                         </tr>
@@ -1144,6 +1253,7 @@
                         </td>
                         <td></td>
                         <td></td>
+                        <td></td>
                     </tr>
 
                     <tr class="summary-row">
@@ -1152,6 +1262,7 @@
                         <td class="summary-label" colspan="2">TOTAL AUDIT FEE</td>
                         <td></td>
                         <td class="amount-col" id="totalAuditFeeText">Rp @Model.TotalAuditFee.ToString("N0")</td>
+                        <td></td>
                         <td></td>
                     </tr>
 
@@ -1162,6 +1273,7 @@
                         <td></td>
                         <td></td>
                         <td class="amount-col" id="totalLumpsumText">Rp @Model.TotalLumpsum.ToString("N0")</td>
+                        <td></td>
                     </tr>
 
                     <tr class="summary-row">
@@ -1173,13 +1285,15 @@
                         </td>
                         <td class="amount-col" id="totalAuditFeeTextBottom">Rp @Model.TotalAuditFee.ToString("N0")</td>
                         <td class="amount-col" id="totalLumpsumTextBottom">Rp @Model.TotalLumpsum.ToString("N0")</td>
+                        <td></td>
                     </tr>
 
                     <tr class="summary-box-row">
                         <td></td>
                         <td></td>
                         <td class="summary-label" colspan="2">LESS DIRECT CHARGES</td>
-                        <td class="amount-col">Rp @Model.LessDirectCharges.ToString("N0")</td>
+                        <td class="amount-col" id="lessDirectChargesText" data-less-direct-charges="@MoneyInputValue(Model.LessDirectCharges)">Rp @Model.LessDirectCharges.ToString("N0")</td>
+                        <td></td>
                         <td></td>
                         <td></td>
                     </tr>
@@ -1188,7 +1302,8 @@
                         <td></td>
                         <td></td>
                         <td class="summary-label" colspan="2">LESS ADVANCES</td>
-                        <td class="amount-col">Rp @Model.LessAdvances.ToString("N0")</td>
+                        <td class="amount-col" id="lessAdvancesText" data-less-advances="@MoneyInputValue(Model.LessAdvances)">Rp @Model.LessAdvances.ToString("N0")</td>
+                        <td></td>
                         <td></td>
                         <td></td>
                     </tr>
@@ -1198,6 +1313,7 @@
                         <td></td>
                         <td class="summary-label" colspan="2">AMOUNT DUE TO/(FROM) EMPLOYEE</td>
                         <td class="amount-col" id="amountDueText">Rp @amountDue.ToString("N0")</td>
+                        <td></td>
                         <td></td>
                         <td></td>
                     </tr>
@@ -1220,9 +1336,20 @@
                             <p class="attachment-desc">@attachment.Description</p>
                         }
 
-                        <a href="@attachment.Path" target="_blank" class="attachment-link">
-                            @GetFileName(attachment.Path)
-                        </a>
+                        <span class="attachment-amount">
+                            Rp @attachment.Amount.ToString("N0")
+                        </span>
+
+                        @if (!string.IsNullOrWhiteSpace(attachment.Path))
+                        {
+                            <a href="@attachment.Path" target="_blank" class="attachment-link">
+                                @GetFileName(attachment.Path)
+                            </a>
+                        }
+                        else
+                        {
+                            <div class="attachment-desc">Foto belum tersedia</div>
+                        }
                     </div>
                 }
             </div>
@@ -1331,7 +1458,6 @@
                         <label class="field-label mt-3">Alasan Ditolak</label>
                         <textarea form="approvalForm"
                               name="RejectionReason"
-                              required
                               class="finance-reject-textarea"
                               rows="4"
                               placeholder="Isi alasan jika invoice ditolak. Contoh: nominal tidak sesuai, dokumen kurang lengkap, atau perlu revisi audit fee.">@Model.RejectionReason</textarea>
@@ -1458,15 +1584,12 @@ else if (isPendingApproval)
             const hasComma = raw.includes(',');
             const hasDot = raw.includes('.');
 
-            // Format Indonesia: 9.600.000,50
             if (hasComma && hasDot) {
                 raw = raw.replace(/\./g, '').replace(',', '.');
             }
-            // Format decimal comma: 9600000,50
             else if (hasComma && !hasDot) {
                 raw = raw.replace(',', '.');
             }
-            // Format display: Rp 9.600.000
             else if (!hasComma && hasDot) {
                 const parts = raw.split('.');
                 const lastPart = parts[parts.length - 1];
@@ -1485,16 +1608,23 @@ else if (isPendingApproval)
             return 'Rp ' + Number(value || 0).toLocaleString('id-ID');
         }
 
+        function isRowDeleted(row) {
+            const deletedInput = row ? row.querySelector('.js-is-deleted') : null;
+            return deletedInput && deletedInput.value === 'true';
+        }
+
         function recalcFinanceTotal() {
             let totalAudit = 0;
             let totalLumpsum = 0;
 
-            document.querySelectorAll('.js-audit-fee').forEach(function (input) {
-                totalAudit += toNumber(input.value);
-            });
+            document.querySelectorAll('.invoice-detail-row').forEach(function (row) {
+                if (isRowDeleted(row)) return;
 
-            document.querySelectorAll('.js-lumpsum-fee').forEach(function (input) {
-                totalLumpsum += toNumber(input.value);
+                const auditInput = row.querySelector('.js-audit-fee');
+                const lumpsumInput = row.querySelector('.js-lumpsum-fee');
+
+                totalAudit += auditInput ? toNumber(auditInput.value) : 0;
+                totalLumpsum += lumpsumInput ? toNumber(lumpsumInput.value) : 0;
             });
 
             const totalExpenseEl = document.getElementById('totalExpenseText');
@@ -1505,37 +1635,45 @@ else if (isPendingApproval)
             const totalAuditFeeTextBottom = document.getElementById('totalAuditFeeTextBottom');
             const totalLumpsumText = document.getElementById('totalLumpsumText');
             const totalLumpsumTextBottom = document.getElementById('totalLumpsumTextBottom');
+            const lessDirectChargesText = document.getElementById('lessDirectChargesText');
+            const lessAdvancesText = document.getElementById('lessAdvancesText');
             const amountDueText = document.getElementById('amountDueText');
             const decisionTotalExpense = document.getElementById('decisionTotalExpense');
+
+            const lessDirectCharges = lessDirectChargesText ? grandTotal : 0;
+            const lessAdvances = lessAdvancesText ? toNumber(lessAdvancesText.dataset.lessAdvances) : 0;
+            const amountDue = grandTotal - lessDirectCharges - lessAdvances;
 
             if (totalAuditFeeText) totalAuditFeeText.innerText = rupiah(totalAudit);
             if (totalAuditFeeTextBottom) totalAuditFeeTextBottom.innerText = rupiah(totalAudit);
             if (totalLumpsumText) totalLumpsumText.innerText = rupiah(totalLumpsum);
             if (totalLumpsumTextBottom) totalLumpsumTextBottom.innerText = rupiah(totalLumpsum);
             if (totalExpenseEl) totalExpenseEl.innerText = rupiah(grandTotal);
-            if (amountDueText) amountDueText.innerText = rupiah(grandTotal);
+            if (lessDirectChargesText) lessDirectChargesText.innerText = rupiah(lessDirectCharges);
+            if (amountDueText) amountDueText.innerText = rupiah(amountDue);
             if (decisionTotalExpense) decisionTotalExpense.innerText = rupiah(grandTotal);
 
             recalcLineTotals();
         }
 
         function recalcLineTotals() {
-            document.querySelectorAll('.js-audit-fee').forEach(function (auditInput) {
-                const row = auditInput.closest('tr');
-                if (!row) return;
-
+            document.querySelectorAll('.invoice-detail-row').forEach(function (row) {
+                const auditInput = row.querySelector('.js-audit-fee');
                 const lumpsumInput = row.querySelector('.js-lumpsum-fee');
                 const lineTotalText = row.querySelector('.line-total-text');
 
-                const auditFee = toNumber(auditInput.value);
-                const lumpsumFee = lumpsumInput ? toNumber(lumpsumInput.value) : 0;
-                const claimAmount = toNumber(auditInput.dataset.claimAmount);
+                if (!lineTotalText) return;
 
-                const lineTotal = claimAmount + auditFee + lumpsumFee;
-
-                if (lineTotalText) {
-                    lineTotalText.innerText = rupiah(lineTotal);
+                if (isRowDeleted(row)) {
+                    lineTotalText.innerText = rupiah(0);
+                    return;
                 }
+
+                const auditFee = auditInput ? toNumber(auditInput.value) : 0;
+                const lumpsumFee = lumpsumInput ? toNumber(lumpsumInput.value) : 0;
+                const lineTotal = auditFee + lumpsumFee;
+
+                lineTotalText.innerText = rupiah(lineTotal);
             });
         }
 
@@ -1566,6 +1704,27 @@ else if (isPendingApproval)
         document.addEventListener('DOMContentLoaded', function () {
             document.querySelectorAll('.js-money').forEach(function (input) {
                 input.addEventListener('input', recalcFinanceTotal);
+            });
+
+            document.querySelectorAll('.js-delete-row').forEach(function (button) {
+                button.addEventListener('click', function () {
+                    const row = this.closest('.invoice-detail-row');
+                    if (!row) return;
+
+                    const deletedInput = row.querySelector('.js-is-deleted');
+                    if (!deletedInput) return;
+
+                    const isDeleted = deletedInput.value === 'true';
+
+                    deletedInput.value = isDeleted ? 'false' : 'true';
+                    row.classList.toggle('is-deleted', !isDeleted);
+
+                    this.innerHTML = isDeleted
+                        ? '<i class="bi bi-trash-fill"></i>'
+                        : '<i class="bi bi-arrow-counterclockwise"></i>';
+
+                    recalcFinanceTotal();
+                });
             });
 
             recalcFinanceTotal();

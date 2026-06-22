@@ -44,7 +44,7 @@ namespace e_Pas_CMS.Controllers
     string region = "",
     int? month = null,
     int? year = null,
-    int? day = null)
+    int? tanggal = null)
         {
             var conn = _context.Database.GetDbConnection();
 
@@ -80,7 +80,7 @@ namespace e_Pas_CMS.Controllers
                 region = region ?? "",
                 month,
                 year,
-                day,
+                tanggal,
                 userRegions = userRegion,
                 userSbms = userSbm
             };
@@ -102,8 +102,8 @@ namespace e_Pas_CMS.Controllers
                     OR s.sbm = ANY(@userSbms)
                   )
               AND (
-                    @day IS NULL
-                    OR EXTRACT(DOW FROM COALESCE(ta.audit_execution_time, ta.audit_schedule_date::timestamp, ta.created_date)) = @day
+                    @tanggal IS NULL
+                    OR EXTRACT(DAY FROM COALESCE(ta.audit_execution_time, ta.audit_schedule_date::timestamp, ta.created_date)) = @tanggal
                   )
         )
         SELECT
@@ -143,8 +143,8 @@ namespace e_Pas_CMS.Controllers
                     OR EXTRACT(MONTH FROM COALESCE(ta.audit_execution_time, ta.audit_schedule_date::timestamp, ta.created_date)) = @month
                   )
               AND (
-                    @day IS NULL
-                    OR EXTRACT(DOW FROM COALESCE(ta.audit_execution_time, ta.audit_schedule_date::timestamp, ta.created_date)) = @day
+                    @tanggal IS NULL
+                    OR EXTRACT(DAY FROM COALESCE(ta.audit_execution_time, ta.audit_schedule_date::timestamp, ta.created_date)) = @tanggal
                   )
         ),
         summary AS (
@@ -197,8 +197,8 @@ namespace e_Pas_CMS.Controllers
                     OR EXTRACT(MONTH FROM COALESCE(ta.audit_execution_time, ta.audit_schedule_date::timestamp, ta.created_date)) = @month
                   )
               AND (
-                    @day IS NULL
-                    OR EXTRACT(DOW FROM COALESCE(ta.audit_execution_time, ta.audit_schedule_date::timestamp, ta.created_date)) = @day
+                    @tanggal IS NULL
+                    OR EXTRACT(DAY FROM COALESCE(ta.audit_execution_time, ta.audit_schedule_date::timestamp, ta.created_date)) = @tanggal
                   )
         ),
         grouped AS (
@@ -288,7 +288,7 @@ namespace e_Pas_CMS.Controllers
             string region = "",
             int? month = null,
             int? year = null,
-            int? day = null)
+            int? tanggal = null)
         {
             var conn = _context.Database.GetDbConnection();
 
@@ -324,7 +324,7 @@ namespace e_Pas_CMS.Controllers
                 region = region ?? "",
                 month,
                 year,
-                day,
+                tanggal,
                 userRegions = userRegion,
                 userSbms = userSbm
             };
@@ -362,13 +362,13 @@ namespace e_Pas_CMS.Controllers
                     OR s.sbm = ANY(@userSbms)
                   )
               AND (
-                    @day IS NULL
-                    OR EXTRACT(DOW FROM COALESCE(
+                    @tanggal IS NULL
+                    OR EXTRACT(DAY FROM COALESCE(
                         ta.approval_date,
                         ta.audit_execution_time,
                         ta.audit_schedule_date::timestamp,
                         ta.created_date
-                    )) = @day
+                    )) = @tanggal
                   )
         )
         SELECT
@@ -430,13 +430,13 @@ namespace e_Pas_CMS.Controllers
                     )) = @month
                   )
               AND (
-                    @day IS NULL
-                    OR EXTRACT(DOW FROM COALESCE(
+                    @tanggal IS NULL
+                    OR EXTRACT(DAY FROM COALESCE(
                         ta.approval_date,
                         ta.audit_execution_time,
                         ta.audit_schedule_date::timestamp,
                         ta.created_date
-                    )) = @day
+                    )) = @tanggal
                   )
         )
         SELECT
@@ -516,13 +516,13 @@ namespace e_Pas_CMS.Controllers
                 )) = @month
               )
           AND (
-                @day IS NULL
-                OR EXTRACT(DOW FROM COALESCE(
+                @tanggal IS NULL
+                OR EXTRACT(DAY FROM COALESCE(
                     ta.approval_date,
                     ta.audit_execution_time,
                     ta.audit_schedule_date::timestamp,
                     ta.created_date
-                )) = @day
+                )) = @tanggal
               )
     ),
     grouped AS (
@@ -603,13 +603,13 @@ namespace e_Pas_CMS.Controllers
                 )) = @month
               )
           AND (
-                @day IS NULL
-                OR EXTRACT(DOW FROM COALESCE(
+                @tanggal IS NULL
+                OR EXTRACT(DAY FROM COALESCE(
                     ta.approval_date,
                     ta.audit_execution_time,
                     ta.audit_schedule_date::timestamp,
                     ta.created_date
-                )) = @day
+                )) = @tanggal
               )
     )
     SELECT
@@ -1970,7 +1970,7 @@ namespace e_Pas_CMS.Controllers
             };
 
             ViewBag.Search = search;
-            return View(model); 
+            return View(model);
         }
 
         private async Task<DetailReportViewModel> GetDetailReportAsync(Guid id)

@@ -241,7 +241,15 @@
                 <option value="VIII">Region VIII</option>
             </select>
 
-            <select id="filterMonth" class="filter-select">
+            <select id="filterTanggal" class="filter-select" title="Tanggal">
+                <option value="">Tanggal</option>
+                @for (int d = 1; d <= 31; d++)
+                {
+                    <option value="@d">@d.ToString("00")</option>
+                }
+            </select>
+
+            <select id="filterMonth" class="filter-select" title="Bulan">
                 <option value="">Semua Bulan</option>
                 <option value="1">Januari</option>
                 <option value="2">Februari</option>
@@ -257,18 +265,7 @@
                 <option value="12">Desember</option>
             </select>
 
-            <select id="filterDay" class="filter-select">
-                <option value="">Semua Hari</option>
-                <option value="1">Senin</option>
-                <option value="2">Selasa</option>
-                <option value="3">Rabu</option>
-                <option value="4">Kamis</option>
-                <option value="5">Jumat</option>
-                <option value="6">Sabtu</option>
-                <option value="0">Minggu</option>
-            </select>
-
-            <select id="filterYear" class="filter-select">
+            <select id="filterYear" class="filter-select" title="Tahun">
                 @{
                     var currentYear = DateTime.Now.Year;
                     for (int y = currentYear - 3; y <= currentYear + 1; y++)
@@ -725,14 +722,14 @@
 
                 const region = document.getElementById('filterRegion').value;
                 const month = document.getElementById('filterMonth').value;
-                const day = document.getElementById('filterDay').value;
+                const tanggal = document.getElementById('filterTanggal').value;
                 const year = document.getElementById('filterYear').value;
 
                 const params = new URLSearchParams();
 
                 if (region) params.append('region', region);
                 if (month) params.append('month', month);
-                if (day !== '') params.append('day', day);
+                if (tanggal) params.append('tanggal', tanggal);
                 if (year) params.append('year', year);
 
                 const res = await fetch(`/Dashboard/VerifierPerformanceSummary?${params.toString()}`);
@@ -999,7 +996,7 @@
             document.getElementById('filterRegion').addEventListener('change', loadVerifierPerformance);
             document.getElementById('filterMonth').addEventListener('change', loadVerifierPerformance);
             document.getElementById('filterYear').addEventListener('change', loadVerifierPerformance);
-            document.getElementById('filterDay').addEventListener('change', loadVerifierPerformance);
+            document.getElementById('filterTanggal').addEventListener('change', loadVerifierPerformance);
         });
     </script>
 }
