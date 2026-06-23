@@ -31,7 +31,7 @@ public partial class TrxAuditQq
 
     public decimal? ReferenceDensity15Degree { get; set; }
 
-    public int? TankNumber { get; set; }
+    public string? TankNumber { get; set; }
 
     public decimal? DensityVariation { get; set; }
 

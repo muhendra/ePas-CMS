@@ -14,7 +14,7 @@
         public decimal? ObservedTemp { get; set; }
         public decimal? ObservedDensity15Degree { get; set; }
         public decimal? ReferenceDensity15Degree { get; set; }
-        public int? TankNumber { get; set; }
+        public string? TankNumber { get; set; }
         public decimal? DensityVariation { get; set; }
     }
 
