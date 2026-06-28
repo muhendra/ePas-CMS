@@ -321,6 +321,45 @@ namespace e_Pas_CMS.Controllers
             return statuses.ToDictionary(x => x, x => MapStatus(x));
         }
 
+
+        private sealed class ActiveClosingDateMaster
+        {
+            public string? Id { get; set; }
+            public int? ClosingDay { get; set; }
+        }
+
+        private static DateOnly CalculateClosingDate(DateOnly auditScheduleDate, int? closingDay)
+        {
+            var lastDayOfMonth = DateTime.DaysInMonth(auditScheduleDate.Year, auditScheduleDate.Month);
+
+            // Jika master closing date belum diisi, default ke tanggal terakhir bulan tersebut.
+            var selectedClosingDay = closingDay.HasValue
+                ? Math.Clamp(closingDay.Value, 1, lastDayOfMonth)
+                : lastDayOfMonth;
+
+            return new DateOnly(auditScheduleDate.Year, auditScheduleDate.Month, selectedClosingDay);
+        }
+
+        private async Task<ActiveClosingDateMaster?> GetActiveClosingDateMasterAsync()
+        {
+            var conn = _context.Database.GetDbConnection();
+
+            if (conn.State != ConnectionState.Open)
+                await conn.OpenAsync();
+
+            const string sql = @"
+                SELECT
+                    id AS ""Id"",
+                    closing_day AS ""ClosingDay""
+                FROM public.master_closing_date
+                WHERE is_active = true
+                ORDER BY updated_date DESC NULLS LAST, created_date DESC NULLS LAST
+                LIMIT 1;
+            ";
+
+            return await conn.QueryFirstOrDefaultAsync<ActiveClosingDateMaster>(sql);
+        }
+
         [HttpPost("BulkInlineUpdate")]
         public IActionResult BulkInlineUpdate([FromBody] List<BulkInlineUpdateRequest> reqs)
         {
@@ -868,6 +907,10 @@ namespace e_Pas_CMS.Controllers
             var currentUser = User.Identity?.Name ?? "system";
             var currentTime = DateTime.Now;
 
+            // Ambil master closing date aktif.
+            // Kalau master belum diisi, closing_date akan default ke tanggal terakhir bulan audit.
+            var activeClosingDate = await GetActiveClosingDateMasterAsync();
+
             foreach (var spbuId in spbuIdList)
             {
                 string tid = "";
@@ -1054,6 +1097,16 @@ namespace e_Pas_CMS.Controllers
                     audit_type = TipeAudit,
                     // pakai tanggal yang sudah divalidasi & diparse
                     audit_schedule_date = DateOnly.FromDateTime(tanggalAuditDt),
+
+                    // Closing date:
+                    // - master_closing_date_id diisi kalau master closing date aktif tersedia
+                    // - closing_date default ke akhir bulan jika master belum diisi
+                    master_closing_date_id = activeClosingDate?.Id,
+                    closing_date = CalculateClosingDate(
+                        DateOnly.FromDateTime(tanggalAuditDt),
+                        activeClosingDate?.ClosingDay
+                    ),
+
                     audit_execution_time = null,
                     audit_media_upload = 0,
                     audit_media_total = 0,

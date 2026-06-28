@@ -99,4 +99,10 @@ public partial class trx_audit
     public virtual ICollection<trx_audit_qq> trx_audit_qqs { get; set; } = new List<trx_audit_qq>();
 
     public virtual ICollection<TrxFeedback> TrxFeedbacks { get; set; } = new List<TrxFeedback>();
+
+    public string? master_closing_date_id { get; set; }
+
+    public DateOnly? closing_date { get; set; }
+
+    public virtual master_closing_date? master_closing_date { get; set; }
 }

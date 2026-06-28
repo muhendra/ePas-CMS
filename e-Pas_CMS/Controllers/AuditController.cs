@@ -843,21 +843,41 @@ namespace e_Pas_CMS.Controllers
         }
         private async Task<List<AuditQqCheckItem>> GetQqCheckDataAsync(IDbConnection conn, string id)
         {
-            string sql = @"SELECT id AS Id, nozzle_number AS NozzleNumber,
-                       du_make  AS DuMake,
-                       du_serial_no AS DuSerialNo,
-                       product  AS Product,
-                       mode     AS Mode,
-                       quantity_variation_with_measure AS QuantityVariationWithMeasure,
-                       quantity_variation_in_percentage  AS QuantityVariationInPercentage,
-                       observed_density      AS ObservedDensity,
-                       observed_temp         AS ObservedTemp,
-                       observed_density_15_degree   AS ObservedDensity15Degree,
-                       reference_density_15_degree  AS ReferenceDensity15Degree,
-                       tank_number  AS TankNumber,
-                       density_variation AS DensityVariation
-                FROM trx_audit_qq
-                WHERE trx_audit_id = @id";
+            string sql = @"SELECT 
+                DENSE_RANK() OVER (
+                    ORDER BY 
+                        tank_number,
+                        du_make,
+                        du_serial_no
+                ) AS GroupNo,
+            
+                CONCAT(tank_number, ' - ', du_make, ' - ', du_serial_no) AS GroupKey,
+            
+                nozzle_number AS NozzleNumber,
+                du_make AS DuMake,
+                du_serial_no AS DuSerialNo,
+                product AS Product,
+                mode AS Mode,
+                quantity_variation_with_measure AS QuantityVariationWithMeasure,
+                quantity_variation_in_percentage AS QuantityVariationInPercentage,
+                observed_density AS ObservedDensity,
+                observed_temp AS ObservedTemp,
+                observed_density_15_degree AS ObservedDensity15Degree,
+                reference_density_15_degree AS ReferenceDensity15Degree,
+                tank_number AS TankNumber,
+                density_variation AS DensityVariation
+            FROM trx_audit_qq
+            WHERE trx_audit_id = @id
+            ORDER BY 
+                tank_number,
+                du_make,
+                du_serial_no,
+                nozzle_number,
+                CASE 
+                    WHEN mode = 'P' THEN 1
+                    WHEN mode = 'M' THEN 2
+                    ELSE 3
+                END;";
             var data = await conn.QueryAsync<AuditQqCheckItem>(sql, new { id });
             return data.ToList();
         }
@@ -1615,20 +1635,44 @@ namespace e_Pas_CMS.Controllers
             var penaltyExcellentQuery = @"SELECT STRING_AGG(mqd.penalty_alert, ', ') AS penalty_alerts
                 FROM trx_audit_checklist tac
                 INNER JOIN master_questioner_detail mqd ON mqd.id = tac.master_questioner_detail_id
+                INNER JOIN trx_audit ta ON ta.id = tac.trx_audit_id
                 WHERE 
-                    tac.trx_audit_id = @id and
-                    ((mqd.penalty_excellent_criteria = 'LT_1' and tac.score_input <> 'A') or
-                    (mqd.penalty_excellent_criteria = 'EQ_0' and tac.score_input = 'F')) and
-                    (mqd.is_relaksasi = false or mqd.is_relaksasi is null) and
-                    mqd.is_penalty = true;";
+                tac.trx_audit_id = @id
+                AND (
+                    (
+                        tac.master_questioner_detail_id IN (
+                    '555fe2e4-b95b-461b-9c92-ad8b5c837119',
+                    'bafc206f-ed29-4bbc-8053-38799e186fb0',
+                    'd26f4caa-e849-4ab4-9372-298693247272'
+                )
+                AND tac.score_input <> 'A'
+                )
+                OR
+                (
+                tac.master_questioner_detail_id = '5e9ffc47-de99-4d7d-b8bc-0fb9b7acc81b'
+                AND ta.created_date < '2025-06-01'
+                AND tac.score_input <> 'A')
+                OR
+                (
+                    (
+                    (mqd.penalty_excellent_criteria = 'LT_1' AND tac.score_input <> 'A') OR
+                    (mqd.penalty_excellent_criteria = 'EQ_0' AND tac.score_input = 'F')
+                )
+                AND (mqd.is_relaksasi = false OR mqd.is_relaksasi IS NULL)
+                AND mqd.is_penalty = true
+                AND NOT (
+                    mqd.id = '5e9ffc47-de99-4d7d-b8bc-0fb9b7acc81b'
+                    AND ta.created_date >= '2025-06-01'
+                )));";
 
             var penaltyGoodQuery = @"SELECT STRING_AGG(mqd.penalty_alert, ', ') AS penalty_alerts
-                FROM trx_audit_checklist tac
-                INNER JOIN master_questioner_detail mqd ON mqd.id = tac.master_questioner_detail_id
-                WHERE tac.trx_audit_id = @id AND
-                      tac.score_input = 'F' AND
-                      mqd.is_penalty = true AND 
-                      (mqd.is_relaksasi = false OR mqd.is_relaksasi IS NULL);";
+    FROM trx_audit_checklist tac
+    INNER JOIN master_questioner_detail mqd ON mqd.id = tac.master_questioner_detail_id
+    WHERE 
+        tac.trx_audit_id = @id AND
+        tac.score_input = 'F' AND
+        mqd.is_penalty = true AND 
+        (mqd.is_relaksasi = false OR mqd.is_relaksasi IS NULL) and mqd.id <> '5e9ffc47-de99-4d7d-b8bc-0fb9b7acc81b';";
 
             string auditNext = "";
             string levelspbu = null;

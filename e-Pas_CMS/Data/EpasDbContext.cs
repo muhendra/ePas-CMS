@@ -428,41 +428,183 @@ public partial class EpasDbContext : DbContext
             entity.Property(e => e.id)
                 .HasMaxLength(50)
                 .HasDefaultValueSql("uuid_generate_v4()");
-            entity.Property(e => e.app_user_id).HasMaxLength(50);
-            entity.Property(e => e.audit_execution_time).HasColumnType("timestamp(3) without time zone");
-            entity.Property(e => e.audit_level).HasMaxLength(100);
-            entity.Property(e => e.audit_type).HasMaxLength(100);
-            entity.Property(e => e.created_by).HasMaxLength(50);
+
+            entity.Property(e => e.app_user_id)
+                .HasMaxLength(50);
+
+            entity.Property(e => e.app_user_id_auditor2)
+                .HasMaxLength(50);
+
+            entity.Property(e => e.audit_execution_time)
+                .HasColumnType("timestamp(3) without time zone");
+
+            entity.Property(e => e.audit_execution_time_auditor2)
+                .HasColumnType("timestamp(3) without time zone");
+
+            entity.Property(e => e.audit_level)
+                .HasMaxLength(100);
+
+            entity.Property(e => e.audit_type)
+                .HasMaxLength(100);
+
+            entity.Property(e => e.created_by)
+                .HasMaxLength(50);
+
             entity.Property(e => e.created_date)
                 .HasDefaultValueSql("CURRENT_TIMESTAMP")
                 .HasColumnType("timestamp(3) without time zone");
-            entity.Property(e => e.master_questioner_checklist_id).HasMaxLength(50);
-            entity.Property(e => e.master_questioner_intro_id).HasMaxLength(50);
-            entity.Property(e => e.report_no).HasMaxLength(50);
-            entity.Property(e => e.report_prefix).HasMaxLength(50);
-            entity.Property(e => e.spbu_id).HasMaxLength(50);
-            entity.Property(e => e.status).HasMaxLength(100);
-            entity.Property(e => e.updated_by).HasMaxLength(50);
+
+            entity.Property(e => e.master_questioner_checklist_id)
+                .HasMaxLength(50);
+
+            entity.Property(e => e.master_questioner_intro_id)
+                .HasMaxLength(50);
+
+            // === TAMBAHAN: FK ke master_closing_date ===
+            entity.Property(e => e.master_closing_date_id)
+                .HasMaxLength(50);
+
+            // === TAMBAHAN: tanggal closing actual hasil scheduler ===
+            entity.Property(e => e.closing_date)
+                .HasColumnType("date");
+
+            entity.Property(e => e.report_no)
+                .HasMaxLength(50);
+
+            entity.Property(e => e.report_prefix)
+                .HasMaxLength(50);
+
+            entity.Property(e => e.spbu_id)
+                .HasMaxLength(50);
+
+            entity.Property(e => e.status)
+                .HasMaxLength(100);
+
+            entity.Property(e => e.updated_by)
+                .HasMaxLength(50);
+
             entity.Property(e => e.updated_date)
                 .HasDefaultValueSql("CURRENT_TIMESTAMP")
                 .HasColumnType("timestamp without time zone");
 
-            entity.HasOne(d => d.app_user).WithMany(p => p.trx_audits)
+            entity.Property(e => e.approval_by)
+                .HasMaxLength(50);
+
+            entity.Property(e => e.approval_date)
+                .HasDefaultValueSql("CURRENT_TIMESTAMP")
+                .HasColumnType("timestamp without time zone");
+
+            entity.Property(e => e.good_status)
+                .HasMaxLength(20);
+
+            entity.Property(e => e.excellent_status)
+                .HasMaxLength(20);
+
+            entity.Property(e => e.report_file_good)
+                .HasMaxLength(250);
+
+            entity.Property(e => e.report_file_excellent)
+                .HasMaxLength(250);
+
+            entity.Property(e => e.report_file_boa)
+                .HasMaxLength(250);
+
+            entity.Property(e => e.form_type_auditor1)
+                .HasMaxLength(50)
+                .HasDefaultValue("FULL");
+
+            entity.Property(e => e.form_type_auditor2)
+                .HasMaxLength(50);
+
+            entity.Property(e => e.form_status_auditor1)
+                .HasMaxLength(100);
+
+            entity.Property(e => e.form_status_auditor2)
+                .HasMaxLength(100);
+
+            entity.Property(e => e.km_range)
+                .HasPrecision(10, 2)
+                .HasDefaultValue(0);
+
+            entity.Property(e => e.review_audit_started_at)
+                .HasColumnType("timestamp without time zone");
+
+            entity.Property(e => e.review_audit_started_by)
+                .HasMaxLength(150);
+
+            entity.Property(e => e.review_audit_finished_at)
+                .HasColumnType("timestamp without time zone");
+
+            entity.HasOne(d => d.app_user)
+                .WithMany(p => p.trx_audits)
                 .HasForeignKey(d => d.app_user_id)
                 .HasConstraintName("trx_audit_app_user_id_fkey");
 
-            entity.HasOne(d => d.master_questioner_checklist).WithMany(p => p.trx_auditmaster_questioner_checklists)
+            entity.HasOne(d => d.master_questioner_checklist)
+                .WithMany(p => p.trx_auditmaster_questioner_checklists)
                 .HasForeignKey(d => d.master_questioner_checklist_id)
                 .HasConstraintName("trx_audit_master_questioner_checklist_id_id_fkey");
 
-            entity.HasOne(d => d.master_questioner_intro).WithMany(p => p.trx_auditmaster_questioner_intros)
+            entity.HasOne(d => d.master_questioner_intro)
+                .WithMany(p => p.trx_auditmaster_questioner_intros)
                 .HasForeignKey(d => d.master_questioner_intro_id)
                 .HasConstraintName("trx_audit_master_questioner_intro_id_fkey");
 
-            entity.HasOne(d => d.spbu).WithMany(p => p.trx_audits)
+            // === TAMBAHAN: relasi trx_audit -> master_closing_date ===
+            entity.HasOne(d => d.master_closing_date)
+                .WithMany(p => p.trx_audits)
+                .HasForeignKey(d => d.master_closing_date_id)
+                .HasConstraintName("trx_audit_master_closing_date_id_fkey");
+
+            entity.HasOne(d => d.spbu)
+                .WithMany(p => p.trx_audits)
                 .HasForeignKey(d => d.spbu_id)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("trx_audit_spbu_id_fkey");
+        });
+
+        modelBuilder.Entity<master_closing_date>(entity =>
+        {
+            entity.HasKey(e => e.id).HasName("master_closing_date_pkey");
+
+            entity.ToTable("master_closing_date");
+
+            entity.HasIndex(e => e.closing_day)
+                .HasDatabaseName("idx_master_closing_date_closing_day");
+
+            entity.HasIndex(e => e.is_active)
+                .HasDatabaseName("idx_master_closing_date_is_active");
+
+            entity.HasIndex(e => e.closing_day)
+                .IsUnique()
+                .HasDatabaseName("uq_master_closing_date_day");
+
+            entity.Property(e => e.id)
+                .HasMaxLength(50)
+                .HasDefaultValueSql("uuid_generate_v4()");
+
+            entity.Property(e => e.closing_day)
+                .IsRequired();
+
+            entity.Property(e => e.description)
+                .HasMaxLength(250);
+
+            entity.Property(e => e.is_active)
+                .HasDefaultValue(true);
+
+            entity.Property(e => e.created_by)
+                .HasMaxLength(50);
+
+            entity.Property(e => e.created_date)
+                .HasDefaultValueSql("CURRENT_TIMESTAMP")
+                .HasColumnType("timestamp(3) without time zone");
+
+            entity.Property(e => e.updated_by)
+                .HasMaxLength(50);
+
+            entity.Property(e => e.updated_date)
+                .HasDefaultValueSql("CURRENT_TIMESTAMP")
+                .HasColumnType("timestamp(3) without time zone");
         });
 
         modelBuilder.Entity<trx_audit_checklist>(entity =>

@@ -40,47 +40,58 @@ public class AuditAutoSchedulerService : BackgroundService
         report_file_excellent,
         report_file_boa,
         boa_status,
+        master_closing_date_id,
+        closing_date,
         app_user_id_auditor2,
         form_type_auditor1,
-		form_type_auditor2,
-		form_status_auditor1,
-		form_status_auditor2
+        form_type_auditor2,
+        form_status_auditor1,
+        form_status_auditor2
     )
     WITH
+    active_closing_date AS (
+        SELECT
+            id,
+            closing_day
+        FROM master_closing_date
+        WHERE is_active = true
+        ORDER BY updated_date DESC NULLS LAST, created_date DESC NULLS LAST
+        LIMIT 1
+    ),
     latest_verified AS (
         SELECT DISTINCT ON (ta.spbu_id) 
-			ta.spbu_id,
-	        ta.app_user_id,
-	        ta.audit_level,
-	        COALESCE(ta.audit_execution_time, ta.audit_schedule_date) AS last_verified_date,
-	        ta.audit_execution_time,
-	        ta.good_status, 
-	        ta.excellent_status,
-	        ta.boa_status,
-	        ta.app_user_id_auditor2,
-	        ta.form_type_auditor1,
-		    ta.form_type_auditor2
+            ta.spbu_id,
+            ta.app_user_id,
+            ta.audit_level,
+            COALESCE(ta.audit_execution_time, ta.audit_schedule_date::timestamp) AS last_verified_date,
+            ta.audit_execution_time,
+            ta.good_status, 
+            ta.excellent_status,
+            ta.boa_status,
+            ta.app_user_id_auditor2,
+            ta.form_type_auditor1,
+            ta.form_type_auditor2
         FROM trx_audit ta
         WHERE ta.status IN ('VERIFIED')
         ORDER BY ta.spbu_id, ta.audit_execution_time DESC, ta.audit_schedule_date DESC
     ),
     latest_verified_with_next_audit AS (
-		SELECT 
-		    lv.*,
-		    CASE 
-		        WHEN lv.good_status = 'CERTIFIED' OR lv.boa_status = 'CERTIFIED' THEN 
-		            COALESCE(
-		                maf.passed_audit_level,
-		                CASE 
-		                    WHEN lv.excellent_status = 'CERTIFIED' THEN maf.passed_excellent
-		                    WHEN lv.good_status = 'CERTIFIED' THEN maf.passed_good
-		                END
-		            )
-		        ELSE 
-		            maf.failed_audit_level
-		    END AS audit_next
-		FROM latest_verified lv
-		JOIN master_audit_flow maf ON maf.audit_level = lv.audit_level
+        SELECT 
+            lv.*,
+            CASE 
+                WHEN lv.good_status = 'CERTIFIED' OR lv.boa_status = 'CERTIFIED' THEN 
+                    COALESCE(
+                        maf.passed_audit_level,
+                        CASE 
+                            WHEN lv.excellent_status = 'CERTIFIED' THEN maf.passed_excellent
+                            WHEN lv.good_status = 'CERTIFIED' THEN maf.passed_good
+                        END
+                    )
+                ELSE 
+                    maf.failed_audit_level
+            END AS audit_next
+        FROM latest_verified lv
+        JOIN master_audit_flow maf ON maf.audit_level = lv.audit_level
     ),    
     latest_progress AS (
         SELECT DISTINCT ON (ta.spbu_id)
@@ -88,38 +99,39 @@ public class AuditAutoSchedulerService : BackgroundService
             ta.audit_schedule_date AS last_progress_date
         FROM trx_audit ta
         WHERE ta.status IN ('DRAFT','NOT_STARTED','IN_PROGRESS_INPUT','IN_PROGRESS_SUBMIT','UNDER_REVIEW')
-        ORDER BY ta.spbu_id, ta.audit_schedule_date desc, ta.audit_execution_time DESC
+        ORDER BY ta.spbu_id, ta.audit_schedule_date DESC, ta.audit_execution_time DESC
     ),
     latest_master_questioner AS (
-    	SELECT DISTINCT ON (mq.type, mq.category)
-    	       mq.id,
-    	       mq.type,
-    	       mq.category,
-    	       mq.version
-    	FROM master_questioner mq
-    	ORDER BY mq.type, mq.category, mq.version DESC
+        SELECT DISTINCT ON (mq.type, mq.category)
+               mq.id,
+               mq.type,
+               mq.category,
+               mq.version
+        FROM master_questioner mq
+        ORDER BY mq.type, mq.category, mq.version DESC
     ),
     data AS (
         SELECT
             s.spbu_no,
-            s.id as spbu_id,
+            s.id AS spbu_id,
             lvna.app_user_id,
             lvna.app_user_id_auditor2,
             lvna.form_type_auditor1,
-	        lvna.form_type_auditor2,
+            lvna.form_type_auditor2,
             lvna.audit_next,
+            lvna.last_verified_date,
             lvna.audit_execution_time,
             lp.last_progress_date,
             maf.range_audit_month,
             maf.audit_type,
-            lmqi.id as master_questioner_intro_id,
-            lmqc.id as master_questioner_checklist_id
+            lmqi.id AS master_questioner_intro_id,
+            lmqc.id AS master_questioner_checklist_id
         FROM spbu s
         INNER JOIN latest_verified_with_next_audit lvna
-	        ON lvna.spbu_id = s.id
+            ON lvna.spbu_id = s.id
         INNER JOIN master_audit_flow maf
             ON maf.audit_level = lvna.audit_next
-           AND maf.range_audit_month IS NOT null
+           AND maf.range_audit_month IS NOT NULL
         LEFT JOIN latest_master_questioner lmqi
             ON lmqi.type = maf.audit_type AND lmqi.category = 'INTRO'
         LEFT JOIN latest_master_questioner lmqc
@@ -130,58 +142,104 @@ public class AuditAutoSchedulerService : BackgroundService
           AND lvna.last_verified_date IS NOT NULL
     ),
     distributed AS (
-        SELECT d.*,
-               ROW_NUMBER() OVER (PARTITION BY d.app_user_id, d.range_audit_month
-                                  ORDER BY d.spbu_no) AS rn
+        SELECT
+            d.*,
+            ROW_NUMBER() OVER (
+                PARTITION BY d.app_user_id, d.range_audit_month
+                ORDER BY d.spbu_no
+            ) AS rn
         FROM data d
+    ),
+    scheduled AS (
+        SELECT
+            d.*,
+            (
+                date_trunc('month', d.last_verified_date + (d.range_audit_month || ' month')::interval)
+                + (
+                    (
+                        (d.rn - 1) % CAST(
+                            EXTRACT(
+                                DAY FROM (
+                                    date_trunc('month', d.last_verified_date + (d.range_audit_month || ' month')::interval)
+                                    + interval '1 month - 1 day'
+                                )
+                            ) AS int
+                        )
+                    ) * interval '1 day'
+                )
+            )::date AS generated_audit_schedule_date
+        FROM distributed d
     )
-    SELECT uuid_generate_v4() as id,
-           '' as report_prefix,
-           '' as report_no,
-           spbu_id,
-           app_user_id,
-           master_questioner_intro_id,
-           master_questioner_checklist_id,
-           audit_next as audit_level,
-           audit_type,
-           (
-			  date_trunc('month', audit_execution_time + (range_audit_month || ' month')::interval)
-			  + (((rn - 1) % CAST(
-			        extract(day from date_trunc('month',
-			           audit_execution_time + (range_audit_month || ' month')::interval)
-			           + interval '1 month - 1 day'
-			        ) AS int)
-			     ) * interval '1 day')
-		   )::date as audit_schedule_date,
-           null as audit_execution_time,
-           0 as audit_media_upload,
-           0 as audit_media_total,
-           '' as audit_mom_intro,
-           '' as audit_mom_final,
-           'DRAFT' as status,
-           'SYSTEM-AUTO-SCHEDULE' as created_by,
-           current_timestamp as created_date,
-           'SYSTEM-AUTO-SCHEDULE' as updated_by,
-           current_timestamp as updated_date,
-           null as approval_by,
-           null as approval_date,
-           null as good_status,
-           null as excellent_status,
-           0 as score,
-           null as report_file_good,
-           null as report_file_excellent,
-           null as report_file_boa,
-           null as boa_status,
-           app_user_id_auditor2,
-           form_type_auditor1,
-	       form_type_auditor2,
-	       'DRAFT' as form_status_auditor1,
-           CASE 
-                WHEN app_user_id_auditor2 IS NULL THEN NULL
-                ELSE 'DRAFT'
-            END as form_status_auditor2
-    FROM distributed
-    ORDER BY app_user_id, range_audit_month, rn";
+    SELECT
+        uuid_generate_v4() AS id,
+        '' AS report_prefix,
+        '' AS report_no,
+        sch.spbu_id,
+        sch.app_user_id,
+        sch.master_questioner_intro_id,
+        sch.master_questioner_checklist_id,
+        sch.audit_next AS audit_level,
+        sch.audit_type,
+        sch.generated_audit_schedule_date AS audit_schedule_date,
+        NULL AS audit_execution_time,
+        0 AS audit_media_upload,
+        0 AS audit_media_total,
+        '' AS audit_mom_intro,
+        '' AS audit_mom_final,
+        'DRAFT' AS status,
+        'SYSTEM-AUTO-SCHEDULE' AS created_by,
+        current_timestamp AS created_date,
+        'SYSTEM-AUTO-SCHEDULE' AS updated_by,
+        current_timestamp AS updated_date,
+        NULL AS approval_by,
+        NULL AS approval_date,
+        NULL AS good_status,
+        NULL AS excellent_status,
+        0 AS score,
+        NULL AS report_file_good,
+        NULL AS report_file_excellent,
+        NULL AS report_file_boa,
+        NULL AS boa_status,
+
+        -- Jika master closing date kosong, master_closing_date_id akan NULL.
+        acd.id AS master_closing_date_id,
+
+        -- Jika master closing date kosong, default ke tanggal terakhir bulan audit.
+        -- Jika master berisi 31 tapi bulan hanya sampai 30/28/29, otomatis pakai tanggal terakhir bulan tersebut.
+        (
+            date_trunc('month', sch.generated_audit_schedule_date::timestamp)::date
+            + (
+                LEAST(
+                    COALESCE(
+                        acd.closing_day,
+                        EXTRACT(
+                            DAY FROM (
+                                date_trunc('month', sch.generated_audit_schedule_date::timestamp)
+                                + interval '1 month - 1 day'
+                            )
+                        )::int
+                    ),
+                    EXTRACT(
+                        DAY FROM (
+                            date_trunc('month', sch.generated_audit_schedule_date::timestamp)
+                            + interval '1 month - 1 day'
+                        )
+                    )::int
+                ) - 1
+            )
+        )::date AS closing_date,
+
+        sch.app_user_id_auditor2,
+        sch.form_type_auditor1,
+        sch.form_type_auditor2,
+        'DRAFT' AS form_status_auditor1,
+        CASE 
+            WHEN sch.app_user_id_auditor2 IS NULL THEN NULL
+            ELSE 'DRAFT'
+        END AS form_status_auditor2
+    FROM scheduled sch
+    LEFT JOIN active_closing_date acd ON true
+    ORDER BY sch.app_user_id, sch.range_audit_month, sch.rn";
 
     public AuditAutoSchedulerService(IServiceProvider services,
                                      ILogger<AuditAutoSchedulerService> logger)
@@ -287,7 +345,7 @@ public class AuditAutoSchedulerService : BackgroundService
         {
             try
             {
-                await conn.ExecuteAsync(CreateSchedulerSql, transaction: tx2);
+                await conn.ExecuteAsync(CreateSchedulerSql, transaction: tx2, commandTimeout: 600);
                 await tx2.CommitAsync(ct);
             }
             catch
