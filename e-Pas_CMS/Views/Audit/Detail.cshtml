@@ -204,7 +204,7 @@
                                 <td><input type="number" step="0.1" class="form-control form-control-sm qq-obtemp" value="@item.ObservedTemp" /></td>
                                 <td><input type="number" step="0.001" class="form-control form-control-sm qq-obdens15" value="@item.ObservedDensity15Degree" /></td>
                                 <td><input type="number" step="0.001" class="form-control form-control-sm qq-refdens15" value="@item.ReferenceDensity15Degree" /></td>
-                                <td><input type="number" class="form-control form-control-sm qq-tank" value="@item.TankNumber" /></td>
+                                <td><input type="text" maxlength="255" class="form-control form-control-sm qq-tank" value="@item.TankNumber" /></td>
                                 <td><input type="number" step="0.001" class="form-control form-control-sm qq-densvar" value="@item.DensityVariation" readonly /></td>
 
                                 <td>
@@ -2412,7 +2412,7 @@ const usePrimaryMedia = @(((bool?)ViewBag.UsePrimaryMedia ?? false).ToString().T
                 ObservedTemp: parseFloat($row.find('.qq-obtemp').val()) || null,
                 ObservedDensity15Degree: parseFloat($row.find('.qq-obdens15').val()) || null,
                 ReferenceDensity15Degree: parseFloat($row.find('.qq-refdens15').val()) || null,
-                TankNumber: parseInt($row.find('.qq-tank').val()) || null,
+                TankNumber: ($row.find('.qq-tank').val() || '').trim() || null,
                 DensityVariation: parseFloat($row.find('.qq-densvar').val()) || null
             };
 

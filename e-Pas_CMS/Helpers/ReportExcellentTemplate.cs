@@ -681,7 +681,7 @@ public class ReportExcellentTemplate : IDocument
                     DataCell($"{qq?.ObservedTemp ?? 0m}");
                     DataCell($"{qq?.ObservedDensity15Degree ?? 0m:0.0000}");
                     DataCell($"{qq?.ReferenceDensity15Degree ?? 0m:0.0000}");
-                    DataCell($"{qq?.TankNumber ?? 0}");
+                    DataCell($"{qq?.TankNumber ?? string.Empty}");
                     DataCell($"{qq?.DensityVariation ?? 0m:0.0000}");
                 }
                 catch (Exception ex)

@@ -31,7 +31,7 @@ public partial class trx_audit_qq
 
     public decimal? reference_density_15_degree { get; set; }
 
-    public int? tank_number { get; set; }
+    public string? tank_number { get; set; }
 
     public decimal? density_variation { get; set; }
 
