@@ -466,7 +466,7 @@ public partial class EpasDbContext : DbContext
 
             // === TAMBAHAN: tanggal closing actual hasil scheduler ===
             entity.Property(e => e.closing_date)
-                .HasColumnType("date");
+    .HasColumnType("timestamp(3) without time zone");
 
             entity.Property(e => e.report_no)
                 .HasMaxLength(50);

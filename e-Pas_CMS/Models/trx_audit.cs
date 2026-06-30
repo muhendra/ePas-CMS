@@ -102,7 +102,7 @@ public partial class trx_audit
 
     public string? master_closing_date_id { get; set; }
 
-    public DateOnly? closing_date { get; set; }
+    public DateTime? closing_date { get; set; }
 
     public virtual master_closing_date? master_closing_date { get; set; }
 }

@@ -328,16 +328,19 @@ namespace e_Pas_CMS.Controllers
             public int? ClosingDay { get; set; }
         }
 
-        private static DateOnly CalculateClosingDate(DateOnly auditScheduleDate, int? closingDay)
+        private static DateOnly? CalculateClosingDate(DateOnly tanggalAudit, int? closingDay)
         {
-            var lastDayOfMonth = DateTime.DaysInMonth(auditScheduleDate.Year, auditScheduleDate.Month);
+            if (!closingDay.HasValue)
+                return null;
 
-            // Jika master closing date belum diisi, default ke tanggal terakhir bulan tersebut.
-            var selectedClosingDay = closingDay.HasValue
-                ? Math.Clamp(closingDay.Value, 1, lastDayOfMonth)
-                : lastDayOfMonth;
+            var year = tanggalAudit.Year;
+            var month = tanggalAudit.Month;
 
-            return new DateOnly(auditScheduleDate.Year, auditScheduleDate.Month, selectedClosingDay);
+            var maxDayInMonth = DateTime.DaysInMonth(year, month);
+
+            var validClosingDay = Math.Min(closingDay.Value, maxDayInMonth);
+
+            return new DateOnly(year, month, validClosingDay);
         }
 
         private async Task<ActiveClosingDateMaster?> GetActiveClosingDateMasterAsync()
@@ -1103,9 +1106,11 @@ namespace e_Pas_CMS.Controllers
                     // - closing_date default ke akhir bulan jika master belum diisi
                     master_closing_date_id = activeClosingDate?.Id,
                     closing_date = CalculateClosingDate(
-                        DateOnly.FromDateTime(tanggalAuditDt),
-                        activeClosingDate?.ClosingDay
-                    ),
+    DateOnly.FromDateTime(tanggalAuditDt),
+    activeClosingDate?.ClosingDay
+) is DateOnly closingDate
+    ? closingDate.ToDateTime(TimeOnly.MinValue)
+    : null,
 
                     audit_execution_time = null,
                     audit_media_upload = 0,
@@ -1144,6 +1149,7 @@ namespace e_Pas_CMS.Controllers
             TempData["Success"] = "Scheduler berhasil ditambahkan.";
             return RedirectToAction("Add");
         }
+
 
         // === NEW: Jalankan Auto-Scheduler (sesuai query yang kamu kirim) ===
         [HttpPost("RunAutoSchedule")]
