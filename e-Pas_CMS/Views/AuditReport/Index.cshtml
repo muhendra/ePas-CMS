@@ -257,6 +257,41 @@
 
 <h3 class="mb-4 fw-bold">Audit Report</h3>
 
+@if (TempData["Success"] != null)
+{
+    <div class="alert alert-success">@TempData["Success"]</div>
+}
+
+@if (TempData["Error"] != null)
+{
+    <div class="alert alert-danger">@TempData["Error"]</div>
+}
+
+<form asp-controller="RegularAuditImport"
+      asp-action="Upload"
+      method="post"
+      enctype="multipart/form-data"
+      class="row g-2 align-items-center mb-3">
+    @Html.AntiForgeryToken()
+
+    <div class="col-md-8">
+        <input type="file"
+               name="file"
+               class="form-control"
+               accept=".csv,text/csv"
+               required />
+        <small class="text-muted">
+            Template: Regular Audit Summary CSV. Data detail yang tidak ada (contoh QQ/checklist/media) tidak akan dibuat.
+        </small>
+    </div>
+
+    <div class="col-auto">
+        <button type="submit" class="btn btn-primary d-flex align-items-center gap-1">
+            <i class="bi bi-upload"></i> Upload Regular Audit
+        </button>
+    </div>
+</form>
+
 <form method="get" asp-controller="AuditReport" asp-action="Index" class="row g-2 align-items-center mb-4">
     <div class="col-auto" style="flex: 1 1 auto; min-width: 250px;">
         <input type="text" name="searchTerm" value="@ViewBag.SearchTerm" class="form-control w-100" placeholder="🔍 Cari SPBU, Auditor, Status..." />
@@ -414,7 +449,7 @@
 @section Scripts {
     <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
     <script>
-        $(document).ready(function () {
+        $(document).ready(function() {
             $('#audit-table').DataTable({
                 paging: false,
                 info: false,
@@ -424,16 +459,16 @@
             });
         });
 
-                (function () {
+        (function() {
             const btn = document.getElementById('btnDownloadCsv');
             if (!btn) return;
 
-            btn.addEventListener('click', function () {
+            btn.addEventListener('click', function() {
                 const monthSel = document.querySelector('select[name="filterMonth"]');
-                const yearSel  = document.querySelector('select[name="filterYear"]');
+                const yearSel = document.querySelector('select[name="filterYear"]');
 
                 const mVal = monthSel ? monthSel.value : "";
-                const yVal = yearSel  ? yearSel.value  : "";
+                const yVal = yearSel ? yearSel.value : "";
 
                 if (!mVal || !yVal) {
                     alert("Silakan pilih Bulan dan Tahun terlebih dahulu.");
@@ -447,11 +482,11 @@
             });
         })();
 
-        (function () {
+        (function() {
             const btn = document.getElementById('btnDownloadReportSuperAdmin');
             if (!btn) return;
 
-            btn.addEventListener('click', function () {
+            btn.addEventListener('click', function() {
                 const dateInput = document.getElementById('downloadReportSuperAdminDate');
                 const searchInput = document.querySelector('input[name="searchTerm"]');
 

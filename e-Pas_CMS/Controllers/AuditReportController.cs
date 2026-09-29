@@ -132,6 +132,13 @@ namespace e_Pas_CMS.Controllers
             var penaltyFlagsByAudit = await GetAuditReportIndexPenaltyFlagsAsync(conn, auditIds);
             var auditFlows = await GetAuditReportIndexAuditFlowsAsync(conn);
 
+            // Historical Regular Audit uploaded from CSV has summary values but no
+            // checklist/QQ/media detail rows. Use this table as Index fallback only.
+            var importedSummaryByAudit = await _context.trx_audit_import_summaries
+                .AsNoTracking()
+                .Where(x => auditIds.Contains(x.trx_audit_id))
+                .ToDictionaryAsync(x => x.trx_audit_id, StringComparer.OrdinalIgnoreCase);
+
             var result = new List<AuditReportListViewModel>(pagedAudits.Count);
 
             foreach (var a in pagedAudits)
@@ -143,7 +150,12 @@ namespace e_Pas_CMS.Controllers
                     .Where(x => string.Equals(x.type, "QUESTION", StringComparison.OrdinalIgnoreCase))
                     .ToList();
 
-                decimal finalScore = CalculateAuditReportIndexFinalScore(questionRows);
+                importedSummaryByAudit.TryGetValue(a.id, out var importedSummary);
+                bool isImportedSummary = importedSummary != null;
+
+                decimal finalScore = questionRows.Count > 0
+                    ? CalculateAuditReportIndexFinalScore(questionRows)
+                    : importedSummary?.total_score ?? a.score ?? 0m;
 
                 var specialScores = specialScoresByAudit.TryGetValue(a.id, out var auditSpecialScores)
                     ? auditSpecialScores
@@ -157,8 +169,9 @@ namespace e_Pas_CMS.Controllers
                 bool hasGoodPenalty = penaltyFlags.HasGoodPenalty;
 
                 // === Audit Next
-                string auditNext = "";
-                string levelspbu = null;
+                // Imported historical audit keeps audit_next / kelas_spbu from CSV.
+                string auditNext = importedSummary?.audit_next ?? "";
+                string levelspbu = importedSummary?.kelas_spbu;
 
                 auditFlows.TryGetValue(a.audit_level ?? "", out var auditFlow);
 
@@ -170,32 +183,41 @@ namespace e_Pas_CMS.Controllers
                 CalculateChecklistScores(elements);
                 var modelstotal = new DetailReportViewModel { Elements = elements };
                 CalculateOverallScore(modelstotal, flatChecklistData);
-                decimal? totalScore = modelstotal.TotalScore;
+                decimal? totalScore = questionRows.Count > 0
+                    ? modelstotal.TotalScore
+                    : importedSummary?.total_score ?? a.score;
+
                 var compliance = HitungComplianceLevelDariElements(elements);
 
                 // === Compliance validation
-                var sss = Math.Round(compliance.SSS ?? 0, 2);
-                var eqnq = Math.Round(compliance.EQnQ ?? 0, 2);
-                var rfs = Math.Round(compliance.RFS ?? 0, 2);
-                var vfc = Math.Round(compliance.VFC ?? 0, 2);
-                var epo = Math.Round(compliance.EPO ?? 0, 2);
+                var sss = Math.Round(importedSummary?.sss ?? compliance.SSS ?? 0, 2);
+                var eqnq = Math.Round(importedSummary?.eqnq ?? compliance.EQnQ ?? 0, 2);
+                var rfs = Math.Round(importedSummary?.rfs ?? compliance.RFS ?? 0, 2);
+                var vfc = Math.Round(importedSummary?.vfc ?? compliance.VFC ?? 0, 2);
+                var epo = Math.Round(importedSummary?.epo ?? compliance.EPO ?? 0, 2);
 
                 bool failGood = sss < 80 || eqnq < 85 || rfs < 85 || vfc < 15 || epo < 25;
                 bool failExcellent = sss < 85 || eqnq < 85 || rfs < 85 || vfc < 20 || epo < 50;
 
-                // === Update status with compliance logic
-                string goodStatus = (finalScore >= 75 && !hasGoodPenalty && !failGood)
-                    ? "CERTIFIED"
-                    : "NOT CERTIFIED";
+                // For imported historical data, keep the status supplied by the CSV.
+                // For normal application audits, keep the existing calculation.
+                string goodStatus = isImportedSummary && !string.IsNullOrWhiteSpace(a.good_status)
+                    ? a.good_status
+                    : (finalScore >= 75 && !hasGoodPenalty && !failGood)
+                        ? "CERTIFIED"
+                        : "NOT CERTIFIED";
 
-                string excellentStatus = (finalScore >= 80 && !hasExcellentPenalty && !failExcellent && !forceNotCertified)
-                    ? (forceGoodOnly ? "GOOD" : "CERTIFIED")
-                    : "NOT CERTIFIED";
+                string excellentStatus = isImportedSummary && !string.IsNullOrWhiteSpace(a.excellent_status)
+                    ? a.excellent_status
+                    : (finalScore >= 80 && !hasExcellentPenalty && !failExcellent && !forceNotCertified)
+                        ? (forceGoodOnly ? "GOOD" : "CERTIFIED")
+                        : "NOT CERTIFIED";
 
-                decimal scoress = Math.Round((decimal)totalScore, 2);
+                decimal scoress = Math.Round(totalScore ?? 0m, 2);
 
 
-                if (auditFlow != null)
+                // Do not overwrite CSV audit_next / kelas_spbu for imported audits.
+                if (!isImportedSummary && auditFlow != null)
                 {
                     string passedGood = auditFlow.PassedGood;
                     string passedExcellent = auditFlow.PassedExcellent;
@@ -254,26 +276,26 @@ namespace e_Pas_CMS.Controllers
                     Year = a.spbu.year ?? DateTime.Now.Year,
                     AuditDate = (a.audit_execution_time == null || a.audit_execution_time.Value == DateTime.MinValue) ? a.updated_date.Value : a.audit_execution_time.Value,
                     SubmitDate = a.approval_date.GetValueOrDefault() == DateTime.MinValue ? a.updated_date : a.approval_date.GetValueOrDefault(),
-                    Auditor = a.app_user.name,
+                    Auditor = a.app_user?.name ?? "-",
                     GoodStatus = goodStatus,
                     ExcellentStatus = excellentStatus,
                     //Score = (a.score ?? a.spbu.audit_current_score ?? (decimal?)finalScore).Value,
                     Score = totalScore ?? a.score,
-                    WTMS = a.spbu.wtms,
-                    QQ = a.spbu.qq,
-                    WMEF = a.spbu.wmef,
-                    FormatFisik = a.spbu.format_fisik,
-                    CPO = a.spbu.cpo,
+                    WTMS = isImportedSummary ? importedSummary?.wtms : a.spbu.wtms,
+                    QQ = isImportedSummary ? importedSummary?.qq : a.spbu.qq,
+                    WMEF = isImportedSummary ? importedSummary?.wmef : a.spbu.wmef,
+                    FormatFisik = isImportedSummary ? importedSummary?.format_fisik : a.spbu.format_fisik,
+                    CPO = isImportedSummary ? importedSummary?.cpo : a.spbu.cpo,
                     KelasSpbu = levelspbu,
                     Auditlevel = a.audit_level,
                     AuditNext = auditNext,
                     ApproveDate = a.approval_date ?? DateTime.Now,
                     ApproveBy = string.IsNullOrWhiteSpace(a.approval_by) ? "-" : a.approval_by,
-                    SSS = Math.Round(compliance.SSS ?? 0, 2),
-                    EQnQ = Math.Round(compliance.EQnQ ?? 0, 2),
-                    RFS = Math.Round(compliance.RFS ?? 0, 2),
-                    VFC = Math.Round(compliance.VFC ?? 0, 2),
-                    EPO = Math.Round(compliance.EPO ?? 0, 2)
+                    SSS = sss,
+                    EQnQ = eqnq,
+                    RFS = rfs,
+                    VFC = vfc,
+                    EPO = epo
                 });
             }
 
@@ -3225,8 +3247,8 @@ namespace e_Pas_CMS.Controllers
                 CalculateChecklistScores(elements);
                 var modelstotal = new DetailReportViewModel { Elements = elements };
                 CalculateOverallScore(modelstotal, checklistData);
-                decimal? totalScore = modelstotal.TotalScore; 
-                var compliance = HitungComplianceLevelDariElements(elements); 
+                decimal? totalScore = modelstotal.TotalScore;
+                var compliance = HitungComplianceLevelDariElements(elements);
                 decimal scoress = Math.Round((decimal)totalScore, 2);
 
                 const string sqlUpdate = @"UPDATE trx_audit SET score = @score WHERE id = @id";

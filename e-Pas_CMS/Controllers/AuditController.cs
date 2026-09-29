@@ -82,7 +82,14 @@ namespace e_Pas_CMS.Controllers
     join u2 in _context.app_users on a.app_user_id_auditor2 equals u2.id into aud2
     from u2 in aud2.DefaultIfEmpty()
 
-    where a.status == "UNDER_REVIEW"
+    where (
+        a.status == "UNDER_REVIEW"
+        ||
+        (
+            a.status == "VERIFIED"
+            && _context.trx_audit_import_summaries.Any(x => x.trx_audit_id == a.id)
+        )
+    )
     && a.audit_type != "Basic Operational"
     select new
     {
@@ -147,6 +154,11 @@ namespace e_Pas_CMS.Controllers
                 var specialScoresByAudit = await GetAuditIndexSpecialScoresAsync(conn, auditIds);
                 var penaltyFlagsByAudit = await GetAuditIndexPenaltyFlagsAsync(conn, auditIds);
 
+                var importedSummaryByAudit = await _context.trx_audit_import_summaries
+                    .AsNoTracking()
+                    .Where(x => auditIds.Contains(x.trx_audit_id))
+                    .ToDictionaryAsync(x => x.trx_audit_id, StringComparer.OrdinalIgnoreCase);
+
                 var result = new List<SpbuViewModel>(items.Count);
 
                 foreach (var a in items)
@@ -161,7 +173,12 @@ namespace e_Pas_CMS.Controllers
                         .Where(x => string.Equals(x.type, "QUESTION", StringComparison.OrdinalIgnoreCase))
                         .ToList();
 
-                    decimal finalScore = CalculateAuditIndexFinalScore(questionRows);
+                    importedSummaryByAudit.TryGetValue(a.Audit.id, out var importedSummary);
+                    bool isImportedSummary = importedSummary != null;
+
+                    decimal finalScore = questionRows.Count > 0
+                        ? CalculateAuditIndexFinalScore(questionRows)
+                        : importedSummary?.total_score ?? a.Audit.score ?? 0m;
 
                     var specialScores = specialScoresByAudit.TryGetValue(a.Audit.id, out var auditSpecialScores)
                         ? auditSpecialScores
@@ -181,27 +198,34 @@ namespace e_Pas_CMS.Controllers
                     CalculateChecklistScores(elements);
                     var modelstotal = new DetailReportViewModel { Elements = elements };
                     CalculateOverallScore(modelstotal, flatChecklistData);
-                    decimal? totalScore = modelstotal.TotalScore;
+                    decimal? totalScore = questionRows.Count > 0
+                        ? modelstotal.TotalScore
+                        : importedSummary?.total_score ?? a.Audit.score;
+
                     var compliance = HitungComplianceLevelDariElements(elements);
 
                     // === Compliance validation
-                    var sss = Math.Round(compliance.SSS ?? 0, 2);
-                    var eqnq = Math.Round(compliance.EQnQ ?? 0, 2);
-                    var rfs = Math.Round(compliance.RFS ?? 0, 2);
-                    var vfc = Math.Round(compliance.VFC ?? 0, 2);
-                    var epo = Math.Round(compliance.EPO ?? 0, 2);
+                    var sss = Math.Round(importedSummary?.sss ?? compliance.SSS ?? 0, 2);
+                    var eqnq = Math.Round(importedSummary?.eqnq ?? compliance.EQnQ ?? 0, 2);
+                    var rfs = Math.Round(importedSummary?.rfs ?? compliance.RFS ?? 0, 2);
+                    var vfc = Math.Round(importedSummary?.vfc ?? compliance.VFC ?? 0, 2);
+                    var epo = Math.Round(importedSummary?.epo ?? compliance.EPO ?? 0, 2);
 
                     bool failGood = sss < 80 || eqnq < 85 || rfs < 85 || vfc < 15 || epo < 25;
                     bool failExcellent = sss < 85 || eqnq < 85 || rfs < 85 || vfc < 20 || epo < 50;
 
-                    // === Update status with compliance logic
-                    string goodStatus = (finalScore >= 75 && !hasGoodPenalty && !failGood)
-                        ? "CERTIFIED"
-                        : "NOT CERTIFIED";
+                    // Imported historical audit keeps status from CSV.
+                    string goodStatus = isImportedSummary && !string.IsNullOrWhiteSpace(a.Audit.good_status)
+                        ? a.Audit.good_status
+                        : (finalScore >= 75 && !hasGoodPenalty && !failGood)
+                            ? "CERTIFIED"
+                            : "NOT CERTIFIED";
 
-                    string excellentStatus = (finalScore >= 80 && !hasExcellentPenalty && !failExcellent && !forceNotCertified)
-                        ? (forceGoodOnly ? "GOOD" : "CERTIFIED")
-                        : "NOT CERTIFIED";
+                    string excellentStatus = isImportedSummary && !string.IsNullOrWhiteSpace(a.Audit.excellent_status)
+                        ? a.Audit.excellent_status
+                        : (finalScore >= 80 && !hasExcellentPenalty && !failExcellent && !forceNotCertified)
+                            ? (forceGoodOnly ? "GOOD" : "CERTIFIED")
+                            : "NOT CERTIFIED";
 
                     result.Add(new SpbuViewModel
                     {
@@ -212,7 +236,7 @@ namespace e_Pas_CMS.Controllers
                         TipeSpbu = a.Spbu.type,
                         Tahun = a.Audit.created_date.ToString("yyyy"),
                         Audit = a.Audit.audit_level,
-                        Score = Math.Round((decimal)totalScore, 2),
+                        Score = Math.Round(totalScore ?? 0m, 2),
                         Good = goodStatus,
                         Excelent = excellentStatus,
                         Provinsi = a.Spbu.province_name,
@@ -1711,7 +1735,7 @@ namespace e_Pas_CMS.Controllers
                 : "NOT CERTIFIED";
 
             excellentStatus = (model.TotalScore >= 80 && !hasExcellentPenalty && !failExcellent)
-                ? "CERTIFIED" 
+                ? "CERTIFIED"
                 : "NOT CERTIFIED";
 
             auditNext = nextauditsspbu;
@@ -3070,7 +3094,7 @@ VALUES
             if (!string.IsNullOrWhiteSpace(search))
             {
                 search = search.ToLower();
-                allFiles = allFiles.Where(f => 
+                allFiles = allFiles.Where(f =>
                     Path.GetFileName(f).ToLower().Contains(search) ||
                     Path.GetFileNameWithoutExtension(f).ToLower().Contains(search)
                 ).OrderByDescending(f => System.IO.File.GetCreationTime(f));
@@ -3124,11 +3148,11 @@ VALUES
             {
                 var fileName = Path.GetFileName(request.MediaPath);
                 //_logger.LogInformation("UpdateMediaPath: Processing file: {FileName}", fileName);
-                
+
                 var destinationDir = Path.Combine("/var/www/epas-asset", "wwwroot", "uploads", request.AuditId, request.NodeId);
                 //_logger.LogInformation("UpdateMediaPath: Creating destination directory: {DestinationDir}", destinationDir);
                 Directory.CreateDirectory(destinationDir);
-                
+
                 // var sourcePath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", request.MediaPath.TrimStart('/'));
                 var sourcePath = Path.Combine("/var/www/epas-asset", "wwwroot", "uploads", "library", fileName);
                 var destinationPath = Path.Combine(destinationDir, fileName);
@@ -3145,7 +3169,7 @@ VALUES
                     //_logger.LogInformation("UpdateMediaPath: Destination file exists, computing hashes for comparison");
                     var sourceHash = ComputeFileHash(sourcePath);
                     var destHash = ComputeFileHash(destinationPath);
-                    
+
                     if (sourceHash == destHash)
                     {
                         //_logger.LogInformation("UpdateMediaPath: File already exists and is identical, skipping copy");

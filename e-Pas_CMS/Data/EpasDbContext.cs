@@ -36,6 +36,8 @@ public partial class EpasDbContext : DbContext
 
     public virtual DbSet<trx_audit_qq> trx_audit_qqs { get; set; }
 
+    public virtual DbSet<trx_audit_import_summary> trx_audit_import_summaries { get; set; }
+
     public virtual DbSet<TrxFeedback> TrxFeedbacks { get; set; }
 
     public virtual DbSet<TrxFeedbackPoint> TrxFeedbackPoints { get; set; }
@@ -1512,6 +1514,60 @@ public partial class EpasDbContext : DbContext
                 .OnDelete(DeleteBehavior.Cascade)
                 .HasConstraintName("trx_claim_media_trx_claim_id_fkey");
         });
+
+        modelBuilder.Entity<trx_audit_import_summary>(entity =>
+        {
+            entity.ToTable("trx_audit_import_summary");
+
+            entity.HasKey(e => e.id).HasName("trx_audit_import_summary_pkey");
+
+            entity.HasIndex(e => e.trx_audit_id, "uq_trx_audit_import_summary_audit")
+                .IsUnique();
+
+            entity.Property(e => e.id)
+                .HasMaxLength(50)
+                .HasDefaultValueSql("uuid_generate_v4()");
+
+            entity.Property(e => e.trx_audit_id)
+                .HasMaxLength(50)
+                .IsRequired();
+
+            entity.Property(e => e.send_date)
+                .HasColumnType("timestamp without time zone");
+
+            entity.Property(e => e.audit_date)
+                .HasColumnType("timestamp without time zone");
+
+            entity.Property(e => e.total_score).HasPrecision(8, 2);
+            entity.Property(e => e.sss).HasPrecision(8, 2);
+            entity.Property(e => e.eqnq).HasPrecision(8, 2);
+            entity.Property(e => e.rfs).HasPrecision(8, 2);
+            entity.Property(e => e.vfc).HasPrecision(8, 2);
+            entity.Property(e => e.epo).HasPrecision(8, 2);
+
+            entity.Property(e => e.wtms).HasPrecision(8, 2);
+            entity.Property(e => e.qq).HasPrecision(8, 2);
+            entity.Property(e => e.wmef).HasPrecision(8, 2);
+            entity.Property(e => e.format_fisik).HasPrecision(8, 2);
+            entity.Property(e => e.cpo).HasPrecision(8, 2);
+
+            entity.Property(e => e.kelas_spbu).HasMaxLength(100);
+            entity.Property(e => e.audit_next).HasMaxLength(100);
+            entity.Property(e => e.penalty_good_alerts).HasColumnType("text");
+            entity.Property(e => e.penalty_excellent_alerts).HasColumnType("text");
+            entity.Property(e => e.source_file).HasMaxLength(255);
+            entity.Property(e => e.created_by).HasMaxLength(50).IsRequired();
+            entity.Property(e => e.created_date)
+                .HasDefaultValueSql("CURRENT_TIMESTAMP")
+                .HasColumnType("timestamp without time zone");
+
+            entity.HasOne<trx_audit>()
+                .WithMany()
+                .HasForeignKey(e => e.trx_audit_id)
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("fk_trx_audit_import_summary_audit");
+        });
+
         OnModelCreatingPartial(modelBuilder);
     }
 

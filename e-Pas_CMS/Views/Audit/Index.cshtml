@@ -7,7 +7,7 @@
         html, body {
         font-family: 'Inter', sans-serif !important;
         }
-        
+
         /* paksa semua elemen pakai Inter */
         * {
             font-family: 'Inter', sans-serif !important;
@@ -15,11 +15,11 @@
         body {
             font-weight: 400;
         }
-        
+
         .fw-bold {
             font-weight: 600 !important;
         }
-        
+
         .table {
             font-size: 0.95rem;
         }
@@ -528,13 +528,25 @@
                                     var item = Model.Items[i];
                                     <tr>
                                         <td>
-                                            <button type="button"
-        class="btn btn-sm btn-outline-primary fw-semibold btn-start-review"
-        data-audit-id="@item.Id"
-        data-spbu="@item.NoSpbu"
-        data-report="@item.Report">
-    <i class="bi bi-eye"></i> Detail
-</button>
+                                            @if (item.Status == "Terverifikasi" || item.Status == "VERIFIED")
+                                            {
+                                                <a asp-controller="Audit"
+                                                   asp-action="Detail"
+                                                   asp-route-id="@item.Id"
+                                                   class="btn btn-sm btn-outline-primary fw-semibold">
+                                                    <i class="bi bi-eye"></i> Detail
+                                                </a>
+                                            }
+                                            else
+                                            {
+                                                <button type="button"
+                                                        class="btn btn-sm btn-outline-primary fw-semibold btn-start-review"
+                                                        data-audit-id="@item.Id"
+                                                        data-spbu="@item.NoSpbu"
+                                                        data-report="@item.Report">
+                                                    <i class="bi bi-eye"></i> Detail
+                                                </button>
+                                            }
                                         </td>
                                         <td>@((Model.PageNumber - 1) * Model.PageSize + i + 1)</td>
                                         <td class="fw-bold @(item.Status == "VERIFIED" || item.Status == "PASS" ? "text-success" : "text-danger")">@item.Status</td>
@@ -581,22 +593,24 @@
                 @if (Model.PageNumber > 1)
                 {
                     <li class="page-item">
-                        <a class="page-link" href="@Url.Action("Index", new {
-                        pageNumber = 1,
-                        pageSize = Model.PageSize,
-                        searchTerm = ViewBag.SearchTerm,
-                        sortColumn = ViewBag.SortColumn,
-                        sortDirection = ViewBag.SortDirection
-                    })">First</a>
+                        <a class="page-link" href="@Url.Action("Index", new
+                           {
+                               pageNumber = 1,
+                               pageSize = Model.PageSize,
+                               searchTerm = ViewBag.SearchTerm,
+                               sortColumn = ViewBag.SortColumn,
+                               sortDirection = ViewBag.SortDirection
+                           })">First</a>
                     </li>
                     <li class="page-item">
-                        <a class="page-link" href="@Url.Action("Index", new {
-                        pageNumber = Model.PageNumber - 1,
-                        pageSize = Model.PageSize,
-                        searchTerm = ViewBag.SearchTerm,
-                        sortColumn = ViewBag.SortColumn,
-                        sortDirection = ViewBag.SortDirection
-                    })">&laquo;</a>
+                        <a class="page-link" href="@Url.Action("Index", new
+                           {
+                               pageNumber = Model.PageNumber - 1,
+                               pageSize = Model.PageSize,
+                               searchTerm = ViewBag.SearchTerm,
+                               sortColumn = ViewBag.SortColumn,
+                               sortDirection = ViewBag.SortDirection
+                           })">&laquo;</a>
                     </li>
                 }
 
@@ -610,35 +624,38 @@
                 @for (int i = startPage; i <= endPage; i++)
                 {
                     <li class="page-item @(i == Model.PageNumber ? "active" : "")">
-                        <a class="page-link" href="@Url.Action("Index", new {
-                        pageNumber = i,
-                        pageSize = Model.PageSize,
-                        searchTerm = ViewBag.SearchTerm,
-                        sortColumn = ViewBag.SortColumn,
-                        sortDirection = ViewBag.SortDirection
-                    })">@i</a>
+                        <a class="page-link" href="@Url.Action("Index", new
+                           {
+                               pageNumber = i,
+                               pageSize = Model.PageSize,
+                               searchTerm = ViewBag.SearchTerm,
+                               sortColumn = ViewBag.SortColumn,
+                               sortDirection = ViewBag.SortDirection
+                           })">@i</a>
                     </li>
                 }
 
                 @if (Model.PageNumber < Model.TotalPages)
                 {
                     <li class="page-item">
-                        <a class="page-link" href="@Url.Action("Index", new {
-                        pageNumber = Model.PageNumber + 1,
-                        pageSize = Model.PageSize,
-                        searchTerm = ViewBag.SearchTerm,
-                        sortColumn = ViewBag.SortColumn,
-                        sortDirection = ViewBag.SortDirection
-                    })">&raquo;</a>
+                        <a class="page-link" href="@Url.Action("Index", new
+                           {
+                               pageNumber = Model.PageNumber + 1,
+                               pageSize = Model.PageSize,
+                               searchTerm = ViewBag.SearchTerm,
+                               sortColumn = ViewBag.SortColumn,
+                               sortDirection = ViewBag.SortDirection
+                           })">&raquo;</a>
                     </li>
                     <li class="page-item">
-                        <a class="page-link" href="@Url.Action("Index", new {
-                        pageNumber = Model.TotalPages,
-                        pageSize = Model.PageSize,
-                        searchTerm = ViewBag.SearchTerm,
-                        sortColumn = ViewBag.SortColumn,
-                        sortDirection = ViewBag.SortDirection
-                    })">Last</a>
+                        <a class="page-link" href="@Url.Action("Index", new
+                           {
+                               pageNumber = Model.TotalPages,
+                               pageSize = Model.PageSize,
+                               searchTerm = ViewBag.SearchTerm,
+                               sortColumn = ViewBag.SortColumn,
+                               sortDirection = ViewBag.SortDirection
+                           })">Last</a>
                     </li>
                 }
             </ul>
