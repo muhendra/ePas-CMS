@@ -281,7 +281,7 @@
                accept=".csv,text/csv"
                required />
         <small class="text-muted">
-            Template: Regular Audit Summary CSV. Data detail yang tidak ada (contoh QQ/checklist/media) tidak akan dibuat.
+            Template mendukung Summary maupun Full Report CSV. Jika checklist_json / qq_json tersedia, checklist dan Q&Q akan diimport. Media gambar/video tidak diimport.
         </small>
     </div>
 
@@ -449,7 +449,7 @@
 @section Scripts {
     <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
     <script>
-        $(document).ready(function() {
+        $(document).ready(function () {
             $('#audit-table').DataTable({
                 paging: false,
                 info: false,
@@ -459,16 +459,16 @@
             });
         });
 
-        (function() {
+                (function () {
             const btn = document.getElementById('btnDownloadCsv');
             if (!btn) return;
 
-            btn.addEventListener('click', function() {
+            btn.addEventListener('click', function () {
                 const monthSel = document.querySelector('select[name="filterMonth"]');
-                const yearSel = document.querySelector('select[name="filterYear"]');
+                const yearSel  = document.querySelector('select[name="filterYear"]');
 
                 const mVal = monthSel ? monthSel.value : "";
-                const yVal = yearSel ? yearSel.value : "";
+                const yVal = yearSel  ? yearSel.value  : "";
 
                 if (!mVal || !yVal) {
                     alert("Silakan pilih Bulan dan Tahun terlebih dahulu.");
@@ -482,11 +482,11 @@
             });
         })();
 
-        (function() {
+        (function () {
             const btn = document.getElementById('btnDownloadReportSuperAdmin');
             if (!btn) return;
 
-            btn.addEventListener('click', function() {
+            btn.addEventListener('click', function () {
                 const dateInput = document.getElementById('downloadReportSuperAdminDate');
                 const searchInput = document.querySelector('input[name="searchTerm"]');
 

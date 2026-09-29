@@ -1,10 +1,12 @@
 ﻿using System.Globalization;
 using System.Text;
+using Dapper;
 using e_Pas_CMS.Data;
 using e_Pas_CMS.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 
 namespace e_Pas_CMS.Controllers;
 
@@ -39,9 +41,10 @@ public class RegularAuditImportController : Controller
         }
 
         var currentUser = User.Identity?.Name ?? "SYSTEM";
-        var now = DateTime.Now;
+        var nowWithoutTimeZone = DateTime.SpecifyKind(DateTime.Now, DateTimeKind.Unspecified);
+        var nowUtc = DateTime.UtcNow;
 
-        await using var dbTransaction = await _context.Database.BeginTransactionAsync();
+        _context.Database.SetCommandTimeout(TimeSpan.FromSeconds(120));
 
         try
         {
@@ -55,352 +58,1016 @@ public class RegularAuditImportController : Controller
             if (rows.Count == 0)
                 throw new InvalidOperationException("CSV tidak memiliki data.");
 
-            var success = 0;
-            var skipped = 0;
-            var updated = 0;
+            var validRows = rows
+                .Where(x => !string.IsNullOrWhiteSpace(x.SpbuNo) && x.AuditDate.HasValue)
+                .ToList();
 
-            foreach (var row in rows)
+            var skipped = rows.Count - validRows.Count;
+
+            if (validRows.Count == 0)
+                throw new InvalidOperationException("Tidak ada row valid. spbu_no dan Audit Date wajib diisi.");
+
+            // =========================================================
+            // PRELOAD MASTER / EXISTING DATA - OUTSIDE WRITE TRANSACTION
+            // =========================================================
+
+            var spbuNos = validRows
+                .Select(x => x.SpbuNo.Trim())
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            // Tracked because full CSV is allowed to enrich existing SPBU master fields.
+            var existingSpbus = await _context.spbus
+                .Where(x => spbuNos.Contains(x.spbu_no))
+                .ToListAsync();
+
+            var spbuByNo = existingSpbus
+                .GroupBy(x => x.spbu_no, StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(x => x.Key, x => x.First(), StringComparer.OrdinalIgnoreCase);
+
+            var allQuestionnaires = await _context.master_questioners
+                .AsNoTracking()
+                .Where(x => x.category == "CHECKLIST")
+                .OrderByDescending(x => x.version)
+                .ToListAsync();
+
+            foreach (var row in validRows)
             {
-                if (string.IsNullOrWhiteSpace(row.SpbuNo) || !row.AuditDate.HasValue)
+                row.ResolvedMasterQuestionerChecklistId = ResolveMasterQuestionerChecklistId(row, allQuestionnaires);
+            }
+
+            var requiredQuestionnaireIds = validRows
+                .Select(x => x.ResolvedMasterQuestionerChecklistId)
+                .Where(x => !string.IsNullOrWhiteSpace(x))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+
+            var questionMapByQuestionnaire = await LoadQuestionMapAsync(requiredQuestionnaireIds);
+
+            // Resolve auditor/verifier identities by username first, then by exact name.
+            var userTokens = validRows
+                .SelectMany(x => new[]
                 {
-                    skipped++;
-                    continue;
-                }
+                    x.Auditor1Username, x.Auditor2Username, x.VerifierUsername,
+                    x.Auditor1Name, x.Auditor2Name, x.VerifierName
+                })
+                .Where(x => !string.IsNullOrWhiteSpace(x))
+                .Select(x => x.Trim())
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
 
-                var spbuNo = row.SpbuNo.Trim();
-                var auditDate = DateTime.SpecifyKind(row.AuditDate.Value.Date, DateTimeKind.Unspecified);
-                var sendDate = row.SendDate.HasValue
-                    ? DateTime.SpecifyKind(row.SendDate.Value.Date, DateTimeKind.Unspecified)
-                    : auditDate;
+            var candidateUsers = userTokens.Count == 0
+                ? new List<app_user>()
+                : await _context.app_users
+                    .AsNoTracking()
+                    .Where(x => userTokens.Contains(x.username) || userTokens.Contains(x.name))
+                    .ToListAsync();
 
-                // =========================================================
-                // 1. MASTER SPBU
-                // =========================================================
-                var spbu = await _context.spbus.FirstOrDefaultAsync(x => x.spbu_no == spbuNo);
+            var userByUsername = candidateUsers
+                .Where(x => !string.IsNullOrWhiteSpace(x.username))
+                .GroupBy(x => x.username, StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(x => x.Key, x => x.First(), StringComparer.OrdinalIgnoreCase);
 
-                if (spbu == null)
+            var userByName = candidateUsers
+                .Where(x => !string.IsNullOrWhiteSpace(x.name))
+                .GroupBy(x => x.name, StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(x => x.Key, x => x.First(), StringComparer.OrdinalIgnoreCase);
+
+            var minAuditDate = DateTime.SpecifyKind(
+                validRows.Min(x => x.AuditDate!.Value.Date),
+                DateTimeKind.Unspecified);
+
+            var maxAuditDateExclusive = DateTime.SpecifyKind(
+                validRows.Max(x => x.AuditDate!.Value.Date).AddDays(1),
+                DateTimeKind.Unspecified);
+
+            var existingSpbuIds = existingSpbus
+                .Select(x => x.id)
+                .Distinct()
+                .ToList();
+
+            // Match both historical imported "Regular Audit" and native non-BO regular records.
+            var existingAudits = existingSpbuIds.Count == 0
+                ? new List<trx_audit>()
+                : await _context.trx_audits
+                    .Where(x =>
+                        existingSpbuIds.Contains(x.spbu_id) &&
+                        x.audit_type != "Basic Operational" &&
+                        x.audit_execution_time >= minAuditDate &&
+                        x.audit_execution_time < maxAuditDateExclusive)
+                    .ToListAsync();
+
+            static string AuditKey(string spbuId, DateTime date, string level) =>
+                $"{spbuId}|{date:yyyyMMdd}|{level.Trim().ToUpperInvariant()}";
+
+            var auditByKey = existingAudits
+                .Where(x => x.audit_execution_time.HasValue)
+                .GroupBy(x => AuditKey(
+                    x.spbu_id,
+                    x.audit_execution_time!.Value.Date,
+                    string.IsNullOrWhiteSpace(x.audit_level) ? "-" : x.audit_level))
+                .ToDictionary(x => x.Key, x => x.First(), StringComparer.OrdinalIgnoreCase);
+
+            var existingAuditIds = existingAudits
+                .Select(x => x.id)
+                .Distinct()
+                .ToList();
+
+            var existingSummaries = existingAuditIds.Count == 0
+                ? new List<trx_audit_import_summary>()
+                : await _context.trx_audit_import_summaries
+                    .Where(x => existingAuditIds.Contains(x.trx_audit_id))
+                    .ToListAsync();
+
+            var summaryByAuditId = existingSummaries
+                .GroupBy(x => x.trx_audit_id)
+                .ToDictionary(x => x.Key, x => x.First(), StringComparer.OrdinalIgnoreCase);
+
+            var invoiceAuditIds = existingAuditIds.Count == 0
+                ? new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+                : new HashSet<string>(
+                    await _context.TrxInvoiceDetails
+                        .AsNoTracking()
+                        .Where(x => existingAuditIds.Contains(x.TrxAuditId))
+                        .Select(x => x.TrxAuditId)
+                        .ToListAsync(),
+                    StringComparer.OrdinalIgnoreCase);
+
+            await using var dbTransaction = await _context.Database.BeginTransactionAsync();
+
+            try
+            {
+                await _context.Database.ExecuteSqlRawAsync("SET LOCAL lock_timeout = '8s';");
+                await _context.Database.ExecuteSqlRawAsync("SET LOCAL statement_timeout = '120s';");
+
+                // =====================================================
+                // STAGE 1 - SPBU MASTER
+                // =====================================================
+
+                foreach (var row in validRows)
                 {
-                    spbu = new spbu
+                    var spbuNo = row.SpbuNo.Trim();
+                    var auditDate = AsUnspecified(row.AuditDate!.Value.Date);
+
+                    if (!spbuByNo.TryGetValue(spbuNo, out var spbu))
                     {
-                        id = Guid.NewGuid().ToString(),
-                        spbu_no = spbuNo,
-                        region = RequiredFallback(row.Region),
-                        province_name = "-",
-                        city_name = RequiredFallback(row.CityName),
-                        address = NullIfEmpty(row.Address),
-                        type = NullIfEmpty(row.TipeSpbu),
-                        sbm = NullIfEmpty(row.Rayon),
-                        year = row.Year,
-                        audit_next = NullIfEmpty(row.AuditNext),
-                        status_good = NullIfEmpty(row.GoodStatus),
-                        status_excellent = NullIfEmpty(row.ExcellentStatus),
-                        audit_current_score = row.TotalScore,
-                        audit_current_time = auditDate,
-                        status = "ACTIVE",
-                        created_by = currentUser,
-                        created_date = now,
-                        updated_by = currentUser,
-                        updated_date = now,
+                        spbu = new spbu
+                        {
+                            id = Guid.NewGuid().ToString(),
+                            spbu_no = spbuNo,
+                            region = RequiredFallback(row.Region),
+                            province_name = RequiredFallback(row.ProvinceName),
+                            city_name = RequiredFallback(row.CityName),
+                            status = "ACTIVE",
+                            created_by = currentUser,
+                            created_date = nowWithoutTimeZone,
+                            updated_by = currentUser,
+                            updated_date = nowWithoutTimeZone,
+                            wtms = row.Wtms ?? 0m,
+                            qq = row.Qq ?? 0m,
+                            wmef = row.Wmef ?? 0m,
+                            format_fisik = row.FormatFisik ?? 0m,
+                            cpo = row.Cpo ?? 0m
+                        };
 
-                        // These columns are non-null on the existing SPBU table.
-                        // They are master SPBU technical defaults, NOT imported audit answers.
-                        wtms = 0,
-                        qq = 0,
-                        wmef = 0,
-                        format_fisik = 0,
-                        cpo = 0
-                    };
+                        _context.spbus.Add(spbu);
+                        spbuByNo[spbuNo] = spbu;
+                    }
 
-                    _context.spbus.Add(spbu);
-                }
-                else
-                {
-                    if (!string.IsNullOrWhiteSpace(row.Region)) spbu.region = row.Region.Trim();
-                    if (!string.IsNullOrWhiteSpace(row.CityName)) spbu.city_name = row.CityName.Trim();
-                    if (!string.IsNullOrWhiteSpace(row.Address)) spbu.address = row.Address.Trim();
-                    if (!string.IsNullOrWhiteSpace(row.TipeSpbu)) spbu.type = row.TipeSpbu.Trim();
-                    if (!string.IsNullOrWhiteSpace(row.Rayon)) spbu.sbm = row.Rayon.Trim();
+                    // Only overwrite master text if the full CSV actually supplies a value.
+                    SetIfNotBlank(row.Region, v => spbu.region = v);
+                    SetIfNotBlank(row.ProvinceName, v => spbu.province_name = v);
+                    SetIfNotBlank(row.CityName, v => spbu.city_name = v);
+                    SetIfNotBlank(row.Address, v => spbu.address = v);
+                    SetIfNotBlank(row.TipeSpbu, v => spbu.owner_type = v);
+                    SetIfNotBlank(row.Rayon, v => spbu.sbm = v);
+                    SetIfNotBlank(row.Sam, v => spbu.sam = v);
+                    SetIfNotBlank(row.OwnerName, v => spbu.owner_name = v);
+                    SetIfNotBlank(row.ManagerName, v => spbu.manager_name = v);
+                    SetIfNotBlank(row.Mor, v => spbu.mor = v);
+                    SetIfNotBlank(row.SalesArea, v => spbu.sales_area = v);
+                    SetIfNotBlank(row.PhoneNumber1, v => spbu.phone_number_1 = v);
+                    SetIfNotBlank(row.KelasSpbu, v => spbu.level = v);
+                    SetIfNotBlank(row.AuditNext, v => spbu.audit_next = v);
+                    SetIfNotBlank(row.AuditLevel, v => spbu.audit_current = v);
+                    SetIfNotBlank(row.GoodStatus, v => spbu.status_good = v);
+                    SetIfNotBlank(row.ExcellentStatus, v => spbu.status_excellent = v);
+
                     if (row.Year.HasValue) spbu.year = row.Year;
+                    if (row.Quarter.HasValue) spbu.quater = row.Quarter;
+                    if (row.Wtms.HasValue) spbu.wtms = row.Wtms.Value;
+                    if (row.Qq.HasValue) spbu.qq = row.Qq.Value;
+                    if (row.Wmef.HasValue) spbu.wmef = row.Wmef.Value;
+                    if (row.FormatFisik.HasValue) spbu.format_fisik = row.FormatFisik.Value;
+                    if (row.Cpo.HasValue) spbu.cpo = row.Cpo.Value;
 
-                    spbu.audit_next = NullIfEmpty(row.AuditNext);
-                    spbu.status_good = NullIfEmpty(row.GoodStatus);
-                    spbu.status_excellent = NullIfEmpty(row.ExcellentStatus);
                     spbu.audit_current_score = row.TotalScore;
                     spbu.audit_current_time = auditDate;
                     spbu.updated_by = currentUser;
-                    spbu.updated_date = now;
+                    spbu.updated_date = nowWithoutTimeZone;
                 }
 
-                await _context.SaveChangesAsync();
+                await SaveStageAsync("SPBU");
 
-                // =========================================================
-                // 2. AUDIT
-                // Dedupe by SPBU + audit date + audit level + Regular Audit.
-                // =========================================================
-                var nextDate = auditDate.AddDays(1);
-                var normalizedAuditLevel = string.IsNullOrWhiteSpace(row.AuditLevel)
-                    ? "-"
-                    : row.AuditLevel.Trim();
+                // =====================================================
+                // STAGE 2 - AUDIT HEADER + SUMMARY
+                // =====================================================
 
-                var audit = await _context.trx_audits.FirstOrDefaultAsync(x =>
-                    x.spbu_id == spbu.id &&
-                    x.audit_type == "Regular Audit" &&
-                    x.audit_execution_time >= auditDate &&
-                    x.audit_execution_time < nextDate &&
-                    x.audit_level == normalizedAuditLevel);
+                var created = 0;
+                var updated = 0;
+                var auditRows = new List<AuditImportContext>();
 
-                var isNewAudit = audit == null;
-
-                if (audit == null)
+                foreach (var row in validRows)
                 {
-                    audit = new trx_audit
+                    var spbuNo = row.SpbuNo.Trim();
+                    var spbu = spbuByNo[spbuNo];
+                    var auditDate = AsUnspecified(row.AuditDate!.Value.Date);
+                    var sendDate = AsUnspecified((row.SendDate ?? row.AuditDate.Value).Date);
+                    var normalizedAuditLevel = string.IsNullOrWhiteSpace(row.AuditLevel)
+                        ? "-"
+                        : row.AuditLevel.Trim();
+
+                    var auditKey = AuditKey(spbu.id, auditDate, normalizedAuditLevel);
+
+                    if (!auditByKey.TryGetValue(auditKey, out var audit))
                     {
-                        id = Guid.NewGuid().ToString(),
-                        report_prefix = "IMP",
-                        report_no = GenerateReportNo(row),
-                        spbu_id = spbu.id,
+                        audit = new trx_audit
+                        {
+                            id = Guid.NewGuid().ToString(),
+                            spbu_id = spbu.id,
+                            audit_level = normalizedAuditLevel,
+                            audit_type = string.IsNullOrWhiteSpace(row.AuditType)
+                                ? "Regular Audit"
+                                : row.AuditType.Trim(),
+                            status = "VERIFIED",
+                            form_type_auditor1 = "FULL",
+                            form_status_auditor1 = "COMPLETED",
+                            km_range = row.KmRange ?? 0m,
+                            created_by = currentUser,
+                            created_date = row.AuditCreatedDate.HasValue
+                                ? AsUnspecified(row.AuditCreatedDate.Value)
+                                : sendDate,
+                            updated_by = currentUser,
+                            updated_date = nowWithoutTimeZone
+                        };
 
-                        // Template does not contain auditor/user id.
-                        app_user_id = null,
-                        app_user_id_auditor2 = null,
+                        _context.trx_audits.Add(audit);
+                        auditByKey[auditKey] = audit;
+                        created++;
+                    }
+                    else
+                    {
+                        updated++;
+                    }
 
-                        audit_level = normalizedAuditLevel,
-                        audit_type = "Regular Audit",
-                        score = row.TotalScore,
-                        audit_schedule_date = DateOnly.FromDateTime(auditDate),
-                        audit_execution_time = auditDate,
-                        status = "VERIFIED",
-                        form_type_auditor1 = "FULL",
-                        form_status_auditor1 = "COMPLETED",
-                        good_status = NullIfEmpty(row.GoodStatus),
-                        excellent_status = NullIfEmpty(row.ExcellentStatus),
-                        created_by = currentUser,
-                        created_date = sendDate,
-                        updated_by = currentUser,
-                        updated_date = now,
-                        approval_by = currentUser,
-                        approval_date = sendDate,
-                        km_range = 0
-                    };
+                    var auditor1 = ResolveUser(row.Auditor1Username, row.Auditor1Name, userByUsername, userByName);
+                    var auditor2 = ResolveUser(row.Auditor2Username, row.Auditor2Name, userByUsername, userByName);
+                    var verifier = ResolveUser(row.VerifierUsername, row.VerifierName, userByUsername, userByName);
 
-                    _context.trx_audits.Add(audit);
-                }
-                else
-                {
+                    audit.report_prefix = NullIfEmpty(row.ReportPrefix) ?? audit.report_prefix ?? "IMP";
+                    audit.report_no = NullIfEmpty(row.ReportNo) ?? audit.report_no ?? GenerateReportNo(row);
+
+                    if (row.HasAuditor1Column)
+                        audit.app_user_id = auditor1?.id;
+
+                    if (row.HasAuditor2Column)
+                        audit.app_user_id_auditor2 = auditor2?.id;
+
+                    if (!string.IsNullOrWhiteSpace(row.ResolvedMasterQuestionerChecklistId))
+                        audit.master_questioner_checklist_id = row.ResolvedMasterQuestionerChecklistId;
+                    audit.audit_level = normalizedAuditLevel;
+                    audit.audit_type = string.IsNullOrWhiteSpace(row.AuditType)
+                        ? "Regular Audit"
+                        : row.AuditType.Trim();
                     audit.score = row.TotalScore;
+                    audit.audit_schedule_date = row.AuditScheduleDate.HasValue
+                        ? DateOnly.FromDateTime(row.AuditScheduleDate.Value)
+                        : DateOnly.FromDateTime(auditDate);
+                    audit.audit_execution_time = auditDate;
+                    if (row.HasAuditMomIntroColumn)
+                        audit.audit_mom_intro = NullIfEmpty(row.AuditMomIntro);
+
+                    if (row.HasAuditMomFinalColumn)
+                        audit.audit_mom_final = NullIfEmpty(row.AuditMomFinal);
+
+                    audit.status = "VERIFIED";
+                    audit.form_type_auditor1 = "FULL";
+                    audit.form_status_auditor1 = "COMPLETED";
                     audit.good_status = NullIfEmpty(row.GoodStatus);
                     audit.excellent_status = NullIfEmpty(row.ExcellentStatus);
-                    audit.status = "VERIFIED";
-                    audit.approval_date = sendDate;
-                    audit.updated_by = currentUser;
-                    audit.updated_date = now;
-                    updated++;
-                }
-
-                await _context.SaveChangesAsync();
-
-                // =========================================================
-                // 3. IMPORTED REPORT SUMMARY
-                // Store exactly what exists in CSV. Missing optional fields stay NULL.
-                // =========================================================
-                var summary = await _context.trx_audit_import_summaries
-                    .FirstOrDefaultAsync(x => x.trx_audit_id == audit.id);
-
-                if (summary == null)
-                {
-                    summary = new trx_audit_import_summary
+                    if (row.HasVerifierColumn)
                     {
-                        id = Guid.NewGuid().ToString(),
-                        trx_audit_id = audit.id,
-                        created_by = currentUser,
-                        created_date = now
-                    };
+                        audit.approval_by = verifier?.username
+                            ?? NullIfEmpty(row.VerifierUsername)
+                            ?? audit.approval_by;
+                    }
+                    else if (string.IsNullOrWhiteSpace(audit.approval_by))
+                    {
+                        audit.approval_by = currentUser;
+                    }
+                    audit.approval_date = row.ApprovalDate.HasValue
+                        ? AsUnspecified(row.ApprovalDate.Value)
+                        : sendDate;
+                    audit.km_range = row.KmRange ?? audit.km_range;
+                    audit.updated_by = currentUser;
+                    audit.updated_date = nowWithoutTimeZone;
 
-                    _context.trx_audit_import_summaries.Add(summary);
+                    if (!summaryByAuditId.TryGetValue(audit.id, out var summary))
+                    {
+                        summary = new trx_audit_import_summary
+                        {
+                            id = Guid.NewGuid().ToString(),
+                            trx_audit_id = audit.id,
+                            created_by = currentUser,
+                            created_date = nowWithoutTimeZone
+                        };
+
+                        _context.trx_audit_import_summaries.Add(summary);
+                        summaryByAuditId[audit.id] = summary;
+                    }
+
+                    summary.send_date = sendDate;
+                    summary.audit_date = auditDate;
+                    summary.total_score = row.TotalScore;
+                    summary.sss = row.Sss;
+                    summary.eqnq = row.Eqnq;
+                    summary.rfs = row.Rfs;
+                    summary.vfc = row.Vfc;
+                    summary.epo = row.Epo;
+                    summary.wtms = row.Wtms;
+                    summary.qq = row.Qq;
+                    summary.wmef = row.Wmef;
+                    summary.format_fisik = row.FormatFisik;
+                    summary.cpo = row.Cpo;
+                    summary.kelas_spbu = NullIfEmpty(row.KelasSpbu);
+                    summary.audit_next = NullIfEmpty(row.AuditNext);
+                    summary.penalty_good_alerts = NullIfEmpty(row.PenaltyGoodAlerts);
+                    summary.penalty_excellent_alerts = NullIfEmpty(row.PenaltyExcellentAlerts);
+                    summary.source_file = Path.GetFileName(file.FileName);
+
+                    auditRows.Add(new AuditImportContext
+                    {
+                        Row = row,
+                        Audit = audit,
+                        SpbuNo = spbuNo
+                    });
                 }
 
-                summary.send_date = sendDate;
-                summary.audit_date = auditDate;
-                summary.total_score = row.TotalScore;
+                await SaveStageAsync("AUDIT/REPORT");
 
-                summary.sss = row.Sss;
-                summary.eqnq = row.Eqnq;
-                summary.rfs = row.Rfs;
-                summary.vfc = row.Vfc;
-                summary.epo = row.Epo;
+                // =====================================================
+                // STAGE 3 - CHECKLIST + QQ DETAIL (NO MEDIA)
+                // =====================================================
 
-                summary.wtms = row.Wtms;
-                summary.qq = row.Qq;
-                summary.wmef = row.Wmef;
-                summary.format_fisik = row.FormatFisik;
-                summary.cpo = row.Cpo;
+                var detailAuditIds = auditRows
+                    .Where(x => x.Row.HasChecklistPayload || x.Row.HasQqWideColumns)
+                    .Select(x => x.Audit.id)
+                    .Distinct()
+                    .ToList();
 
-                summary.kelas_spbu = NullIfEmpty(row.KelasSpbu);
-                summary.audit_next = NullIfEmpty(row.AuditNext);
-                summary.penalty_good_alerts = NullIfEmpty(row.PenaltyGoodAlerts);
-                summary.penalty_excellent_alerts = NullIfEmpty(row.PenaltyExcellentAlerts);
-                summary.source_file = Path.GetFileName(file.FileName);
+                if (detailAuditIds.Count > 0)
+                {
+                    var existingChecklist = await _context.trx_audit_checklists
+                        .Where(x => detailAuditIds.Contains(x.trx_audit_id))
+                        .ToListAsync();
 
-                await _context.SaveChangesAsync();
+                    var qqAuditIds = auditRows
+                        .Where(x => x.Row.HasQqWideColumns)
+                        .Select(x => x.Audit.id)
+                        .Distinct()
+                        .ToList();
 
-                // =========================================================
-                // 4. FINANCE INVOICE
-                // Existing Finance Invoice Index only displays:
-                // invoice=IN_PROGRESS, detail=IN_PROGRESS, claim=UNDER_REVIEW.
-                // =========================================================
-                await EnsureFinanceInvoiceAsync(audit, spbuNo, currentUser, now);
+                    var existingQq = qqAuditIds.Count == 0
+                        ? new List<trx_audit_qq>()
+                        : await _context.trx_audit_qqs
+                            .Where(x => qqAuditIds.Contains(x.trx_audit_id))
+                            .ToListAsync();
 
-                // IMPORTANT:
-                // No trx_audit_qq / trx_audit_checklist / trx_audit_medium rows are
-                // inserted here. If the CSV does not contain QQ/checklist/media data,
-                // those detail tables remain empty as requested.
+                    // Wide checklist columns are authoritative when present.
+                    var checklistReplaceIds = auditRows
+                        .Where(x => x.Row.HasChecklistPayload)
+                        .Select(x => x.Audit.id)
+                        .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
-                if (isNewAudit)
-                    success++;
+                    _context.trx_audit_checklists.RemoveRange(
+                        existingChecklist.Where(x => checklistReplaceIds.Contains(x.trx_audit_id)));
+
+                    // Wide QQ columns are authoritative when present. If all QQ cells
+                    // are blank, existing QQ rows are intentionally cleared.
+                    _context.trx_audit_qqs.RemoveRange(existingQq);
+
+                    await SaveStageAsync("DETAIL-CLEAR");
+                }
+
+                foreach (var ctx in auditRows)
+                {
+                    var row = ctx.Row;
+                    var audit = ctx.Audit;
+
+                    if (row.HasChecklistPayload)
+                    {
+                        if (string.IsNullOrWhiteSpace(audit.master_questioner_checklist_id))
+                        {
+                            throw new InvalidOperationException(
+                                $"Checklist audit {row.SpbuNo} {row.AuditDate:yyyy-MM-dd} tidak dapat diimport karena master_questioner_checklist_id tidak ditemukan.");
+                        }
+
+                        if (!questionMapByQuestionnaire.TryGetValue(
+                                audit.master_questioner_checklist_id,
+                                out var questionMap))
+                        {
+                            throw new InvalidOperationException(
+                                $"Master checklist {audit.master_questioner_checklist_id} tidak memiliki QUESTION yang dapat dipetakan.");
+                        }
+
+                        var checklistPayload = BuildChecklistPayload(row, questionMap);
+
+                        foreach (var item in checklistPayload)
+                        {
+                            _context.trx_audit_checklists.Add(new trx_audit_checklist
+                            {
+                                id = Guid.NewGuid().ToString(),
+                                trx_audit_id = audit.id,
+                                master_questioner_detail_id = item.Question.Id,
+                                score_input = NullIfEmpty(item.ScoreInput)?.ToUpperInvariant(),
+                                score_af = item.ScoreAf ?? CalculateScoreAf(item.ScoreInput, item.Question.IsRelaksasi),
+                                score_x = item.ScoreX,
+                                comment = NullIfEmpty(item.Comment),
+                                status = "ACTIVE",
+                                created_by = currentUser,
+                                created_date = nowWithoutTimeZone,
+                                updated_by = currentUser,
+                                updated_date = nowWithoutTimeZone
+                            });
+                        }
+                    }
+
+                    if (row.HasQqWideColumns)
+                    {
+                        var qqItems = ParseQqWide(row);
+
+                        foreach (var qq in qqItems)
+                        {
+                            // At minimum a QQ row needs a nozzle number because the
+                            // existing entity/database requires it.
+                            if (string.IsNullOrWhiteSpace(qq.NozzleNumber))
+                                continue;
+
+                            _context.trx_audit_qqs.Add(new trx_audit_qq
+                            {
+                                id = Guid.NewGuid().ToString(),
+                                trx_audit_id = audit.id,
+                                nozzle_number = qq.NozzleNumber.Trim(),
+                                du_make = NullIfEmpty(qq.DuMake),
+                                du_serial_no = NullIfEmpty(qq.DuSerialNo),
+                                product = NullIfEmpty(qq.Product),
+                                mode = NullIfEmpty(qq.Mode),
+                                quantity_variation_with_measure = qq.QuantityVariationWithMeasure,
+                                quantity_variation_in_percentage = qq.QuantityVariationInPercentage,
+                                observed_density = qq.ObservedDensity,
+                                observed_temp = qq.ObservedTemp,
+                                observed_density_15_degree = qq.ObservedDensity15Degree,
+                                reference_density_15_degree = qq.ReferenceDensity15Degree,
+                                tank_number = NullIfEmpty(qq.TankNumber),
+                                density_variation = qq.DensityVariation,
+                                status = "ACTIVE",
+                                created_by = currentUser,
+                                created_date = nowWithoutTimeZone,
+                                updated_by = currentUser,
+                                updated_date = nowWithoutTimeZone
+                            });
+                        }
+                    }
+                }
+
+                await SaveStageAsync("CHECKLIST/QQ");
+
+                // =====================================================
+                // STAGE 4 - FINANCE
+                // =====================================================
+
+                foreach (var item in auditRows)
+                {
+                    if (invoiceAuditIds.Contains(item.Audit.id))
+                        continue;
+
+                    AddFinanceInvoice(item.Audit, item.SpbuNo, currentUser, nowUtc);
+                    invoiceAuditIds.Add(item.Audit.id);
+                }
+
+                await SaveStageAsync("FINANCE");
+                await dbTransaction.CommitAsync();
+
+                var fullRows = auditRows.Count(x => x.Row.HasChecklistPayload || x.Row.HasQqWideColumns);
+
+                TempData["Success"] =
+                    $"Upload Regular Audit berhasil. New={created}, Updated={updated}, FullDetail={fullRows}, Skipped={skipped}.";
+
+                return RedirectToAction("Index", "AuditReport");
             }
-
-            await _context.SaveChangesAsync();
-            await dbTransaction.CommitAsync();
-
-            TempData["Success"] =
-                $"Upload Regular Audit berhasil. New={success}, Updated={updated}, Skipped={skipped}.";
-
-            return RedirectToAction("Index", "AuditReport");
+            catch
+            {
+                await dbTransaction.RollbackAsync();
+                throw;
+            }
         }
         catch (Exception ex)
         {
-            await dbTransaction.RollbackAsync();
-
             _logger.LogError(ex, "Regular Audit CSV import failed for {FileName}", file.FileName);
-
-            TempData["Error"] = $"Upload Regular Audit gagal: {ex.Message}";
+            TempData["Error"] = $"Upload Regular Audit gagal: {GetImportError(ex)}";
             return RedirectToAction("Index", "AuditReport");
         }
     }
 
-    private async Task EnsureFinanceInvoiceAsync(
+    // =============================================================
+    // QUESTIONNAIRE / CHECKLIST HELPERS
+    // =============================================================
+
+    private static string? ResolveMasterQuestionerChecklistId(
+        RegularAuditImportRow row,
+        List<master_questioner> questionnaires)
+    {
+        if (!string.IsNullOrWhiteSpace(row.MasterQuestionerChecklistId))
+        {
+            var explicitMatch = questionnaires.FirstOrDefault(x =>
+                string.Equals(x.id, row.MasterQuestionerChecklistId.Trim(), StringComparison.OrdinalIgnoreCase));
+
+            if (explicitMatch != null)
+                return explicitMatch.id;
+        }
+
+        var questionnaireType = string.IsNullOrWhiteSpace(row.AuditType) ||
+                                row.AuditType.Equals("Regular Audit", StringComparison.OrdinalIgnoreCase)
+            ? "Mystery Audit"
+            : row.AuditType.Trim();
+
+        if (row.MasterQuestionerVersion.HasValue)
+        {
+            var versionMatch = questionnaires
+                .Where(x =>
+                    x.version == row.MasterQuestionerVersion.Value &&
+                    x.category == "CHECKLIST" &&
+                    x.type.Equals(questionnaireType, StringComparison.OrdinalIgnoreCase))
+                .OrderByDescending(x => x.version)
+                .FirstOrDefault();
+
+            if (versionMatch != null)
+                return versionMatch.id;
+        }
+
+        // Same convention already used by Scheduler for Regular Audit.
+        var fallback = questionnaires
+            .Where(x =>
+                x.category == "CHECKLIST" &&
+                x.type.Equals(questionnaireType, StringComparison.OrdinalIgnoreCase))
+            .OrderByDescending(x => x.version)
+            .FirstOrDefault();
+
+        if (fallback != null)
+            return fallback.id;
+
+        // Last safety fallback if a deployment stores Regular Audit literally.
+        return questionnaires
+            .Where(x =>
+                x.category == "CHECKLIST" &&
+                x.type.Equals("Regular Audit", StringComparison.OrdinalIgnoreCase))
+            .OrderByDescending(x => x.version)
+            .Select(x => x.id)
+            .FirstOrDefault();
+    }
+
+    private async Task<Dictionary<string, QuestionMap>> LoadQuestionMapAsync(string[] questionnaireIds)
+    {
+        var result = new Dictionary<string, QuestionMap>(StringComparer.OrdinalIgnoreCase);
+
+        if (questionnaireIds.Length == 0)
+            return result;
+
+        var connectionString = _context.Database.GetConnectionString();
+        await using var conn = new NpgsqlConnection(connectionString);
+        await conn.OpenAsync();
+
+        var rows = (await conn.QueryAsync<QuestionMapItem>(@"
+            SELECT
+                id AS ""Id"",
+                master_questioner_id AS ""MasterQuestionerId"",
+                number AS ""Number"",
+                COALESCE(is_relaksasi, false) AS ""IsRelaksasi""
+            FROM master_questioner_detail
+            WHERE master_questioner_id = ANY(@ids)
+              AND type = 'QUESTION'
+            ORDER BY master_questioner_id, order_no;",
+            new { ids = questionnaireIds })).ToList();
+
+        foreach (var group in rows.GroupBy(x => x.MasterQuestionerId, StringComparer.OrdinalIgnoreCase))
+        {
+            result[group.Key] = new QuestionMap(group.ToList());
+        }
+
+        return result;
+    }
+
+    private static List<ResolvedChecklistItem> BuildChecklistPayload(
+        RegularAuditImportRow row,
+        QuestionMap questionMap)
+    {
+        var result = new List<ResolvedChecklistItem>();
+
+        // Human-friendly wide format:
+        //   1.1.1.a            = A/B/C/D/E/F/X
+        //   1.1.1.a_comment    = free text comment
+        //   1.1.1.a_score_x    = numeric X score when score_input = X
+        // Legacy double-underscore suffixes are accepted too.
+        foreach (var question in questionMap.Items)
+        {
+            if (string.IsNullOrWhiteSpace(question.Number))
+                continue;
+
+            var number = question.Number.Trim();
+            var score = row.GetRaw(number);
+
+            var comment = FirstNotBlank(
+                row.GetRaw($"{number}_comment"),
+                row.GetRaw($"{number}__comment"));
+
+            var scoreX = ParseDecimal(FirstNotBlank(
+                row.GetRaw($"{number}_score_x"),
+                row.GetRaw($"{number}__score_x")));
+
+            if (string.IsNullOrWhiteSpace(score) &&
+                string.IsNullOrWhiteSpace(comment) &&
+                !scoreX.HasValue)
+            {
+                continue;
+            }
+
+            var normalizedScore = string.IsNullOrWhiteSpace(score)
+                ? null
+                : score.Trim().ToUpperInvariant();
+
+            if (!string.IsNullOrWhiteSpace(normalizedScore) &&
+                normalizedScore is not ("A" or "B" or "C" or "D" or "E" or "F" or "X"))
+            {
+                throw new InvalidOperationException(
+                    $"Nilai checklist '{number}' untuk SPBU {row.SpbuNo} tidak valid: '{score}'. Gunakan A/B/C/D/E/F/X atau kosong.");
+            }
+
+            result.Add(new ResolvedChecklistItem
+            {
+                Question = question,
+                ScoreInput = normalizedScore,
+                ScoreAf = CalculateScoreAf(normalizedScore, question.IsRelaksasi),
+                ScoreX = scoreX,
+                Comment = comment
+            });
+        }
+
+        return result;
+    }
+
+    private static decimal? CalculateScoreAf(string? scoreInput, bool isRelaksasi)
+    {
+        var score = scoreInput?.Trim().ToUpperInvariant();
+
+        if (isRelaksasi && score == "F")
+            return 1.00m;
+
+        return score switch
+        {
+            "A" => 1.00m,
+            "B" => 0.80m,
+            "C" => 0.60m,
+            "D" => 0.40m,
+            "E" => 0.20m,
+            "F" => 0.00m,
+            _ => null
+        };
+    }
+
+    private static List<QqCsvPayloadItem> ParseQqWide(RegularAuditImportRow row)
+    {
+        var indexes = row.RawValues.Keys
+            .Select(header => TryGetQqColumnIndex(header, out var index) ? index : (int?)null)
+            .Where(index => index.HasValue)
+            .Select(index => index!.Value)
+            .Distinct()
+            .OrderBy(index => index)
+            .ToList();
+
+        var result = new List<QqCsvPayloadItem>();
+
+        foreach (var index in indexes)
+        {
+            var prefix = $"qq_{index}_";
+
+            var item = new QqCsvPayloadItem
+            {
+                NozzleNumber = row.GetRaw(prefix + "nozzle_number"),
+                DuMake = row.GetRaw(prefix + "du_make"),
+                DuSerialNo = row.GetRaw(prefix + "du_serial_no"),
+                Product = row.GetRaw(prefix + "product"),
+                Mode = row.GetRaw(prefix + "mode"),
+                QuantityVariationWithMeasure = ParseDecimal(row.GetRaw(prefix + "quantity_variation_with_measure")),
+                QuantityVariationInPercentage = ParseDecimal(row.GetRaw(prefix + "quantity_variation_in_percentage")),
+                ObservedDensity = ParseDecimal(row.GetRaw(prefix + "observed_density")),
+                ObservedTemp = ParseDecimal(row.GetRaw(prefix + "observed_temp")),
+                ObservedDensity15Degree = ParseDecimal(row.GetRaw(prefix + "observed_density_15_degree")),
+                ReferenceDensity15Degree = ParseDecimal(row.GetRaw(prefix + "reference_density_15_degree")),
+                TankNumber = row.GetRaw(prefix + "tank_number"),
+                DensityVariation = ParseDecimal(row.GetRaw(prefix + "density_variation"))
+            };
+
+            var hasAnyValue =
+                !string.IsNullOrWhiteSpace(item.NozzleNumber) ||
+                !string.IsNullOrWhiteSpace(item.DuMake) ||
+                !string.IsNullOrWhiteSpace(item.DuSerialNo) ||
+                !string.IsNullOrWhiteSpace(item.Product) ||
+                !string.IsNullOrWhiteSpace(item.Mode) ||
+                item.QuantityVariationWithMeasure.HasValue ||
+                item.QuantityVariationInPercentage.HasValue ||
+                item.ObservedDensity.HasValue ||
+                item.ObservedTemp.HasValue ||
+                item.ObservedDensity15Degree.HasValue ||
+                item.ReferenceDensity15Degree.HasValue ||
+                !string.IsNullOrWhiteSpace(item.TankNumber) ||
+                item.DensityVariation.HasValue;
+
+            if (!hasAnyValue)
+                continue;
+
+            if (string.IsNullOrWhiteSpace(item.NozzleNumber))
+            {
+                throw new InvalidOperationException(
+                    $"QQ baris {index} untuk SPBU {row.SpbuNo} memiliki data tetapi qq_{index}_nozzle_number kosong.");
+            }
+
+            result.Add(item);
+        }
+
+        return result;
+    }
+
+    private static bool TryGetQqColumnIndex(string? header, out int index)
+    {
+        index = 0;
+
+        if (string.IsNullOrWhiteSpace(header))
+            return false;
+
+        var value = header.Trim();
+        if (!value.StartsWith("qq_", StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        var rest = value.Substring(3);
+        var separator = rest.IndexOf('_');
+        if (separator <= 0)
+            return false;
+
+        return int.TryParse(rest.Substring(0, separator), out index) && index > 0;
+    }
+
+    private static bool LooksLikeChecklistColumn(string? header)
+    {
+        if (string.IsNullOrWhiteSpace(header))
+            return false;
+
+        var value = header.Trim();
+
+        if (value.StartsWith("qq_", StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        var suffixes = new[]
+        {
+            "__comment", "__score_x",
+            "_comment", "_score_x"
+        };
+
+        foreach (var suffix in suffixes)
+        {
+            if (value.EndsWith(suffix, StringComparison.OrdinalIgnoreCase))
+            {
+                value = value[..^suffix.Length];
+                break;
+            }
+        }
+
+        if (string.IsNullOrWhiteSpace(value) || !char.IsDigit(value[0]))
+            return false;
+
+        return value.All(c => char.IsDigit(c) || char.IsLetter(c) || c == '.');
+    }
+
+    private static string? FirstNotBlank(params string?[] values)
+    {
+        return values.FirstOrDefault(x => !string.IsNullOrWhiteSpace(x))?.Trim();
+    }
+
+    private static app_user? ResolveUser(
+        string? username,
+        string? name,
+        Dictionary<string, app_user> byUsername,
+        Dictionary<string, app_user> byName)
+    {
+        if (!string.IsNullOrWhiteSpace(username) && byUsername.TryGetValue(username.Trim(), out var byUser))
+            return byUser;
+
+        if (!string.IsNullOrWhiteSpace(name) && byName.TryGetValue(name.Trim(), out var byDisplayName))
+            return byDisplayName;
+
+        return null;
+    }
+
+    // =============================================================
+    // SAVE / ERROR HELPERS
+    // =============================================================
+
+    private async Task SaveStageAsync(string stage)
+    {
+        if (!_context.ChangeTracker.HasChanges())
+            return;
+
+        try
+        {
+            await _context.SaveChangesAsync();
+        }
+        catch (Exception ex)
+        {
+            throw new InvalidOperationException($"[{stage}] {GetDeepestMessage(ex)}", ex);
+        }
+    }
+
+    private static string GetImportError(Exception ex)
+    {
+        var current = ex;
+
+        while (current != null)
+        {
+            if (current is InvalidOperationException && current.Message.StartsWith("[", StringComparison.Ordinal))
+                return current.Message;
+
+            current = current.InnerException;
+        }
+
+        return GetDeepestMessage(ex);
+    }
+
+    private static string GetDeepestMessage(Exception ex)
+    {
+        var current = ex;
+        while (current.InnerException != null)
+            current = current.InnerException;
+        return current.Message;
+    }
+
+    // =============================================================
+    // FINANCE
+    // =============================================================
+
+    private void AddFinanceInvoice(
         trx_audit audit,
         string spbuNo,
         string currentUser,
-        DateTime now)
+        DateTime nowUtc)
     {
-        var detailExists = await _context.TrxInvoiceDetails
-            .AnyAsync(x => x.TrxAuditId == audit.id);
+        nowUtc = ToUtc(nowUtc);
 
-        if (detailExists)
-            return;
+        var auditDateWithoutTimeZone = audit.audit_execution_time ?? audit.created_date;
+        var auditDateUtc = ToUtc(auditDateWithoutTimeZone);
 
-        var auditDate = audit.audit_execution_time ?? audit.created_date;
-        var invoicePeriodStart = new DateTime(auditDate.Year, auditDate.Month, 1);
-        var invoicePeriodEnd = invoicePeriodStart.AddMonths(1).AddDays(-1);
+        var invoicePeriodStartUtc = new DateTime(
+            auditDateWithoutTimeZone.Year,
+            auditDateWithoutTimeZone.Month,
+            1,
+            0, 0, 0,
+            DateTimeKind.Utc);
 
+        var invoicePeriodEndUtc = invoicePeriodStartUtc.AddMonths(1).AddDays(-1);
         var invoiceId = Guid.NewGuid().ToString();
-        var invoiceNo =
-            $"IMP-{auditDate:yyyyMM}-{NormalizeForNumber(spbuNo)}-{audit.id[..8]}";
+        var invoiceNo = $"IMP-{auditDateWithoutTimeZone:yyyyMM}-{NormalizeForNumber(spbuNo)}-{audit.id[..8]}";
 
-        var invoice = new TrxInvoice
+        _context.TrxInvoices.Add(new TrxInvoice
         {
             Id = invoiceId,
-            AppUserId = null,
+            AppUserId = audit.app_user_id,
             InvoicePrefix = "IMP",
             InvoiceNo = invoiceNo,
-            InvoicePeriodStart = invoicePeriodStart,
-            InvoicePeriodEnd = invoicePeriodEnd,
-            IssuedDate = auditDate,
-            DueDate = auditDate.AddDays(30),
+            InvoicePeriodStart = invoicePeriodStartUtc,
+            InvoicePeriodEnd = invoicePeriodEndUtc,
+            IssuedDate = auditDateUtc,
+            DueDate = auditDateUtc.AddDays(30),
             Status = "IN_PROGRESS",
             CreatedBy = currentUser,
-            CreatedDate = now,
+            CreatedDate = nowUtc,
             UpdatedBy = currentUser,
-            UpdatedDate = now
-        };
+            UpdatedDate = nowUtc
+        });
 
-        var detail = new TrxInvoiceDetail
+        _context.TrxInvoiceDetails.Add(new TrxInvoiceDetail
         {
             Id = Guid.NewGuid().ToString(),
             TrxInvoiceId = invoiceId,
             TrxAuditId = audit.id,
-
-            // Template has no finance fee column. Do not fabricate an amount.
             AuditFee = 0m,
             LumpsumFee = null,
-
             Status = "IN_PROGRESS",
             CreatedBy = currentUser,
-            CreatedDate = now,
+            CreatedDate = nowUtc,
             UpdatedBy = currentUser,
-            UpdatedDate = now
-        };
+            UpdatedDate = nowUtc
+        });
 
-        var claimDateUtc = DateTime.SpecifyKind(auditDate, DateTimeKind.Utc);
-
-        var claim = new trx_claim
+        _context.TrxClaims.Add(new trx_claim
         {
             id = Guid.NewGuid().ToString(),
             trx_invoice_id = invoiceId,
-            app_user_id = null,
-            claim_date = claimDateUtc,
+            app_user_id = audit.app_user_id,
+            claim_date = auditDateUtc,
             claim_media_upload = 0,
             claim_media_total = 0,
             status = "UNDER_REVIEW",
             created_by = currentUser,
-            created_date = now,
+            created_date = nowUtc,
             updated_by = currentUser,
-            updated_date = now
-        };
-
-        _context.TrxInvoices.Add(invoice);
-        _context.TrxInvoiceDetails.Add(detail);
-        _context.TrxClaims.Add(claim);
+            updated_date = nowUtc
+        });
     }
+
+    // =============================================================
+    // CSV PARSER - SUPPORTS QUOTED MULTILINE COMMENTS AND WIDE CHECKLIST/QQ COLUMNS
+    // =============================================================
 
     private static List<RegularAuditImportRow> ReadCsv(TextReader reader)
     {
+        var records = ReadCsvRecords(reader);
+        if (records.Count == 0)
+            return new List<RegularAuditImportRow>();
+
+        var header = records[0]
+            .Select(x => (x ?? string.Empty).Trim().TrimStart('\uFEFF'))
+            .ToList();
+
         var result = new List<RegularAuditImportRow>();
 
-        var headerLine = reader.ReadLine();
-        if (string.IsNullOrWhiteSpace(headerLine))
-            return result;
-
-        var headerValues = ParseCsvLine(headerLine);
-        var headers = headerValues
-            .Select((name, index) => new { Name = NormalizeHeader(name), Index = index })
-            .GroupBy(x => x.Name, StringComparer.OrdinalIgnoreCase)
-            .ToDictionary(x => x.Key, x => x.First().Index, StringComparer.OrdinalIgnoreCase);
-
-        string? line;
-
-        while ((line = reader.ReadLine()) != null)
+        for (var r = 1; r < records.Count; r++)
         {
-            if (string.IsNullOrWhiteSpace(line))
+            var values = records[r];
+            if (values.All(string.IsNullOrWhiteSpace))
                 continue;
 
-            var values = ParseCsvLine(line);
+            var raw = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            for (var i = 0; i < header.Count; i++)
+            {
+                var key = header[i];
+                if (string.IsNullOrWhiteSpace(key))
+                    continue;
+
+                raw[key] = i < values.Count ? values[i] : string.Empty;
+            }
 
             string Get(params string[] names)
             {
                 foreach (var name in names)
                 {
-                    var key = NormalizeHeader(name);
+                    var found = raw.FirstOrDefault(x =>
+                        NormalizeHeader(x.Key) == NormalizeHeader(name));
 
-                    if (headers.TryGetValue(key, out var index) && index < values.Count)
-                        return values[index].Trim();
+                    if (!string.IsNullOrEmpty(found.Key))
+                        return found.Value?.Trim() ?? string.Empty;
                 }
 
-                return "";
+                return string.Empty;
             }
 
-            result.Add(new RegularAuditImportRow
+            bool Has(params string[] names) => names.Any(name =>
+                raw.Keys.Any(k => NormalizeHeader(k) == NormalizeHeader(name)));
+
+            var row = new RegularAuditImportRow
             {
-                SendDate = ParseDate(Get("send_date")),
-                AuditDate = ParseDate(Get("Audit Date", "audit_date")),
+                RawValues = raw,
+
+                SendDate = ParseDateTime(Get("send_date")),
+                AuditDate = ParseDateTime(Get("Audit Date", "audit_date", "audit_execution_time")),
+                AuditScheduleDate = ParseDateTime(Get("audit_schedule_date")),
+                AuditCreatedDate = ParseDateTime(Get("audit_created_date")),
+                ApprovalDate = ParseDateTime(Get("approval_date")),
+
                 SpbuNo = Get("spbu_no"),
                 Region = Get("region"),
+                ProvinceName = Get("province_name", "province"),
                 Year = ParseInt(Get("year")),
                 Address = Get("address"),
                 CityName = Get("city_name"),
-                TipeSpbu = Get("tipe_spbu"),
-                Rayon = Get("rayon"),
+                TipeSpbu = Get("tipe_spbu", "owner_type"),
+                Rayon = Get("rayon", "sbm"),
+                Sam = Get("sam"),
+                OwnerName = Get("owner_name"),
+                ManagerName = Get("manager_name"),
+                Quarter = ParseInt(Get("quarter", "quater")),
+                Mor = Get("mor"),
+                SalesArea = Get("sales_area"),
+                PhoneNumber1 = Get("phone_number_1", "phone"),
+
+                AuditType = Get("audit_type"),
                 AuditLevel = Get("audit_level"),
                 AuditNext = Get("audit_next"),
                 GoodStatus = Get("good_status"),
@@ -411,40 +1078,70 @@ public class RegularAuditImportController : Controller
                 Rfs = ParseDecimal(Get("RFS")),
                 Vfc = ParseDecimal(Get("VFC")),
                 Epo = ParseDecimal(Get("EPO")),
-
-                // Optional future-compatible columns. Current Mar_2026 template does
-                // not contain these, therefore values become NULL.
                 Wtms = ParseDecimal(Get("WTMS")),
                 Qq = ParseDecimal(Get("QQ")),
                 Wmef = ParseDecimal(Get("WMEF")),
                 FormatFisik = ParseDecimal(Get("FORMAT FISIK", "format_fisik")),
                 Cpo = ParseDecimal(Get("CPO")),
-
                 KelasSpbu = Get("kelas_spbu"),
                 PenaltyGoodAlerts = Get("penalty_good_alerts"),
-                PenaltyExcellentAlerts = Get("penalty_excellent_alerts")
-            });
+                PenaltyExcellentAlerts = Get("penalty_excellent_alerts"),
+
+                ReportPrefix = Get("report_prefix"),
+                ReportNo = Get("report_no"),
+                Auditor1Username = Get("auditor1_username"),
+                Auditor1Name = Get("auditor1_name"),
+                Auditor2Username = Get("auditor2_username"),
+                Auditor2Name = Get("auditor2_name"),
+                VerifierUsername = Get("verifier_username", "approval_by"),
+                VerifierName = Get("verifier_name"),
+                AuditMomIntro = Get("audit_mom_intro"),
+                AuditMomFinal = Get("audit_mom_final", "berita_acara"),
+                KmRange = ParseDecimal(Get("km_range")),
+
+                MasterQuestionerChecklistId = Get("master_questioner_checklist_id"),
+                MasterQuestionerVersion = ParseInt(Get("master_questioner_version", "questionnaire_version")),
+
+                HasAuditor1Column = Has("auditor1_username", "auditor1_name"),
+                HasAuditor2Column = Has("auditor2_username", "auditor2_name"),
+                HasVerifierColumn = Has("verifier_username", "verifier_name", "approval_by"),
+                HasAuditMomIntroColumn = Has("audit_mom_intro"),
+                HasAuditMomFinalColumn = Has("audit_mom_final", "berita_acara")
+            };
+
+            // Checklist scores are ordinary columns such as 1.1.1.a, exactly
+            // like the historical Audit_Summary CSV supplied by the business user.
+            row.HasDynamicChecklistColumns = raw.Keys.Any(LooksLikeChecklistColumn);
+            row.HasQqWideColumns = raw.Keys.Any(k => TryGetQqColumnIndex(k, out _));
+            row.FixedNormalizedHeaders = BuildFixedHeaderSet();
+
+            result.Add(row);
         }
 
         return result;
     }
 
-    private static List<string> ParseCsvLine(string line)
+    private static List<List<string>> ReadCsvRecords(TextReader reader)
     {
-        var values = new List<string>();
-        var buffer = new StringBuilder();
+        var records = new List<List<string>>();
+        var record = new List<string>();
+        var field = new StringBuilder();
         var inQuotes = false;
 
-        for (var i = 0; i < line.Length; i++)
+        while (true)
         {
-            var c = line[i];
+            var read = reader.Read();
+            if (read < 0)
+                break;
+
+            var c = (char)read;
 
             if (c == '"')
             {
-                if (inQuotes && i + 1 < line.Length && line[i + 1] == '"')
+                if (inQuotes && reader.Peek() == '"')
                 {
-                    buffer.Append('"');
-                    i++;
+                    reader.Read();
+                    field.Append('"');
                 }
                 else
                 {
@@ -456,48 +1153,94 @@ public class RegularAuditImportController : Controller
 
             if (c == ',' && !inQuotes)
             {
-                values.Add(buffer.ToString());
-                buffer.Clear();
+                record.Add(field.ToString());
+                field.Clear();
                 continue;
             }
 
-            buffer.Append(c);
+            if ((c == '\r' || c == '\n') && !inQuotes)
+            {
+                if (c == '\r' && reader.Peek() == '\n')
+                    reader.Read();
+
+                record.Add(field.ToString());
+                field.Clear();
+
+                if (record.Any(x => !string.IsNullOrWhiteSpace(x)))
+                    records.Add(record);
+
+                record = new List<string>();
+                continue;
+            }
+
+            field.Append(c);
         }
 
-        values.Add(buffer.ToString());
-        return values;
+        if (field.Length > 0 || record.Count > 0)
+        {
+            record.Add(field.ToString());
+            if (record.Any(x => !string.IsNullOrWhiteSpace(x)))
+                records.Add(record);
+        }
+
+        if (inQuotes)
+            throw new InvalidOperationException("CSV tidak valid: ada quoted field yang belum ditutup.");
+
+        return records;
     }
+
+    private static HashSet<string> BuildFixedHeaderSet()
+    {
+        var headers = new[]
+        {
+            "send_date","Audit Date","audit_date","audit_execution_time","audit_schedule_date","audit_created_date","approval_date",
+            "spbu_no","region","province_name","province","year","address","city_name","tipe_spbu","owner_type","rayon","sbm","sam",
+            "owner_name","manager_name","quarter","quater","mor","sales_area","phone_number_1","phone",
+            "audit_type","audit_level","audit_next","good_status","excellent_status","Total Score","total_score",
+            "SSS","EQnQ","RFS","VFC","EPO","WTMS","QQ","WMEF","FORMAT FISIK","format_fisik","CPO","kelas_spbu",
+            "penalty_good_alerts","penalty_excellent_alerts","report_prefix","report_no",
+            "auditor1_username","auditor1_name","auditor2_username","auditor2_name","verifier_username","approval_by","verifier_name",
+            "audit_mom_intro","audit_mom_final","berita_acara","km_range",
+            "master_questioner_checklist_id","master_questioner_version","questionnaire_version"
+        };
+
+        return headers.Select(NormalizeHeader).ToHashSet(StringComparer.OrdinalIgnoreCase);
+    }
+
+    // =============================================================
+    // BASIC PARSE / FORMAT HELPERS
+    // =============================================================
 
     private static decimal? ParseDecimal(string? value)
     {
         if (string.IsNullOrWhiteSpace(value))
             return null;
 
-        value = value.Trim();
+        var text = value.Trim().Replace(" ", string.Empty);
 
-        // Template uses decimal comma ("94,11"). Try Indonesian culture first.
-        if (decimal.TryParse(
-            value,
-            NumberStyles.Number,
-            CultureInfo.GetCultureInfo("id-ID"),
-            out var idValue))
+        // CSV historical can contain 94,11 or 94.11. Treat a single separator
+        // as the decimal separator, not as a thousands separator.
+        if (text.Contains(',') && !text.Contains('.'))
+            text = text.Replace(',', '.');
+        else if (text.Contains(',') && text.Contains('.'))
         {
-            return idValue;
+            // Whichever separator appears last is considered decimal separator.
+            if (text.LastIndexOf(',') > text.LastIndexOf('.'))
+                text = text.Replace(".", string.Empty).Replace(',', '.');
+            else
+                text = text.Replace(",", string.Empty);
         }
 
-        if (decimal.TryParse(
-            value,
-            NumberStyles.Number,
+        return decimal.TryParse(
+            text,
+            NumberStyles.AllowLeadingSign | NumberStyles.AllowDecimalPoint,
             CultureInfo.InvariantCulture,
-            out var invariantValue))
-        {
-            return invariantValue;
-        }
-
-        return null;
+            out var number)
+                ? number
+                : null;
     }
 
-    private static DateTime? ParseDate(string? value)
+    private static DateTime? ParseDateTime(string? value)
     {
         if (string.IsNullOrWhiteSpace(value))
             return null;
@@ -505,7 +1248,10 @@ public class RegularAuditImportController : Controller
         var formats = new[]
         {
             "yyyy-MM-dd",
+            "yyyy-MM-dd HH:mm:ss",
+            "yyyy-MM-ddTHH:mm:ss",
             "dd/MM/yyyy",
+            "dd/MM/yyyy HH:mm:ss",
             "dd-MM-yyyy",
             "yyyy/MM/dd"
         };
@@ -523,7 +1269,24 @@ public class RegularAuditImportController : Controller
             }
         }
 
+        if (DateTime.TryParse(value.Trim(), CultureInfo.InvariantCulture, DateTimeStyles.None, out var parsed))
+            return parsed;
+
         return null;
+    }
+
+    private static DateTime AsUnspecified(DateTime value) =>
+        DateTime.SpecifyKind(value, DateTimeKind.Unspecified);
+
+    private static DateTime ToUtc(DateTime value)
+    {
+        return value.Kind switch
+        {
+            DateTimeKind.Utc => value,
+            DateTimeKind.Local => value.ToUniversalTime(),
+            DateTimeKind.Unspecified => DateTime.SpecifyKind(value, DateTimeKind.Utc),
+            _ => DateTime.SpecifyKind(value, DateTimeKind.Utc)
+        };
     }
 
     private static int? ParseInt(string? value) =>
@@ -536,11 +1299,11 @@ public class RegularAuditImportController : Controller
         string.IsNullOrWhiteSpace(value) ? "-" : value.Trim();
 
     private static string NormalizeHeader(string? value) =>
-        (value ?? "")
+        (value ?? string.Empty)
             .Trim()
-            .Replace(" ", "")
-            .Replace("_", "")
-            .Replace("-", "")
+            .Replace(" ", string.Empty)
+            .Replace("_", string.Empty)
+            .Replace("-", string.Empty)
             .ToLowerInvariant();
 
     private static string NormalizeForNumber(string? value)
@@ -557,22 +1320,120 @@ public class RegularAuditImportController : Controller
         return $"IMP-{date:yyyyMMdd}-{NormalizeForNumber(row.SpbuNo)}";
     }
 
+    private static void SetIfNotBlank(string? value, Action<string> setter)
+    {
+        if (!string.IsNullOrWhiteSpace(value))
+            setter(value.Trim());
+    }
+
+    // =============================================================
+    // PRIVATE TYPES
+    // =============================================================
+
+    private sealed class AuditImportContext
+    {
+        public RegularAuditImportRow Row { get; set; } = null!;
+        public trx_audit Audit { get; set; } = null!;
+        public string SpbuNo { get; set; } = string.Empty;
+    }
+
+    private sealed class QuestionMap
+    {
+        public List<QuestionMapItem> Items { get; }
+        private readonly Dictionary<string, QuestionMapItem> _byId;
+        private readonly Dictionary<string, QuestionMapItem> _byNumber;
+
+        public QuestionMap(List<QuestionMapItem> items)
+        {
+            Items = items;
+            _byId = items
+                .GroupBy(x => x.Id, StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(x => x.Key, x => x.First(), StringComparer.OrdinalIgnoreCase);
+
+            _byNumber = items
+                .Where(x => !string.IsNullOrWhiteSpace(x.Number))
+                .GroupBy(x => x.Number!.Trim(), StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(x => x.Key, x => x.First(), StringComparer.OrdinalIgnoreCase);
+        }
+
+        public QuestionMapItem? Resolve(string? id, string? number)
+        {
+            if (!string.IsNullOrWhiteSpace(id) && _byId.TryGetValue(id.Trim(), out var byId))
+                return byId;
+
+            if (!string.IsNullOrWhiteSpace(number) && _byNumber.TryGetValue(number.Trim(), out var byNumber))
+                return byNumber;
+
+            return null;
+        }
+    }
+
+    private sealed class QuestionMapItem
+    {
+        public string Id { get; set; } = string.Empty;
+        public string MasterQuestionerId { get; set; } = string.Empty;
+        public string? Number { get; set; }
+        public bool IsRelaksasi { get; set; }
+    }
+
+    private sealed class ResolvedChecklistItem
+    {
+        public QuestionMapItem Question { get; set; } = null!;
+        public string? ScoreInput { get; set; }
+        public decimal? ScoreAf { get; set; }
+        public decimal? ScoreX { get; set; }
+        public string? Comment { get; set; }
+    }
+
+    private sealed class QqCsvPayloadItem
+    {
+        public string? NozzleNumber { get; set; }
+        public string? DuMake { get; set; }
+        public string? DuSerialNo { get; set; }
+        public string? Product { get; set; }
+        public string? Mode { get; set; }
+        public decimal? QuantityVariationWithMeasure { get; set; }
+        public decimal? QuantityVariationInPercentage { get; set; }
+        public decimal? ObservedDensity { get; set; }
+        public decimal? ObservedTemp { get; set; }
+        public decimal? ObservedDensity15Degree { get; set; }
+        public decimal? ReferenceDensity15Degree { get; set; }
+        public string? TankNumber { get; set; }
+        public decimal? DensityVariation { get; set; }
+    }
+
     private sealed class RegularAuditImportRow
     {
+        public Dictionary<string, string> RawValues { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+        public HashSet<string> FixedNormalizedHeaders { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+
         public DateTime? SendDate { get; set; }
         public DateTime? AuditDate { get; set; }
+        public DateTime? AuditScheduleDate { get; set; }
+        public DateTime? AuditCreatedDate { get; set; }
+        public DateTime? ApprovalDate { get; set; }
 
-        public string SpbuNo { get; set; } = "";
-        public string Region { get; set; } = "";
+        public string SpbuNo { get; set; } = string.Empty;
+        public string Region { get; set; } = string.Empty;
+        public string ProvinceName { get; set; } = string.Empty;
         public int? Year { get; set; }
-        public string Address { get; set; } = "";
-        public string CityName { get; set; } = "";
-        public string TipeSpbu { get; set; } = "";
-        public string Rayon { get; set; } = "";
-        public string AuditLevel { get; set; } = "";
-        public string AuditNext { get; set; } = "";
-        public string GoodStatus { get; set; } = "";
-        public string ExcellentStatus { get; set; } = "";
+        public string Address { get; set; } = string.Empty;
+        public string CityName { get; set; } = string.Empty;
+        public string TipeSpbu { get; set; } = string.Empty;
+        public string Rayon { get; set; } = string.Empty;
+        public string Sam { get; set; } = string.Empty;
+        public string OwnerName { get; set; } = string.Empty;
+        public string ManagerName { get; set; } = string.Empty;
+        public int? Quarter { get; set; }
+        public string Mor { get; set; } = string.Empty;
+        public string SalesArea { get; set; } = string.Empty;
+        public string PhoneNumber1 { get; set; } = string.Empty;
+
+        public string AuditType { get; set; } = string.Empty;
+        public string AuditLevel { get; set; } = string.Empty;
+        public string AuditNext { get; set; } = string.Empty;
+        public string GoodStatus { get; set; } = string.Empty;
+        public string ExcellentStatus { get; set; } = string.Empty;
 
         public decimal? TotalScore { get; set; }
         public decimal? Sss { get; set; }
@@ -580,15 +1441,55 @@ public class RegularAuditImportController : Controller
         public decimal? Rfs { get; set; }
         public decimal? Vfc { get; set; }
         public decimal? Epo { get; set; }
-
         public decimal? Wtms { get; set; }
         public decimal? Qq { get; set; }
         public decimal? Wmef { get; set; }
         public decimal? FormatFisik { get; set; }
         public decimal? Cpo { get; set; }
+        public decimal? KmRange { get; set; }
 
-        public string KelasSpbu { get; set; } = "";
-        public string PenaltyGoodAlerts { get; set; } = "";
-        public string PenaltyExcellentAlerts { get; set; } = "";
+        public string KelasSpbu { get; set; } = string.Empty;
+        public string PenaltyGoodAlerts { get; set; } = string.Empty;
+        public string PenaltyExcellentAlerts { get; set; } = string.Empty;
+
+        public string ReportPrefix { get; set; } = string.Empty;
+        public string ReportNo { get; set; } = string.Empty;
+        public string Auditor1Username { get; set; } = string.Empty;
+        public string Auditor1Name { get; set; } = string.Empty;
+        public string Auditor2Username { get; set; } = string.Empty;
+        public string Auditor2Name { get; set; } = string.Empty;
+        public string VerifierUsername { get; set; } = string.Empty;
+        public string VerifierName { get; set; } = string.Empty;
+        public string AuditMomIntro { get; set; } = string.Empty;
+        public string AuditMomFinal { get; set; } = string.Empty;
+
+        public string MasterQuestionerChecklistId { get; set; } = string.Empty;
+        public int? MasterQuestionerVersion { get; set; }
+        public string? ResolvedMasterQuestionerChecklistId { get; set; }
+
+        public bool HasDynamicChecklistColumns { get; set; }
+        public bool HasQqWideColumns { get; set; }
+        public bool HasAuditor1Column { get; set; }
+        public bool HasAuditor2Column { get; set; }
+        public bool HasVerifierColumn { get; set; }
+        public bool HasAuditMomIntroColumn { get; set; }
+        public bool HasAuditMomFinalColumn { get; set; }
+
+        public bool HasChecklistPayload => HasDynamicChecklistColumns;
+
+        public string GetRaw(string header)
+        {
+            if (RawValues.TryGetValue(header, out var exact))
+                return exact?.Trim() ?? string.Empty;
+
+            var normalized = NormalizeHeader(header);
+            foreach (var pair in RawValues)
+            {
+                if (NormalizeHeader(pair.Key) == normalized)
+                    return pair.Value?.Trim() ?? string.Empty;
+            }
+
+            return string.Empty;
+        }
     }
 }
