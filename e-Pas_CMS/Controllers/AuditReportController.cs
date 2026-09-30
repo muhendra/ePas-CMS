@@ -51,7 +51,7 @@ namespace e_Pas_CMS.Controllers
             _env = env;
         }
 
-        public async Task<IActionResult> Index(int pageNumber = 1, int pageSize = 10, string searchTerm = "", int? filterMonth = null, int? filterYear = null)
+        public async Task<IActionResult> Index(int pageNumber = 1, int pageSize = 10, string searchTerm = "", int? filterMonth = null, int? filterYear = null, string importSource = "")
         {
             var currentUser = User.Identity?.Name;
 
@@ -75,6 +75,24 @@ namespace e_Pas_CMS.Controllers
                 .Include(a => a.spbu)
                 .Include(a => a.app_user)
                 .Where(a => a.status == "VERIFIED" && a.audit_type != "Basic Operational");
+
+            // Filter sumber audit:
+            // imported     = hasil CSV upload
+            // non-imported = audit yang dibuat melalui aplikasi
+            importSource = (importSource ?? "").Trim().ToLowerInvariant();
+
+            if (importSource == "imported")
+            {
+                query = query.Where(a => a.is_imported);
+            }
+            else if (importSource == "non-imported")
+            {
+                query = query.Where(a => !a.is_imported);
+            }
+            else
+            {
+                importSource = "";
+            }
 
             if (userRegion.Any() || userSbm.Any())
             {
@@ -106,6 +124,7 @@ namespace e_Pas_CMS.Controllers
 
             ViewBag.FilterMonth = filterMonth;
             ViewBag.FilterYear = filterYear;
+            ViewBag.ImportSource = importSource;
 
             query = query.OrderByDescending(a => a.audit_execution_time)
                          .ThenByDescending(a => a.updated_date);
