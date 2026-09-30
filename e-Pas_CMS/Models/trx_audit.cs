@@ -25,6 +25,8 @@ public partial class trx_audit
 
     public string audit_type { get; set; } = null!;
 
+    public bool is_imported { get; set; }
+
     public decimal? score { get; set; } = 0;
 
     public DateOnly? audit_schedule_date { get; set; }

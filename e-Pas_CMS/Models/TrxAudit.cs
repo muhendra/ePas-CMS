@@ -26,7 +26,7 @@ public partial class TrxAudit
     public DateOnly? AuditScheduleDate { get; set; }
 
     public DateTime? AuditExecutionTime { get; set; }
-
+    public bool is_imported { get; set; }
     public int? AuditMediaUpload { get; set; }
 
     public int? AuditMediaTotal { get; set; }

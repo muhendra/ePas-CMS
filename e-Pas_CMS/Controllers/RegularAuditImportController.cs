@@ -26,18 +26,32 @@ public class RegularAuditImportController : Controller
 
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> Upload(IFormFile file)
+    public Task<IActionResult> Upload(IFormFile file) =>
+        UploadInternal(file, "Regular Audit", "AuditReport");
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public Task<IActionResult> UploadBasicOperational(IFormFile file) =>
+        UploadInternal(file, "Basic Operational", "BasicOperationalReport");
+
+    private async Task<IActionResult> UploadInternal(
+        IFormFile file,
+        string defaultAuditType,
+        string redirectController)
     {
+        var importLabel = defaultAuditType;
+        var isBasicOperational =
+            defaultAuditType.Equals("Basic Operational", StringComparison.OrdinalIgnoreCase);
         if (file == null || file.Length == 0)
         {
             TempData["Error"] = "File CSV belum dipilih.";
-            return RedirectToAction("Index", "AuditReport");
+            return RedirectToAction("Index", redirectController);
         }
 
         if (!string.Equals(Path.GetExtension(file.FileName), ".csv", StringComparison.OrdinalIgnoreCase))
         {
-            TempData["Error"] = "Template Regular Audit harus berupa file CSV.";
-            return RedirectToAction("Index", "AuditReport");
+            TempData["Error"] = $"Template {importLabel} harus berupa file CSV.";
+            return RedirectToAction("Index", redirectController);
         }
 
         var currentUser = User.Identity?.Name ?? "SYSTEM";
@@ -57,6 +71,16 @@ public class RegularAuditImportController : Controller
 
             if (rows.Count == 0)
                 throw new InvalidOperationException("CSV tidak memiliki data.");
+
+            foreach (var row in rows)
+            {
+                if (string.IsNullOrWhiteSpace(row.AuditType))
+                    row.AuditType = defaultAuditType;
+
+                // Basic Operational historical CSV uses "result" instead of good_status.
+                if (isBasicOperational && string.IsNullOrWhiteSpace(row.GoodStatus))
+                    row.GoodStatus = row.Result;
+            }
 
             var validRows = rows
                 .Where(x => !string.IsNullOrWhiteSpace(x.SpbuNo) && x.AuditDate.HasValue)
@@ -146,16 +170,22 @@ public class RegularAuditImportController : Controller
                 .Distinct()
                 .ToList();
 
-            // Match both historical imported "Regular Audit" and native non-BO regular records.
-            var existingAudits = existingSpbuIds.Count == 0
-                ? new List<trx_audit>()
-                : await _context.trx_audits
+            var existingAudits = new List<trx_audit>();
+
+            if (existingSpbuIds.Count > 0)
+            {
+                var auditQuery = _context.trx_audits
                     .Where(x =>
                         existingSpbuIds.Contains(x.spbu_id) &&
-                        x.audit_type != "Basic Operational" &&
                         x.audit_execution_time >= minAuditDate &&
-                        x.audit_execution_time < maxAuditDateExclusive)
-                    .ToListAsync();
+                        x.audit_execution_time < maxAuditDateExclusive);
+
+                auditQuery = isBasicOperational
+                    ? auditQuery.Where(x => x.audit_type == "Basic Operational")
+                    : auditQuery.Where(x => x.audit_type != "Basic Operational");
+
+                existingAudits = await auditQuery.ToListAsync();
+            }
 
             static string AuditKey(string spbuId, DateTime date, string level) =>
                 $"{spbuId}|{date:yyyyMMdd}|{level.Trim().ToUpperInvariant()}";
@@ -297,7 +327,7 @@ public class RegularAuditImportController : Controller
                             spbu_id = spbu.id,
                             audit_level = normalizedAuditLevel,
                             audit_type = string.IsNullOrWhiteSpace(row.AuditType)
-                                ? "Regular Audit"
+                                ? defaultAuditType
                                 : row.AuditType.Trim(),
                             status = "VERIFIED",
                             form_type_auditor1 = "FULL",
@@ -337,9 +367,10 @@ public class RegularAuditImportController : Controller
                         audit.master_questioner_checklist_id = row.ResolvedMasterQuestionerChecklistId;
                     audit.audit_level = normalizedAuditLevel;
                     audit.audit_type = string.IsNullOrWhiteSpace(row.AuditType)
-                        ? "Regular Audit"
+                        ? defaultAuditType
                         : row.AuditType.Trim();
                     audit.score = row.TotalScore;
+                    audit.is_imported = true;
                     audit.audit_schedule_date = row.AuditScheduleDate.HasValue
                         ? DateOnly.FromDateTime(row.AuditScheduleDate.Value)
                         : DateOnly.FromDateTime(auditDate);
@@ -561,9 +592,9 @@ public class RegularAuditImportController : Controller
                 var fullRows = auditRows.Count(x => x.Row.HasChecklistPayload || x.Row.HasQqWideColumns);
 
                 TempData["Success"] =
-                    $"Upload Regular Audit berhasil. New={created}, Updated={updated}, FullDetail={fullRows}, Skipped={skipped}.";
+                    $"Upload {importLabel} berhasil. New={created}, Updated={updated}, FullDetail={fullRows}, Skipped={skipped}.";
 
-                return RedirectToAction("Index", "AuditReport");
+                return RedirectToAction("Index", redirectController);
             }
             catch
             {
@@ -573,9 +604,9 @@ public class RegularAuditImportController : Controller
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Regular Audit CSV import failed for {FileName}", file.FileName);
-            TempData["Error"] = $"Upload Regular Audit gagal: {GetImportError(ex)}";
-            return RedirectToAction("Index", "AuditReport");
+            _logger.LogError(ex, "{AuditType} CSV import failed for {FileName}", importLabel, file.FileName);
+            TempData["Error"] = $"Upload {importLabel} gagal: {GetImportError(ex)}";
+            return RedirectToAction("Index", redirectController);
         }
     }
 
@@ -1070,7 +1101,8 @@ public class RegularAuditImportController : Controller
                 AuditType = Get("audit_type"),
                 AuditLevel = Get("audit_level"),
                 AuditNext = Get("audit_next"),
-                GoodStatus = Get("good_status"),
+                GoodStatus = Get("good_status", "result"),
+                Result = Get("result"),
                 ExcellentStatus = Get("excellent_status"),
                 TotalScore = ParseDecimal(Get("Total Score", "total_score")),
                 Sss = ParseDecimal(Get("SSS")),
@@ -1084,7 +1116,7 @@ public class RegularAuditImportController : Controller
                 FormatFisik = ParseDecimal(Get("FORMAT FISIK", "format_fisik")),
                 Cpo = ParseDecimal(Get("CPO")),
                 KelasSpbu = Get("kelas_spbu"),
-                PenaltyGoodAlerts = Get("penalty_good_alerts"),
+                PenaltyGoodAlerts = Get("penalty_good_alerts", "penalty_alerts"),
                 PenaltyExcellentAlerts = Get("penalty_excellent_alerts"),
 
                 ReportPrefix = Get("report_prefix"),
@@ -1196,9 +1228,9 @@ public class RegularAuditImportController : Controller
             "send_date","Audit Date","audit_date","audit_execution_time","audit_schedule_date","audit_created_date","approval_date",
             "spbu_no","region","province_name","province","year","address","city_name","tipe_spbu","owner_type","rayon","sbm","sam",
             "owner_name","manager_name","quarter","quater","mor","sales_area","phone_number_1","phone",
-            "audit_type","audit_level","audit_next","good_status","excellent_status","Total Score","total_score",
+            "audit_type","audit_level","audit_next","good_status","result","excellent_status","Total Score","total_score",
             "SSS","EQnQ","RFS","VFC","EPO","WTMS","QQ","WMEF","FORMAT FISIK","format_fisik","CPO","kelas_spbu",
-            "penalty_good_alerts","penalty_excellent_alerts","report_prefix","report_no",
+            "penalty_good_alerts","penalty_alerts","penalty_excellent_alerts","report_prefix","report_no",
             "auditor1_username","auditor1_name","auditor2_username","auditor2_name","verifier_username","approval_by","verifier_name",
             "audit_mom_intro","audit_mom_final","berita_acara","km_range",
             "master_questioner_checklist_id","master_questioner_version","questionnaire_version"
@@ -1433,6 +1465,7 @@ public class RegularAuditImportController : Controller
         public string AuditLevel { get; set; } = string.Empty;
         public string AuditNext { get; set; } = string.Empty;
         public string GoodStatus { get; set; } = string.Empty;
+        public string Result { get; set; } = string.Empty;
         public string ExcellentStatus { get; set; } = string.Empty;
 
         public decimal? TotalScore { get; set; }

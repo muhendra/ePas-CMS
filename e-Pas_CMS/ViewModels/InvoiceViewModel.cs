@@ -124,6 +124,21 @@ namespace e_Pas_CMS.ViewModels
 
         public string? RejectionReason { get; set; }
 
+        // =========================
+        // MULTI APPROVAL
+        // =========================
+        public List<InvoiceApprovalStepVM> ApprovalSteps { get; set; } = new();
+
+        public List<InvoiceApprovalUserOptionVM> ApprovalUserOptions { get; set; } = new();
+
+        public bool HasApprovalFlow => ApprovalSteps.Count > 0;
+
+        public bool CanCurrentUserApprove { get; set; }
+
+        public int? CurrentApprovalLevel { get; set; }
+
+        public string? CurrentApproverName { get; set; }
+
         // Backward compatibility kalau view lama masih pakai RejectReason
         public string? RejectReason
         {
@@ -178,6 +193,37 @@ namespace e_Pas_CMS.ViewModels
 
         public decimal DistanceKm { get; set; }
         public bool IsDeleted { get; set; }
+    }
+
+    public class InvoiceApprovalUserOptionVM
+    {
+        public string Id { get; set; } = null!;
+        public string Username { get; set; } = null!;
+        public string Name { get; set; } = null!;
+
+        public string DisplayName =>
+            string.IsNullOrWhiteSpace(Name)
+                ? Username
+                : $"{Name} ({Username})";
+    }
+
+    public class InvoiceApprovalStepVM
+    {
+        public string Id { get; set; } = null!;
+        public int ApprovalLevel { get; set; }
+        public string ApproverUserId { get; set; } = null!;
+        public string ApproverUsername { get; set; } = "-";
+        public string ApproverName { get; set; } = "-";
+        public string Status { get; set; } = "PENDING";
+        public string? ActionBy { get; set; }
+        public DateTime? ActionDate { get; set; }
+        public string? RejectionReason { get; set; }
+    }
+
+    public class InvoiceStartProcessVM
+    {
+        public string Id { get; set; } = null!;
+        public List<string> ApproverUserIds { get; set; } = new();
     }
 
     public class InvoiceApprovalPostVM

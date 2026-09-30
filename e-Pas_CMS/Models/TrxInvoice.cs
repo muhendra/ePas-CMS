@@ -38,4 +38,6 @@ public partial class TrxInvoice
     public virtual ICollection<trx_claim> TrxClaims { get; set; } = new List<trx_claim>();
 
     public virtual ICollection<TrxInvoiceApproval> TrxInvoiceApprovals { get; set; } = new List<TrxInvoiceApproval>();
+
+    public virtual ICollection<TrxInvoiceApprovalFlow> ApprovalFlows { get; set; } = new List<TrxInvoiceApprovalFlow>();
 }

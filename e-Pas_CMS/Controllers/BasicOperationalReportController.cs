@@ -1302,6 +1302,76 @@ namespace e_Pas_CMS.Controllers
 
             var model = MapToViewModel(basic);
 
+            var importedChecklistCount = await conn.ExecuteScalarAsync<int>(@"
+                SELECT COUNT(*)::int
+                FROM trx_audit_checklist
+                WHERE trx_audit_id = @id;", new { id });
+
+            var imported = await conn.QueryFirstOrDefaultAsync<BasicOperationalImportedSummary>(@"
+                SELECT
+                    s.send_date AS SendDate,
+                    s.audit_date AS AuditDate,
+                    COALESCE(s.total_score, ta.score) AS TotalScore,
+                    s.sss AS SSS,
+                    s.eqnq AS EQnQ,
+                    s.rfs AS RFS,
+                    s.vfc AS VFC,
+                    s.epo AS EPO,
+                    s.kelas_spbu AS KelasSpbu,
+                    s.audit_next AS AuditNext,
+                    s.penalty_good_alerts AS PenaltyGoodAlerts,
+                    s.penalty_excellent_alerts AS PenaltyExcellentAlerts,
+                    ta.good_status AS GoodStatus,
+                    ta.excellent_status AS ExcellentStatus
+                FROM trx_audit_import_summary s
+                INNER JOIN trx_audit ta ON ta.id = s.trx_audit_id
+                WHERE s.trx_audit_id = @id
+                LIMIT 1;", new { id });
+
+            // Summary-only Basic Operational import: keep imported values and do
+            // not recalculate from an intentionally empty checklist.
+            if (imported != null && importedChecklistCount == 0)
+            {
+                var importedScore = imported.TotalScore ?? 0m;
+
+                model.TotalScore = importedScore;
+                model.Score = importedScore;
+                model.FinalScore = importedScore;
+                model.SSS = imported.SSS;
+                model.EQnQ = imported.EQnQ;
+                model.RFS = imported.RFS;
+                model.VFC = imported.VFC;
+                model.EPO = imported.EPO;
+                model.GoodStatus = string.IsNullOrWhiteSpace(imported.GoodStatus)
+                    ? "-"
+                    : imported.GoodStatus;
+                model.ExcellentStatus = string.IsNullOrWhiteSpace(imported.ExcellentStatus)
+                    ? "-"
+                    : imported.ExcellentStatus;
+                model.AuditNext = imported.AuditNext;
+                model.ClassSPBU = imported.KelasSpbu;
+                model.PenaltyAlerts = imported.PenaltyExcellentAlerts ?? imported.PenaltyGoodAlerts;
+                model.PenaltyAlertsGood = imported.PenaltyGoodAlerts;
+
+                if (imported.AuditDate.HasValue)
+                    model.TanggalAudit = imported.AuditDate;
+
+                if (imported.SendDate.HasValue)
+                    model.TanggalSubmit = imported.SendDate;
+
+                model.MediaNotes = new List<MediaItem>();
+                model.FinalDocuments = new List<MediaItem>();
+                model.QqChecks = new List<AuditQqCheckItem>();
+                model.Elements = new List<AuditChecklistNode>();
+                model.FotoTemuan = new List<FotoTemuan>();
+                model.LevelSummaries = new List<AuditLevelSummary>();
+                model.LevelSummaryGroups = new List<AuditLevelSummaryGroup>();
+
+                ViewBag.AuditId = id;
+                ViewBag.IsImportedAudit = true;
+                return View(model);
+            }
+
             var penaltySql = @"SELECT STRING_AGG(mqd.penalty_alert, ', ') AS penalty_alerts
             FROM trx_audit_checklist tac
             INNER JOIN master_questioner_detail mqd ON mqd.id = tac.master_questioner_detail_id
@@ -1789,6 +1859,64 @@ WHERE
                 throw new Exception("Data tidak ditemukan.");
 
             var model = MapToViewModel(auditHeader);
+
+            var importedChecklistCount = await conn.ExecuteScalarAsync<int>(@"
+                SELECT COUNT(*)::int
+                FROM trx_audit_checklist
+                WHERE trx_audit_id = @id;", new { id = id.ToString() });
+
+            var imported = await conn.QueryFirstOrDefaultAsync<BasicOperationalImportedSummary>(@"
+                SELECT
+                    s.send_date AS SendDate,
+                    s.audit_date AS AuditDate,
+                    COALESCE(s.total_score, ta.score) AS TotalScore,
+                    s.sss AS SSS,
+                    s.eqnq AS EQnQ,
+                    s.rfs AS RFS,
+                    s.vfc AS VFC,
+                    s.epo AS EPO,
+                    s.kelas_spbu AS KelasSpbu,
+                    s.audit_next AS AuditNext,
+                    s.penalty_good_alerts AS PenaltyGoodAlerts,
+                    s.penalty_excellent_alerts AS PenaltyExcellentAlerts,
+                    ta.good_status AS GoodStatus,
+                    ta.excellent_status AS ExcellentStatus
+                FROM trx_audit_import_summary s
+                INNER JOIN trx_audit ta ON ta.id = s.trx_audit_id
+                WHERE s.trx_audit_id = @id
+                LIMIT 1;", new { id = id.ToString() });
+
+            if (imported != null && importedChecklistCount == 0)
+            {
+                var importedScore = imported.TotalScore ?? 0m;
+
+                model.TotalScore = importedScore;
+                model.Score = importedScore;
+                model.FinalScore = importedScore;
+                model.SSS = imported.SSS;
+                model.EQnQ = imported.EQnQ;
+                model.RFS = imported.RFS;
+                model.VFC = imported.VFC;
+                model.EPO = imported.EPO;
+                model.GoodStatus = string.IsNullOrWhiteSpace(imported.GoodStatus) ? "-" : imported.GoodStatus;
+                model.ExcellentStatus = string.IsNullOrWhiteSpace(imported.ExcellentStatus) ? "-" : imported.ExcellentStatus;
+                model.AuditNext = imported.AuditNext;
+                model.ClassSPBU = imported.KelasSpbu;
+                model.PenaltyAlerts = imported.PenaltyExcellentAlerts ?? imported.PenaltyGoodAlerts;
+                model.PenaltyAlertsGood = imported.PenaltyGoodAlerts;
+                model.TanggalAudit = imported.AuditDate ?? model.TanggalAudit;
+                model.TanggalSubmit = imported.SendDate ?? model.TanggalSubmit;
+                model.MediaNotes = new List<MediaItem>();
+                model.FinalDocuments = new List<MediaItem>();
+                model.QqChecks = new List<AuditQqCheckItem>();
+                model.Elements = new List<AuditChecklistNode>();
+                model.FotoTemuan = new List<FotoTemuan>();
+                model.LevelSummaries = new List<AuditLevelSummary>();
+                model.LevelSummaryGroups = new List<AuditLevelSummaryGroup>();
+
+                return model;
+            }
+
             model.FinalDocuments = await GetMediaNotesAsync(conn, id.ToString(), "FINAL");
             model.QqChecks = await GetQqCheckDataAsync(conn, id.ToString());
 
@@ -1971,6 +2099,24 @@ WHERE
         }
 
 
+        private sealed class BasicOperationalImportedSummary
+        {
+            public DateTime? SendDate { get; set; }
+            public DateTime? AuditDate { get; set; }
+            public decimal? TotalScore { get; set; }
+            public decimal? SSS { get; set; }
+            public decimal? EQnQ { get; set; }
+            public decimal? RFS { get; set; }
+            public decimal? VFC { get; set; }
+            public decimal? EPO { get; set; }
+            public string? KelasSpbu { get; set; }
+            public string? AuditNext { get; set; }
+            public string? PenaltyGoodAlerts { get; set; }
+            public string? PenaltyExcellentAlerts { get; set; }
+            public string? GoodStatus { get; set; }
+            public string? ExcellentStatus { get; set; }
+        }
+
         private async Task<AuditHeaderDto> GetAuditHeaderAsync(IDbConnection conn, string id)
         {
             string sql = @"
@@ -2038,7 +2184,7 @@ WHERE
         ta.updated_date as UpdateDate,
         ta.audit_level as AuditCurrent,
         s.audit_next as AuditNext,
-        au.name as NamaAuditor,
+        COALESCE(au.name, '-') as NamaAuditor,
     COALESCE(
         (SELECT name 
          FROM app_user 
@@ -2048,7 +2194,7 @@ WHERE
     ) AS NamaAuditor2
     FROM trx_audit ta
     JOIN spbu s ON ta.spbu_id = s.id
-    join app_user au on au.id = ta.app_user_id
+    LEFT JOIN app_user au on au.id = ta.app_user_id
     WHERE ta.id = @id";
 
             var a = await conn.QueryFirstOrDefaultAsync<AuditHeaderDto>(sql, new { id });

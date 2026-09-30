@@ -61,6 +61,7 @@ public partial class EpasDbContext : DbContext
 
     public DbSet<TrxInvoiceApproval> TrxInvoiceApprovals { get; set; }
     public DbSet<TrxInvoiceApprovalDetail> TrxInvoiceApprovalDetails { get; set; }
+    public DbSet<TrxInvoiceApprovalFlow> TrxInvoiceApprovalFlows { get; set; }
 
     public DbSet<trx_claim> TrxClaims { get; set; }
     public DbSet<trx_claim_detail> TrxClaimDetails { get; set; }
@@ -448,6 +449,9 @@ public partial class EpasDbContext : DbContext
 
             entity.Property(e => e.audit_type)
                 .HasMaxLength(100);
+
+            entity.Property(e => e.is_imported)
+                .HasDefaultValue(false);
 
             entity.Property(e => e.created_by)
                 .HasMaxLength(50);
@@ -1186,6 +1190,88 @@ public partial class EpasDbContext : DbContext
                 .HasForeignKey(d => d.TrxInvoiceId)
                 .OnDelete(DeleteBehavior.Cascade)
                 .HasConstraintName("trx_invoice_detail_trx_invoice_id_fkey");
+        });
+
+
+        modelBuilder.Entity<TrxInvoiceApprovalFlow>(entity =>
+        {
+            entity.ToTable("trx_invoice_approval_flow");
+
+            entity.HasKey(e => e.Id).HasName("trx_invoice_approval_flow_pkey");
+
+            entity.HasIndex(e => new { e.TrxInvoiceId, e.ApprovalLevel }, "ux_trx_invoice_approval_flow_level")
+                .IsUnique();
+
+            entity.HasIndex(e => e.ApproverUserId, "idx_trx_invoice_approval_flow_approver");
+
+            entity.Property(e => e.Id)
+                .HasColumnName("id")
+                .HasMaxLength(50)
+                .HasDefaultValueSql("uuid_generate_v4()");
+
+            entity.Property(e => e.TrxInvoiceId)
+                .HasColumnName("trx_invoice_id")
+                .HasMaxLength(50)
+                .IsRequired();
+
+            entity.Property(e => e.ApprovalLevel)
+                .HasColumnName("approval_level")
+                .IsRequired();
+
+            entity.Property(e => e.ApproverUserId)
+                .HasColumnName("approver_user_id")
+                .HasMaxLength(50)
+                .IsRequired();
+
+            entity.Property(e => e.Status)
+                .HasColumnName("status")
+                .HasMaxLength(30)
+                .HasDefaultValue("PENDING")
+                .IsRequired();
+
+            entity.Property(e => e.ActionBy)
+                .HasColumnName("action_by")
+                .HasMaxLength(50);
+
+            entity.Property(e => e.ActionDate)
+                .HasColumnName("action_date")
+                .HasColumnType("timestamp without time zone");
+
+            entity.Property(e => e.RejectionReason)
+                .HasColumnName("rejection_reason")
+                .HasColumnType("text");
+
+            entity.Property(e => e.CreatedBy)
+                .HasColumnName("created_by")
+                .HasMaxLength(50)
+                .IsRequired();
+
+            entity.Property(e => e.CreatedDate)
+                .HasColumnName("created_date")
+                .HasColumnType("timestamp without time zone")
+                .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+            entity.Property(e => e.UpdatedBy)
+                .HasColumnName("updated_by")
+                .HasMaxLength(50)
+                .IsRequired();
+
+            entity.Property(e => e.UpdatedDate)
+                .HasColumnName("updated_date")
+                .HasColumnType("timestamp without time zone")
+                .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+            entity.HasOne<TrxInvoice>()
+                .WithMany(x => x.ApprovalFlows)
+                .HasForeignKey(e => e.TrxInvoiceId)
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("trx_invoice_approval_flow_invoice_fkey");
+
+            entity.HasOne<app_user>()
+                .WithMany()
+                .HasForeignKey(e => e.ApproverUserId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("trx_invoice_approval_flow_approver_fkey");
         });
 
         modelBuilder.Entity<TrxInvoiceApproval>(entity =>

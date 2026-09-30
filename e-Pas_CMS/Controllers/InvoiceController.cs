@@ -28,6 +28,11 @@ public class InvoiceController : Controller
     private const string ClaimRejected = "REJECTED";
     private const string InvoiceDetailInProgress = "IN_PROGRESS";
 
+    private const string ApprovalFlowPending = "PENDING";
+    private const string ApprovalFlowApproved = "APPROVED";
+    private const string ApprovalFlowRejected = "REJECTED";
+    private const string ApprovalFlowCancelled = "CANCELLED";
+
     public InvoiceController(EpasDbContext context)
     {
         _context = context;
@@ -344,14 +349,14 @@ public class InvoiceController : Controller
 
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> Process(string id)
+    public async Task<IActionResult> Process(string id, InvoiceStartProcessVM model)
     {
-        return await StartProcess(id);
+        return await StartProcess(id, model);
     }
 
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> StartProcess(string id)
+    public async Task<IActionResult> StartProcess(string id, InvoiceStartProcessVM model)
     {
         if (string.IsNullOrWhiteSpace(id))
             return NotFound();
@@ -381,10 +386,6 @@ public class InvoiceController : Controller
             return RedirectToAction(nameof(Detail), new { id });
         }
 
-        // Flow awal yang boleh klik tombol Proses:
-        // trx_invoice        = IN_PROGRESS
-        // trx_invoice_detail = IN_PROGRESS
-        // trx_claim          = UNDER_REVIEW
         if (invoice.Status != InvoiceInProgress)
         {
             TempData["Error"] = "Invoice belum masuk tahap in progress.";
@@ -403,13 +404,62 @@ public class InvoiceController : Controller
             return RedirectToAction(nameof(Detail), new { id });
         }
 
+        var approverIds = (model?.ApproverUserIds ?? new List<string>())
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .Select(x => x.Trim())
+            .ToList();
+
+        if (approverIds.Count == 0)
+        {
+            TempData["Error"] = "Minimal satu approver wajib dipilih.";
+            return RedirectToAction(nameof(Detail), new { id });
+        }
+
+        if (approverIds.Count != approverIds.Distinct(StringComparer.OrdinalIgnoreCase).Count())
+        {
+            TempData["Error"] = "Approver yang sama tidak boleh dipilih lebih dari satu level.";
+            return RedirectToAction(nameof(Detail), new { id });
+        }
+
+        var approvers = await _context.app_users
+            .AsNoTracking()
+            .Where(x => approverIds.Contains(x.id) && x.status == "ACTIVE")
+            .Select(x => new { x.id, x.username, x.name })
+            .ToListAsync();
+
+        if (approvers.Count != approverIds.Count)
+        {
+            TempData["Error"] = "Ada approver yang tidak ditemukan atau sudah tidak aktif.";
+            return RedirectToAction(nameof(Detail), new { id });
+        }
+
         var now = DateTime.Now;
         var currentUser = GetCurrentUser();
 
-        // Setelah klik Proses:
-        // trx_invoice        = IN_PROGRESS
-        // trx_invoice_detail = IN_PROGRESS
-        // trx_claim          = PENDING_APPROVAL
+        // Clean stale setup only while claim is still UNDER_REVIEW.
+        var oldFlows = await _context.TrxInvoiceApprovalFlows
+            .Where(x => x.TrxInvoiceId == id)
+            .ToListAsync();
+
+        if (oldFlows.Any())
+            _context.TrxInvoiceApprovalFlows.RemoveRange(oldFlows);
+
+        for (var i = 0; i < approverIds.Count; i++)
+        {
+            _context.TrxInvoiceApprovalFlows.Add(new TrxInvoiceApprovalFlow
+            {
+                Id = Guid.NewGuid().ToString(),
+                TrxInvoiceId = id,
+                ApprovalLevel = i + 1,
+                ApproverUserId = approverIds[i],
+                Status = ApprovalFlowPending,
+                CreatedBy = currentUser,
+                CreatedDate = now,
+                UpdatedBy = currentUser,
+                UpdatedDate = now
+            });
+        }
+
         invoice.Status = InvoiceInProgress;
         invoice.UpdatedBy = currentUser;
         invoice.UpdatedDate = now;
@@ -426,10 +476,10 @@ public class InvoiceController : Controller
         }
 
         NormalizeDateTimesForPostgres();
-
         await _context.SaveChangesAsync();
 
-        TempData["Success"] = "Invoice berhasil diproses dan masuk ke pending approval finance.";
+        TempData["Success"] =
+            $"Invoice berhasil diproses dengan {approverIds.Count} level approval.";
 
         return RedirectToAction(nameof(Detail), new { id });
     }
@@ -438,10 +488,10 @@ public class InvoiceController : Controller
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Approve(string id, InvoiceApprovalPostVM model)
     {
+        var invoiceId = ResolveInvoiceId(id, model);
+
         try
         {
-            var invoiceId = ResolveInvoiceId(id, model);
-
             if (string.IsNullOrWhiteSpace(invoiceId))
                 return NotFound();
 
@@ -470,22 +520,39 @@ public class InvoiceController : Controller
                 return RedirectToAction(nameof(Detail), new { id = invoiceId });
             }
 
-            if (invoice.Status != InvoiceInProgress)
+            if (invoice.Status != InvoiceInProgress ||
+                invoiceDetails.Any(x => x.Status != InvoiceDetailInProgress) ||
+                claim.status != ClaimPendingApproval)
             {
-                TempData["Error"] = "Invoice belum masuk tahap in progress.";
+                TempData["Error"] = "Invoice belum berada pada tahap pending approval.";
                 return RedirectToAction(nameof(Detail), new { id = invoiceId });
             }
 
-            if (invoiceDetails.Any(x => x.Status != InvoiceDetailInProgress))
-            {
-                TempData["Error"] = "Detail invoice belum masuk tahap in progress.";
-                return RedirectToAction(nameof(Detail), new { id = invoiceId });
-            }
+            var flowSteps = await _context.TrxInvoiceApprovalFlows
+                .Where(x => x.TrxInvoiceId == invoiceId)
+                .OrderBy(x => x.ApprovalLevel)
+                .ToListAsync();
 
-            if (claim.status != ClaimPendingApproval)
+            var pendingStep = flowSteps
+                .FirstOrDefault(x => x.Status == ApprovalFlowPending);
+
+            // Backward compatibility: old invoice without approval-flow remains single approval.
+            if (flowSteps.Any())
             {
-                TempData["Error"] = "Claim belum masuk tahap pending approval.";
-                return RedirectToAction(nameof(Detail), new { id = invoiceId });
+                if (pendingStep == null)
+                {
+                    TempData["Error"] = "Tidak ada level approval yang sedang menunggu.";
+                    return RedirectToAction(nameof(Detail), new { id = invoiceId });
+                }
+
+                var currentUserId = await GetCurrentAppUserIdAsync();
+                if (string.IsNullOrWhiteSpace(currentUserId) ||
+                    !string.Equals(currentUserId, pendingStep.ApproverUserId, StringComparison.OrdinalIgnoreCase))
+                {
+                    TempData["Error"] =
+                        $"Invoice saat ini menunggu approval level {pendingStep.ApprovalLevel} oleh approver yang telah dipilih.";
+                    return RedirectToAction(nameof(Detail), new { id = invoiceId });
+                }
             }
 
             ApplyFinanceAdjustment(invoiceDetails, model?.Items);
@@ -493,6 +560,66 @@ public class InvoiceController : Controller
             var now = DateTime.Now;
             var currentUser = GetCurrentUser();
 
+            if (pendingStep != null)
+            {
+                pendingStep.Status = ApprovalFlowApproved;
+                pendingStep.ActionBy = currentUser;
+                pendingStep.ActionDate = now;
+                pendingStep.UpdatedBy = currentUser;
+                pendingStep.UpdatedDate = now;
+            }
+
+            var approvalAction = pendingStep == null
+                ? "APPROVED"
+                : $"APPROVED_LEVEL_{pendingStep.ApprovalLevel}";
+
+            var approvalSnapshot = await BuildApprovalSnapshot(
+                invoice,
+                claim,
+                invoiceDetails,
+                approvalAction,
+                null
+            );
+
+            _context.TrxInvoiceApprovals.Add(approvalSnapshot);
+
+            var hasNextPending = flowSteps.Any(x =>
+                x != pendingStep &&
+                x.Status == ApprovalFlowPending);
+
+            if (flowSteps.Any() && hasNextPending)
+            {
+                // Intermediate approval: invoice remains pending until final level.
+                invoice.Status = InvoiceInProgress;
+                invoice.UpdatedBy = currentUser;
+                invoice.UpdatedDate = now;
+
+                claim.status = ClaimPendingApproval;
+                claim.updated_by = currentUser;
+                claim.updated_date = now;
+
+                foreach (var detail in invoiceDetails)
+                {
+                    detail.Status = InvoiceDetailInProgress;
+                    detail.UpdatedBy = currentUser;
+                    detail.UpdatedDate = now;
+                }
+
+                NormalizeDateTimesForPostgres();
+                await _context.SaveChangesAsync();
+
+                var nextStep = flowSteps
+                    .Where(x => x.Status == ApprovalFlowPending)
+                    .OrderBy(x => x.ApprovalLevel)
+                    .First();
+
+                TempData["Success"] =
+                    $"Approval level {pendingStep!.ApprovalLevel} berhasil. Lanjut ke level {nextStep.ApprovalLevel}.";
+
+                return RedirectToAction(nameof(Detail), new { id = invoiceId });
+            }
+
+            // Final approval (or legacy single approval).
             invoice.Status = InvoiceCompleted;
             invoice.CompletedDate = now;
             invoice.UpdatedBy = currentUser;
@@ -521,25 +648,12 @@ public class InvoiceController : Controller
                 detail.UpdatedDate = now;
             }
 
-            var activeInvoiceDetails = invoiceDetails
-                .Where(x => x.Status == InvoiceDetailClaimed)
-                .ToList();
-
-            var approval = await BuildApprovalSnapshot(
-                invoice,
-                claim,
-                activeInvoiceDetails,
-                "APPROVED",
-                null
-            );
-
-            _context.TrxInvoiceApprovals.Add(approval);
-
             NormalizeDateTimesForPostgres();
-
             await _context.SaveChangesAsync();
 
-            TempData["Success"] = "Invoice berhasil disetujui dan data approval finance berhasil disimpan.";
+            TempData["Success"] = flowSteps.Any()
+                ? "Seluruh level approval selesai. Invoice berhasil disetujui."
+                : "Invoice berhasil disetujui.";
 
             return RedirectToAction(nameof(Detail), new { id = invoiceId });
         }
@@ -550,7 +664,7 @@ public class InvoiceController : Controller
             if (ex.InnerException != null)
                 TempData["Error"] += " | Inner: " + ex.InnerException.Message;
 
-            return RedirectToAction(nameof(Detail), new { id = id ?? model?.Id });
+            return RedirectToAction(nameof(Detail), new { id = invoiceId ?? id ?? model?.Id });
         }
     }
 
@@ -596,45 +710,75 @@ public class InvoiceController : Controller
                 return RedirectToAction(nameof(Detail), new { id = invoiceId });
             }
 
-            // Finance hanya boleh reject saat invoice berada di tahap pending approval:
-            // trx_invoice        = IN_PROGRESS
-            // trx_invoice_detail = IN_PROGRESS
-            // trx_claim          = PENDING_APPROVAL
-            if (invoice.Status != InvoiceInProgress)
+            if (invoice.Status != InvoiceInProgress ||
+                invoiceDetails.Any(x => x.Status != InvoiceDetailInProgress) ||
+                claim.status != ClaimPendingApproval)
             {
-                TempData["Error"] = "Invoice belum masuk tahap in progress.";
+                TempData["Error"] = "Invoice belum berada pada tahap pending approval.";
                 return RedirectToAction(nameof(Detail), new { id = invoiceId });
             }
 
-            if (invoiceDetails.Any(x => x.Status != InvoiceDetailInProgress))
-            {
-                TempData["Error"] = "Detail invoice belum masuk tahap in progress.";
-                return RedirectToAction(nameof(Detail), new { id = invoiceId });
-            }
+            var flowSteps = await _context.TrxInvoiceApprovalFlows
+                .Where(x => x.TrxInvoiceId == invoiceId)
+                .OrderBy(x => x.ApprovalLevel)
+                .ToListAsync();
 
-            if (claim.status != ClaimPendingApproval)
+            var pendingStep = flowSteps
+                .FirstOrDefault(x => x.Status == ApprovalFlowPending);
+
+            if (flowSteps.Any())
             {
-                TempData["Error"] = "Claim belum masuk tahap pending approval.";
-                return RedirectToAction(nameof(Detail), new { id = invoiceId });
+                if (pendingStep == null)
+                {
+                    TempData["Error"] = "Tidak ada level approval yang sedang menunggu.";
+                    return RedirectToAction(nameof(Detail), new { id = invoiceId });
+                }
+
+                var currentUserId = await GetCurrentAppUserIdAsync();
+                if (string.IsNullOrWhiteSpace(currentUserId) ||
+                    !string.Equals(currentUserId, pendingStep.ApproverUserId, StringComparison.OrdinalIgnoreCase))
+                {
+                    TempData["Error"] =
+                        $"Invoice saat ini menunggu approval level {pendingStep.ApprovalLevel} oleh approver yang telah dipilih.";
+                    return RedirectToAction(nameof(Detail), new { id = invoiceId });
+                }
             }
 
             ApplyFinanceAdjustment(invoiceDetails, model?.Items);
+
+            var now = DateTime.Now;
+            var currentUser = GetCurrentUser();
+            var rejectionReason = model.RejectionReason.Trim();
+
+            if (pendingStep != null)
+            {
+                pendingStep.Status = ApprovalFlowRejected;
+                pendingStep.ActionBy = currentUser;
+                pendingStep.ActionDate = now;
+                pendingStep.RejectionReason = rejectionReason;
+                pendingStep.UpdatedBy = currentUser;
+                pendingStep.UpdatedDate = now;
+
+                foreach (var future in flowSteps.Where(x =>
+                    x.Status == ApprovalFlowPending &&
+                    x.ApprovalLevel > pendingStep.ApprovalLevel))
+                {
+                    future.Status = ApprovalFlowCancelled;
+                    future.UpdatedBy = currentUser;
+                    future.UpdatedDate = now;
+                }
+            }
 
             var approval = await BuildApprovalSnapshot(
                 invoice,
                 claim,
                 invoiceDetails,
-                "REJECTED",
-                model.RejectionReason.Trim()
+                pendingStep == null
+                    ? "REJECTED"
+                    : $"REJECTED_LEVEL_{pendingStep.ApprovalLevel}",
+                rejectionReason
             );
 
-            var now = DateTime.Now;
-            var currentUser = GetCurrentUser();
-
-            // Jika finance reject:
-            // trx_invoice        = REJECTED
-            // trx_invoice_detail = NOT_CLAIMED
-            // trx_claim          = REJECTED
             invoice.Status = InvoiceRejected;
             invoice.UpdatedBy = currentUser;
             invoice.UpdatedDate = now;
@@ -654,10 +798,11 @@ public class InvoiceController : Controller
             _context.TrxInvoiceApprovals.Add(approval);
 
             NormalizeDateTimesForPostgres();
-
             await _context.SaveChangesAsync();
 
-            TempData["Success"] = "Invoice berhasil ditolak dan alasan penolakan berhasil disimpan.";
+            TempData["Success"] = pendingStep == null
+                ? "Invoice berhasil ditolak."
+                : $"Invoice ditolak pada approval level {pendingStep.ApprovalLevel}.";
 
             return RedirectToAction(nameof(Detail), new { id = invoiceId });
         }
@@ -882,6 +1027,58 @@ public class InvoiceController : Controller
             .OrderByDescending(x => x.ApprovedDate)
             .FirstOrDefaultAsync();
 
+        var approvalSteps = await (
+            from flow in _context.TrxInvoiceApprovalFlows.AsNoTracking()
+            join user in _context.app_users.AsNoTracking()
+                on flow.ApproverUserId equals user.id
+            where flow.TrxInvoiceId == invoice.Id
+            orderby flow.ApprovalLevel
+            select new InvoiceApprovalStepVM
+            {
+                Id = flow.Id,
+                ApprovalLevel = flow.ApprovalLevel,
+                ApproverUserId = flow.ApproverUserId,
+                ApproverUsername = user.username,
+                ApproverName = user.name,
+                Status = flow.Status,
+                ActionBy = flow.ActionBy,
+                ActionDate = flow.ActionDate,
+                RejectionReason = flow.RejectionReason
+            }
+        ).ToListAsync();
+
+        var approvalUserOptions = await _context.app_users
+            .AsNoTracking()
+            .Where(x => x.status == "ACTIVE")
+            .OrderBy(x => x.name)
+            .ThenBy(x => x.username)
+            .Select(x => new InvoiceApprovalUserOptionVM
+            {
+                Id = x.id,
+                Username = x.username,
+                Name = x.name
+            })
+            .ToListAsync();
+
+        var currentPendingApproval = approvalSteps
+            .FirstOrDefault(x => x.Status == ApprovalFlowPending);
+
+        var currentAppUserId = await GetCurrentAppUserIdAsync();
+
+        var canCurrentUserApprove =
+            claim.status == ClaimPendingApproval &&
+            (
+                approvalSteps.Count == 0 ||
+                (
+                    currentPendingApproval != null &&
+                    !string.IsNullOrWhiteSpace(currentAppUserId) &&
+                    string.Equals(
+                        currentPendingApproval.ApproverUserId,
+                        currentAppUserId,
+                        StringComparison.OrdinalIgnoreCase)
+                )
+            );
+
         var isProcessOrDone =
             claim.status == ClaimUnderReview ||
             claim.status == ClaimPendingApproval ||
@@ -929,7 +1126,17 @@ public class InvoiceController : Controller
                     : null,
 
             ApprovedDate = latestApproval?.ApprovedDate,
-            RejectionReason = latestApproval?.RejectionReason
+            RejectionReason = latestApproval?.RejectionReason,
+
+            ApprovalSteps = approvalSteps,
+            ApprovalUserOptions = approvalUserOptions,
+            CanCurrentUserApprove = canCurrentUserApprove,
+            CurrentApprovalLevel = currentPendingApproval?.ApprovalLevel,
+            CurrentApproverName = currentPendingApproval == null
+                ? null
+                : string.IsNullOrWhiteSpace(currentPendingApproval.ApproverName)
+                    ? currentPendingApproval.ApproverUsername
+                    : currentPendingApproval.ApproverName
         };
 
         if (setViewBag)
@@ -1055,6 +1262,17 @@ public class InvoiceController : Controller
                 CreatedDate = now
             }).ToList()
         };
+    }
+
+    private async Task<string?> GetCurrentAppUserIdAsync()
+    {
+        var username = GetCurrentUser();
+
+        return await _context.app_users
+            .AsNoTracking()
+            .Where(x => x.username == username)
+            .Select(x => x.id)
+            .FirstOrDefaultAsync();
     }
 
     private string GetCurrentUser()

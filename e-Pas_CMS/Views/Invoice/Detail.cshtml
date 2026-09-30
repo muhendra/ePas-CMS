@@ -15,7 +15,7 @@
     var isDone = claimStatus == "APPROVED";
     var isRejected = claimStatus == "REJECTED";
 
-    var isEditableView = isWait || isPendingApproval;
+    var isEditableView = isWait || (isPendingApproval && Model.CanCurrentUserApprove);
 
     var statusText = claimStatus switch
     {
@@ -1400,6 +1400,118 @@
     <div class="invoice-card">
         <h2 class="section-title">Persetujuan</h2>
 
+        @if (isWait)
+        {
+            <div class="finance-decision-card mb-4">
+                <div class="decision-title">Skema Approval Finance</div>
+                <div class="decision-subtitle mb-3">
+                    Pilih approver sesuai urutan. Level berikutnya baru dapat melakukan approval setelah level sebelumnya selesai.
+                </div>
+
+                <div id="approverRows" class="d-flex flex-column gap-2">
+                    <div class="approver-row d-flex gap-2 align-items-center">
+                        <span class="badge bg-secondary approval-level-label">Level 1</span>
+                        <select name="ApproverUserIds"
+                                form="processForm"
+                                class="form-select"
+                                required>
+                            <option value="">-- Pilih Approver --</option>
+                            @foreach (var user in Model.ApprovalUserOptions)
+                            {
+                                <option value="@user.Id">@user.DisplayName</option>
+                            }
+                        </select>
+                        <button type="button"
+                                class="btn btn-outline-danger btn-sm remove-approver"
+                                onclick="removeApproverRow(this)"
+                                style="display:none;">
+                            Hapus
+                        </button>
+                    </div>
+                </div>
+
+                <button type="button"
+                        class="btn btn-outline-primary btn-sm mt-3"
+                        onclick="addApproverRow()">
+                    <i class="bi bi-plus-circle"></i> Tambah Approver
+                </button>
+
+                <template id="approverRowTemplate">
+                    <div class="approver-row d-flex gap-2 align-items-center">
+                        <span class="badge bg-secondary approval-level-label">Level</span>
+                        <select name="ApproverUserIds"
+                                form="processForm"
+                                class="form-select"
+                                required>
+                            <option value="">-- Pilih Approver --</option>
+                            @foreach (var user in Model.ApprovalUserOptions)
+                            {
+                                <option value="@user.Id">@user.DisplayName</option>
+                            }
+                        </select>
+                        <button type="button"
+                                class="btn btn-outline-danger btn-sm remove-approver"
+                                onclick="removeApproverRow(this)">
+                            Hapus
+                        </button>
+                    </div>
+                </template>
+            </div>
+        }
+
+        @if (Model.ApprovalSteps?.Any() == true)
+        {
+            <div class="finance-decision-card mb-4">
+                <div class="decision-title">Approval Flow</div>
+                <div class="table-responsive mt-3">
+                    <table class="table table-sm align-middle mb-0">
+                        <thead>
+                            <tr>
+                                <th>Level</th>
+                                <th>Approver</th>
+                                <th>Status</th>
+                                <th>Action By</th>
+                                <th>Action Date</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var step in Model.ApprovalSteps)
+                            {
+                                var stepBadge = step.Status switch
+                                {
+                                    "APPROVED" => "bg-success",
+                                    "REJECTED" => "bg-danger",
+                                    "CANCELLED" => "bg-secondary",
+                                    _ => "bg-warning text-dark"
+                                };
+
+                                <tr>
+                                    <td>@step.ApprovalLevel</td>
+                                    <td>
+                                        <strong>@step.ApproverName</strong><br />
+                                        <small class="text-muted">@step.ApproverUsername</small>
+                                    </td>
+                                    <td><span class="badge @stepBadge">@step.Status</span></td>
+                                    <td>@(string.IsNullOrWhiteSpace(step.ActionBy) ? "-" : step.ActionBy)</td>
+                                    <td>@(step.ActionDate.HasValue ? step.ActionDate.Value.ToString("dd/MM/yyyy HH:mm") : "-")</td>
+                                </tr>
+
+                                @if (!string.IsNullOrWhiteSpace(step.RejectionReason))
+                                {
+                                    <tr>
+                                        <td></td>
+                                        <td colspan="4" class="text-danger">
+                                            <strong>Alasan:</strong> @step.RejectionReason
+                                        </td>
+                                    </tr>
+                                }
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        }
+
         <div class="approval-grid">
             <div>
                 <label class="field-label">Requestor</label>
@@ -1427,7 +1539,7 @@
                 <div class="claimant-role">Requestor</div>
             </div>
             <div>
-                <label class="field-label">Finance / Accounting</label>
+                <label class="field-label">Finance Approval</label>
 
                 @if (isPendingApproval)
                 {
@@ -1438,31 +1550,45 @@
                         </div>
                     </div>
 
-                    <div class="approval-wait">@claimStatusLabel</div>
+                    @if (Model.CanCurrentUserApprove)
+                    {
+                        <div class="approval-wait">
+                            Approval Level @Model.CurrentApprovalLevel - giliran Anda
+                        </div>
 
-                    <div class="finance-decision-card">
-                        <div class="decision-header">
-                            <div>
-                                <div class="decision-title">Keputusan Finance</div>
-                                <div class="decision-subtitle">
-                                    Finance dapat menyesuaikan Audit Fee dan Lumpsum sebelum menyetujui atau menolak invoice.
+                        <div class="finance-decision-card">
+                            <div class="decision-header">
+                                <div>
+                                    <div class="decision-title">Keputusan Finance</div>
+                                    <div class="decision-subtitle">
+                                        Anda adalah approver aktif pada level ini. Audit Fee dan Lumpsum dapat disesuaikan sebelum approve/reject.
+                                    </div>
+                                </div>
+
+                                <div class="decision-total">
+                                    <span>Total Expense</span>
+                                    <strong id="decisionTotalExpense">Rp @Model.TotalExpense.ToString("N0")</strong>
                                 </div>
                             </div>
 
-                            <div class="decision-total">
-                                <span>Total Expense</span>
-                                <strong id="decisionTotalExpense">Rp @Model.TotalExpense.ToString("N0")</strong>
-                            </div>
+                            <label class="field-label mt-3">Alasan Ditolak</label>
+                            <textarea form="approvalForm"
+                                      name="RejectionReason"
+                                      class="finance-reject-textarea"
+                                      rows="4"
+                                      placeholder="Isi alasan jika invoice ditolak.">@Model.RejectionReason</textarea>
                         </div>
-
-                        <label class="field-label mt-3">Alasan Ditolak</label>
-                        <textarea form="approvalForm"
-                              name="RejectionReason"
-                              class="finance-reject-textarea"
-                              rows="4"
-                              placeholder="Isi alasan jika invoice ditolak. Contoh: nominal tidak sesuai, dokumen kurang lengkap, atau perlu revisi audit fee.">@Model.RejectionReason</textarea>
-
-                    </div>
+                    }
+                    else
+                    {
+                        <div class="approval-wait">
+                            Menunggu approval level @Model.CurrentApprovalLevel
+                            @if (!string.IsNullOrWhiteSpace(Model.CurrentApproverName))
+                            {
+                                <span>oleh <strong>@Model.CurrentApproverName</strong></span>
+                            }
+                        </div>
+                    }
                 }
                 else if (isDone)
                 {
@@ -1535,11 +1661,13 @@
 
 @if (isWait)
 {
-    <form method="post"
+    <form id="processForm"
+          method="post"
           asp-action="StartProcess"
           asp-route-id="@Model.Id"
           class="bottom-action-bar">
         @Html.AntiForgeryToken()
+        <input type="hidden" name="Id" value="@Model.Id" />
         <button type="submit"
                 class="btn-process"
                 onclick="return confirmStartProcess();">
@@ -1547,7 +1675,7 @@
         </button>
     </form>
 }
-else if (isPendingApproval)
+else if (isPendingApproval && Model.CanCurrentUserApprove)
 {
     <div class="bottom-action-bar">
         <button type="submit"
@@ -1569,9 +1697,72 @@ else if (isPendingApproval)
         </button>
     </div>
 }
+else if (isPendingApproval)
+{
+    <div class="bottom-action-bar">
+        <div class="approval-wait mb-0">
+            Menunggu approver level @Model.CurrentApprovalLevel
+            @if (!string.IsNullOrWhiteSpace(Model.CurrentApproverName))
+            {
+                <span>- @Model.CurrentApproverName</span>
+            }
+        </div>
+    </div>
+}
 
 @section Scripts {
     <script>
+        function refreshApproverLevels() {
+            const rows = Array.from(document.querySelectorAll('#approverRows .approver-row'));
+
+            rows.forEach((row, index) => {
+                const label = row.querySelector('.approval-level-label');
+                if (label) label.textContent = `Level ${index + 1}`;
+
+                const removeButton = row.querySelector('.remove-approver');
+                if (removeButton) {
+                    removeButton.style.display = rows.length > 1 ? '' : 'none';
+                }
+            });
+        }
+
+        function addApproverRow() {
+            const template = document.getElementById('approverRowTemplate');
+            const container = document.getElementById('approverRows');
+
+            if (!template || !container) return;
+
+            container.appendChild(template.content.cloneNode(true));
+            refreshApproverLevels();
+        }
+
+        function removeApproverRow(button) {
+            const row = button.closest('.approver-row');
+            if (row) row.remove();
+            refreshApproverLevels();
+        }
+
+        function validateApproverSelection() {
+            const selects = Array.from(document.querySelectorAll(
+                '#approverRows select[name="ApproverUserIds"]'
+            ));
+
+            if (selects.length === 0 || selects.some(x => !x.value)) {
+                alert('Minimal satu approver wajib dipilih dan tidak boleh ada level kosong.');
+                return false;
+            }
+
+            const values = selects.map(x => x.value);
+            if (new Set(values).size !== values.length) {
+                alert('Approver yang sama tidak boleh dipilih lebih dari satu level.');
+                return false;
+            }
+
+            return true;
+        }
+
+        document.addEventListener('DOMContentLoaded', refreshApproverLevels);
+
         function toNumber(value) {
             if (value === null || value === undefined) return 0;
 
@@ -1617,7 +1808,7 @@ else if (isPendingApproval)
             let totalAudit = 0;
             let totalLumpsum = 0;
 
-            document.querySelectorAll('.invoice-detail-row').forEach(function (row) {
+            document.querySelectorAll('.invoice-detail-row').forEach(function(row) {
                 if (isRowDeleted(row)) return;
 
                 const auditInput = row.querySelector('.js-audit-fee');
@@ -1657,7 +1848,7 @@ else if (isPendingApproval)
         }
 
         function recalcLineTotals() {
-            document.querySelectorAll('.invoice-detail-row').forEach(function (row) {
+            document.querySelectorAll('.invoice-detail-row').forEach(function(row) {
                 const auditInput = row.querySelector('.js-audit-fee');
                 const lumpsumInput = row.querySelector('.js-lumpsum-fee');
                 const lineTotalText = row.querySelector('.line-total-text');
@@ -1698,16 +1889,17 @@ else if (isPendingApproval)
         }
 
         function confirmStartProcess() {
+            if (!validateApproverSelection()) return false;
             return confirm('Yakin ingin memproses invoice ini ke pending approval finance?');
         }
 
-        document.addEventListener('DOMContentLoaded', function () {
-            document.querySelectorAll('.js-money').forEach(function (input) {
+        document.addEventListener('DOMContentLoaded', function() {
+            document.querySelectorAll('.js-money').forEach(function(input) {
                 input.addEventListener('input', recalcFinanceTotal);
             });
 
-            document.querySelectorAll('.js-delete-row').forEach(function (button) {
-                button.addEventListener('click', function () {
+            document.querySelectorAll('.js-delete-row').forEach(function(button) {
+                button.addEventListener('click', function() {
                     const row = this.closest('.invoice-detail-row');
                     if (!row) return;
 
