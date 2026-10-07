@@ -61,7 +61,7 @@ public class RegularAuditImportController : Controller
         var nowWithoutTimeZone = DateTime.SpecifyKind(DateTime.Now, DateTimeKind.Unspecified);
         var nowUtc = DateTime.UtcNow;
 
-        _context.Database.SetCommandTimeout(TimeSpan.FromSeconds(120));
+        _context.Database.SetCommandTimeout(TimeSpan.FromSeconds(600));
 
         try
         {
@@ -80,9 +80,13 @@ public class RegularAuditImportController : Controller
                 if (string.IsNullOrWhiteSpace(row.AuditType))
                     row.AuditType = defaultAuditType;
 
-                // Basic Operational historical CSV uses "result" instead of good_status.
-                if (isBasicOperational && string.IsNullOrWhiteSpace(row.GoodStatus))
-                    row.GoodStatus = row.Result;
+                // Basic Operational historical CSV may use basic_status / result
+                // instead of good_status. Normalize it to the report convention.
+                if (isBasicOperational)
+                {
+                    row.GoodStatus = NormalizeBasicOperationalStatus(
+                        FirstNotBlank(row.GoodStatus, row.Result));
+                }
             }
 
             var validRows = rows
@@ -340,7 +344,7 @@ public class RegularAuditImportController : Controller
             try
             {
                 await _context.Database.ExecuteSqlRawAsync("SET LOCAL lock_timeout = '8s';");
-                await _context.Database.ExecuteSqlRawAsync("SET LOCAL statement_timeout = '120s';");
+                await _context.Database.ExecuteSqlRawAsync("SET LOCAL statement_timeout = '600s';");
 
                 // =====================================================
                 // STAGE 1 - SPBU MASTER
@@ -633,6 +637,8 @@ public class RegularAuditImportController : Controller
                     await SaveStageAsync("DETAIL-CLEAR");
                 }
 
+                var pendingDetailWrites = 0;
+
                 foreach (var ctx in auditRows)
                 {
                     var row = ctx.Row;
@@ -673,6 +679,13 @@ public class RegularAuditImportController : Controller
                                 updated_by = currentUser,
                                 updated_date = nowWithoutTimeZone
                             });
+
+                            pendingDetailWrites++;
+                            if (pendingDetailWrites >= 1000)
+                            {
+                                await SaveStageAsync("CHECKLIST/QQ-BATCH");
+                                pendingDetailWrites = 0;
+                            }
                         }
                     }
 
@@ -710,6 +723,13 @@ public class RegularAuditImportController : Controller
                                 updated_by = currentUser,
                                 updated_date = nowWithoutTimeZone
                             });
+
+                            pendingDetailWrites++;
+                            if (pendingDetailWrites >= 1000)
+                            {
+                                await SaveStageAsync("CHECKLIST/QQ-BATCH");
+                                pendingDetailWrites = 0;
+                            }
                         }
                     }
                 }
@@ -1228,11 +1248,13 @@ public class RegularAuditImportController : Controller
             {
                 RawValues = raw,
 
-                TrxAuditId = Get("trx_audit_id", "audit_id"),
-                SendDate = ParseDateTime(Get("send_date")),
+                // Support legacy Basic Operational export without requiring
+                // the business user to rename columns manually.
+                TrxAuditId = Get("trx_audit_id", "audit_id", "IdJadwalAudit_PK"),
+                SendDate = ParseDateTime(Get("send_date", "sent_date")),
                 AuditDate = ParseDateTime(Get("Audit Date", "audit_date", "audit_execution_time")),
                 AuditScheduleDate = ParseDateTime(Get("audit_schedule_date")),
-                AuditCreatedDate = ParseDateTime(Get("audit_created_date")),
+                AuditCreatedDate = ParseDateTime(Get("audit_created_date", "SortValue")),
                 ApprovalDate = ParseDateTime(Get("approval_date")),
 
                 SpbuNo = Get("spbu_no"),
@@ -1240,7 +1262,7 @@ public class RegularAuditImportController : Controller
                 ProvinceName = Get("province_name", "province"),
                 Year = ParseInt(Get("year")),
                 Address = Get("address"),
-                CityName = Get("city_name"),
+                CityName = Get("city_name", "city"),
                 TipeSpbu = Get("tipe_spbu", "owner_type"),
                 Rayon = Get("rayon", "sbm"),
                 Sam = Get("sam"),
@@ -1254,13 +1276,13 @@ public class RegularAuditImportController : Controller
                 AuditType = Get("audit_type"),
                 AuditLevel = Get("audit_level"),
                 AuditNext = Get("audit_next"),
-                GoodStatus = Get("good_status", "result"),
-                Result = Get("result"),
+                GoodStatus = Get("good_status", "result", "basic_status"),
+                Result = Get("result", "basic_status"),
                 ExcellentStatus = Get("excellent_status"),
                 TotalScore = ParseDecimal(Get("Total Score", "total_score")),
-                Sss = ParseDecimal(Get("SSS")),
-                Eqnq = ParseDecimal(Get("EQnQ")),
-                Rfs = ParseDecimal(Get("RFS")),
+                Sss = ParseDecimal(Get("SSS", "3S")),
+                Eqnq = ParseDecimal(Get("EQnQ", "QQ")),
+                Rfs = ParseDecimal(Get("RFS", "RVE")),
                 Vfc = ParseDecimal(Get("VFC")),
                 Epo = ParseDecimal(Get("EPO")),
                 Wtms = ParseDecimal(Get("WTMS")),
@@ -1269,7 +1291,7 @@ public class RegularAuditImportController : Controller
                 FormatFisik = ParseDecimal(Get("FORMAT FISIK", "format_fisik")),
                 Cpo = ParseDecimal(Get("CPO")),
                 KelasSpbu = Get("kelas_spbu"),
-                PenaltyGoodAlerts = Get("penalty_good_alerts", "penalty_alerts"),
+                PenaltyGoodAlerts = Get("penalty_good_alerts", "penalty_alerts", "penalty_basic_alert"),
                 PenaltyExcellentAlerts = Get("penalty_excellent_alerts"),
 
                 ReportPrefix = Get("report_prefix"),
@@ -1296,9 +1318,11 @@ public class RegularAuditImportController : Controller
 
             // Checklist scores are ordinary columns such as 1.1.1.a, exactly
             // like the historical Audit_Summary CSV supplied by the business user.
-            row.HasDynamicChecklistColumns = raw.Keys.Any(LooksLikeChecklistColumn);
-            row.HasQqWideColumns = raw.Keys.Any(k => TryGetQqColumnIndex(k, out _));
             row.FixedNormalizedHeaders = BuildFixedHeaderSet();
+            row.HasDynamicChecklistColumns = raw.Keys.Any(k =>
+                !row.FixedNormalizedHeaders.Contains(NormalizeHeader(k)) &&
+                LooksLikeChecklistColumn(k));
+            row.HasQqWideColumns = raw.Keys.Any(k => TryGetQqColumnIndex(k, out _));
 
             result.Add(row);
         }
@@ -1378,12 +1402,13 @@ public class RegularAuditImportController : Controller
     {
         var headers = new[]
         {
-            "trx_audit_id","audit_id","send_date","Audit Date","audit_date","audit_execution_time","audit_schedule_date","audit_created_date","approval_date",
-            "spbu_no","region","province_name","province","year","address","city_name","tipe_spbu","owner_type","rayon","sbm","sam",
+            "trx_audit_id","audit_id","IdJadwalAudit_PK","SortValue","status",
+            "send_date","sent_date","Audit Date","audit_date","audit_execution_time","audit_schedule_date","audit_created_date","approval_date",
+            "spbu_no","region","province_name","province","year","address","city_name","city","tipe_spbu","owner_type","rayon","sbm","sam",
             "owner_name","manager_name","quarter","quater","mor","sales_area","phone_number_1","phone",
-            "audit_type","audit_level","audit_next","good_status","result","excellent_status","Total Score","total_score",
-            "SSS","EQnQ","RFS","VFC","EPO","WTMS","QQ","WMEF","FORMAT FISIK","format_fisik","CPO","kelas_spbu",
-            "penalty_good_alerts","penalty_alerts","penalty_excellent_alerts","report_prefix","report_no",
+            "audit_type","audit_level","audit_next","good_status","result","basic_status","excellent_status","Total Score","total_score",
+            "SSS","3S","EQnQ","RFS","RVE","VFC","EPO","WTMS","QQ","WMEF","FORMAT FISIK","format_fisik","CPO","kelas_spbu",
+            "penalty_good_alerts","penalty_alerts","penalty_basic_alert","penalty_excellent_alerts","report_prefix","report_no",
             "auditor1_username","auditor1_name","auditor2_username","auditor2_name","verifier_username","approval_by","verifier_name",
             "audit_mom_intro","audit_mom_final","berita_acara","km_range",
             "master_questioner_checklist_id","master_questioner_version","questionnaire_version"
@@ -1395,6 +1420,22 @@ public class RegularAuditImportController : Controller
     // =============================================================
     // BASIC PARSE / FORMAT HELPERS
     // =============================================================
+
+    private static string? NormalizeBasicOperationalStatus(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return null;
+
+        var status = value.Trim().ToUpperInvariant();
+
+        if (status is "PASSED BASIC OPERATION" or "PASSED BASIC OPERATIONAL" or "PASSED" or "CERTIFIED")
+            return "CERTIFIED";
+
+        if (status is "NOT PASSED" or "NOT CERTIFIED" or "FAILED")
+            return "NOT CERTIFIED";
+
+        return value.Trim();
+    }
 
     private static decimal? ParseDecimal(string? value)
     {
