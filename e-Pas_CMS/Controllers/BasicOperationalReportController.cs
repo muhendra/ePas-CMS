@@ -616,7 +616,7 @@ namespace e_Pas_CMS.Controllers
             {
                 var headersNoData = new[]
                 {
-            "send_date","Audit Date","spbu_no","region","year","address","city_name","tipe_spbu","rayon",
+            "trx_audit_id","send_date","Audit Date","spbu_no","region","year","address","city_name","tipe_spbu","rayon",
             "audit_level","audit_next","result","Total Score",
             "SSS","EQnQ","RFS","wtms","qq","wmef","format_fisik","cpo",
             "kelas_spbu","penalty_alerts"
@@ -651,7 +651,7 @@ namespace e_Pas_CMS.Controllers
             var csv = new StringBuilder();
             var headers = new[]
             {
-        "send_date","Audit Date","spbu_no","region","year","address","city_name","tipe_spbu","rayon",
+        "trx_audit_id","send_date","Audit Date","spbu_no","region","year","address","city_name","tipe_spbu","rayon",
         "audit_level","audit_next","result","Total Score",
         "SSS","EQnQ","RFS","wtms","qq","wmef","format_fisik","cpo",
         "kelas_spbu","penalty_alerts"
@@ -871,6 +871,7 @@ namespace e_Pas_CMS.Controllers
                 // ========== Tulis baris CSV ==========
                 csv.AppendLine(string.Join(",", new[]
                 {
+                    $"\"{a.id}\"",
                     $"\"{submitDate:yyyy-MM-dd}\"",
                     $"\"{auditDate:yyyy-MM-dd}\"",
                     $"\"{a.spbu.spbu_no}\"",

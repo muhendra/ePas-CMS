@@ -190,15 +190,24 @@
       class="row g-2 align-items-center mb-3">
     @Html.AntiForgeryToken()
 
-    <div class="col-md-8">
+    <div class="col-md-6">
         <input type="file"
                name="file"
                class="form-control"
                accept=".csv,text/csv"
                required />
         <small class="text-muted">
-            Upload Basic Operational CSV. Kolom checklist yang kosong tidak membuat detail checklist.
-            Kolom Q&amp;Q yang kosong tidak membuat detail Q&amp;Q.
+            Upload Basic Operational CSV. Checklist/Q&amp;Q yang kosong tetap diperbolehkan dan tidak membuat detail.
+        </small>
+    </div>
+
+    <div class="col-md-3">
+        <select name="importMode" class="form-select" required>
+            <option value="KEEP" selected>Keep Data Sebelumnya</option>
+            <option value="REPLACE">Perbaharui Data</option>
+        </select>
+        <small class="text-muted">
+            Perbaharui: audit lama menjadi DELETED dan dibuat trx_audit baru.
         </small>
     </div>
 

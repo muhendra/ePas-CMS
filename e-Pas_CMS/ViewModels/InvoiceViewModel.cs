@@ -218,6 +218,7 @@ namespace e_Pas_CMS.ViewModels
         public string? ActionBy { get; set; }
         public DateTime? ActionDate { get; set; }
         public string? RejectionReason { get; set; }
+        public string? SignaturePath { get; set; }
     }
 
     public class InvoiceStartProcessVM

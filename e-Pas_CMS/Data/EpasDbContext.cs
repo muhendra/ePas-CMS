@@ -453,6 +453,9 @@ public partial class EpasDbContext : DbContext
             entity.Property(e => e.is_imported)
                 .HasDefaultValue(false);
 
+            entity.Property(e => e.source_trx_audit_id)
+                .HasMaxLength(50);
+
             entity.Property(e => e.created_by)
                 .HasMaxLength(50);
 
@@ -1240,6 +1243,10 @@ public partial class EpasDbContext : DbContext
             entity.Property(e => e.RejectionReason)
                 .HasColumnName("rejection_reason")
                 .HasColumnType("text");
+
+            entity.Property(e => e.SignaturePath)
+                .HasColumnName("signature_path")
+                .HasMaxLength(500);
 
             entity.Property(e => e.CreatedBy)
                 .HasColumnName("created_by")

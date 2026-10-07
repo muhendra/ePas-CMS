@@ -537,6 +537,8 @@ public class InvoiceController : Controller
                 .FirstOrDefault(x => x.Status == ApprovalFlowPending);
 
             // Backward compatibility: old invoice without approval-flow remains single approval.
+            string? currentUserId = null;
+
             if (flowSteps.Any())
             {
                 if (pendingStep == null)
@@ -545,7 +547,7 @@ public class InvoiceController : Controller
                     return RedirectToAction(nameof(Detail), new { id = invoiceId });
                 }
 
-                var currentUserId = await GetCurrentAppUserIdAsync();
+                currentUserId = await GetCurrentAppUserIdAsync();
                 if (string.IsNullOrWhiteSpace(currentUserId) ||
                     !string.Equals(currentUserId, pendingStep.ApproverUserId, StringComparison.OrdinalIgnoreCase))
                 {
@@ -565,6 +567,7 @@ public class InvoiceController : Controller
                 pendingStep.Status = ApprovalFlowApproved;
                 pendingStep.ActionBy = currentUser;
                 pendingStep.ActionDate = now;
+                pendingStep.SignaturePath = await GetUserSignaturePathAsync(currentUserId);
                 pendingStep.UpdatedBy = currentUser;
                 pendingStep.UpdatedDate = now;
             }
@@ -726,6 +729,8 @@ public class InvoiceController : Controller
             var pendingStep = flowSteps
                 .FirstOrDefault(x => x.Status == ApprovalFlowPending);
 
+            string? currentUserId = null;
+
             if (flowSteps.Any())
             {
                 if (pendingStep == null)
@@ -734,7 +739,7 @@ public class InvoiceController : Controller
                     return RedirectToAction(nameof(Detail), new { id = invoiceId });
                 }
 
-                var currentUserId = await GetCurrentAppUserIdAsync();
+                currentUserId = await GetCurrentAppUserIdAsync();
                 if (string.IsNullOrWhiteSpace(currentUserId) ||
                     !string.Equals(currentUserId, pendingStep.ApproverUserId, StringComparison.OrdinalIgnoreCase))
                 {
@@ -756,6 +761,7 @@ public class InvoiceController : Controller
                 pendingStep.ActionBy = currentUser;
                 pendingStep.ActionDate = now;
                 pendingStep.RejectionReason = rejectionReason;
+                pendingStep.SignaturePath = await GetUserSignaturePathAsync(currentUserId);
                 pendingStep.UpdatedBy = currentUser;
                 pendingStep.UpdatedDate = now;
 
@@ -1043,7 +1049,8 @@ public class InvoiceController : Controller
                 Status = flow.Status,
                 ActionBy = flow.ActionBy,
                 ActionDate = flow.ActionDate,
-                RejectionReason = flow.RejectionReason
+                RejectionReason = flow.RejectionReason,
+                SignaturePath = flow.SignaturePath ?? user.signature_path
             }
         ).ToListAsync();
 
@@ -1324,6 +1331,18 @@ public class InvoiceController : Controller
                 }
             }
         }
+    }
+
+    private async Task<string?> GetUserSignaturePathAsync(string? userId)
+    {
+        if (string.IsNullOrWhiteSpace(userId))
+            return null;
+
+        return await _context.app_users
+            .AsNoTracking()
+            .Where(x => x.id == userId)
+            .Select(x => x.signature_path)
+            .FirstOrDefaultAsync();
     }
 
     private async Task<(string Name, string SignaturePath)> GetRequestorUser(

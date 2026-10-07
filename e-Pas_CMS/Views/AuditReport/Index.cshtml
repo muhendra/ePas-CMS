@@ -275,14 +275,24 @@
       class="row g-2 align-items-center mb-3">
     @Html.AntiForgeryToken()
 
-    <div class="col-md-8">
+    <div class="col-md-6">
         <input type="file"
                name="file"
                class="form-control"
                accept=".csv,text/csv"
                required />
         <small class="text-muted">
-            Template mendukung Summary maupun Full Report CSV. Jika checklist_json / qq_json tersedia, checklist dan Q&Q akan diimport. Media gambar/video tidak diimport.
+            Template mendukung Summary maupun Full Report CSV. Checklist wide dan Q&amp;Q wide akan diimport jika diisi. Media gambar/video tidak diimport.
+        </small>
+    </div>
+
+    <div class="col-md-3">
+        <select name="importMode" class="form-select" required>
+            <option value="KEEP" selected>Keep Data Sebelumnya</option>
+            <option value="REPLACE">Perbaharui Data</option>
+        </select>
+        <small class="text-muted">
+            Perbaharui: audit lama menjadi DELETED dan dibuat trx_audit baru.
         </small>
     </div>
 
@@ -481,7 +491,7 @@
 @section Scripts {
     <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
     <script>
-        $(document).ready(function () {
+        $(document).ready(function() {
             $('#audit-table').DataTable({
                 paging: false,
                 info: false,
@@ -491,16 +501,16 @@
             });
         });
 
-                (function () {
+        (function() {
             const btn = document.getElementById('btnDownloadCsv');
             if (!btn) return;
 
-            btn.addEventListener('click', function () {
+            btn.addEventListener('click', function() {
                 const monthSel = document.querySelector('select[name="filterMonth"]');
-                const yearSel  = document.querySelector('select[name="filterYear"]');
+                const yearSel = document.querySelector('select[name="filterYear"]');
 
                 const mVal = monthSel ? monthSel.value : "";
-                const yVal = yearSel  ? yearSel.value  : "";
+                const yVal = yearSel ? yearSel.value : "";
 
                 if (!mVal || !yVal) {
                     alert("Silakan pilih Bulan dan Tahun terlebih dahulu.");
@@ -514,11 +524,11 @@
             });
         })();
 
-        (function () {
+        (function() {
             const btn = document.getElementById('btnDownloadReportSuperAdmin');
             if (!btn) return;
 
-            btn.addEventListener('click', function () {
+            btn.addEventListener('click', function() {
                 const dateInput = document.getElementById('downloadReportSuperAdminDate');
                 const searchInput = document.querySelector('input[name="searchTerm"]');
 

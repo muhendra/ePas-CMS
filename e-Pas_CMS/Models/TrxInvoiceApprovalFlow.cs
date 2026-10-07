@@ -20,6 +20,9 @@ public partial class TrxInvoiceApprovalFlow
 
     public string? RejectionReason { get; set; }
 
+    // Snapshot of approver signature at the moment approve/reject is performed.
+    public string? SignaturePath { get; set; }
+
     public string CreatedBy { get; set; } = null!;
 
     public DateTime CreatedDate { get; set; }

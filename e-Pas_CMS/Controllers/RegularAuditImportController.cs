@@ -26,22 +26,25 @@ public class RegularAuditImportController : Controller
 
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public Task<IActionResult> Upload(IFormFile file) =>
-        UploadInternal(file, "Regular Audit", "AuditReport");
+    public Task<IActionResult> Upload(IFormFile file, string importMode = "KEEP") =>
+        UploadInternal(file, "Regular Audit", "AuditReport", importMode);
 
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public Task<IActionResult> UploadBasicOperational(IFormFile file) =>
-        UploadInternal(file, "Basic Operational", "BasicOperationalReport");
+    public Task<IActionResult> UploadBasicOperational(IFormFile file, string importMode = "KEEP") =>
+        UploadInternal(file, "Basic Operational", "BasicOperationalReport", importMode);
 
     private async Task<IActionResult> UploadInternal(
         IFormFile file,
         string defaultAuditType,
-        string redirectController)
+        string redirectController,
+        string importMode)
     {
         var importLabel = defaultAuditType;
         var isBasicOperational =
             defaultAuditType.Equals("Basic Operational", StringComparison.OrdinalIgnoreCase);
+        importMode = NormalizeImportMode(importMode);
+        var replaceExisting = importMode == "REPLACE";
         if (file == null || file.Length == 0)
         {
             TempData["Error"] = "File CSV belum dipilih.";
@@ -90,6 +93,30 @@ public class RegularAuditImportController : Controller
 
             if (validRows.Count == 0)
                 throw new InvalidOperationException("Tidak ada row valid. spbu_no dan Audit Date wajib diisi.");
+
+            foreach (var row in validRows)
+            {
+                if (!string.IsNullOrWhiteSpace(row.TrxAuditId) && row.TrxAuditId.Trim().Length > 50)
+                {
+                    throw new InvalidOperationException(
+                        $"trx_audit_id untuk SPBU {row.SpbuNo} melebihi 50 karakter.");
+                }
+            }
+
+            var duplicateAuditIdsInCsv = validRows
+                .Select(x => NullIfEmpty(x.TrxAuditId))
+                .Where(x => !string.IsNullOrWhiteSpace(x))
+                .Select(x => x!)
+                .GroupBy(x => x, StringComparer.OrdinalIgnoreCase)
+                .Where(g => g.Count() > 1)
+                .Select(g => g.Key)
+                .ToList();
+
+            if (duplicateAuditIdsInCsv.Count > 0)
+            {
+                throw new InvalidOperationException(
+                    $"CSV memiliki trx_audit_id duplikat: {string.Join(", ", duplicateAuditIdsInCsv.Take(10))}.");
+            }
 
             // =========================================================
             // PRELOAD MASTER / EXISTING DATA - OUTSIDE WRITE TRANSACTION
@@ -187,16 +214,101 @@ public class RegularAuditImportController : Controller
                 existingAudits = await auditQuery.ToListAsync();
             }
 
+            // Explicit trx_audit_id is the primary key for re-import validation.
+            // Also load replacement rows that point back to the same source audit ID.
+            var sourceAuditIds = validRows
+                .Select(x => NullIfEmpty(x.TrxAuditId))
+                .Where(x => !string.IsNullOrWhiteSpace(x))
+                .Select(x => x!)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            if (sourceAuditIds.Count > 0)
+            {
+                var bySource = await _context.trx_audits
+                    .Where(x =>
+                        sourceAuditIds.Contains(x.id) ||
+                        (x.source_trx_audit_id != null && sourceAuditIds.Contains(x.source_trx_audit_id)))
+                    .ToListAsync();
+
+                foreach (var audit in bySource)
+                {
+                    if (existingAudits.All(x => !string.Equals(x.id, audit.id, StringComparison.OrdinalIgnoreCase)))
+                        existingAudits.Add(audit);
+                }
+            }
+
             static string AuditKey(string spbuId, DateTime date, string level) =>
                 $"{spbuId}|{date:yyyyMMdd}|{level.Trim().ToUpperInvariant()}";
 
             var auditByKey = existingAudits
-                .Where(x => x.audit_execution_time.HasValue)
+                .Where(x => x.audit_execution_time.HasValue && !IsDeletedAudit(x))
                 .GroupBy(x => AuditKey(
                     x.spbu_id,
                     x.audit_execution_time!.Value.Date,
                     string.IsNullOrWhiteSpace(x.audit_level) ? "-" : x.audit_level))
-                .ToDictionary(x => x.Key, x => x.First(), StringComparer.OrdinalIgnoreCase);
+                .ToDictionary(
+                    x => x.Key,
+                    x => x.OrderByDescending(a => a.updated_date ?? a.created_date).First(),
+                    StringComparer.OrdinalIgnoreCase);
+
+            var auditBySourceId = existingAudits
+                .SelectMany(a =>
+                {
+                    var keys = new List<string>();
+                    if (!string.IsNullOrWhiteSpace(a.id))
+                        keys.Add(a.id.Trim());
+                    if (!string.IsNullOrWhiteSpace(a.source_trx_audit_id))
+                        keys.Add(a.source_trx_audit_id.Trim());
+                    return keys.Select(k => new { Key = k, Audit = a });
+                })
+                .GroupBy(x => x.Key, StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(
+                    g => g.Key,
+                    g => g.Select(x => x.Audit)
+                          .OrderBy(a => IsDeletedAudit(a) ? 1 : 0)
+                          .ThenByDescending(a => a.updated_date ?? a.created_date)
+                          .First(),
+                    StringComparer.OrdinalIgnoreCase);
+
+            // Decide KEEP / REPLACE before touching SPBU master.
+            var kept = 0;
+            foreach (var row in validRows)
+            {
+                var spbuNo = row.SpbuNo.Trim();
+                spbuByNo.TryGetValue(spbuNo, out var knownSpbu);
+
+                var normalizedAuditLevel = string.IsNullOrWhiteSpace(row.AuditLevel)
+                    ? "-"
+                    : row.AuditLevel.Trim();
+
+                trx_audit? existing = null;
+                var explicitSourceId = NullIfEmpty(row.TrxAuditId);
+
+                if (!string.IsNullOrWhiteSpace(explicitSourceId) &&
+                    auditBySourceId.TryGetValue(explicitSourceId, out var bySource) &&
+                    !IsDeletedAudit(bySource))
+                {
+                    existing = bySource;
+                }
+                else if (string.IsNullOrWhiteSpace(explicitSourceId) && knownSpbu != null)
+                {
+                    var fallbackKey = AuditKey(
+                        knownSpbu.id,
+                        AsUnspecified(row.AuditDate!.Value.Date),
+                        normalizedAuditLevel);
+
+                    auditByKey.TryGetValue(fallbackKey, out existing);
+                }
+
+                row.ExistingAudit = existing;
+
+                if (existing != null && !replaceExisting)
+                {
+                    row.SkipImport = true;
+                    kept++;
+                }
+            }
 
             var existingAuditIds = existingAudits
                 .Select(x => x.id)
@@ -234,7 +346,7 @@ public class RegularAuditImportController : Controller
                 // STAGE 1 - SPBU MASTER
                 // =====================================================
 
-                foreach (var row in validRows)
+                foreach (var row in validRows.Where(x => !x.SkipImport))
                 {
                     var spbuNo = row.SpbuNo.Trim();
                     var auditDate = AsUnspecified(row.AuditDate!.Value.Date);
@@ -304,10 +416,10 @@ public class RegularAuditImportController : Controller
                 // =====================================================
 
                 var created = 0;
-                var updated = 0;
+                var replaced = 0;
                 var auditRows = new List<AuditImportContext>();
 
-                foreach (var row in validRows)
+                foreach (var row in validRows.Where(x => !x.SkipImport))
                 {
                     var spbuNo = row.SpbuNo.Trim();
                     var spbu = spbuByNo[spbuNo];
@@ -318,37 +430,68 @@ public class RegularAuditImportController : Controller
                         : row.AuditLevel.Trim();
 
                     var auditKey = AuditKey(spbu.id, auditDate, normalizedAuditLevel);
+                    var existingAudit = row.ExistingAudit;
+                    var explicitSourceId = NullIfEmpty(row.TrxAuditId);
 
-                    if (!auditByKey.TryGetValue(auditKey, out var audit))
+                    string sourceAuditId;
+
+                    if (existingAudit != null && replaceExisting)
                     {
-                        audit = new trx_audit
-                        {
-                            id = Guid.NewGuid().ToString(),
-                            spbu_id = spbu.id,
-                            audit_level = normalizedAuditLevel,
-                            audit_type = string.IsNullOrWhiteSpace(row.AuditType)
-                                ? defaultAuditType
-                                : row.AuditType.Trim(),
-                            status = "VERIFIED",
-                            form_type_auditor1 = "FULL",
-                            form_status_auditor1 = "COMPLETED",
-                            km_range = row.KmRange ?? 0m,
-                            created_by = currentUser,
-                            created_date = row.AuditCreatedDate.HasValue
-                                ? AsUnspecified(row.AuditCreatedDate.Value)
-                                : sendDate,
-                            updated_by = currentUser,
-                            updated_date = nowWithoutTimeZone
-                        };
+                        // Keep the previous data as history. The old audit is only
+                        // logically deleted; its checklist/QQ/summary remain attached
+                        // to the old trx_audit.id.
+                        existingAudit.status = "DELETED";
+                        existingAudit.updated_by = currentUser;
+                        existingAudit.updated_date = nowWithoutTimeZone;
 
-                        _context.trx_audits.Add(audit);
-                        auditByKey[auditKey] = audit;
-                        created++;
+                        sourceAuditId =
+                            explicitSourceId ??
+                            NullIfEmpty(existingAudit.source_trx_audit_id) ??
+                            existingAudit.id;
+
+                        replaced++;
                     }
                     else
                     {
-                        updated++;
+                        sourceAuditId = explicitSourceId ?? string.Empty;
                     }
+
+                    // Initial import can preserve the source trx_audit.id.
+                    // A replacement always receives a new trx_audit.id.
+                    var newAuditId =
+                        existingAudit == null &&
+                        !string.IsNullOrWhiteSpace(explicitSourceId) &&
+                        existingAudits.All(x => !string.Equals(x.id, explicitSourceId, StringComparison.OrdinalIgnoreCase))
+                            ? explicitSourceId!
+                            : Guid.NewGuid().ToString();
+
+                    var audit = new trx_audit
+                    {
+                        id = newAuditId,
+                        source_trx_audit_id = string.IsNullOrWhiteSpace(sourceAuditId)
+                            ? newAuditId
+                            : sourceAuditId,
+                        spbu_id = spbu.id,
+                        audit_level = normalizedAuditLevel,
+                        audit_type = string.IsNullOrWhiteSpace(row.AuditType)
+                            ? defaultAuditType
+                            : row.AuditType.Trim(),
+                        status = "VERIFIED",
+                        form_type_auditor1 = "FULL",
+                        form_status_auditor1 = "COMPLETED",
+                        km_range = row.KmRange ?? 0m,
+                        created_by = currentUser,
+                        created_date = row.AuditCreatedDate.HasValue
+                            ? AsUnspecified(row.AuditCreatedDate.Value)
+                            : sendDate,
+                        updated_by = currentUser,
+                        updated_date = nowWithoutTimeZone
+                    };
+
+                    _context.trx_audits.Add(audit);
+                    auditByKey[auditKey] = audit;
+                    auditBySourceId[audit.source_trx_audit_id!] = audit;
+                    created++;
 
                     var auditor1 = ResolveUser(row.Auditor1Username, row.Auditor1Name, userByUsername, userByName);
                     var auditor2 = ResolveUser(row.Auditor2Username, row.Auditor2Name, userByUsername, userByName);
@@ -592,7 +735,7 @@ public class RegularAuditImportController : Controller
                 var fullRows = auditRows.Count(x => x.Row.HasChecklistPayload || x.Row.HasQqWideColumns);
 
                 TempData["Success"] =
-                    $"Upload {importLabel} berhasil. New={created}, Updated={updated}, FullDetail={fullRows}, Skipped={skipped}.";
+                    $"Upload {importLabel} berhasil. New={created}, Replaced={replaced}, Kept={kept}, FullDetail={fullRows}, SkippedInvalid={skipped}.";
 
                 return RedirectToAction("Index", redirectController);
             }
@@ -908,6 +1051,15 @@ public class RegularAuditImportController : Controller
         return null;
     }
 
+    private static string NormalizeImportMode(string? importMode)
+    {
+        var value = (importMode ?? "KEEP").Trim().ToUpperInvariant();
+        return value == "REPLACE" ? "REPLACE" : "KEEP";
+    }
+
+    private static bool IsDeletedAudit(trx_audit audit) =>
+        string.Equals(audit.status, "DELETED", StringComparison.OrdinalIgnoreCase);
+
     // =============================================================
     // SAVE / ERROR HELPERS
     // =============================================================
@@ -1076,6 +1228,7 @@ public class RegularAuditImportController : Controller
             {
                 RawValues = raw,
 
+                TrxAuditId = Get("trx_audit_id", "audit_id"),
                 SendDate = ParseDateTime(Get("send_date")),
                 AuditDate = ParseDateTime(Get("Audit Date", "audit_date", "audit_execution_time")),
                 AuditScheduleDate = ParseDateTime(Get("audit_schedule_date")),
@@ -1225,7 +1378,7 @@ public class RegularAuditImportController : Controller
     {
         var headers = new[]
         {
-            "send_date","Audit Date","audit_date","audit_execution_time","audit_schedule_date","audit_created_date","approval_date",
+            "trx_audit_id","audit_id","send_date","Audit Date","audit_date","audit_execution_time","audit_schedule_date","audit_created_date","approval_date",
             "spbu_no","region","province_name","province","year","address","city_name","tipe_spbu","owner_type","rayon","sbm","sam",
             "owner_name","manager_name","quarter","quater","mor","sales_area","phone_number_1","phone",
             "audit_type","audit_level","audit_next","good_status","result","excellent_status","Total Score","total_score",
@@ -1438,6 +1591,10 @@ public class RegularAuditImportController : Controller
     {
         public Dictionary<string, string> RawValues { get; set; } = new(StringComparer.OrdinalIgnoreCase);
         public HashSet<string> FixedNormalizedHeaders { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+
+        public string TrxAuditId { get; set; } = string.Empty;
+        public trx_audit? ExistingAudit { get; set; }
+        public bool SkipImport { get; set; }
 
         public DateTime? SendDate { get; set; }
         public DateTime? AuditDate { get; set; }

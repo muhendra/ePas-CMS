@@ -1469,6 +1469,7 @@
                             <tr>
                                 <th>Level</th>
                                 <th>Approver</th>
+                                <th>Signature</th>
                                 <th>Status</th>
                                 <th>Action By</th>
                                 <th>Action Date</th>
@@ -1484,12 +1485,27 @@
                                     "CANCELLED" => "bg-secondary",
                                     _ => "bg-warning text-dark"
                                 };
+                                var stepSignatureUrl = BuildAssetUrl(step.SignaturePath);
 
                                 <tr>
                                     <td>@step.ApprovalLevel</td>
                                     <td>
                                         <strong>@step.ApproverName</strong><br />
                                         <small class="text-muted">@step.ApproverUsername</small>
+                                    </td>
+                                    <td>
+                                        @if (!string.IsNullOrWhiteSpace(stepSignatureUrl) &&
+                                             (step.Status == "APPROVED" || step.Status == "REJECTED"))
+                                        {
+                                            <img src="@stepSignatureUrl"
+                                                 alt="Signature Level @step.ApprovalLevel"
+                                                 class="requestor-signature-img"
+                                                 style="max-width:110px;max-height:65px;" />
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted">-</span>
+                                        }
                                     </td>
                                     <td><span class="badge @stepBadge">@step.Status</span></td>
                                     <td>@(string.IsNullOrWhiteSpace(step.ActionBy) ? "-" : step.ActionBy)</td>
@@ -1500,7 +1516,7 @@
                                 {
                                     <tr>
                                         <td></td>
-                                        <td colspan="4" class="text-danger">
+                                        <td colspan="5" class="text-danger">
                                             <strong>Alasan:</strong> @step.RejectionReason
                                         </td>
                                     </tr>

@@ -1593,7 +1593,7 @@ namespace e_Pas_CMS.Controllers
 
                 var summaryHeaders = new[]
                 {
-                    "send_date","Audit Date","spbu_no","region","year","address","city_name","tipe_spbu","rayon",
+                    "trx_audit_id","send_date","Audit Date","spbu_no","region","year","address","city_name","tipe_spbu","rayon",
                     "audit_level","audit_next","good_status","excellent_status","Total Score",
                     "SSS","EQnQ","RFS","VFC","EPO","wtms","qq","wmef","format_fisik","cpo",
                     "kelas_spbu","penalty_good_alerts","penalty_excellent_alerts"
@@ -1806,6 +1806,7 @@ namespace e_Pas_CMS.Controllers
 
                     var summaryValues = new string?[]
                     {
+                        a.id,
                         sendDate.ToString("yyyy-MM-dd"),
                         auditDate.ToString("yyyy-MM-dd"),
                         a.spbu.spbu_no,
