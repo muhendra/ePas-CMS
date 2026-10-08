@@ -91,6 +91,27 @@
         }
     }
 
+    bool IsImagePath(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+            return false;
+
+        try
+        {
+            var cleanPath = path;
+            var separatorIndex = cleanPath.IndexOfAny(new[] { '?', '#' });
+            if (separatorIndex >= 0)
+                cleanPath = cleanPath.Substring(0, separatorIndex);
+
+            var extension = System.IO.Path.GetExtension(cleanPath)?.ToLowerInvariant();
+            return extension is ".jpg" or ".jpeg" or ".png" or ".gif" or ".webp" or ".bmp";
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
     var bpjsKesehatan = GetMediaPath("BPJS_KESEHATAN");
     var bpjsKetenagakerjaan = GetMediaPath("BPJS_KETENAGAKERJAAN");
     var vehicle = GetMediaPath("VEHICLE_MAINTENANCE");
@@ -572,13 +593,54 @@
             color: #111827;
         }
 
+        .attachment-item {
+            min-width: 0;
+        }
+
+        .attachment-thumbnail-link {
+            display: block;
+            width: 100%;
+            max-width: 180px;
+            margin-top: 10px;
+            border: 1px solid #e5e7eb;
+            border-radius: 12px;
+            overflow: hidden;
+            background: #f8fafc;
+            box-shadow: 0 3px 10px rgba(15, 23, 42, .08);
+            text-decoration: none;
+        }
+
+        .attachment-thumbnail {
+            display: block;
+            width: 100%;
+            aspect-ratio: 4 / 3;
+            object-fit: cover;
+            background: #f1f5f9;
+            transition: transform .18s ease, opacity .18s ease;
+        }
+
+        .attachment-thumbnail-link:hover .attachment-thumbnail {
+            transform: scale(1.03);
+            opacity: .94;
+        }
+
+        .attachment-thumbnail-caption {
+            display: block;
+            padding: 7px 9px;
+            color: #64748b;
+            font-size: 11px;
+            font-weight: 700;
+            text-align: center;
+            background: #fff;
+        }
+
         .attachment-link {
             display: inline-block;
             color: #08b5d3;
             text-decoration: none;
             font-size: 14px;
             font-weight: 800;
-            margin-top: 4px;
+            margin-top: 8px;
             word-break: break-word;
         }
 
@@ -1328,7 +1390,7 @@
             <div class="attachment-grid">
                 @foreach (var attachment in attachmentItems)
                 {
-                    <div>
+                    <div class="attachment-item">
                         <div class="attachment-title">@attachment.Title</div>
 
                         @if (!string.IsNullOrWhiteSpace(attachment.Description))
@@ -1342,9 +1404,29 @@
 
                         @if (!string.IsNullOrWhiteSpace(attachment.Path))
                         {
-                            <a href="@attachment.Path" target="_blank" class="attachment-link">
-                                @GetFileName(attachment.Path)
-                            </a>
+                            @if (IsImagePath(attachment.Path))
+                            {
+                                <a href="@attachment.Path"
+                                   target="_blank"
+                                   rel="noopener noreferrer"
+                                   class="attachment-thumbnail-link"
+                                   title="Buka gambar ukuran penuh">
+                                    <img src="@attachment.Path"
+                                         alt="Lampiran @attachment.Title"
+                                         class="attachment-thumbnail"
+                                         loading="lazy" />
+                                    <span class="attachment-thumbnail-caption">Klik untuk lihat gambar</span>
+                                </a>
+                            }
+                            else
+                            {
+                                <a href="@attachment.Path"
+                                   target="_blank"
+                                   rel="noopener noreferrer"
+                                   class="attachment-link">
+                                    @GetFileName(attachment.Path)
+                                </a>
+                            }
                         }
                         else
                         {
@@ -1469,7 +1551,6 @@
                             <tr>
                                 <th>Level</th>
                                 <th>Approver</th>
-                                <th>Signature</th>
                                 <th>Status</th>
                                 <th>Action By</th>
                                 <th>Action Date</th>
@@ -1485,27 +1566,12 @@
                                     "CANCELLED" => "bg-secondary",
                                     _ => "bg-warning text-dark"
                                 };
-                                var stepSignatureUrl = BuildAssetUrl(step.SignaturePath);
 
                                 <tr>
                                     <td>@step.ApprovalLevel</td>
                                     <td>
                                         <strong>@step.ApproverName</strong><br />
                                         <small class="text-muted">@step.ApproverUsername</small>
-                                    </td>
-                                    <td>
-                                        @if (!string.IsNullOrWhiteSpace(stepSignatureUrl) &&
-                                             (step.Status == "APPROVED" || step.Status == "REJECTED"))
-                                        {
-                                            <img src="@stepSignatureUrl"
-                                                 alt="Signature Level @step.ApprovalLevel"
-                                                 class="requestor-signature-img"
-                                                 style="max-width:110px;max-height:65px;" />
-                                        }
-                                        else
-                                        {
-                                            <span class="text-muted">-</span>
-                                        }
                                     </td>
                                     <td><span class="badge @stepBadge">@step.Status</span></td>
                                     <td>@(string.IsNullOrWhiteSpace(step.ActionBy) ? "-" : step.ActionBy)</td>
@@ -1516,7 +1582,7 @@
                                 {
                                     <tr>
                                         <td></td>
-                                        <td colspan="5" class="text-danger">
+                                        <td colspan="4" class="text-danger">
                                             <strong>Alasan:</strong> @step.RejectionReason
                                         </td>
                                     </tr>

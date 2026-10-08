@@ -426,11 +426,41 @@
             text-decoration: none;
             font-size: 26px;
             line-height: 1;
+            min-width: 30px;
+            height: 30px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
         }
 
             .invoice-page-arrow:hover {
                 color: #111827;
             }
+
+            .invoice-page-arrow.disabled {
+                opacity: .35;
+                cursor: default;
+                pointer-events: none;
+            }
+
+        .invoice-page-ellipsis {
+            min-width: 22px;
+            height: 30px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            color: #9aa3ad;
+            font-size: 14px;
+            font-weight: 700;
+            user-select: none;
+        }
+
+        .invoice-pagination-info {
+            color: #7b8490;
+            font-size: 12px;
+            font-weight: 700;
+            white-space: nowrap;
+        }
 
         .invoice-alert {
             border-radius: 12px;
@@ -506,6 +536,26 @@
     var totalPages = Model.TotalPages;
     var prevPage = Model.PageNumber > 1 ? Model.PageNumber - 1 : 1;
     var nextPage = Model.PageNumber < totalPages ? Model.PageNumber + 1 : totalPages;
+
+    // Pagination window: jangan render seluruh halaman (mis. 1..300).
+    // Tampilkan maksimal 5 page di sekitar current page,
+    // ditambah first/last page + ellipsis.
+    const int paginationRadius = 2;
+    const int paginationWindowSize = 5;
+
+    var startPage = Math.Max(1, Model.PageNumber - paginationRadius);
+    var endPage = Math.Min(totalPages, Model.PageNumber + paginationRadius);
+
+    if (Model.PageNumber <= paginationRadius + 1)
+    {
+        startPage = 1;
+        endPage = Math.Min(totalPages, paginationWindowSize);
+    }
+    else if (Model.PageNumber >= totalPages - paginationRadius)
+    {
+        startPage = Math.Max(1, totalPages - paginationWindowSize + 1);
+        endPage = totalPages;
+    }
 
     var auditorOptions = ViewBag.AuditorOptions as IEnumerable<InvoiceAuditorOptionVM>
         ?? new List<InvoiceAuditorOptionVM>();
@@ -774,22 +824,61 @@
     @if (totalPages > 1)
     {
         <div class="invoice-pagination-wrap">
-            <a class="invoice-page-arrow"
-               href="@Url.Action("Index", new
-               {
-                   pageNumber = prevPage,
-                   pageSize = Model.PageSize,
-                   searchTerm = searchTerm,
-                   auditorId = selectedAuditorId,
-                   periodClaim = selectedPeriodClaim,
-                   sortColumn = ViewBag.SortColumn,
-                   sortDirection = ViewBag.SortDirection
-               })">
-                ‹
-            </a>
+            <span class="invoice-pagination-info">
+                Halaman @Model.PageNumber dari @totalPages
+            </span>
+
+            @if (Model.HasPreviousPage)
+            {
+                <a class="invoice-page-arrow"
+                   aria-label="Halaman sebelumnya"
+                   href="@Url.Action("Index", new
+                   {
+                       pageNumber = prevPage,
+                       pageSize = Model.PageSize,
+                       searchTerm = searchTerm,
+                       auditorId = selectedAuditorId,
+                       periodClaim = selectedPeriodClaim,
+                       sortColumn = ViewBag.SortColumn,
+                       sortDirection = ViewBag.SortDirection
+                   })">
+                    ‹
+                </a>
+            }
+            else
+            {
+                <span class="invoice-page-arrow disabled" aria-hidden="true">‹</span>
+            }
 
             <ul class="invoice-pagination">
-                @for (int i = 1; i <= totalPages; i++)
+                @* First page jika window tidak dimulai dari 1 *@
+                @if (startPage > 1)
+                {
+                    <li>
+                        <a class="invoice-page-link"
+                           href="@Url.Action("Index", new
+                           {
+                               pageNumber = 1,
+                               pageSize = Model.PageSize,
+                               searchTerm = searchTerm,
+                               auditorId = selectedAuditorId,
+                               periodClaim = selectedPeriodClaim,
+                               sortColumn = ViewBag.SortColumn,
+                               sortDirection = ViewBag.SortDirection
+                           })">
+                            1
+                        </a>
+                    </li>
+
+                    @if (startPage > 2)
+                    {
+                        <li>
+                            <span class="invoice-page-ellipsis">…</span>
+                        </li>
+                    }
+                }
+
+                @for (int i = startPage; i <= endPage; i++)
                 {
                     <li>
                         <a class="invoice-page-link @(i == Model.PageNumber ? "active" : "")"
@@ -807,21 +896,56 @@
                         </a>
                     </li>
                 }
+
+                @* Last page jika window belum mencapai halaman terakhir *@
+                @if (endPage < totalPages)
+                {
+                    @if (endPage < totalPages - 1)
+                    {
+                        <li>
+                            <span class="invoice-page-ellipsis">…</span>
+                        </li>
+                    }
+
+                    <li>
+                        <a class="invoice-page-link"
+                           href="@Url.Action("Index", new
+                           {
+                               pageNumber = totalPages,
+                               pageSize = Model.PageSize,
+                               searchTerm = searchTerm,
+                               auditorId = selectedAuditorId,
+                               periodClaim = selectedPeriodClaim,
+                               sortColumn = ViewBag.SortColumn,
+                               sortDirection = ViewBag.SortDirection
+                           })">
+                            @totalPages
+                        </a>
+                    </li>
+                }
             </ul>
 
-            <a class="invoice-page-arrow"
-               href="@Url.Action("Index", new
-               {
-                   pageNumber = nextPage,
-                   pageSize = Model.PageSize,
-                   searchTerm = searchTerm,
-                   auditorId = selectedAuditorId,
-                   periodClaim = selectedPeriodClaim,
-                   sortColumn = ViewBag.SortColumn,
-                   sortDirection = ViewBag.SortDirection
-               })">
-                ›
-            </a>
+            @if (Model.HasNextPage)
+            {
+                <a class="invoice-page-arrow"
+                   aria-label="Halaman berikutnya"
+                   href="@Url.Action("Index", new
+                   {
+                       pageNumber = nextPage,
+                       pageSize = Model.PageSize,
+                       searchTerm = searchTerm,
+                       auditorId = selectedAuditorId,
+                       periodClaim = selectedPeriodClaim,
+                       sortColumn = ViewBag.SortColumn,
+                       sortDirection = ViewBag.SortDirection
+                   })">
+                    ›
+                </a>
+            }
+            else
+            {
+                <span class="invoice-page-arrow disabled" aria-hidden="true">›</span>
+            }
         </div>
     }
 </div>

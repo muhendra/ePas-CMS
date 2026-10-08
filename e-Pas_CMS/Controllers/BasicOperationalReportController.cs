@@ -98,7 +98,9 @@ namespace e_Pas_CMS.Controllers
                 searchTerm = searchTerm.ToLower();
                 query = query.Where(a =>
                     a.spbu.spbu_no.ToLower().Contains(searchTerm) ||
-                    a.app_user.name.ToLower().Contains(searchTerm) ||
+                    (a.app_user != null &&
+                     a.app_user.name != null &&
+                     a.app_user.name.ToLower().Contains(searchTerm)) ||
                     a.status.ToLower().Contains(searchTerm) ||
                     a.spbu.address.ToLower().Contains(searchTerm) ||
                     a.spbu.province_name.ToLower().Contains(searchTerm) ||
@@ -236,9 +238,13 @@ namespace e_Pas_CMS.Controllers
                     SAM = a.spbu.sam,
                     Province = a.spbu.province_name,
                     Year = a.spbu.year ?? DateTime.Now.Year,
-                    AuditDate = (a.audit_execution_time == null || a.audit_execution_time.Value == DateTime.MinValue) ? a.updated_date.Value : a.audit_execution_time.Value,
-                    SubmitDate = a.approval_date.GetValueOrDefault() == DateTime.MinValue ? a.updated_date : a.approval_date.GetValueOrDefault(),
-                    Auditor = a.app_user.name,
+                    AuditDate = (a.audit_execution_time == null || a.audit_execution_time.Value == DateTime.MinValue)
+                        ? (a.updated_date ?? a.created_date)
+                        : a.audit_execution_time.Value,
+                    SubmitDate = (!a.approval_date.HasValue || a.approval_date.Value == DateTime.MinValue)
+                        ? (a.updated_date ?? a.created_date)
+                        : a.approval_date.Value,
+                    Auditor = a.app_user?.name ?? "-",
                     GoodStatus = goodStatus,
                     ExcellentStatus = excellentStatus,
                     //Score = (a.score ?? a.spbu.audit_current_score ?? (decimal?)finalScore).Value,
@@ -594,7 +600,9 @@ namespace e_Pas_CMS.Controllers
                 searchTerm = searchTerm.ToLower();
                 query = query.Where(a =>
                     a.spbu.spbu_no.ToLower().Contains(searchTerm) ||
-                    a.app_user.name.ToLower().Contains(searchTerm) ||
+                    (a.app_user != null &&
+                     a.app_user.name != null &&
+                     a.app_user.name.ToLower().Contains(searchTerm)) ||
                     a.status.ToLower().Contains(searchTerm) ||
                     a.spbu.address.ToLower().Contains(searchTerm) ||
                     a.spbu.province_name.ToLower().Contains(searchTerm) ||
@@ -1280,9 +1288,13 @@ namespace e_Pas_CMS.Controllers
                     SAM = a.spbu.sam,
                     Province = a.spbu.province_name,
                     Year = a.spbu.year ?? DateTime.Now.Year,
-                    AuditDate = (a.audit_execution_time == null || a.audit_execution_time.Value == DateTime.MinValue) ? a.updated_date.Value : a.audit_execution_time.Value,
-                    SubmitDate = a.approval_date.GetValueOrDefault() == DateTime.MinValue ? a.updated_date : a.approval_date.GetValueOrDefault(),
-                    Auditor = a.app_user.name,
+                    AuditDate = (a.audit_execution_time == null || a.audit_execution_time.Value == DateTime.MinValue)
+                        ? (a.updated_date ?? a.created_date)
+                        : a.audit_execution_time.Value,
+                    SubmitDate = (!a.approval_date.HasValue || a.approval_date.Value == DateTime.MinValue)
+                        ? (a.updated_date ?? a.created_date)
+                        : a.approval_date.Value,
+                    Auditor = a.app_user?.name ?? "-",
                     GoodStatus = goodStatus,
                     ExcellentStatus = excellentStatus,
                     Score = (a.spbu.audit_current_score.HasValue && a.spbu.audit_current_score.Value != 0) ? a.spbu.audit_current_score.Value : finalScore,
