@@ -34,11 +34,13 @@ public class InvoiceController : Controller
     private const string ApprovalFlowCancelled = "CANCELLED";
 
     // Approval invoice:
-    // Level 1 wajib role Finance.
-    // Level 2 wajib role Audit Report pada app Legacy.
-    // Level 3+ bebas memilih user aktif.
-    private const string ApprovalLevel1RoleLabel = "Finance";
-    private const string ApprovalLevel2RoleLabel = "Audit Report, Legacy";
+    // Level 1 wajib: app_role.name = "Finance", app_role.app = "Finance".
+    // Level 2 wajib: app_role.name = "Audit Report", app_role.app = "Legacy".
+    // Level 3+ bebas memilih user ACTIVE.
+    private const string ApprovalLevel1RoleName = "Finance";
+    private const string ApprovalLevel1RoleApp = "Finance";
+    private const string ApprovalLevel2RoleName = "Audit Report";
+    private const string ApprovalLevel2RoleApp = "Legacy";
 
     public InvoiceController(EpasDbContext context)
     {
@@ -419,7 +421,7 @@ public class InvoiceController : Controller
         if (approverIds.Count < 2)
         {
             TempData["Error"] =
-                $"Level 1 ({ApprovalLevel1RoleLabel}) dan Level 2 ({ApprovalLevel2RoleLabel}) wajib dipilih.";
+                $"Level 1 ({ApprovalLevel1RoleName}) dan Level 2 ({ApprovalLevel2RoleName}, {ApprovalLevel2RoleApp}) wajib dipilih.";
             return RedirectToAction(nameof(Detail), new { id });
         }
 
@@ -434,14 +436,14 @@ public class InvoiceController : Controller
         if (!requiredRoleUsers.Level1Finance.Contains(approverIds[0]))
         {
             TempData["Error"] =
-                $"Approver Level 1 wajib user aktif dengan role {ApprovalLevel1RoleLabel}.";
+                $"Approver Level 1 wajib user ACTIVE dengan role {ApprovalLevel1RoleName} / {ApprovalLevel1RoleApp}.";
             return RedirectToAction(nameof(Detail), new { id });
         }
 
         if (!requiredRoleUsers.Level2AuditReportLegacy.Contains(approverIds[1]))
         {
             TempData["Error"] =
-                $"Approver Level 2 wajib user aktif dengan role {ApprovalLevel2RoleLabel}.";
+                $"Approver Level 2 wajib user ACTIVE dengan role {ApprovalLevel2RoleName} / {ApprovalLevel2RoleApp}.";
             return RedirectToAction(nameof(Detail), new { id });
         }
 
@@ -1317,7 +1319,7 @@ public class InvoiceController : Controller
             join user in _context.app_users.AsNoTracking()
                 on ur.app_user_id equals user.id
             where user.status == "ACTIVE"
-                  && role.status != "DELETED"
+                  && role.status == "ACTIVE"
             select new
             {
                 UserId = user.id,
@@ -1326,50 +1328,39 @@ public class InvoiceController : Controller
             }
         ).ToListAsync();
 
+        // Level 1 wajib role:
+        // name = Finance
+        // app  = Finance
         var level1 = assignments
-            .Where(x => IsFinanceApprovalRole(x.RoleName, x.RoleApp))
+            .Where(x =>
+                string.Equals(
+                    x.RoleName?.Trim(),
+                    ApprovalLevel1RoleName,
+                    StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(
+                    x.RoleApp?.Trim(),
+                    ApprovalLevel1RoleApp,
+                    StringComparison.OrdinalIgnoreCase))
             .Select(x => x.UserId)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
+        // Level 2 wajib role:
+        // name = Audit Report
+        // app  = Legacy
         var level2 = assignments
-            .Where(x => IsAuditReportLegacyApprovalRole(x.RoleName, x.RoleApp))
+            .Where(x =>
+                string.Equals(
+                    x.RoleName?.Trim(),
+                    ApprovalLevel2RoleName,
+                    StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(
+                    x.RoleApp?.Trim(),
+                    ApprovalLevel2RoleApp,
+                    StringComparison.OrdinalIgnoreCase))
             .Select(x => x.UserId)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
         return (level1, level2);
-    }
-
-    private static bool IsFinanceApprovalRole(string? roleName, string? roleApp)
-    {
-        var name = NormalizeApprovalRoleValue(roleName);
-        var app = NormalizeApprovalRoleValue(roleApp);
-
-        // Support deployment yang menyimpan Finance sebagai role name
-        // maupun sebagai app/module label.
-        return name == "FINANCE" || app == "FINANCE";
-    }
-
-    private static bool IsAuditReportLegacyApprovalRole(string? roleName, string? roleApp)
-    {
-        var name = NormalizeApprovalRoleValue(roleName);
-        var app = NormalizeApprovalRoleValue(roleApp);
-
-        // Format utama: role.name = "Audit Report", role.app = "Legacy".
-        // Compatibility: role name dapat tersimpan sebagai "Audit Report, Legacy".
-        return (name == "AUDITREPORT" && app == "LEGACY")
-               || name == "AUDITREPORTLEGACY"
-               || app == "AUDITREPORTLEGACY";
-    }
-
-    private static string NormalizeApprovalRoleValue(string? value)
-    {
-        if (string.IsNullOrWhiteSpace(value))
-            return string.Empty;
-
-        return new string(value
-            .Where(char.IsLetterOrDigit)
-            .Select(char.ToUpperInvariant)
-            .ToArray());
     }
 
     private async Task<string?> GetCurrentAppUserIdAsync()

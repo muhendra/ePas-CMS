@@ -1520,7 +1520,7 @@
             <div class="finance-decision-card mb-4">
                 <div class="decision-title">Skema Approval Finance</div>
                 <div class="decision-subtitle mb-3">
-                    Level 1 dan Level 2 wajib tersedia sesuai role. Level 3 dan seterusnya bersifat opsional dan dapat memilih user aktif secara bebas.
+                    Level 1 Finance dan Level 2 Audit Report, Legacy wajib dipilih. Level 3 dan seterusnya opsional dan dapat memilih user aktif secara bebas.
                 </div>
 
                 <div id="approverRows" class="d-flex flex-column gap-2">
@@ -1539,7 +1539,7 @@
                                 required>
                             @if (Model.ApprovalLevel1UserOptions.Any())
                             {
-                                <option value="">-- Pilih user role Finance --</option>
+                                <option value="">-- Pilih user Finance --</option>
                                 @foreach (var user in Model.ApprovalLevel1UserOptions)
                                 {
                                     <option value="@user.Id">@user.DisplayName</option>
@@ -1547,7 +1547,7 @@
                             }
                             else
                             {
-                                <option value="">-- Tidak ada user aktif role Finance --</option>
+                                <option value="">-- Tidak ada user ACTIVE role Finance --</option>
                             }
                         </select>
                     </div>
@@ -1567,7 +1567,7 @@
                                 required>
                             @if (Model.ApprovalLevel2UserOptions.Any())
                             {
-                                <option value="">-- Pilih user role Audit Report, Legacy --</option>
+                                <option value="">-- Pilih user Audit Report, Legacy --</option>
                                 @foreach (var user in Model.ApprovalLevel2UserOptions)
                                 {
                                     <option value="@user.Id">@user.DisplayName</option>
@@ -1575,7 +1575,7 @@
                             }
                             else
                             {
-                                <option value="">-- Tidak ada user aktif role Audit Report, Legacy --</option>
+                                <option value="">-- Tidak ada user ACTIVE role Audit Report, Legacy --</option>
                             }
                         </select>
                     </div>
