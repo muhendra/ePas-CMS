@@ -35,12 +35,17 @@ public class InvoiceController : Controller
 
     // Approval invoice:
     // Level 1 wajib: app_role.name = "Finance", app_role.app = "Finance".
-    // Level 2 wajib: app_role.name = "Audit Report", app_role.app = "Legacy".
+    // Level 2 wajib menggunakan role EXISTING:
+    // id   = 5ae044b5-551d-4272-a4ca-f54ae7568961
+    // name = Report
+    // app  = Management
+    // menu_function = ARP#BOARP
     // Level 3+ bebas memilih user ACTIVE.
     private const string ApprovalLevel1RoleName = "Finance";
     private const string ApprovalLevel1RoleApp = "Finance";
-    private const string ApprovalLevel2RoleName = "Audit Report";
-    private const string ApprovalLevel2RoleApp = "Legacy";
+
+    private const string ApprovalLevel2RoleId = "5ae044b5-551d-4272-a4ca-f54ae7568961";
+    private const string ApprovalLevel2RoleDisplay = "Audit Report, Legacy";
 
     public InvoiceController(EpasDbContext context)
     {
@@ -421,7 +426,7 @@ public class InvoiceController : Controller
         if (approverIds.Count < 2)
         {
             TempData["Error"] =
-                $"Level 1 ({ApprovalLevel1RoleName}) dan Level 2 ({ApprovalLevel2RoleName}, {ApprovalLevel2RoleApp}) wajib dipilih.";
+                $"Level 1 ({ApprovalLevel1RoleName}) dan Level 2 ({ApprovalLevel2RoleDisplay}) wajib dipilih.";
             return RedirectToAction(nameof(Detail), new { id });
         }
 
@@ -443,7 +448,7 @@ public class InvoiceController : Controller
         if (!requiredRoleUsers.Level2AuditReportLegacy.Contains(approverIds[1]))
         {
             TempData["Error"] =
-                $"Approver Level 2 wajib user ACTIVE dengan role {ApprovalLevel2RoleName} / {ApprovalLevel2RoleApp}.";
+                $"Approver Level 2 wajib user ACTIVE yang terdaftar pada role existing {ApprovalLevel2RoleDisplay}.";
             return RedirectToAction(nameof(Detail), new { id });
         }
 
@@ -1323,6 +1328,7 @@ public class InvoiceController : Controller
             select new
             {
                 UserId = user.id,
+                RoleId = role.id,
                 RoleName = role.name,
                 RoleApp = role.app
             }
@@ -1344,18 +1350,15 @@ public class InvoiceController : Controller
             .Select(x => x.UserId)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
-        // Level 2 wajib role:
-        // name = Audit Report
-        // app  = Legacy
+        // Level 2 TIDAK membuat role baru.
+        // Pakai role existing secara exact berdasarkan app_role.id:
+        // 5ae044b5-551d-4272-a4ca-f54ae7568961
+        // name = Report, app = Management, menu_function = ARP#BOARP.
         var level2 = assignments
             .Where(x =>
                 string.Equals(
-                    x.RoleName?.Trim(),
-                    ApprovalLevel2RoleName,
-                    StringComparison.OrdinalIgnoreCase) &&
-                string.Equals(
-                    x.RoleApp?.Trim(),
-                    ApprovalLevel2RoleApp,
+                    x.RoleId,
+                    ApprovalLevel2RoleId,
                     StringComparison.OrdinalIgnoreCase))
             .Select(x => x.UserId)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
