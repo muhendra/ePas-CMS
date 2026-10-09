@@ -129,7 +129,15 @@ namespace e_Pas_CMS.ViewModels
         // =========================
         public List<InvoiceApprovalStepVM> ApprovalSteps { get; set; } = new();
 
+        // Semua user aktif: hanya dipakai untuk Level 3 dan seterusnya.
         public List<InvoiceApprovalUserOptionVM> ApprovalUserOptions { get; set; } = new();
+
+        // Level 1 wajib: kandidat hanya user aktif dengan role Finance.
+        public List<InvoiceApprovalUserOptionVM> ApprovalLevel1UserOptions { get; set; } = new();
+
+        // Level 2 wajib: kandidat hanya user aktif role Audit Report pada app Legacy
+        // (juga menerima label role "Audit Report, Legacy" untuk compatibility).
+        public List<InvoiceApprovalUserOptionVM> ApprovalLevel2UserOptions { get; set; } = new();
 
         public bool HasApprovalFlow => ApprovalSteps.Count > 0;
 

@@ -241,6 +241,39 @@
             margin-top: 4px;
         }
 
+        .approval-required-role {
+            width: 190px;
+            min-width: 190px;
+            border: 1px solid #e5e7eb;
+            border-radius: 10px;
+            background: #f8fafc;
+            padding: 8px 10px;
+            line-height: 1.2;
+        }
+
+            .approval-required-role strong {
+                display: block;
+                color: #111827;
+                font-size: 12px;
+            }
+
+            .approval-required-role small {
+                display: block;
+                margin-top: 3px;
+                color: #dc2626;
+                font-size: 10px;
+                font-weight: 800;
+                text-transform: uppercase;
+                letter-spacing: .4px;
+            }
+
+        .approver-row-fixed {
+            padding: 8px;
+            border: 1px solid #eef0f2;
+            border-radius: 12px;
+            background: #fcfcfd;
+        }
+
         .approval-meta {
             margin-top: 10px;
             color: #334155;
@@ -1487,35 +1520,71 @@
             <div class="finance-decision-card mb-4">
                 <div class="decision-title">Skema Approval Finance</div>
                 <div class="decision-subtitle mb-3">
-                    Pilih approver sesuai urutan. Level berikutnya baru dapat melakukan approval setelah level sebelumnya selesai.
+                    Level 1 dan Level 2 wajib tersedia sesuai role. Level 3 dan seterusnya bersifat opsional dan dapat memilih user aktif secara bebas.
                 </div>
 
                 <div id="approverRows" class="d-flex flex-column gap-2">
-                    <div class="approver-row d-flex gap-2 align-items-center">
-                        <span class="badge bg-secondary approval-level-label">Level 1</span>
+                    <div class="approver-row approver-row-fixed d-flex gap-2 align-items-center"
+                         data-fixed-level="1">
+                        <span class="badge bg-dark approval-level-label">Level 1</span>
+
+                        <div class="approval-required-role">
+                            <strong>Finance</strong>
+                            <small>Wajib</small>
+                        </div>
+
                         <select name="ApproverUserIds"
                                 form="processForm"
                                 class="form-select"
                                 required>
-                            <option value="">-- Pilih Approver --</option>
-                            @foreach (var user in Model.ApprovalUserOptions)
+                            @if (Model.ApprovalLevel1UserOptions.Any())
                             {
-                                <option value="@user.Id">@user.DisplayName</option>
+                                <option value="">-- Pilih user role Finance --</option>
+                                @foreach (var user in Model.ApprovalLevel1UserOptions)
+                                {
+                                    <option value="@user.Id">@user.DisplayName</option>
+                                }
+                            }
+                            else
+                            {
+                                <option value="">-- Tidak ada user aktif role Finance --</option>
                             }
                         </select>
-                        <button type="button"
-                                class="btn btn-outline-danger btn-sm remove-approver"
-                                onclick="removeApproverRow(this)"
-                                style="display:none;">
-                            Hapus
-                        </button>
+                    </div>
+
+                    <div class="approver-row approver-row-fixed d-flex gap-2 align-items-center"
+                         data-fixed-level="2">
+                        <span class="badge bg-dark approval-level-label">Level 2</span>
+
+                        <div class="approval-required-role">
+                            <strong>Audit Report, Legacy</strong>
+                            <small>Wajib</small>
+                        </div>
+
+                        <select name="ApproverUserIds"
+                                form="processForm"
+                                class="form-select"
+                                required>
+                            @if (Model.ApprovalLevel2UserOptions.Any())
+                            {
+                                <option value="">-- Pilih user role Audit Report, Legacy --</option>
+                                @foreach (var user in Model.ApprovalLevel2UserOptions)
+                                {
+                                    <option value="@user.Id">@user.DisplayName</option>
+                                }
+                            }
+                            else
+                            {
+                                <option value="">-- Tidak ada user aktif role Audit Report, Legacy --</option>
+                            }
+                        </select>
                     </div>
                 </div>
 
                 <button type="button"
                         class="btn btn-outline-primary btn-sm mt-3"
                         onclick="addApproverRow()">
-                    <i class="bi bi-plus-circle"></i> Tambah Approver
+                    <i class="bi bi-plus-circle"></i> Tambah Approver Level 3+
                 </button>
 
                 <template id="approverRowTemplate">
@@ -1551,6 +1620,7 @@
                             <tr>
                                 <th>Level</th>
                                 <th>Approver</th>
+                                <th>Signature</th>
                                 <th>Status</th>
                                 <th>Action By</th>
                                 <th>Action Date</th>
@@ -1566,12 +1636,27 @@
                                     "CANCELLED" => "bg-secondary",
                                     _ => "bg-warning text-dark"
                                 };
+                                var stepSignatureUrl = BuildAssetUrl(step.SignaturePath);
 
                                 <tr>
                                     <td>@step.ApprovalLevel</td>
                                     <td>
                                         <strong>@step.ApproverName</strong><br />
                                         <small class="text-muted">@step.ApproverUsername</small>
+                                    </td>
+                                    <td>
+                                        @if (!string.IsNullOrWhiteSpace(stepSignatureUrl) &&
+                                             (step.Status == "APPROVED" || step.Status == "REJECTED"))
+                                        {
+                                            <img src="@stepSignatureUrl"
+                                                 alt="Signature Level @step.ApprovalLevel"
+                                                 class="requestor-signature-img"
+                                                 style="max-width:110px;max-height:65px;" />
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted">-</span>
+                                        }
                                     </td>
                                     <td><span class="badge @stepBadge">@step.Status</span></td>
                                     <td>@(string.IsNullOrWhiteSpace(step.ActionBy) ? "-" : step.ActionBy)</td>
@@ -1582,7 +1667,7 @@
                                 {
                                     <tr>
                                         <td></td>
-                                        <td colspan="4" class="text-danger">
+                                        <td colspan="5" class="text-danger">
                                             <strong>Alasan:</strong> @step.RejectionReason
                                         </td>
                                     </tr>
@@ -1803,7 +1888,9 @@ else if (isPendingApproval)
 
                 const removeButton = row.querySelector('.remove-approver');
                 if (removeButton) {
-                    removeButton.style.display = rows.length > 1 ? '' : 'none';
+                    // Level 1 dan 2 tidak punya tombol remove.
+                    // Row tambahan selalu Level 3+.
+                    removeButton.style.display = index >= 2 ? '' : 'none';
                 }
             });
         }
@@ -1829,8 +1916,25 @@ else if (isPendingApproval)
                 '#approverRows select[name="ApproverUserIds"]'
             ));
 
-            if (selects.length === 0 || selects.some(x => !x.value)) {
-                alert('Minimal satu approver wajib dipilih dan tidak boleh ada level kosong.');
+            if (selects.length < 2) {
+                alert('Level 1 Finance dan Level 2 Audit Report, Legacy wajib tersedia.');
+                return false;
+            }
+
+            if (!selects[0].value) {
+                alert('Approver Level 1 dengan role Finance wajib dipilih.');
+                selects[0].focus();
+                return false;
+            }
+
+            if (!selects[1].value) {
+                alert('Approver Level 2 dengan role Audit Report, Legacy wajib dipilih.');
+                selects[1].focus();
+                return false;
+            }
+
+            if (selects.slice(2).some(x => !x.value)) {
+                alert('Approver tambahan Level 3 dan seterusnya tidak boleh kosong.');
                 return false;
             }
 

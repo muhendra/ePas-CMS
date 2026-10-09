@@ -33,6 +33,13 @@ public class InvoiceController : Controller
     private const string ApprovalFlowRejected = "REJECTED";
     private const string ApprovalFlowCancelled = "CANCELLED";
 
+    // Approval invoice:
+    // Level 1 wajib role Finance.
+    // Level 2 wajib role Audit Report pada app Legacy.
+    // Level 3+ bebas memilih user aktif.
+    private const string ApprovalLevel1RoleLabel = "Finance";
+    private const string ApprovalLevel2RoleLabel = "Audit Report, Legacy";
+
     public InvoiceController(EpasDbContext context)
     {
         _context = context;
@@ -409,15 +416,32 @@ public class InvoiceController : Controller
             .Select(x => x.Trim())
             .ToList();
 
-        if (approverIds.Count == 0)
+        if (approverIds.Count < 2)
         {
-            TempData["Error"] = "Minimal satu approver wajib dipilih.";
+            TempData["Error"] =
+                $"Level 1 ({ApprovalLevel1RoleLabel}) dan Level 2 ({ApprovalLevel2RoleLabel}) wajib dipilih.";
             return RedirectToAction(nameof(Detail), new { id });
         }
 
         if (approverIds.Count != approverIds.Distinct(StringComparer.OrdinalIgnoreCase).Count())
         {
             TempData["Error"] = "Approver yang sama tidak boleh dipilih lebih dari satu level.";
+            return RedirectToAction(nameof(Detail), new { id });
+        }
+
+        var requiredRoleUsers = await GetRequiredApprovalRoleUserIdsAsync();
+
+        if (!requiredRoleUsers.Level1Finance.Contains(approverIds[0]))
+        {
+            TempData["Error"] =
+                $"Approver Level 1 wajib user aktif dengan role {ApprovalLevel1RoleLabel}.";
+            return RedirectToAction(nameof(Detail), new { id });
+        }
+
+        if (!requiredRoleUsers.Level2AuditReportLegacy.Contains(approverIds[1]))
+        {
+            TempData["Error"] =
+                $"Approver Level 2 wajib user aktif dengan role {ApprovalLevel2RoleLabel}.";
             return RedirectToAction(nameof(Detail), new { id });
         }
 
@@ -1067,6 +1091,16 @@ public class InvoiceController : Controller
             })
             .ToListAsync();
 
+        var requiredRoleUsers = await GetRequiredApprovalRoleUserIdsAsync();
+
+        var approvalLevel1UserOptions = approvalUserOptions
+            .Where(x => requiredRoleUsers.Level1Finance.Contains(x.Id))
+            .ToList();
+
+        var approvalLevel2UserOptions = approvalUserOptions
+            .Where(x => requiredRoleUsers.Level2AuditReportLegacy.Contains(x.Id))
+            .ToList();
+
         var currentPendingApproval = approvalSteps
             .FirstOrDefault(x => x.Status == ApprovalFlowPending);
 
@@ -1137,6 +1171,8 @@ public class InvoiceController : Controller
 
             ApprovalSteps = approvalSteps,
             ApprovalUserOptions = approvalUserOptions,
+            ApprovalLevel1UserOptions = approvalLevel1UserOptions,
+            ApprovalLevel2UserOptions = approvalLevel2UserOptions,
             CanCurrentUserApprove = canCurrentUserApprove,
             CurrentApprovalLevel = currentPendingApproval?.ApprovalLevel,
             CurrentApproverName = currentPendingApproval == null
@@ -1269,6 +1305,71 @@ public class InvoiceController : Controller
                 CreatedDate = now
             }).ToList()
         };
+    }
+
+    private async Task<(HashSet<string> Level1Finance, HashSet<string> Level2AuditReportLegacy)>
+        GetRequiredApprovalRoleUserIdsAsync()
+    {
+        var assignments = await (
+            from ur in _context.app_user_roles.AsNoTracking()
+            join role in _context.app_roles.AsNoTracking()
+                on ur.app_role_id equals role.id
+            join user in _context.app_users.AsNoTracking()
+                on ur.app_user_id equals user.id
+            where user.status == "ACTIVE"
+                  && role.status != "DELETED"
+            select new
+            {
+                UserId = user.id,
+                RoleName = role.name,
+                RoleApp = role.app
+            }
+        ).ToListAsync();
+
+        var level1 = assignments
+            .Where(x => IsFinanceApprovalRole(x.RoleName, x.RoleApp))
+            .Select(x => x.UserId)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        var level2 = assignments
+            .Where(x => IsAuditReportLegacyApprovalRole(x.RoleName, x.RoleApp))
+            .Select(x => x.UserId)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        return (level1, level2);
+    }
+
+    private static bool IsFinanceApprovalRole(string? roleName, string? roleApp)
+    {
+        var name = NormalizeApprovalRoleValue(roleName);
+        var app = NormalizeApprovalRoleValue(roleApp);
+
+        // Support deployment yang menyimpan Finance sebagai role name
+        // maupun sebagai app/module label.
+        return name == "FINANCE" || app == "FINANCE";
+    }
+
+    private static bool IsAuditReportLegacyApprovalRole(string? roleName, string? roleApp)
+    {
+        var name = NormalizeApprovalRoleValue(roleName);
+        var app = NormalizeApprovalRoleValue(roleApp);
+
+        // Format utama: role.name = "Audit Report", role.app = "Legacy".
+        // Compatibility: role name dapat tersimpan sebagai "Audit Report, Legacy".
+        return (name == "AUDITREPORT" && app == "LEGACY")
+               || name == "AUDITREPORTLEGACY"
+               || app == "AUDITREPORTLEGACY";
+    }
+
+    private static string NormalizeApprovalRoleValue(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return string.Empty;
+
+        return new string(value
+            .Where(char.IsLetterOrDigit)
+            .Select(char.ToUpperInvariant)
+            .ToArray());
     }
 
     private async Task<string?> GetCurrentAppUserIdAsync()
