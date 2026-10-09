@@ -241,9 +241,34 @@
             margin-top: 4px;
         }
 
+        .approver-row {
+            width: 100%;
+            max-width: 760px;
+        }
+
+        .approver-picker {
+            width: min(420px, 100%);
+            min-width: 0;
+        }
+
+        .approver-search-input {
+            height: 36px;
+            margin-bottom: 6px;
+            border-radius: 9px;
+            font-size: 12px;
+        }
+
+        .approver-picker .form-select {
+            width: 100%;
+            max-width: 420px;
+            min-height: 38px;
+            border-radius: 9px;
+            font-size: 12px;
+        }
+
         .approval-required-role {
-            width: 190px;
-            min-width: 190px;
+            width: 150px;
+            min-width: 150px;
             border: 1px solid #e5e7eb;
             border-radius: 10px;
             background: #f8fafc;
@@ -272,6 +297,203 @@
             border: 1px solid #eef0f2;
             border-radius: 12px;
             background: #fcfcfd;
+        }
+
+        @@media (max-width: 768px) {
+            .approver-row {
+                max-width: 100%;
+                align-items: stretch !important;
+                flex-wrap: wrap;
+            }
+
+            .approval-required-role {
+                width: calc(100% - 78px);
+                min-width: 0;
+            }
+
+            .approver-picker {
+                width: 100%;
+                max-width: none;
+                margin-left: 0;
+            }
+
+                .approver-picker .form-select {
+                    max-width: none;
+                }
+        }
+
+
+        /* ===== Compact searchable approver picker ===== */
+        .approver-row {
+            max-width: 760px;
+            width: 100%;
+        }
+
+        .approver-picker {
+            position: relative;
+            width: min(100%, 380px);
+            min-width: 260px;
+        }
+
+        .approver-native-select {
+            position: absolute !important;
+            width: 1px !important;
+            height: 1px !important;
+            padding: 0 !important;
+            margin: -1px !important;
+            overflow: hidden !important;
+            clip: rect(0, 0, 0, 0) !important;
+            white-space: nowrap !important;
+            border: 0 !important;
+            opacity: 0 !important;
+            pointer-events: none !important;
+        }
+
+        .approver-picker-toggle {
+            width: 100%;
+            min-height: 38px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            border: 1px solid #d9dee5;
+            border-radius: 9px;
+            background: #fff;
+            padding: 8px 11px;
+            color: #111827;
+            font-size: 13px;
+            text-align: left;
+            cursor: pointer;
+            box-shadow: none;
+        }
+
+            .approver-picker-toggle:hover {
+                border-color: #b8c2cc;
+            }
+
+        .approver-picker.open .approver-picker-toggle {
+            border-color: #22b8d4;
+            box-shadow: 0 0 0 3px rgba(34, 184, 212, .12);
+        }
+
+        .approver-picker-toggle-text {
+            min-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .approver-picker-chevron {
+            flex: 0 0 auto;
+            color: #94a3b8;
+            font-size: 11px;
+            transition: transform .15s ease;
+        }
+
+        .approver-picker.open .approver-picker-chevron {
+            transform: rotate(180deg);
+        }
+
+        .approver-picker-menu {
+            position: absolute;
+            z-index: 1080;
+            top: calc(100% + 5px);
+            left: 0;
+            width: 100%;
+            min-width: 300px;
+            max-width: 380px;
+            border: 1px solid #e2e8f0;
+            border-radius: 10px;
+            background: #fff;
+            box-shadow: 0 14px 34px rgba(15, 23, 42, .16);
+            padding: 8px;
+            display: none;
+        }
+
+        .approver-picker.open .approver-picker-menu {
+            display: block;
+        }
+
+        .approver-picker-search {
+            width: 100%;
+            height: 34px;
+            border: 1px solid #dfe4ea;
+            border-radius: 8px;
+            padding: 0 10px;
+            font-size: 12px;
+            outline: none;
+            margin-bottom: 7px;
+        }
+
+            .approver-picker-search:focus {
+                border-color: #22b8d4;
+                box-shadow: 0 0 0 2px rgba(34, 184, 212, .10);
+            }
+
+        .approver-picker-options {
+            /* 10 items x ~34px = max 340px */
+            max-height: 340px;
+            overflow-y: auto;
+            overscroll-behavior: contain;
+            scrollbar-width: thin;
+        }
+
+        .approver-picker-option {
+            width: 100%;
+            min-height: 34px;
+            display: flex;
+            align-items: center;
+            border: 0;
+            border-radius: 7px;
+            background: transparent;
+            padding: 7px 9px;
+            color: #1f2937;
+            font-size: 12px;
+            text-align: left;
+            cursor: pointer;
+        }
+
+            .approver-picker-option:hover,
+            .approver-picker-option.active {
+                background: #f0fbfd;
+                color: #0891b2;
+            }
+
+            .approver-picker-option.selected {
+                background: #e6f8fb;
+                color: #067f95;
+                font-weight: 800;
+            }
+
+        .approver-picker-empty {
+            padding: 12px 9px;
+            color: #94a3b8;
+            font-size: 12px;
+            text-align: center;
+        }
+
+        @@media (max-width: 767px) {
+            .approver-row {
+                align-items: stretch !important;
+                flex-direction: column;
+            }
+
+            .approver-picker {
+                width: 100%;
+                max-width: none;
+                min-width: 0;
+            }
+
+            .approver-picker-menu {
+                width: 100%;
+                min-width: 0;
+                max-width: none;
+            }
+
+            .approval-required-role {
+                width: 100%;
+                min-width: 0;
+            }
         }
 
         .approval-meta {
@@ -1533,23 +1755,25 @@
                             <small>Wajib</small>
                         </div>
 
-                        <select name="ApproverUserIds"
-                                form="processForm"
-                                class="form-select"
-                                required>
-                            @if (Model.ApprovalLevel1UserOptions.Any())
-                            {
-                                <option value="">-- Pilih user Finance --</option>
-                                @foreach (var user in Model.ApprovalLevel1UserOptions)
+                        <div class="approver-picker">
+                            <select name="ApproverUserIds"
+                                    form="processForm"
+                                    class="form-select approver-select approver-native-select"
+                                    required>
+                                @if (Model.ApprovalLevel1UserOptions.Any())
                                 {
-                                    <option value="@user.Id">@user.DisplayName</option>
+                                    <option value="">-- Pilih user Finance --</option>
+                                    @foreach (var user in Model.ApprovalLevel1UserOptions)
+                                    {
+                                        <option value="@user.Id">@user.DisplayName</option>
+                                    }
                                 }
-                            }
-                            else
-                            {
-                                <option value="">-- Tidak ada user ACTIVE role Finance --</option>
-                            }
-                        </select>
+                                else
+                                {
+                                    <option value="">-- Tidak ada user ACTIVE role Finance --</option>
+                                }
+                            </select>
+                        </div>
                     </div>
 
                     <div class="approver-row approver-row-fixed d-flex gap-2 align-items-center"
@@ -1561,23 +1785,25 @@
                             <small>Wajib · Role Report/Management</small>
                         </div>
 
-                        <select name="ApproverUserIds"
-                                form="processForm"
-                                class="form-select"
-                                required>
-                            @if (Model.ApprovalLevel2UserOptions.Any())
-                            {
-                                <option value="">-- Pilih user Audit Report, Legacy --</option>
-                                @foreach (var user in Model.ApprovalLevel2UserOptions)
+                        <div class="approver-picker">
+                            <select name="ApproverUserIds"
+                                    form="processForm"
+                                    class="form-select approver-select approver-native-select"
+                                    required>
+                                @if (Model.ApprovalLevel2UserOptions.Any())
                                 {
-                                    <option value="@user.Id">@user.DisplayName</option>
+                                    <option value="">-- Pilih user Audit Report, Legacy --</option>
+                                    @foreach (var user in Model.ApprovalLevel2UserOptions)
+                                    {
+                                        <option value="@user.Id">@user.DisplayName</option>
+                                    }
                                 }
-                            }
-                            else
-                            {
-                                <option value="">-- Tidak ada user ACTIVE role Audit Report, Legacy --</option>
-                            }
-                        </select>
+                                else
+                                {
+                                    <option value="">-- Tidak ada user ACTIVE role Audit Report, Legacy --</option>
+                                }
+                            </select>
+                        </div>
                     </div>
                 </div>
 
@@ -1590,16 +1816,18 @@
                 <template id="approverRowTemplate">
                     <div class="approver-row d-flex gap-2 align-items-center">
                         <span class="badge bg-secondary approval-level-label">Level</span>
-                        <select name="ApproverUserIds"
-                                form="processForm"
-                                class="form-select"
-                                required>
-                            <option value="">-- Pilih Approver --</option>
-                            @foreach (var user in Model.ApprovalUserOptions)
-                            {
-                                <option value="@user.Id">@user.DisplayName</option>
-                            }
-                        </select>
+                        <div class="approver-picker">
+                            <select name="ApproverUserIds"
+                                    form="processForm"
+                                    class="form-select approver-select approver-native-select"
+                                    required>
+                                <option value="">-- Pilih Approver --</option>
+                                @foreach (var user in Model.ApprovalUserOptions)
+                                {
+                                    <option value="@user.Id">@user.DisplayName</option>
+                                }
+                            </select>
+                        </div>
                         <button type="button"
                                 class="btn btn-outline-danger btn-sm remove-approver"
                                 onclick="removeApproverRow(this)">
@@ -1879,6 +2107,221 @@ else if (isPendingApproval)
 
 @section Scripts {
     <script>
+        function filterApproverOptions(input) {
+            const picker = input.closest('.approver-picker');
+            if (!picker) return;
+
+            const select = picker.querySelector('select[name="ApproverUserIds"]');
+            if (!select) return;
+
+            const keyword = (input.value || '').trim().toLowerCase();
+            const selectedValue = select.value;
+
+            Array.from(select.options).forEach((option, index) => {
+                // Placeholder selalu ditampilkan.
+                if (index === 0 || !option.value) {
+                    option.hidden = false;
+                    option.disabled = false;
+                    return;
+                }
+
+                const text = (option.textContent || '').toLowerCase();
+                const matches = !keyword || text.includes(keyword);
+                const isSelected = option.value === selectedValue;
+
+                // Selected value tetap visible agar pilihan tidak hilang saat search.
+                option.hidden = !matches && !isSelected;
+                option.disabled = !matches && !isSelected;
+            });
+        }
+
+
+        function initApproverPicker(select) {
+            if (!select || select.dataset.approverPickerInitialized === '1') {
+                return;
+            }
+
+            select.dataset.approverPickerInitialized = '1';
+
+            const picker = document.createElement('div');
+            picker.className = 'approver-picker';
+
+            const toggle = document.createElement('button');
+            toggle.type = 'button';
+            toggle.className = 'approver-picker-toggle';
+            toggle.setAttribute('aria-haspopup', 'listbox');
+            toggle.setAttribute('aria-expanded', 'false');
+
+            const toggleText = document.createElement('span');
+            toggleText.className = 'approver-picker-toggle-text';
+
+            const chevron = document.createElement('span');
+            chevron.className = 'approver-picker-chevron';
+            chevron.textContent = '▼';
+
+            toggle.appendChild(toggleText);
+            toggle.appendChild(chevron);
+
+            const menu = document.createElement('div');
+            menu.className = 'approver-picker-menu';
+
+            const search = document.createElement('input');
+            search.type = 'text';
+            search.className = 'approver-picker-search';
+            search.placeholder = 'Cari approver...';
+            search.autocomplete = 'off';
+
+            const optionsBox = document.createElement('div');
+            optionsBox.className = 'approver-picker-options';
+            optionsBox.setAttribute('role', 'listbox');
+
+            menu.appendChild(search);
+            menu.appendChild(optionsBox);
+
+            // Let the original select stay in the DOM for normal MVC form binding.
+            select.parentNode.insertBefore(picker, select);
+            picker.appendChild(select);
+            picker.appendChild(toggle);
+            picker.appendChild(menu);
+
+            function getRealOptions() {
+                return Array.from(select.options).filter(option => option.value);
+            }
+
+            function updateToggle() {
+                const selected = select.options[select.selectedIndex];
+                const selectedText = selected && selected.value
+                    ? selected.textContent.trim()
+                    : (select.options[0]?.textContent.trim() || '-- Pilih Approver --');
+
+                toggleText.textContent = selectedText;
+                toggle.title = selectedText;
+            }
+
+            function renderOptions(keyword = '') {
+                const normalized = (keyword || '').trim().toLowerCase();
+                const options = getRealOptions().filter(option =>
+                    option.textContent.toLowerCase().includes(normalized)
+                );
+
+                optionsBox.innerHTML = '';
+
+                if (options.length === 0) {
+                    const empty = document.createElement('div');
+                    empty.className = 'approver-picker-empty';
+                    empty.textContent = 'Approver tidak ditemukan';
+                    optionsBox.appendChild(empty);
+                    return;
+                }
+
+                options.forEach(option => {
+                    const item = document.createElement('button');
+                    item.type = 'button';
+                    item.className = 'approver-picker-option';
+                    item.textContent = option.textContent.trim();
+                    item.dataset.value = option.value;
+
+                    if (select.value === option.value) {
+                        item.classList.add('selected');
+                    }
+
+                    item.addEventListener('click', () => {
+                        select.value = option.value;
+                        select.dispatchEvent(new Event('change', { bubbles: true }));
+                        updateToggle();
+                        closeApproverPicker(picker);
+                    });
+
+                    optionsBox.appendChild(item);
+                });
+            }
+
+            function openPicker() {
+                closeAllApproverPickers(picker);
+                picker.classList.add('open');
+                toggle.setAttribute('aria-expanded', 'true');
+
+                search.value = '';
+                renderOptions('');
+
+                window.setTimeout(() => {
+                    search.focus();
+
+                    const selectedItem = optionsBox.querySelector('.selected');
+                    if (selectedItem) {
+                        selectedItem.scrollIntoView({ block: 'nearest' });
+                    } else {
+                        optionsBox.scrollTop = 0;
+                    }
+                }, 0);
+            }
+
+            toggle.addEventListener('click', () => {
+                if (picker.classList.contains('open')) {
+                    closeApproverPicker(picker);
+                } else {
+                    openPicker();
+                }
+            });
+
+            search.addEventListener('input', () => {
+                renderOptions(search.value);
+                optionsBox.scrollTop = 0;
+            });
+
+            search.addEventListener('keydown', event => {
+                if (event.key === 'Escape') {
+                    closeApproverPicker(picker);
+                    toggle.focus();
+                    return;
+                }
+
+                if (event.key === 'Enter') {
+                    const first = optionsBox.querySelector('.approver-picker-option');
+                    if (first) {
+                        event.preventDefault();
+                        first.click();
+                    }
+                }
+            });
+
+            select.addEventListener('change', () => {
+                updateToggle();
+                renderOptions(search.value);
+            });
+
+            updateToggle();
+            renderOptions('');
+        }
+
+        function closeApproverPicker(picker) {
+            if (!picker) return;
+
+            picker.classList.remove('open');
+            const toggle = picker.querySelector('.approver-picker-toggle');
+            if (toggle) {
+                toggle.setAttribute('aria-expanded', 'false');
+            }
+        }
+
+        function closeAllApproverPickers(exceptPicker = null) {
+            document.querySelectorAll('.approver-picker.open').forEach(picker => {
+                if (picker !== exceptPicker) {
+                    closeApproverPicker(picker);
+                }
+            });
+        }
+
+        function initAllApproverPickers(root = document) {
+            root.querySelectorAll('select[name="ApproverUserIds"]').forEach(initApproverPicker);
+        }
+
+        document.addEventListener('click', event => {
+            if (!event.target.closest('.approver-picker')) {
+                closeAllApproverPickers();
+            }
+        });
+
         function refreshApproverLevels() {
             const rows = Array.from(document.querySelectorAll('#approverRows .approver-row'));
 
@@ -1901,8 +2344,20 @@ else if (isPendingApproval)
 
             if (!template || !container) return;
 
-            container.appendChild(template.content.cloneNode(true));
+            const fragment = template.content.cloneNode(true);
+            const newRow = fragment.querySelector('.approver-row');
+
+            container.appendChild(fragment);
             refreshApproverLevels();
+
+            if (newRow) {
+                initAllApproverPickers(newRow);
+
+                const toggle = newRow.querySelector('.approver-picker-toggle');
+                if (toggle) {
+                    toggle.click();
+                }
+            }
         }
 
         function removeApproverRow(button) {
@@ -1947,7 +2402,10 @@ else if (isPendingApproval)
             return true;
         }
 
-        document.addEventListener('DOMContentLoaded', refreshApproverLevels);
+        document.addEventListener('DOMContentLoaded', () => {
+            refreshApproverLevels();
+            initAllApproverPickers();
+        });
 
         function toNumber(value) {
             if (value === null || value === undefined) return 0;
