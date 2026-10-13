@@ -460,6 +460,11 @@ public class InvoiceController : Controller
             return RedirectToAction(nameof(Detail), new { id });
         }
 
+        // Finance dapat menyesuaikan nilai saat claim masih UNDER_REVIEW.
+        // Perubahan disimpan bersamaan ketika tombol Proses diklik,
+        // sebelum claim berpindah ke PENDING_APPROVAL.
+        ApplyFinanceAdjustment(invoiceDetails, model?.Items);
+
         var now = DateTime.Now;
         var currentUser = GetCurrentUser();
 
@@ -948,8 +953,8 @@ public class InvoiceController : Controller
         return status switch
         {
             ClaimInProgressSubmit => "Submit Diproses",
-            ClaimUnderReview => "Sedang Direview",
-            ClaimPendingApproval => "Menunggu Persetujuan",
+            ClaimUnderReview => "Sedang di Review",
+            ClaimPendingApproval => "Menunggu Approval",
             ClaimApproved => "Disetujui",
             ClaimRejected => "Ditolak",
             _ => status ?? "-"

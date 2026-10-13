@@ -19,10 +19,10 @@
 
     var statusText = claimStatus switch
     {
-        "UNDER_REVIEW" => "UNDER_REVIEW",
-        "PENDING_APPROVAL" => "PENDING_APPROVAL",
-        "APPROVED" => "APPROVED",
-        "REJECTED" => "REJECTED",
+        "UNDER_REVIEW" => "Sedang di Review",
+        "PENDING_APPROVAL" => "Menunggu Approval",
+        "APPROVED" => "Disetujui",
+        "REJECTED" => "Ditolak",
         _ => string.IsNullOrWhiteSpace(claimStatus) ? "-" : claimStatus
     };
 
@@ -1489,7 +1489,28 @@
                                 </td>
 
                                 <td class="amount-col">
-                                    @if (isPendingApproval)
+                                    @if (isWait)
+                                    {
+                                        <input type="hidden"
+                                               form="processForm"
+                                               name="Items[@i].TrxInvoiceDetailId"
+                                               value="@item.TrxInvoiceDetailId" />
+
+                                        <input type="hidden"
+                                               form="processForm"
+                                               name="Items[@i].IsDeleted"
+                                               value="false" />
+
+                                        <input type="number"
+                                               form="processForm"
+                                               name="Items[@i].AuditFee"
+                                               value="@MoneyInputValue(item.AuditFee)"
+                                               min="0"
+                                               step="1000"
+                                               class="cell-input amount editable js-money js-audit-fee"
+                                               data-row-index="@i" />
+                                    }
+                                    else if (isPendingApproval)
                                     {
                                         <input type="hidden"
                                                form="approvalForm"
@@ -1518,7 +1539,18 @@
                                 </td>
 
                                 <td class="amount-col">
-                                    @if (isPendingApproval)
+                                    @if (isWait)
+                                    {
+                                        <input type="number"
+                                               form="processForm"
+                                               name="Items[@i].LumpsumFee"
+                                               value="@MoneyInputValue(item.Lumpsum)"
+                                               min="0"
+                                               step="1000"
+                                               class="cell-input amount editable js-money js-lumpsum-fee"
+                                               data-row-index="@i" />
+                                    }
+                                    else if (isPendingApproval)
                                     {
                                         <input type="hidden"
                                                form="approvalForm"
@@ -1742,7 +1774,9 @@
             <div class="finance-decision-card mb-4">
                 <div class="decision-title">Skema Approval Finance</div>
                 <div class="decision-subtitle mb-3">
-                    Level 1 Finance dan Level 2 Audit Report, Legacy wajib dipilih. Level 3 dan seterusnya opsional dan dapat memilih user aktif secara bebas.
+                    Audit Fee dan Lumpsum dapat disesuaikan selama status Sedang di Review.
+                    Level 1 Finance dan Level 2 Audit Report, Legacy wajib dipilih.
+                    Level 3 dan seterusnya opsional dan dapat memilih user aktif secara bebas.
                 </div>
 
                 <div id="approverRows" class="d-flex flex-column gap-2">

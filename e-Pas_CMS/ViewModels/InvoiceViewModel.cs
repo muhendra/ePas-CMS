@@ -233,6 +233,10 @@ namespace e_Pas_CMS.ViewModels
     {
         public string Id { get; set; } = null!;
         public List<string> ApproverUserIds { get; set; } = new();
+
+        // Saat claim masih UNDER_REVIEW, Finance boleh menyesuaikan
+        // Audit Fee dan Lumpsum sebelum invoice masuk approval flow.
+        public List<InvoiceApprovalDetailPostVM> Items { get; set; } = new();
     }
 
     public class InvoiceApprovalPostVM
