@@ -31,7 +31,11 @@
         };
     }
 
-    var statusText = GetDetailStatusText(claimStatus);
+    // PRIORITAS: label dari controller untuk tampilan.
+    // Raw claimStatus tetap dipakai hanya untuk business logic.
+    var statusText = !string.IsNullOrWhiteSpace(claimStatusLabel)
+        ? claimStatusLabel
+        : GetDetailStatusText(claimStatus);
 
     var statusClass = claimStatus switch
     {
@@ -283,21 +287,21 @@
             line-height: 1.2;
         }
 
-        .approval-required-role strong {
-            display: block;
-            color: #111827;
-            font-size: 12px;
-        }
+            .approval-required-role strong {
+                display: block;
+                color: #111827;
+                font-size: 12px;
+            }
 
-        .approval-required-role small {
-            display: block;
-            margin-top: 3px;
-            color: #dc2626;
-            font-size: 10px;
-            font-weight: 800;
-            text-transform: uppercase;
-            letter-spacing: .4px;
-        }
+            .approval-required-role small {
+                display: block;
+                margin-top: 3px;
+                color: #dc2626;
+                font-size: 10px;
+                font-weight: 800;
+                text-transform: uppercase;
+                letter-spacing: .4px;
+            }
 
         .approver-row-fixed {
             padding: 8px;
@@ -324,9 +328,9 @@
                 margin-left: 0;
             }
 
-            .approver-picker .form-select {
-                max-width: none;
-            }
+                .approver-picker .form-select {
+                    max-width: none;
+                }
         }
 
 
@@ -374,9 +378,9 @@
             box-shadow: none;
         }
 
-        .approver-picker-toggle:hover {
-            border-color: #b8c2cc;
-        }
+            .approver-picker-toggle:hover {
+                border-color: #b8c2cc;
+            }
 
         .approver-picker.open .approver-picker-toggle {
             border-color: #22b8d4;
@@ -432,10 +436,10 @@
             margin-bottom: 7px;
         }
 
-        .approver-picker-search:focus {
-            border-color: #22b8d4;
-            box-shadow: 0 0 0 2px rgba(34, 184, 212, .10);
-        }
+            .approver-picker-search:focus {
+                border-color: #22b8d4;
+                box-shadow: 0 0 0 2px rgba(34, 184, 212, .10);
+            }
 
         .approver-picker-options {
             /* 10 items x ~34px = max 340px */
@@ -460,17 +464,17 @@
             cursor: pointer;
         }
 
-        .approver-picker-option:hover,
-        .approver-picker-option.active {
-            background: #f0fbfd;
-            color: #0891b2;
-        }
+            .approver-picker-option:hover,
+            .approver-picker-option.active {
+                background: #f0fbfd;
+                color: #0891b2;
+            }
 
-        .approver-picker-option.selected {
-            background: #e6f8fb;
-            color: #067f95;
-            font-weight: 800;
-        }
+            .approver-picker-option.selected {
+                background: #e6f8fb;
+                color: #067f95;
+                font-weight: 800;
+            }
 
         .approver-picker-empty {
             padding: 12px 9px;
@@ -1340,6 +1344,8 @@
         <div class="invoice-alert error">@TempData["Error"]</div>
     }
 
+    @* Jangan render @claimStatus / raw DB status di sini.
+       Banner wajib memakai display label. *@
     <div class="status-banner @statusClass">
         @statusText
     </div>
@@ -1797,7 +1803,7 @@
                         </div>
 
                         <div class="approver-picker">
-<select name="ApproverUserIds"
+                            <select name="ApproverUserIds"
                                     form="processForm"
                                     class="form-select approver-select approver-native-select"
                                     required>
@@ -1827,7 +1833,7 @@
                         </div>
 
                         <div class="approver-picker">
-<select name="ApproverUserIds"
+                            <select name="ApproverUserIds"
                                     form="processForm"
                                     class="form-select approver-select approver-native-select"
                                     required>
@@ -1858,7 +1864,7 @@
                     <div class="approver-row d-flex gap-2 align-items-center">
                         <span class="badge bg-secondary approval-level-label">Level</span>
                         <div class="approver-picker">
-<select name="ApproverUserIds"
+                            <select name="ApproverUserIds"
                                     form="processForm"
                                     class="form-select approver-select approver-native-select"
                                     required>

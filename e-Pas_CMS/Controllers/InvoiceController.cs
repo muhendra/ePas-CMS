@@ -1494,22 +1494,6 @@ public class InvoiceController : Controller
         return string.IsNullOrWhiteSpace(clean) ? Guid.NewGuid().ToString("N") : clean;
     }
 }
-
-public class InvoiceApprovalPostVM
-{
-    public string Id { get; set; }
-    public string RejectionReason { get; set; }
-    public List<InvoiceApprovalDetailPostVM> Items { get; set; } = new List<InvoiceApprovalDetailPostVM>();
-}
-
-public class InvoiceApprovalDetailPostVM
-{
-    public string TrxInvoiceDetailId { get; set; }
-    public decimal AuditFee { get; set; }
-    public decimal LumpsumFee { get; set; }
-    public bool IsDeleted { get; set; }
-}
-
 public class InvoiceAuditorOptionVM
 {
     public string Id { get; set; }
