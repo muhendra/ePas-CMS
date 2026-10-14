@@ -1297,11 +1297,11 @@ public class RegularAuditImportController : Controller
                 ReportPrefix = Get("report_prefix"),
                 ReportNo = Get("report_no"),
                 Auditor1Username = Get("auditor1_username"),
-                Auditor1Name = Get("auditor1_name"),
+                Auditor1Name = Get("auditor1_name", "auditor"),
                 Auditor2Username = Get("auditor2_username"),
                 Auditor2Name = Get("auditor2_name"),
                 VerifierUsername = Get("verifier_username", "approval_by"),
-                VerifierName = Get("verifier_name"),
+                VerifierName = Get("verifier_name", "verifikator"),
                 AuditMomIntro = Get("audit_mom_intro"),
                 AuditMomFinal = Get("audit_mom_final", "berita_acara"),
                 KmRange = ParseDecimal(Get("km_range")),
@@ -1309,9 +1309,9 @@ public class RegularAuditImportController : Controller
                 MasterQuestionerChecklistId = Get("master_questioner_checklist_id"),
                 MasterQuestionerVersion = ParseInt(Get("master_questioner_version", "questionnaire_version")),
 
-                HasAuditor1Column = Has("auditor1_username", "auditor1_name"),
+                HasAuditor1Column = Has("auditor1_username", "auditor1_name", "auditor"),
                 HasAuditor2Column = Has("auditor2_username", "auditor2_name"),
-                HasVerifierColumn = Has("verifier_username", "verifier_name", "approval_by"),
+                HasVerifierColumn = Has("verifier_username", "verifier_name", "verifikator", "approval_by"),
                 HasAuditMomIntroColumn = Has("audit_mom_intro"),
                 HasAuditMomFinalColumn = Has("audit_mom_final", "berita_acara")
             };
@@ -1409,7 +1409,7 @@ public class RegularAuditImportController : Controller
             "audit_type","audit_level","audit_next","good_status","result","basic_status","excellent_status","Total Score","total_score",
             "SSS","3S","EQnQ","RFS","RVE","VFC","EPO","WTMS","QQ","WMEF","FORMAT FISIK","format_fisik","CPO","kelas_spbu",
             "penalty_good_alerts","penalty_alerts","penalty_basic_alert","penalty_excellent_alerts","report_prefix","report_no",
-            "auditor1_username","auditor1_name","auditor2_username","auditor2_name","verifier_username","approval_by","verifier_name",
+            "auditor1_username","auditor1_name","auditor","auditor2_username","auditor2_name","verifier_username","approval_by","verifier_name","verifikator",
             "audit_mom_intro","audit_mom_final","berita_acara","km_range",
             "master_questioner_checklist_id","master_questioner_version","questionnaire_version"
         };
