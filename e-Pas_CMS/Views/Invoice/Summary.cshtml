@@ -1,0 +1,42 @@
+@using e_Pas_CMS.ViewModels
+@model InvoiceMonthlySummaryVM
+@{
+    ViewData["Title"] = "Summary Pembayaran Auditor";
+}
+<div class="container-fluid px-4 py-4">
+    <h2 class="mb-2">Summary Pembayaran Auditor</h2>
+    <p class="text-muted">Hanya invoice yang disetujui, sesuai cut-off tanggal 16 bulan sebelumnya sampai 15 bulan berjalan (WIB).</p>
+    <form method="get" asp-action="Summary" class="d-flex gap-2 align-items-end mb-4 flex-wrap">
+        <div>
+            <label class="form-label" for="period">Periode</label>
+            <input class="form-control" type="month" name="period" id="period" value="@Model.Period" />
+        </div>
+        <button class="btn btn-primary" type="submit">Filter</button>
+        <a asp-action="ExportSummary" asp-route-period="@Model.Period" class="btn btn-success">Export Excel (CSV)</a>
+        <a asp-action="Index" class="btn btn-outline-secondary">Kembali</a>
+    </form>
+    <p><strong>Periode transaksi:</strong> @Model.Start.ToString("dd/MM/yyyy") - @Model.EndExclusive.AddDays(-1).ToString("dd/MM/yyyy")</p>
+    <div class="table-responsive">
+        <table class="table table-bordered table-hover align-middle">
+            <thead class="table-light"><tr><th>No Invoice</th><th>Nama Auditor</th><th>ID Auditor</th><th class="text-end">Total Pendapatan</th><th>Invoice & Bukti</th></tr></thead>
+            <tbody>
+            @foreach (var row in Model.Items)
+            {
+                <tr>
+                    <td>@row.InvoiceNo</td>
+                    <td>@row.AuditorName</td>
+                    <td>@row.AuditorCode</td>
+                    <td class="text-end">Rp @row.TotalAmount.ToString("N0")</td>
+                    <td><a asp-action="Preview" asp-route-id="@row.InvoiceId">Preview</a> |
+                        <a asp-action="Detail" asp-route-id="@row.InvoiceId">Evidence</a></td>
+                </tr>
+            }
+            @if (Model.Items.Count == 0)
+            {
+                <tr><td colspan="5" class="text-center text-muted">Belum ada invoice disetujui pada periode ini.</td></tr>
+            }
+            </tbody>
+            <tfoot><tr class="fw-bold"><td colspan="3">TOTAL</td><td class="text-end">Rp @Model.Total.ToString("N0")</td><td></td></tr></tfoot>
+        </table>
+    </div>
+</div>

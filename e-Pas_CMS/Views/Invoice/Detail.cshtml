@@ -15,7 +15,7 @@
     var isDone = claimStatus == "APPROVED";
     var isRejected = claimStatus == "REJECTED";
 
-    var isEditableView = isWait || (isPendingApproval && Model.CanCurrentUserApprove);
+    var isEditableView = isWait; // Lock amounts after Finance sends for approval.
 
     // Status raw tetap dipakai untuk business logic.
     // Yang ditampilkan pada Detail menggunakan label user-friendly.
@@ -1789,7 +1789,7 @@
                 <div class="decision-subtitle mb-3">
                     Audit Fee dan Lumpsum dapat disesuaikan selama status Sedang di Review.
                     Level 1 Finance dan Level 2 Audit Report, Legacy wajib dipilih.
-                    Level 3 dan seterusnya opsional dan dapat memilih user aktif secara bebas.
+                    Level 3 (final) wajib; total 3 approver + 1 auditor sebagai preparer.
                 </div>
 
                 <div id="approverRows" class="d-flex flex-column gap-2">
@@ -2400,6 +2400,10 @@ else if (isPendingApproval)
             const container = document.getElementById('approverRows');
 
             if (!template || !container) return;
+            if (container.querySelectorAll('.approver-row').length >= 3) {
+                alert('Sesuai flow baru: hanya 3 level approver (Finance, Report/Legacy, Final).');
+                return;
+            }
 
             const fragment = template.content.cloneNode(true);
             const newRow = fragment.querySelector('.approver-row');
@@ -2428,8 +2432,8 @@ else if (isPendingApproval)
                 '#approverRows select[name="ApproverUserIds"]'
             ));
 
-            if (selects.length < 2) {
-                alert('Level 1 Finance dan Level 2 Audit Report, Legacy wajib tersedia.');
+            if (selects.length !== 3) {
+                alert('Wajib pilih tepat 3 level: Finance, Report/Legacy, dan Final.');
                 return false;
             }
 
@@ -2624,3 +2628,42 @@ else if (isPendingApproval)
         });
     </script>
 }
+<div class="container-fluid px-4 mt-3">
+    <div class="card shadow-sm mb-3">
+        <div class="card-header fw-bold">Rincian Expenses Auditor Berdasarkan Tanggal</div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-striped table-sm mb-0 align-middle">
+                    <thead><tr><th>Tanggal</th><th>Jenis</th><th>Keterangan</th><th class="text-end">Jumlah</th><th>Evidence</th></tr></thead>
+                    <tbody>
+                        @foreach (var expense in Model.ClaimExpenses)
+                        {
+                            <tr>
+                                <td>@expense.Date.ToString("dd/MM/yyyy")</td>
+                                <td>@expense.Type</td>
+                                <td>@expense.Description</td>
+                                <td class="text-end">Rp @expense.Amount.ToString("N0")</td>
+                                <td>
+                                    @if (!string.IsNullOrWhiteSpace(expense.EvidencePath))
+                                    {
+                                        <a href="@BuildAssetUrl(expense.EvidencePath)" target="_blank" rel="noopener noreferrer">Lihat Bukti</a>
+                                    }
+                                    else
+                                    {
+
+                                        <span class="text-muted">-</span>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                        @if (Model.ClaimExpenses.Count == 0)
+                        {
+                            <tr><td colspan="5" class="text-muted text-center">Tidak ada expense tambahan</td></tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+

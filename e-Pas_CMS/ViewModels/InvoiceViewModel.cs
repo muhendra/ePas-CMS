@@ -67,6 +67,12 @@ namespace e_Pas_CMS.ViewModels
 
         public string Homebase { get; set; } = "-";
 
+        public string AuditorCode { get; set; } = "-";
+
+        public List<InvoiceClaimExpenseVM> ClaimExpenses { get; set; } = new();
+
+        public List<InvoicePrintLineVM> PrintLines { get; set; } = new();
+
         public string Job { get; set; } = "Audit SPBU";
 
         // =========================
@@ -257,4 +263,48 @@ namespace e_Pas_CMS.ViewModels
     }
 
 
+}
+namespace e_Pas_CMS.ViewModels
+{
+    public class InvoiceClaimExpenseVM
+    {
+        public DateOnly Date { get; set; }
+        public string Type { get; set; } = "";
+        public string Description { get; set; } = "";
+        public decimal Amount { get; set; }
+        public string? EvidencePath { get; set; }
+    }
+
+    public class InvoicePrintLineVM
+    {
+        public DateTime Date { get; set; }
+        public string Description { get; set; } = "";
+        public decimal AuditFee { get; set; }
+        public decimal Lumpsum { get; set; }
+        public decimal BpjsKesehatan { get; set; }
+        public decimal BpjsKetenagakerjaan { get; set; }
+        public decimal VehicleMaintenance { get; set; }
+        public decimal Internet { get; set; }
+        public decimal Other { get; set; }
+        public decimal Total => AuditFee + Lumpsum + BpjsKesehatan + BpjsKetenagakerjaan
+            + VehicleMaintenance + Internet + Other;
+    }
+
+    public class InvoiceMonthlySummaryVM
+    {
+        public string Period { get; set; } = "";
+        public DateTime Start { get; set; }
+        public DateTime EndExclusive { get; set; }
+        public List<InvoiceMonthlySummaryLineVM> Items { get; set; } = new();
+        public decimal Total => Items.Sum(x => x.TotalAmount);
+    }
+
+    public class InvoiceMonthlySummaryLineVM
+    {
+        public string InvoiceId { get; set; } = "";
+        public string InvoiceNo { get; set; } = "";
+        public string AuditorName { get; set; } = "";
+        public string AuditorCode { get; set; } = "";
+        public decimal TotalAmount { get; set; }
+    }
 }

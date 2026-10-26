@@ -34,7 +34,9 @@ public class ProfileController : Controller
             Username = user.username,
             Name = user.name,
             PhoneNumber = user.phone_number,
-            Email = user.email
+            Email = user.email,
+            Homebase = user.homebase,
+            AuditorCode = user.auditor_code
         };
 
         return View(vm);
@@ -43,15 +45,20 @@ public class ProfileController : Controller
     // ========================
     // UPDATE PROFILE
     // ========================
+    [Authorize]
     [HttpPost]
+    [ValidateAntiForgeryToken]
     public async Task<IActionResult> Index(ProfileViewModel vm)
     {
-        var user = await _context.app_users.FindAsync(vm.Id);
+        // Identity must come from session; posted Id can be tampered with.
+        var username = User.Identity?.Name;
+        var user = await _context.app_users.FirstOrDefaultAsync(x => x.username == username);
         if (user == null) return NotFound();
 
         user.name = vm.Name;
         user.phone_number = vm.PhoneNumber;
         user.email = vm.Email;
+        user.homebase = (vm.Homebase ?? "").Trim();
         user.updated_date = DateTime.Now;
         user.updated_by = User.Identity.Name;
 

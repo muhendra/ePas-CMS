@@ -1170,7 +1170,7 @@ public class RegularAuditImportController : Controller
             Id = Guid.NewGuid().ToString(),
             TrxInvoiceId = invoiceId,
             TrxAuditId = audit.id,
-            AuditFee = 0m,
+            AuditFee = 150000m, // Invoice flow: automatic fee per imported SPBU
             LumpsumFee = null,
             Status = "IN_PROGRESS",
             CreatedBy = currentUser,

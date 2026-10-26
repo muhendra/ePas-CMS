@@ -12,6 +12,9 @@ public partial class trx_claim_detail
 
     public string? description { get; set; }
 
+    // Date of actual spending (not upload timestamp). Nullable for historic data.
+    public DateOnly? expense_date { get; set; }
+
     public decimal amount { get; set; }
 
     public string created_by { get; set; } = null!;

@@ -37,6 +37,11 @@ public partial class app_user
 
     public string? signature_path { get; set; }
 
+    // New invoice flow: place of departure and permanent auditor number.
+    public string? homebase { get; set; }
+
+    public string? auditor_code { get; set; }
+
     public virtual ICollection<app_user_role> app_user_roles { get; set; } = new List<app_user_role>();
 
     public virtual ICollection<Notification> Notifications { get; set; } = new List<Notification>();

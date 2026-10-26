@@ -153,6 +153,8 @@ public partial class EpasDbContext : DbContext
                 .HasDefaultValueSql("CURRENT_TIMESTAMP")
                 .HasColumnType("timestamp(3) without time zone");
             entity.Property(e => e.email).HasMaxLength(100);
+            entity.Property(e => e.homebase).HasColumnName("homebase").HasMaxLength(250);
+            entity.Property(e => e.auditor_code).HasColumnName("auditor_code").HasMaxLength(20);
             entity.Property(e => e.last_change_passwd_dt).HasColumnType("timestamp(3) without time zone");
             entity.Property(e => e.last_login_dt).HasColumnType("timestamp(3) without time zone");
             entity.Property(e => e.name).HasMaxLength(100);
@@ -1529,6 +1531,7 @@ public partial class EpasDbContext : DbContext
 
             entity.Property(e => e.description)
                 .HasColumnName("description");
+            entity.Property(e => e.expense_date).HasColumnName("expense_date").HasColumnType("date");
 
             entity.Property(e => e.amount)
                 .HasColumnName("amount")
