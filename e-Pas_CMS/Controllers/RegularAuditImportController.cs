@@ -737,26 +737,19 @@ public class RegularAuditImportController : Controller
                 await SaveStageAsync("CHECKLIST/QQ");
 
                 // =====================================================
-                // STAGE 4 - MOBILE INVOICE SEED
+                // STAGE 4 - FINANCE
                 // =====================================================
-                // Import hanya menyiapkan invoice agar bisa diajukan dari mobile.
-                // Claim TIDAK dibuat di CMS. Setelah auditor submit claim di mobile,
-                // API existing akan mengubah status menjadi:
-                //   trx_invoice        = IN_PROGRESS
-                //   trx_invoice_detail = IN_PROGRESS
-                //   trx_claim          = UNDER_REVIEW
-                // Baru pada kondisi tersebut invoice masuk ke menu Finance CMS.
 
                 foreach (var item in auditRows)
                 {
                     if (invoiceAuditIds.Contains(item.Audit.id))
                         continue;
 
-                    AddMobileSubmitInvoice(item.Audit, item.SpbuNo, currentUser, nowUtc);
+                    AddFinanceInvoice(item.Audit, item.SpbuNo, currentUser, nowUtc);
                     invoiceAuditIds.Add(item.Audit.id);
                 }
 
-                await SaveStageAsync("MOBILE-INVOICE");
+                await SaveStageAsync("FINANCE");
                 await dbTransaction.CommitAsync();
 
                 var fullRows = auditRows.Count(x => x.Row.HasChecklistPayload || x.Row.HasQqWideColumns);
@@ -1133,7 +1126,7 @@ public class RegularAuditImportController : Controller
     // FINANCE
     // =============================================================
 
-    private void AddMobileSubmitInvoice(
+    private void AddFinanceInvoice(
         trx_audit audit,
         string spbuNo,
         string currentUser,
@@ -1165,7 +1158,7 @@ public class RegularAuditImportController : Controller
             InvoicePeriodEnd = invoicePeriodEndUtc,
             IssuedDate = auditDateUtc,
             DueDate = auditDateUtc.AddDays(30),
-            Status = "NOT_CLAIMED",
+            Status = "IN_PROGRESS",
             CreatedBy = currentUser,
             CreatedDate = nowUtc,
             UpdatedBy = currentUser,
@@ -1179,14 +1172,27 @@ public class RegularAuditImportController : Controller
             TrxAuditId = audit.id,
             AuditFee = 150000m, // Invoice flow: automatic fee per imported SPBU
             LumpsumFee = null,
-            Status = "NOT_CLAIMED",
+            Status = "IN_PROGRESS",
             CreatedBy = currentUser,
             CreatedDate = nowUtc,
             UpdatedBy = currentUser,
             UpdatedDate = nowUtc
         });
 
-        // Claim sengaja belum dibuat di import. Claim dibuat oleh flow mobile submit.
+        _context.TrxClaims.Add(new trx_claim
+        {
+            id = Guid.NewGuid().ToString(),
+            trx_invoice_id = invoiceId,
+            app_user_id = audit.app_user_id,
+            claim_date = auditDateUtc,
+            claim_media_upload = 0,
+            claim_media_total = 0,
+            status = "UNDER_REVIEW",
+            created_by = currentUser,
+            created_date = nowUtc,
+            updated_by = currentUser,
+            updated_date = nowUtc
+        });
     }
 
     // =============================================================
@@ -1195,7 +1201,16 @@ public class RegularAuditImportController : Controller
 
     private static List<RegularAuditImportRow> ReadCsv(TextReader reader)
     {
-        var records = ReadCsvRecords(reader);
+        // Support CSV exported with either comma (,) or semicolon (;) delimiter.
+        // Delimiter is detected from the header row only, so decimal-comma values
+        // such as 96,67 in semicolon CSV remain part of the same field.
+        var csvText = reader.ReadToEnd();
+        if (string.IsNullOrWhiteSpace(csvText))
+            return new List<RegularAuditImportRow>();
+
+        var delimiter = DetectCsvDelimiter(csvText);
+        using var csvReader = new StringReader(csvText);
+        var records = ReadCsvRecords(csvReader, delimiter);
         if (records.Count == 0)
             return new List<RegularAuditImportRow>();
 
@@ -1324,7 +1339,45 @@ public class RegularAuditImportController : Controller
         return result;
     }
 
-    private static List<List<string>> ReadCsvRecords(TextReader reader)
+    private static char DetectCsvDelimiter(string csvText)
+    {
+        var inQuotes = false;
+        var commaCount = 0;
+        var semicolonCount = 0;
+
+        // Inspect only the first logical CSV record/header. Separators inside
+        // quoted header values are ignored.
+        for (var i = 0; i < csvText.Length; i++)
+        {
+            var c = csvText[i];
+
+            if (c == '"')
+            {
+                if (inQuotes && i + 1 < csvText.Length && csvText[i + 1] == '"')
+                {
+                    i++;
+                    continue;
+                }
+
+                inQuotes = !inQuotes;
+                continue;
+            }
+
+            if (inQuotes)
+                continue;
+
+            if (c == ',')
+                commaCount++;
+            else if (c == ';')
+                semicolonCount++;
+            else if (c == '\r' || c == '\n')
+                break;
+        }
+
+        return semicolonCount > commaCount ? ';' : ',';
+    }
+
+    private static List<List<string>> ReadCsvRecords(TextReader reader, char delimiter)
     {
         var records = new List<List<string>>();
         var record = new List<string>();
@@ -1354,7 +1407,7 @@ public class RegularAuditImportController : Controller
                 continue;
             }
 
-            if (c == ',' && !inQuotes)
+            if (c == delimiter && !inQuotes)
             {
                 record.Add(field.ToString());
                 field.Clear();
