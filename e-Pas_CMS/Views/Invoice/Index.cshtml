@@ -569,6 +569,7 @@
     var summaryApproved = ViewBag.SummaryApproved is int sa ? sa : 0;
     var summaryPending = ViewBag.SummaryPending is int sp ? sp : 0;
     var summaryRejected = ViewBag.SummaryRejected is int sr ? sr : 0;
+    var canProcessInvoice = ViewBag.CanProcessInvoice is bool cpi && cpi;
 
     string GetStatusText(string status)
     {
@@ -747,7 +748,7 @@
                             var status = item.Status ?? "";
                             var statusText = GetStatusText(status);
                             var statusClass = GetStatusClass(status);
-                            var canProcess = status == "UNDER_REVIEW";
+                            var canProcess = canProcessInvoice && status == "UNDER_REVIEW";
 
                             <tr>
                                 <td>
@@ -798,7 +799,7 @@
                                         <a asp-action="Detail"
                                            asp-route-id="@item.Id"
                                            class="invoice-btn">
-                                            Detail
+                                            View
                                         </a>
                                     }
                                 </td>

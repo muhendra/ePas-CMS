@@ -737,19 +737,26 @@ public class RegularAuditImportController : Controller
                 await SaveStageAsync("CHECKLIST/QQ");
 
                 // =====================================================
-                // STAGE 4 - FINANCE
+                // STAGE 4 - MOBILE INVOICE SEED
                 // =====================================================
+                // Import hanya menyiapkan invoice agar bisa diajukan dari mobile.
+                // Claim TIDAK dibuat di CMS. Setelah auditor submit claim di mobile,
+                // API existing akan mengubah status menjadi:
+                //   trx_invoice        = IN_PROGRESS
+                //   trx_invoice_detail = IN_PROGRESS
+                //   trx_claim          = UNDER_REVIEW
+                // Baru pada kondisi tersebut invoice masuk ke menu Finance CMS.
 
                 foreach (var item in auditRows)
                 {
                     if (invoiceAuditIds.Contains(item.Audit.id))
                         continue;
 
-                    AddFinanceInvoice(item.Audit, item.SpbuNo, currentUser, nowUtc);
+                    AddMobileSubmitInvoice(item.Audit, item.SpbuNo, currentUser, nowUtc);
                     invoiceAuditIds.Add(item.Audit.id);
                 }
 
-                await SaveStageAsync("FINANCE");
+                await SaveStageAsync("MOBILE-INVOICE");
                 await dbTransaction.CommitAsync();
 
                 var fullRows = auditRows.Count(x => x.Row.HasChecklistPayload || x.Row.HasQqWideColumns);
@@ -1126,7 +1133,7 @@ public class RegularAuditImportController : Controller
     // FINANCE
     // =============================================================
 
-    private void AddFinanceInvoice(
+    private void AddMobileSubmitInvoice(
         trx_audit audit,
         string spbuNo,
         string currentUser,
@@ -1158,7 +1165,7 @@ public class RegularAuditImportController : Controller
             InvoicePeriodEnd = invoicePeriodEndUtc,
             IssuedDate = auditDateUtc,
             DueDate = auditDateUtc.AddDays(30),
-            Status = "IN_PROGRESS",
+            Status = "NOT_CLAIMED",
             CreatedBy = currentUser,
             CreatedDate = nowUtc,
             UpdatedBy = currentUser,
@@ -1172,27 +1179,14 @@ public class RegularAuditImportController : Controller
             TrxAuditId = audit.id,
             AuditFee = 150000m, // Invoice flow: automatic fee per imported SPBU
             LumpsumFee = null,
-            Status = "IN_PROGRESS",
+            Status = "NOT_CLAIMED",
             CreatedBy = currentUser,
             CreatedDate = nowUtc,
             UpdatedBy = currentUser,
             UpdatedDate = nowUtc
         });
 
-        _context.TrxClaims.Add(new trx_claim
-        {
-            id = Guid.NewGuid().ToString(),
-            trx_invoice_id = invoiceId,
-            app_user_id = audit.app_user_id,
-            claim_date = auditDateUtc,
-            claim_media_upload = 0,
-            claim_media_total = 0,
-            status = "UNDER_REVIEW",
-            created_by = currentUser,
-            created_date = nowUtc,
-            updated_by = currentUser,
-            updated_date = nowUtc
-        });
+        // Claim sengaja belum dibuat di import. Claim dibuat oleh flow mobile submit.
     }
 
     // =============================================================

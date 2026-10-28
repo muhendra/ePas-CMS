@@ -1,6 +1,7 @@
 ﻿using System.Globalization;
 using System.Text;
 using e_Pas_CMS.Data;
+using e_Pas_CMS.Helpers;
 using e_Pas_CMS.Models;
 using e_Pas_CMS.ViewModels;
 using Microsoft.AspNetCore.Authorization;
@@ -300,6 +301,7 @@ public class InvoiceController : Controller
             ViewBag.SortColumn = sortColumn;
             ViewBag.SortDirection = sortDirection;
             ViewBag.AuditorOptions = auditorOptions;
+            ViewBag.CanProcessInvoice = User.HasPermission("FINANCE_INVOICE_PROCESS");
 
             return View(model);
         }
@@ -318,6 +320,7 @@ public class InvoiceController : Controller
             ViewBag.SummaryApproved = 0;
             ViewBag.SummaryPending = 0;
             ViewBag.SummaryRejected = 0;
+            ViewBag.CanProcessInvoice = User.HasPermission("FINANCE_INVOICE_PROCESS");
 
             return View(new PaginationModel<InvoiceVM>
             {
@@ -456,7 +459,10 @@ public class InvoiceController : Controller
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> StartProcess(string id, InvoiceStartProcessVM model)
     {
-        if (!await HasRoleAsync("Finance")) return Forbid();
+        // PROCESS dipisahkan dari role Finance. User Finance yang hanya memiliki
+        // FINANCE_INVOICE_VIEW tetap read-only dan baru bertindak saat terpilih
+        // sebagai approver pada approval flow.
+        if (!User.HasPermission("FINANCE_INVOICE_PROCESS")) return Forbid();
         if (string.IsNullOrWhiteSpace(id))
             return NotFound();
 
@@ -1379,6 +1385,7 @@ public class InvoiceController : Controller
             ViewBag.InvoiceStatusLabel = GetInvoiceStatusLabel(invoice.Status);
             ViewBag.ClaimStatus = claim.status;
             ViewBag.ClaimStatusLabel = GetClaimStatusLabel(claim.status);
+            ViewBag.CanProcessInvoice = User.HasPermission("FINANCE_INVOICE_PROCESS");
         }
 
         return vm;

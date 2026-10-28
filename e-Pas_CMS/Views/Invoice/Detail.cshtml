@@ -14,8 +14,12 @@
     var isPendingApproval = claimStatus == "PENDING_APPROVAL";
     var isDone = claimStatus == "APPROVED";
     var isRejected = claimStatus == "REJECTED";
+    var canProcessInvoice = ViewBag.CanProcessInvoice is bool cpi && cpi;
 
-    var isEditableView = isWait; // Lock amounts after Finance sends for approval.
+    // UNDER_REVIEW hanya editable untuk user yang memang punya permission PROCESS.
+    // Role Finance dengan VIEW saja tetap read-only; saat terpilih sebagai approver
+    // action Setuju/Tidak Setuju tetap mengikuti CanCurrentUserApprove.
+    var isEditableView = isWait && canProcessInvoice;
 
     // Status raw tetap dipakai untuk business logic.
     // Yang ditampilkan pada Detail menggunakan label user-friendly.
@@ -733,9 +737,9 @@
                 background: var(--invoice-head);
                 border: 0;
                 color: #111827;
-                font-size: 15px;
+                font-size: 13px;
                 font-weight: 800;
-                padding: 16px 14px;
+                padding: 14px 12px;
                 vertical-align: middle;
                 text-align: center;
             }
@@ -743,9 +747,9 @@
             .detail-table tbody td {
                 border-top: 1px dashed #e5e8ec;
                 background: #fff;
-                padding: 20px 14px;
+                padding: 16px 12px;
                 vertical-align: middle;
-                font-size: 14px;
+                font-size: 12px;
                 color: #111827;
                 word-break: break-word;
             }
@@ -793,7 +797,7 @@
 
         .date-sub {
             color: #a2aab3;
-            font-size: 12px;
+            font-size: 11px;
             margin-top: 2px;
         }
 
@@ -803,7 +807,7 @@
             border-radius: 7px;
             padding: 0 12px;
             width: 100%;
-            font-size: 14px;
+            font-size: 12px;
             color: #4b5563;
             background: #fff;
             outline: none;
@@ -1300,7 +1304,7 @@
     <div class="invoice-top-row">
         <h1 class="invoice-title">Detail Invoice</h1>
 
-        @if (isDone)
+        @if (isPendingApproval || isDone)
         {
             <div class="invoice-action-buttons">
                 <a asp-action="Preview"
@@ -1311,21 +1315,24 @@
                     Preview
                 </a>
 
-                <a asp-action="Export"
-                   asp-route-id="@Model.Id"
-                   class="download-pdf-btn dark">
-                    <i class="bi bi-file-earmark-arrow-down-fill"></i>
-                    Export
-                </a>
+                @if (isDone)
+                {
+                    <a asp-action="Export"
+                       asp-route-id="@Model.Id"
+                       class="download-pdf-btn dark">
+                        <i class="bi bi-file-earmark-arrow-down-fill"></i>
+                        Export
+                    </a>
 
-                <a asp-action="Preview"
-                   asp-route-id="@Model.Id"
-                   asp-route-print="true"
-                   target="_blank"
-                   class="download-pdf-btn">
-                    <i class="bi bi-printer-fill"></i>
-                    Print
-                </a>
+                    <a asp-action="Preview"
+                       asp-route-id="@Model.Id"
+                       asp-route-print="true"
+                       target="_blank"
+                       class="download-pdf-btn">
+                        <i class="bi bi-printer-fill"></i>
+                        Print
+                    </a>
+                }
             </div>
         }
     </div>
@@ -1502,7 +1509,7 @@
                                 </td>
 
                                 <td class="amount-col">
-                                    @if (isWait)
+                                    @if (isEditableView)
                                     {
                                         <input type="hidden"
                                                form="processForm"
@@ -1523,28 +1530,6 @@
                                                class="cell-input amount editable js-money js-audit-fee"
                                                data-row-index="@i" />
                                     }
-                                    else if (isPendingApproval)
-                                    {
-                                        <input type="hidden"
-                                               form="approvalForm"
-                                               name="Items[@i].TrxInvoiceDetailId"
-                                               value="@item.TrxInvoiceDetailId" />
-
-                                        <input type="hidden"
-                                               form="approvalForm"
-                                               name="Items[@i].IsDeleted"
-                                               value="false"
-                                               class="js-is-deleted" />
-
-                                        <input type="number"
-                                               form="approvalForm"
-                                               name="Items[@i].AuditFee"
-                                               value="@MoneyInputValue(item.AuditFee)"
-                                               min="0"
-                                               step="1000"
-                                               class="cell-input amount editable js-money js-audit-fee"
-                                               data-row-index="@i" />
-                                    }
                                     else
                                     {
                                         <span>Rp @item.AuditFee.ToString("N0")</span>
@@ -1552,7 +1537,7 @@
                                 </td>
 
                                 <td class="amount-col">
-                                    @if (isWait)
+                                    @if (isEditableView)
                                     {
                                         <input type="number"
                                                form="processForm"
@@ -1563,17 +1548,6 @@
                                                class="cell-input amount editable js-money js-lumpsum-fee"
                                                data-row-index="@i" />
                                     }
-                                    else if (isPendingApproval)
-                                    {
-                                        <input type="hidden"
-                                               form="approvalForm"
-                                               name="Items[@i].LumpsumFee"
-                                               value="@MoneyInputValue(item.Lumpsum)"
-                                               class="js-lumpsum-fee"
-                                               data-row-index="@i" />
-
-                                        <span>Rp @item.Lumpsum.ToString("N0")</span>
-                                    }
                                     else
                                     {
                                         <span>Rp @item.Lumpsum.ToString("N0")</span>
@@ -1581,18 +1555,7 @@
                                 </td>
 
                                 <td class="center-col">
-                                    @if (isPendingApproval)
-                                    {
-                                        <button type="button"
-                                                class="btn-delete-row js-delete-row"
-                                                title="Delete row">
-                                            <i class="bi bi-trash-fill"></i>
-                                        </button>
-                                    }
-                                    else
-                                    {
-                                        <span>-</span>
-                                    }
+                                    <span>-</span>
                                 </td>
                             </tr>
                         }
@@ -1782,7 +1745,7 @@
     <div class="invoice-card">
         <h2 class="section-title">Persetujuan</h2>
 
-        @if (isWait)
+        @if (isWait && canProcessInvoice)
         {
             <div class="finance-decision-card mb-4">
                 <div class="decision-title">Skema Approval Finance</div>
@@ -2111,7 +2074,7 @@
     </div>
 </div>
 
-@if (isWait)
+@if (isWait && canProcessInvoice)
 {
     <form id="processForm"
           method="post"
@@ -2666,4 +2629,3 @@ else if (isPendingApproval)
         </div>
     </div>
 </div>
-
