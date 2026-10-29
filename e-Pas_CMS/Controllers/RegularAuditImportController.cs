@@ -737,19 +737,33 @@ public class RegularAuditImportController : Controller
                 await SaveStageAsync("CHECKLIST/QQ");
 
                 // =====================================================
-                // STAGE 4 - FINANCE
+                // STAGE 4 - MOBILE INVOICE SEED
                 // =====================================================
+                // Import hanya menyiapkan invoice agar bisa diajukan dari mobile.
+                // Claim TIDAK dibuat di CMS. Setelah auditor submit claim di mobile,
+                // API existing akan mengubah status menjadi:
+                //   trx_invoice        = IN_PROGRESS
+                //   trx_invoice_detail = IN_PROGRESS
+                //   trx_claim          = UNDER_REVIEW
+                // Baru pada kondisi tersebut invoice masuk ke menu Finance CMS.
+
+                var invoicePeriodStartDate = await GetInvoicePeriodStartDateAsync();
 
                 foreach (var item in auditRows)
                 {
                     if (invoiceAuditIds.Contains(item.Audit.id))
                         continue;
 
-                    AddFinanceInvoice(item.Audit, item.SpbuNo, currentUser, nowUtc);
+                    AddMobileSubmitInvoice(
+                        item.Audit,
+                        item.SpbuNo,
+                        currentUser,
+                        nowUtc,
+                        invoicePeriodStartDate);
                     invoiceAuditIds.Add(item.Audit.id);
                 }
 
-                await SaveStageAsync("FINANCE");
+                await SaveStageAsync("MOBILE-INVOICE");
                 await dbTransaction.CommitAsync();
 
                 var fullRows = auditRows.Count(x => x.Row.HasChecklistPayload || x.Row.HasQqWideColumns);
@@ -1126,25 +1140,76 @@ public class RegularAuditImportController : Controller
     // FINANCE
     // =============================================================
 
-    private void AddFinanceInvoice(
+    private async Task<int> GetInvoicePeriodStartDateAsync()
+    {
+        const int defaultStartDate = 16;
+
+        var parameter = await _context.SysParameter
+            .AsNoTracking()
+            .Where(x => x.Code == "INVOICE_PERIODE_START_DATE" && x.Status == "ACTIVE")
+            .Select(x => x.Value)
+            .FirstOrDefaultAsync();
+
+        if (string.IsNullOrWhiteSpace(parameter) ||
+            !int.TryParse(parameter, out var startDate) ||
+            startDate < 1 ||
+            startDate > 28)
+        {
+            return defaultStartDate;
+        }
+
+        return startDate;
+    }
+
+    private static (DateTime PeriodStartUtc, DateTime PeriodEndUtc) GetInvoicePeriod(
+        DateTime auditDate,
+        int periodStartDay)
+    {
+        var auditDateOnly = auditDate.Date;
+
+        DateTime periodStartUtc;
+        if (auditDateOnly.Day >= periodStartDay)
+        {
+            periodStartUtc = new DateTime(
+                auditDateOnly.Year,
+                auditDateOnly.Month,
+                periodStartDay,
+                0, 0, 0,
+                DateTimeKind.Utc);
+        }
+        else
+        {
+            var previousMonth = auditDateOnly.AddMonths(-1);
+            periodStartUtc = new DateTime(
+                previousMonth.Year,
+                previousMonth.Month,
+                periodStartDay,
+                0, 0, 0,
+                DateTimeKind.Utc);
+        }
+
+        var periodEndUtc = periodStartUtc.AddMonths(1).AddDays(-1);
+        return (periodStartUtc, periodEndUtc);
+    }
+
+    private void AddMobileSubmitInvoice(
         trx_audit audit,
         string spbuNo,
         string currentUser,
-        DateTime nowUtc)
+        DateTime nowUtc,
+        int invoicePeriodStartDate)
     {
         nowUtc = ToUtc(nowUtc);
 
         var auditDateWithoutTimeZone = audit.audit_execution_time ?? audit.created_date;
         var auditDateUtc = ToUtc(auditDateWithoutTimeZone);
 
-        var invoicePeriodStartUtc = new DateTime(
-            auditDateWithoutTimeZone.Year,
-            auditDateWithoutTimeZone.Month,
-            1,
-            0, 0, 0,
-            DateTimeKind.Utc);
-
-        var invoicePeriodEndUtc = invoicePeriodStartUtc.AddMonths(1).AddDays(-1);
+        // Samakan periode invoice import dengan API mobile.
+        // Parameter INVOICE_PERIODE_START_DATE default 16, sehingga contoh:
+        // audit 14 Oct -> period 16 Sep - 15 Oct
+        // audit 16 Oct -> period 16 Oct - 15 Nov
+        var (invoicePeriodStartUtc, invoicePeriodEndUtc) =
+            GetInvoicePeriod(auditDateWithoutTimeZone, invoicePeriodStartDate);
         var invoiceId = Guid.NewGuid().ToString();
         var invoiceNo = $"IMP-{auditDateWithoutTimeZone:yyyyMM}-{NormalizeForNumber(spbuNo)}-{audit.id[..8]}";
 
@@ -1158,7 +1223,7 @@ public class RegularAuditImportController : Controller
             InvoicePeriodEnd = invoicePeriodEndUtc,
             IssuedDate = auditDateUtc,
             DueDate = auditDateUtc.AddDays(30),
-            Status = "IN_PROGRESS",
+            Status = "NOT_CLAIMED",
             CreatedBy = currentUser,
             CreatedDate = nowUtc,
             UpdatedBy = currentUser,
@@ -1172,27 +1237,14 @@ public class RegularAuditImportController : Controller
             TrxAuditId = audit.id,
             AuditFee = 150000m, // Invoice flow: automatic fee per imported SPBU
             LumpsumFee = null,
-            Status = "IN_PROGRESS",
+            Status = "NOT_CLAIMED",
             CreatedBy = currentUser,
             CreatedDate = nowUtc,
             UpdatedBy = currentUser,
             UpdatedDate = nowUtc
         });
 
-        _context.TrxClaims.Add(new trx_claim
-        {
-            id = Guid.NewGuid().ToString(),
-            trx_invoice_id = invoiceId,
-            app_user_id = audit.app_user_id,
-            claim_date = auditDateUtc,
-            claim_media_upload = 0,
-            claim_media_total = 0,
-            status = "UNDER_REVIEW",
-            created_by = currentUser,
-            created_date = nowUtc,
-            updated_by = currentUser,
-            updated_date = nowUtc
-        });
+        // Claim sengaja belum dibuat di import. Claim dibuat oleh flow mobile submit.
     }
 
     // =============================================================
