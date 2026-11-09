@@ -19,10 +19,10 @@
     var vehicleMaintenance = ExpenseAmount("VEHICLE_MAINTENANCE");
     var internetData = ExpenseAmount("INTERNET");
     var others = ExpenseAmount("OTHER");
-
     var amountDue = Model.TotalExpense - Model.LessDirectCharges - Model.LessAdvances;
-    var rowCount = Math.Max(Model.PrintLines?.Count ?? 0, 20);
+    var rowCount = Math.Max(Model.PrintLines?.Count ?? 0, 12);
     var autoPrint = ViewBag.AutoPrint is bool ap && ap;
+    var claimStatusLabel = ViewBag.ClaimStatusLabel?.ToString() ?? Model.Status;
 
     string Money(decimal value)
     {
@@ -33,120 +33,169 @@
     {
         return value.ToString("dd/MM/yyyy");
     }
+
+    string ApprovalName(int level, string fallback)
+    {
+        var step = Model.ApprovalSteps?.FirstOrDefault(x => x.ApprovalLevel == level);
+        if (step == null)
+            return fallback;
+
+        return string.IsNullOrWhiteSpace(step.ApproverName)
+            ? step.ApproverUsername
+            : step.ApproverName;
+    }
+
+    string ApprovalStatus(int level)
+    {
+        var step = Model.ApprovalSteps?.FirstOrDefault(x => x.ApprovalLevel == level);
+        return step?.Status ?? "PENDING";
+    }
+
+    string ApprovalDate(int level)
+    {
+        var step = Model.ApprovalSteps?.FirstOrDefault(x => x.ApprovalLevel == level);
+        return step?.ActionDate?.ToString("dd/MM/yyyy") ?? "";
+    }
 }
 
 <!DOCTYPE html>
 <html>
 <head>
     <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Preview Invoice - @Model.InvoiceNo</title>
     <style>
             * {
                 box-sizing: border-box;
             }
 
+            :root {
+                --ink: #111827;
+                --line: #111827;
+                --muted: #64748b;
+                --paper: #ffffff;
+                --bg: #eef1f5;
+                --yellow: #fff200;
+                --cyan: #22b8d4;
+            }
+
             body {
                 margin: 0;
-                background: #f3f4f6;
+                background: var(--bg);
                 font-family: Arial, Helvetica, sans-serif;
                 color: #000;
             }
 
             .preview-toolbar {
-                max-width: 1320px;
-                margin: 18px auto 0;
+                width: min(1180px, calc(100% - 32px));
+                margin: 16px auto 0;
                 display: flex;
                 justify-content: flex-end;
-                gap: 10px;
-                padding: 0 16px;
+                gap: 8px;
             }
 
             .toolbar-btn {
                 border: 0;
                 border-radius: 999px;
-                padding: 10px 22px;
-                background: #22b8d4;
+                padding: 9px 18px;
+                background: var(--cyan);
                 color: #fff;
                 font-weight: 800;
                 cursor: pointer;
                 text-decoration: none;
-                font-size: 13px;
+                font-size: 12px;
+                box-shadow: 0 4px 12px rgba(15, 23, 42, .08);
             }
 
                 .toolbar-btn.dark {
-                    background: #111827;
+                    background: var(--ink);
                 }
 
             .invoice-sheet {
-                width: 1320px;
-                min-height: 780px;
-                margin: 18px auto 36px;
-                background: #fff;
-                padding: 22px 26px 34px;
-                box-shadow: 0 18px 44px rgba(15, 23, 42, .12);
+                width: min(1180px, calc(100% - 32px));
+                margin: 12px auto 28px;
+                background: var(--paper);
+                padding: 24px 26px 28px;
+                box-shadow: 0 16px 40px rgba(15, 23, 42, .12);
             }
 
             .top-header {
                 display: grid;
-                grid-template-columns: 360px 1fr 250px;
-                align-items: start;
-                gap: 22px;
-                margin-bottom: 22px;
+                grid-template-columns: 320px 1fr 255px;
+                align-items: center;
+                gap: 16px;
+                margin-bottom: 14px;
             }
 
             .company-title {
-                font-size: 22px;
+                font-size: 21px;
                 font-weight: 900;
-                line-height: 1;
+                letter-spacing: -.35px;
             }
 
             .company-subtitle {
-                font-size: 10px;
-                margin-top: 4px;
+                font-size: 9px;
+                margin-top: 3px;
             }
 
                 .company-subtitle strong {
-                    font-size: 17px;
-                    letter-spacing: -1px;
+                    font-size: 14px;
+                    letter-spacing: -.5px;
                 }
 
             .invoice-heading {
                 text-align: center;
-                font-size: 28px;
+                font-size: 26px;
                 font-weight: 900;
                 letter-spacing: .3px;
-                padding-top: 18px;
+            }
+
+            .invoice-meta {
+                display: grid;
+                gap: 6px;
             }
 
             .invoice-no-box {
-                margin-top: 18px;
-                background: #fff200;
-                padding: 12px 16px;
+                background: var(--yellow);
+                padding: 10px 12px;
                 display: grid;
-                grid-template-columns: 95px 1fr;
-                gap: 10px;
-                font-size: 10px;
+                grid-template-columns: 88px 1fr;
+                gap: 7px;
+                font-size: 9px;
                 font-weight: 900;
             }
 
+            .status-box {
+                border: 1px solid #d1d5db;
+                padding: 7px 10px;
+                display: flex;
+                justify-content: space-between;
+                gap: 12px;
+                font-size: 9px;
+            }
+
+                .status-box strong {
+                    color: var(--ink);
+                }
+
             .info-block {
-                width: 440px;
-                margin-bottom: 18px;
+                width: 470px;
+                margin: 0 0 14px;
             }
 
             .info-row {
                 display: grid;
-                grid-template-columns: 110px 1fr;
+                grid-template-columns: 105px 1fr;
                 align-items: center;
-                margin-bottom: 2px;
-                font-size: 10px;
+                min-height: 20px;
+                font-size: 9px;
                 font-weight: 700;
             }
 
             .info-line {
-                border-bottom: 2px solid #000;
-                min-height: 16px;
-                padding-left: 8px;
+                border-bottom: 1px solid #111;
+                min-height: 18px;
+                padding: 3px 7px 2px;
                 font-weight: 500;
             }
 
@@ -155,57 +204,78 @@
                 border-collapse: collapse;
             }
 
-            .invoice-table th,
-            .invoice-table td {
-                border: 2px solid #000;
-                font-size: 8px;
-                padding: 4px 5px;
-                line-height: 1.1;
-                vertical-align: middle;
+            .invoice-table {
+                table-layout: fixed;
             }
 
-            .invoice-table th {
-                text-align: center;
-                font-weight: 900;
-            }
+                .invoice-table th,
+                .invoice-table td {
+                    border: 1px solid var(--line);
+                    font-size: 7.6px;
+                    padding: 3px 4px;
+                    line-height: 1.12;
+                    vertical-align: middle;
+                }
 
-            .invoice-table td {
-                height: 18px;
-            }
+                .invoice-table th {
+                    text-align: center;
+                    font-weight: 900;
+                    background: #f8fafc;
+                }
 
-            .invoice-table .center {
-                text-align: center;
-            }
+                .invoice-table td {
+                    height: 17px;
+                }
 
-            .invoice-table .right {
-                text-align: right;
-            }
+                .invoice-table .center {
+                    text-align: center;
+                }
 
-            .invoice-table .bold {
-                font-weight: 900;
-            }
+                .invoice-table .right {
+                    text-align: right;
+                }
 
-            .invoice-table .currency {
-                width: 18px;
-                text-align: center;
-            }
+                .invoice-table .bold {
+                    font-weight: 900;
+                }
 
-            .invoice-table .summary-label {
-                font-weight: 900;
-                text-align: left;
-            }
+                .invoice-table .currency {
+                    width: 18px;
+                    text-align: center;
+                }
 
-            .invoice-table .yellow {
-                background: #fff200;
-            }
+                .invoice-table .summary-label {
+                    font-weight: 900;
+                    text-align: left;
+                }
 
-            .statement-row {
+            .after-table {
                 display: grid;
-                grid-template-columns: 56% 44%;
-                gap: 20px;
+                grid-template-columns: 1fr 430px;
+                gap: 28px;
+                margin-top: 10px;
+                align-items: start;
+            }
+
+            .notes {
+                font-size: 8px;
+                line-height: 1.35;
+            }
+
+            .notes-block + .notes-block {
                 margin-top: 8px;
-                font-size: 9px;
-                line-height: 1.25;
+            }
+
+            .notes strong {
+                display: block;
+                margin-bottom: 2px;
+            }
+
+            .report-statement {
+                font-size: 8px;
+                line-height: 1.35;
+                border-left: 3px solid var(--yellow);
+                padding-left: 10px;
             }
 
             .statement-title {
@@ -213,22 +283,11 @@
                 margin-bottom: 3px;
             }
 
-            .notes {
-                margin-top: 34px;
-                font-size: 9px;
-                line-height: 1.45;
-            }
-
-                .notes strong {
-                    display: block;
-                    margin-bottom: 2px;
-                }
-
             .bottom-section {
                 display: grid;
-                grid-template-columns: 440px 1fr;
-                gap: 180px;
-                margin-top: 26px;
+                grid-template-columns: 350px 1fr;
+                gap: 36px;
+                margin-top: 18px;
                 align-items: start;
             }
 
@@ -236,55 +295,70 @@
                 font-size: 9px;
                 font-weight: 900;
                 text-decoration: underline;
-                margin: 0 0 10px 52px;
+                margin-bottom: 7px;
             }
 
             .bank-table td {
-                border: 2px solid #000;
-                font-size: 10px;
-                height: 18px;
-                padding: 2px 6px;
+                border: 1px solid #000;
+                font-size: 9px;
+                height: 20px;
+                padding: 3px 6px;
+                background: var(--yellow);
             }
 
             .bank-table .label {
-                width: 80px;
-                background: #fff200;
+                width: 74px;
                 font-weight: 900;
-            }
-
-            .bank-table .value {
-                background: #fff200;
             }
 
             .sign-grid {
                 display: grid;
-                grid-template-columns: repeat(2, 1fr);
-                gap: 34px 70px;
-                font-size: 9px;
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+                gap: 16px 28px;
             }
 
-            .sign-row {
-                display: grid;
-                grid-template-columns: 52px 115px 42px 95px;
-                align-items: end;
-                column-gap: 8px;
-            }
-
-            .sign-line {
-                border-bottom: 2px solid #000;
-                min-height: 14px;
-                text-align: center;
-                font-weight: 900;
-            }
-
-            .sign-name {
-                font-weight: 900;
-                text-decoration: underline;
+            .sign-card {
+                border: 1px solid #d1d5db;
+                border-radius: 6px;
+                padding: 9px 10px;
+                min-height: 70px;
             }
 
             .sign-role {
-                font-size: 8px;
-                margin-top: 2px;
+                font-size: 7.5px;
+                color: var(--muted);
+                text-transform: uppercase;
+                letter-spacing: .4px;
+                margin-bottom: 10px;
+                font-weight: 700;
+            }
+
+            .sign-name {
+                font-size: 9px;
+                font-weight: 900;
+                padding-bottom: 3px;
+                border-bottom: 1px solid #111;
+                min-height: 15px;
+            }
+
+            .sign-meta {
+                display: flex;
+                justify-content: space-between;
+                gap: 10px;
+                margin-top: 5px;
+                font-size: 7.5px;
+                color: #475569;
+            }
+
+            @@media (max-width: 900px) {
+                .invoice-sheet,
+                .preview-toolbar {
+                    width: 1180px;
+                }
+
+                body {
+                    overflow-x: auto;
+                }
             }
 
             @@media print {
@@ -299,13 +373,17 @@
                 .invoice-sheet {
                     width: 100%;
                     margin: 0;
-                    padding: 10mm;
+                    padding: 5mm;
                     box-shadow: none;
+                }
+
+                .sign-card {
+                    break-inside: avoid;
                 }
 
                 @@page {
                     size: A4 landscape;
-                    margin: 7mm;
+                    margin: 6mm;
                 }
             }
     </style>
@@ -313,7 +391,7 @@
 <body>
     <div class="preview-toolbar">
         <a asp-action="Detail" asp-route-id="@Model.Id" class="toolbar-btn dark">Back to Detail</a>
-        <a asp-action="Export" asp-route-id="@Model.Id" class="toolbar-btn dark">Export</a>
+        <a asp-action="Export" asp-route-id="@Model.Id" class="toolbar-btn dark">Export Excel</a>
         <button type="button" class="toolbar-btn" onclick="window.print()">Print</button>
     </div>
 
@@ -321,14 +399,20 @@
         <div class="top-header">
             <div>
                 <div class="company-title">PT Citrabuana Indoloka</div>
-                <div class="company-subtitle">In association with&nbsp; <strong>intertek</strong></div>
+                <div class="company-subtitle">In association with <strong>intertek</strong></div>
             </div>
 
             <div class="invoice-heading">INVOICE</div>
 
-            <div class="invoice-no-box">
-                <div>INVOICE NO.</div>
-                <div>: @Model.InvoiceNo</div>
+            <div class="invoice-meta">
+                <div class="invoice-no-box">
+                    <div>INVOICE NO.</div>
+                    <div>: @Model.InvoiceNo</div>
+                </div>
+                <div class="status-box">
+                    <span>Status</span>
+                    <strong>@claimStatusLabel</strong>
+                </div>
             </div>
         </div>
 
@@ -354,10 +438,10 @@
         <table class="invoice-table">
             <thead>
                 <tr>
-                    <th rowspan="2" style="width:55px;">Nomor</th>
-                    <th rowspan="2" style="width:75px;">Date</th>
-                    <th rowspan="2" style="width:310px;">Details of Expense (Purpose, staff or others present)</th>
-                    <th rowspan="2" style="width:55px;">Contract<br />or Cost<br />Centre</th>
+                    <th rowspan="2" style="width:40px;">No</th>
+                    <th rowspan="2" style="width:68px;">Date</th>
+                    <th rowspan="2" style="width:245px;">Details of Expense</th>
+                    <th rowspan="2" style="width:56px;">Cost<br />Centre</th>
                     <th colspan="2" rowspan="2" style="width:90px;">TOTAL EXPENSE</th>
                     <th colspan="11">Descriptions</th>
                 </tr>
@@ -367,7 +451,7 @@
                     <th colspan="2">BPJS Kesehatan</th>
                     <th colspan="2">BPJS Ketenagakerjaan</th>
                     <th>Vehicle<br />Maintenance</th>
-                    <th>Internet Data</th>
+                    <th>Internet</th>
                     <th>Others</th>
                 </tr>
             </thead>
@@ -397,34 +481,19 @@
                 }
 
                 <tr>
-                    <td></td>
-                    <td></td>
+                    <td colspan="2"></td>
                     <td class="summary-label">Brought forward from continuation sheet</td>
-                    <td></td>
-                    <td class="currency"></td>
-                    <td class="right"></td>
-                    <td class="currency"></td>
-                    <td class="right"></td>
-                    <td class="currency"></td>
-                    <td class="right"></td>
-                    <td class="currency"></td>
-                    <td class="right"></td>
-                    <td class="currency"></td>
-                    <td class="right"></td>
-                    <td class="right"></td>
-                    <td class="right"></td>
-                    <td class="right"></td>
+                    <td colspan="14"></td>
                 </tr>
                 <tr>
-                    <td></td>
-                    <td></td>
-                    <td class="summary-label">TOTAL/CARRIED FORWARD</td>
+                    <td colspan="2"></td>
+                    <td class="summary-label">TOTAL / CARRIED FORWARD</td>
                     <td></td>
                     <td class="currency">Rp</td>
                     <td class="right bold">@Money(Model.TotalExpense)</td>
                     <td class="currency">Rp</td>
                     <td class="right bold">@Money(Model.TotalAuditFee)</td>
-                    <td class="currency">Rp</td>
+                    <td class="currency">@(Model.TotalLumpsum == 0 ? "" : "Rp")</td>
                     <td class="right bold">@Money(Model.TotalLumpsum)</td>
                     <td class="currency">@(bpjsKesehatan == 0 ? "" : "Rp")</td>
                     <td class="right bold">@Money(bpjsKesehatan)</td>
@@ -435,8 +504,7 @@
                     <td class="right bold">@Money(others)</td>
                 </tr>
                 <tr>
-                    <td></td>
-                    <td></td>
+                    <td colspan="2"></td>
                     <td class="summary-label">LESS DIRECT CHARGES</td>
                     <td></td>
                     <td class="currency">@(Model.LessDirectCharges == 0 ? "" : "Rp")</td>
@@ -444,8 +512,7 @@
                     <td colspan="11"></td>
                 </tr>
                 <tr>
-                    <td></td>
-                    <td></td>
+                    <td colspan="2"></td>
                     <td class="summary-label">LESS ADVANCES</td>
                     <td></td>
                     <td class="currency">@(Model.LessAdvances == 0 ? "" : "Rp")</td>
@@ -453,8 +520,7 @@
                     <td colspan="11"></td>
                 </tr>
                 <tr>
-                    <td></td>
-                    <td></td>
+                    <td colspan="2"></td>
                     <td class="summary-label">AMOUNT DUE TO/FROM EMPLOYEE</td>
                     <td></td>
                     <td class="currency">Rp</td>
@@ -464,105 +530,55 @@
             </tbody>
         </table>
 
-        <div class="statement-row">
-            <div></div>
-            <div>
+        <div class="after-table">
+            <div class="notes">
+                <div class="notes-block">
+                    <strong>Claimant</strong>
+                    Receipts/invoices for the above are properly documented, attached and cross-referenced.
+                </div>
+                <div class="notes-block">
+                    <strong>Accountant / Authoriser</strong>
+                    Checked calculations, reasonableness, receipts, dates and supporting documents. Approver may approve or reject the claim.
+                </div>
+            </div>
+
+            <div class="report-statement">
                 <div class="statement-title">Report Statement</div>
                 The expenses submitted herein are a true and accurate record of prudent costs necessarily incurred on behalf of Intertek.
-                These costs are supported by original receipts of the charging establishments wherever possible.
-                These costs have not been reimbursed to myself previously nor to any other party.
+                These costs are supported by original receipts wherever possible and have not previously been reimbursed.
             </div>
-        </div>
-
-        <div class="notes">
-            <strong>Claimant:</strong>
-            Receipts/invoices for the above are properly documented, attached and cross-referenced. Where VAT is claimed, proper VAT invoice is attached.
-            <br /><br />
-            <strong>Accountant:</strong>
-            Checked calculations; exchange rates; reasonableness; receipts amounts, dates and details agree. Please highlight missing vouchers, any other discrepancies.
-            <br /><br />
-            <strong>Authoriser:</strong>
-            Expenses claimed are reasonable. Accountant has reviewed and signed and all discrepancies highlighted approved. If not, reject claim.
         </div>
 
         <div class="bottom-section">
             <div>
-                <div class="bank-title">Please transfer to :</div>
+                <div class="bank-title">Please transfer to:</div>
                 <table class="bank-table">
-                    <tr>
-                        <td class="label">NAME</td>
-                        <td class="value">@Model.BankOwner</td>
-                    </tr>
-                    <tr>
-                        <td class="label">Bank</td>
-                        <td class="value">@Model.BankName</td>
-                    </tr>
-                    <tr>
-                        <td class="label">A/C No.</td>
-                        <td class="value">@Model.BankAccount</td>
-                    </tr>
+                    <tr><td class="label">NAME</td><td>@Model.BankOwner</td></tr>
+                    <tr><td class="label">Bank</td><td>@Model.BankName</td></tr>
+                    <tr><td class="label">A/C No.</td><td>@Model.BankAccount</td></tr>
                 </table>
             </div>
 
             <div class="sign-grid">
-                <div class="sign-row">
-                    <div>Signed :</div>
-                    <div>
-                        <div class="sign-line">@Model.EmployeeName</div>
-                        <div class="sign-role">Claimant</div>
-                    </div>
-                    <div>Date:</div>
-                    <div class="sign-line">@Model.ClaimDate.ToString("dd/MM/yyyy")</div>
+                <div class="sign-card">
+                    <div class="sign-role">Requestor</div>
+                    <div class="sign-name">@Model.EmployeeName</div>
+                    <div class="sign-meta"><span>SUBMITTED</span><span>@Model.ClaimDate.ToString("dd/MM/yyyy")</span></div>
                 </div>
-
-                <div class="sign-row">
-                    <div>Signed :</div>
-                    <div>
-                        <div class="sign-line">Rommy Irwan</div>
-                        <div class="sign-role">Branch Rept.</div>
-                    </div>
-                    <div>Date:</div>
-                    <div class="sign-line"></div>
+                <div class="sign-card">
+                    <div class="sign-role">Approval Level 1</div>
+                    <div class="sign-name">@ApprovalName(1, "tri.handayani")</div>
+                    <div class="sign-meta"><span>@ApprovalStatus(1)</span><span>@ApprovalDate(1)</span></div>
                 </div>
-
-                <div class="sign-row">
-                    <div>Signed :</div>
-                    <div>
-                        <div class="sign-line">Tri Poni</div>
-                        <div class="sign-role">Checked by</div>
-                    </div>
-                    <div>Date:</div>
-                    <div class="sign-line"></div>
+                <div class="sign-card">
+                    <div class="sign-role">Approval Level 2</div>
+                    <div class="sign-name">@ApprovalName(2, "rommy.irawan")</div>
+                    <div class="sign-meta"><span>@ApprovalStatus(2)</span><span>@ApprovalDate(2)</span></div>
                 </div>
-
-                <div class="sign-row">
-                    <div>Signed :</div>
-                    <div>
-                        <div class="sign-line">Sabar L Kembaren</div>
-                        <div class="sign-role">Manager</div>
-                    </div>
-                    <div>Date:</div>
-                    <div class="sign-line"></div>
-                </div>
-
-                <div class="sign-row">
-                    <div>Signed :</div>
-                    <div>
-                        <div class="sign-line">Elvy Chandra</div>
-                        <div class="sign-role">General Manager</div>
-                    </div>
-                    <div>Date:</div>
-                    <div class="sign-line"></div>
-                </div>
-
-                <div class="sign-row">
-                    <div>Signed :</div>
-                    <div>
-                        <div class="sign-line">Taufik Hidayat</div>
-                        <div class="sign-role">Director</div>
-                    </div>
-                    <div>Date:</div>
-                    <div class="sign-line"></div>
+                <div class="sign-card">
+                    <div class="sign-role">Approval Level 3</div>
+                    <div class="sign-name">@ApprovalName(3, "sabar.kembaren")</div>
+                    <div class="sign-meta"><span>@ApprovalStatus(3)</span><span>@ApprovalDate(3)</span></div>
                 </div>
             </div>
         </div>

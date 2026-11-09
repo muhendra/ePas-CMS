@@ -569,13 +569,12 @@
     var summaryApproved = ViewBag.SummaryApproved is int sa ? sa : 0;
     var summaryPending = ViewBag.SummaryPending is int sp ? sp : 0;
     var summaryRejected = ViewBag.SummaryRejected is int sr ? sr : 0;
-    var canProcessInvoice = ViewBag.CanProcessInvoice is bool cpi && cpi;
 
     string GetStatusText(string status)
     {
         return status switch
         {
-            "UNDER_REVIEW" => "Sedang Direview",
+            "UNDER_REVIEW" => "Menunggu Approval",
             "PENDING_APPROVAL" => "Menunggu Approval",
             "APPROVED" => "Disetujui",
             "REJECTED" => "Ditolak",
@@ -715,7 +714,7 @@
             <div class="summary-card">
                 <div class="summary-card-label">Menunggu / Review</div>
                 <div class="summary-card-value">@summaryPending.ToString("N0")</div>
-                <div class="summary-card-note">Under review & pending approval</div>
+                <div class="summary-card-note">Menunggu approval Level 1-3</div>
             </div>
 
             <div class="summary-card">
@@ -748,7 +747,6 @@
                             var status = item.Status ?? "";
                             var statusText = GetStatusText(status);
                             var statusClass = GetStatusClass(status);
-                            var canProcess = canProcessInvoice && status == "UNDER_REVIEW";
 
                             <tr>
                                 <td>
@@ -784,24 +782,11 @@
                                 </td>
 
                                 <td class="invoice-action">
-                                    @if (canProcess)
-                                    {
-                                        <form asp-action="StartProcess" method="post">
-                                            @Html.AntiForgeryToken()
-                                            <input type="hidden" name="id" value="@item.Id" />
-                                            <button type="submit" class="invoice-btn process">
-                                                Proses
-                                            </button>
-                                        </form>
-                                    }
-                                    else
-                                    {
-                                        <a asp-action="Detail"
-                                           asp-route-id="@item.Id"
-                                           class="invoice-btn">
-                                            View
-                                        </a>
-                                    }
+                                    <a asp-action="Detail"
+                                       asp-route-id="@item.Id"
+                                       class="invoice-btn">
+                                        Detail
+                                    </a>
                                 </td>
                             </tr>
                         }

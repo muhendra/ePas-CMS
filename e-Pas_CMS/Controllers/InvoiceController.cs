@@ -1,7 +1,7 @@
 ﻿using System.Globalization;
 using System.Text;
+using ClosedXML.Excel;
 using e_Pas_CMS.Data;
-using e_Pas_CMS.Helpers;
 using e_Pas_CMS.Models;
 using e_Pas_CMS.ViewModels;
 using Microsoft.AspNetCore.Authorization;
@@ -34,15 +34,13 @@ public class InvoiceController : Controller
     private const string ApprovalFlowRejected = "REJECTED";
     private const string ApprovalFlowCancelled = "CANCELLED";
 
-    // Approval invoice:
-    // Level 1 wajib: user ACTIVE dengan role.name = "Finance".
-    // Level 2 wajib: user ACTIVE dengan role.name = "Report" ATAU role.name = "Legacy".
-    // Report dan Legacy adalah 2 role berbeda yang digabung sebagai kandidat Level 2.
-    // Level 3+ bebas memilih user ACTIVE.
-    private const string ApprovalLevel1RoleName = "Finance";
-    private const string ApprovalLevel2ReportRoleName = "Report";
-    private const string ApprovalLevel2LegacyRoleName = "Legacy";
-    private const string ApprovalLevel2RoleDisplay = "Report / Legacy";
+    // Approval invoice is strictly user-based, never role-based.
+    private static readonly string[] FixedApprovalUsernames =
+    {
+        "tri.handayani",
+        "rommy.irawan",
+        "sabar.kembaren"
+    };
 
     public InvoiceController(EpasDbContext context)
     {
@@ -114,7 +112,7 @@ public class InvoiceController : Controller
                     )
                     ||
                     (
-                        // CMS Klik Proses
+                        // Approval berjalan (setelah Level 1 claim menjadi PENDING_APPROVAL)
                         // trx_invoice        = IN_PROGRESS
                         // trx_invoice_detail = IN_PROGRESS
                         // trx_claim          = PENDING_APPROVAL
@@ -152,7 +150,10 @@ public class InvoiceController : Controller
                     SurveyorName = usr.name != null ? usr.name : "-"
                 };
 
-            if (userRegion.Any() || userSbm.Any())
+            var isFixedApprover = FixedApprovalUsernames.Any(username =>
+                string.Equals(username, currentUser, StringComparison.OrdinalIgnoreCase));
+
+            if (!isFixedApprover && (userRegion.Any() || userSbm.Any()))
             {
                 query = query.Where(x =>
                     (x.Spbu.region != null && userRegion.Contains(x.Spbu.region)) ||
@@ -246,7 +247,7 @@ public class InvoiceController : Controller
                                 .Sum(cd => (decimal?)cd.amount) ?? 0
                         )
                         + g.Sum(x => x.Detail.AuditFee)
-                        + g.Sum(x => x.Detail.LumpsumFee ?? (x.Audit.km_range > 80 ? 400000m : 0m))
+                        + g.Sum(x => x.Detail.LumpsumFee ?? 0m)
                 });
 
             ViewBag.SummaryTotalInvoice = await grouped.CountAsync();
@@ -301,7 +302,6 @@ public class InvoiceController : Controller
             ViewBag.SortColumn = sortColumn;
             ViewBag.SortDirection = sortDirection;
             ViewBag.AuditorOptions = auditorOptions;
-            ViewBag.CanProcessInvoice = User.HasPermission("FINANCE_INVOICE_PROCESS");
 
             return View(model);
         }
@@ -320,7 +320,6 @@ public class InvoiceController : Controller
             ViewBag.SummaryApproved = 0;
             ViewBag.SummaryPending = 0;
             ViewBag.SummaryRejected = 0;
-            ViewBag.CanProcessInvoice = User.HasPermission("FINANCE_INVOICE_PROCESS");
 
             return View(new PaginationModel<InvoiceVM>
             {
@@ -425,6 +424,20 @@ public class InvoiceController : Controller
         if (string.IsNullOrWhiteSpace(id))
             return NotFound();
 
+        var activeClaimStatus = await _context.TrxClaims
+            .AsNoTracking()
+            .Where(x => x.trx_invoice_id == id && x.status != "DELETED")
+            .OrderByDescending(x => x.created_date)
+            .Select(x => x.status)
+            .FirstOrDefaultAsync();
+
+        if (activeClaimStatus == ClaimUnderReview || activeClaimStatus == ClaimPendingApproval)
+        {
+            // New imports already have this flow. This also self-heals old
+            // unprocessed invoices that do not yet have the fixed-user flow.
+            await EnsureFixedApprovalFlowAsync(id);
+        }
+
         var vm = await BuildInvoiceDetailViewModel(id, setViewBag: true);
 
         if (vm == null)
@@ -437,6 +450,16 @@ public class InvoiceController : Controller
     {
         if (string.IsNullOrWhiteSpace(id))
             return NotFound();
+
+        var previewClaimStatus = await _context.TrxClaims
+            .AsNoTracking()
+            .Where(x => x.trx_invoice_id == id && x.status != "DELETED")
+            .OrderByDescending(x => x.created_date)
+            .Select(x => x.status)
+            .FirstOrDefaultAsync();
+
+        if (previewClaimStatus == ClaimUnderReview || previewClaimStatus == ClaimPendingApproval)
+            await EnsureFixedApprovalFlowAsync(id);
 
         var vm = await BuildInvoiceDetailViewModel(id, setViewBag: true);
 
@@ -459,170 +482,16 @@ public class InvoiceController : Controller
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> StartProcess(string id, InvoiceStartProcessVM model)
     {
-        // PROCESS dipisahkan dari role Finance. User Finance yang hanya memiliki
-        // FINANCE_INVOICE_VIEW tetap read-only dan baru bertindak saat terpilih
-        // sebagai approver pada approval flow.
-        if (!User.HasPermission("FINANCE_INVOICE_PROCESS")) return Forbid();
+        // Flow lama Finance -> Proses sudah dinonaktifkan.
+        // Approval flow fixed user dibuat otomatis saat import invoice.
+        // Setelah final submit mobile menghasilkan claim UNDER_REVIEW,
+        // invoice langsung menunggu approval Level 1.
         if (string.IsNullOrWhiteSpace(id))
             return NotFound();
 
-        var invoice = await _context.TrxInvoices
-            .FirstOrDefaultAsync(x => x.Id == id);
-
-        if (invoice == null)
-            return NotFound();
-
-        var claim = await _context.TrxClaims
-            .FirstOrDefaultAsync(x => x.trx_invoice_id == id);
-
-        if (claim == null)
-        {
-            TempData["Error"] = "Data claim tidak ditemukan.";
-            return RedirectToAction(nameof(Detail), new { id });
-        }
-
-        var invoiceDetails = await _context.TrxInvoiceDetails
-            .Where(x => x.TrxInvoiceId == id)
-            .ToListAsync();
-
-        if (!invoiceDetails.Any())
-        {
-            TempData["Error"] = "Detail invoice tidak ditemukan.";
-            return RedirectToAction(nameof(Detail), new { id });
-        }
-
-        if (invoice.Status != InvoiceInProgress)
-        {
-            TempData["Error"] = "Invoice belum masuk tahap in progress.";
-            return RedirectToAction(nameof(Detail), new { id });
-        }
-
-        if (invoiceDetails.Any(x => x.Status != InvoiceDetailInProgress))
-        {
-            TempData["Error"] = "Detail invoice belum masuk tahap in progress.";
-            return RedirectToAction(nameof(Detail), new { id });
-        }
-
-        if (claim.status != ClaimUnderReview)
-        {
-            TempData["Error"] = "Claim belum masuk tahap under review.";
-            return RedirectToAction(nameof(Detail), new { id });
-        }
-
-        var approverIds = (model?.ApproverUserIds ?? new List<string>())
-            .Where(x => !string.IsNullOrWhiteSpace(x))
-            .Select(x => x.Trim())
-            .ToList();
-
-        if (approverIds.Count < 3)
-        {
-            TempData["Error"] =
-                $"Level 1 ({ApprovalLevel1RoleName}), Level 2 ({ApprovalLevel2RoleDisplay}) dan Level 3 final wajib dipilih.";
-            return RedirectToAction(nameof(Detail), new { id });
-        }
-
-        // PDF expenses flow: electronic sign-off is capped at four actors.
-        if (approverIds.Count > 3)
-        {
-            TempData["Error"] = "Maksimal 3 approver ditambah 1 auditor/preparer pada expenses.";
-            return RedirectToAction(nameof(Detail), new { id });
-        }
-
-        if (approverIds.Count != approverIds.Distinct(StringComparer.OrdinalIgnoreCase).Count())
-        {
-            TempData["Error"] = "Approver yang sama tidak boleh dipilih lebih dari satu level.";
-            return RedirectToAction(nameof(Detail), new { id });
-        }
-
-        var requiredRoleUsers = await GetRequiredApprovalRoleUserIdsAsync();
-
-        if (!requiredRoleUsers.Level1Finance.Contains(approverIds[0]))
-        {
-            TempData["Error"] =
-                $"Approver Level 1 wajib user ACTIVE dengan role {ApprovalLevel1RoleName}.";
-            return RedirectToAction(nameof(Detail), new { id });
-        }
-
-        if (!requiredRoleUsers.Level2AuditReportLegacy.Contains(approverIds[1]))
-        {
-            TempData["Error"] =
-                $"Approver Level 2 wajib user ACTIVE dengan role {ApprovalLevel2ReportRoleName} atau {ApprovalLevel2LegacyRoleName}.";
-            return RedirectToAction(nameof(Detail), new { id });
-        }
-
-        var approvers = await _context.app_users
-            .AsNoTracking()
-            .Where(x => approverIds.Contains(x.id) && x.status == "ACTIVE")
-            .Select(x => new { x.id, x.username, x.name })
-            .ToListAsync();
-
-        if (approvers.Count != approverIds.Count)
-        {
-            TempData["Error"] = "Ada approver yang tidak ditemukan atau sudah tidak aktif.";
-            return RedirectToAction(nameof(Detail), new { id });
-        }
-
-        var expenseValidationError = await ValidateExpenseClaimsAsync(claim.id);
-        if (expenseValidationError != null)
-        {
-            TempData["Error"] = expenseValidationError;
-            return RedirectToAction(nameof(Detail), new { id });
-        }
-
-        // Finance dapat menyesuaikan nilai saat claim masih UNDER_REVIEW.
-        // Perubahan disimpan bersamaan ketika tombol Proses diklik,
-        // sebelum claim berpindah ke PENDING_APPROVAL.
-        await SeedInvoiceFeesFromAuditsAsync(invoiceDetails);
-        ApplyFinanceAdjustment(invoiceDetails, model?.Items);
-
-        var now = DateTime.Now;
-        var currentUser = GetCurrentUser();
-
-        // Clean stale setup only while claim is still UNDER_REVIEW.
-        var oldFlows = await _context.TrxInvoiceApprovalFlows
-            .Where(x => x.TrxInvoiceId == id)
-            .ToListAsync();
-
-        if (oldFlows.Any())
-            _context.TrxInvoiceApprovalFlows.RemoveRange(oldFlows);
-
-        for (var i = 0; i < approverIds.Count; i++)
-        {
-            _context.TrxInvoiceApprovalFlows.Add(new TrxInvoiceApprovalFlow
-            {
-                Id = Guid.NewGuid().ToString(),
-                TrxInvoiceId = id,
-                ApprovalLevel = i + 1,
-                ApproverUserId = approverIds[i],
-                Status = ApprovalFlowPending,
-                CreatedBy = currentUser,
-                CreatedDate = now,
-                UpdatedBy = currentUser,
-                UpdatedDate = now
-            });
-        }
-
-        invoice.Status = InvoiceInProgress;
-        invoice.UpdatedBy = currentUser;
-        invoice.UpdatedDate = now;
-
-        claim.status = ClaimPendingApproval;
-        claim.updated_by = currentUser;
-        claim.updated_date = now;
-
-        foreach (var detail in invoiceDetails)
-        {
-            detail.Status = InvoiceDetailInProgress;
-            detail.UpdatedBy = currentUser;
-            detail.UpdatedDate = now;
-        }
-
-        NormalizeDateTimesForPostgres();
-        await _context.SaveChangesAsync();
-
-        TempData["Success"] =
-            $"Invoice berhasil diproses dengan {approverIds.Count} level approval.";
-
+        await Task.CompletedTask;
+        TempData["Error"] =
+            "Flow Proses Finance sudah dinonaktifkan. Invoice dari mobile langsung masuk approval Level 1.";
         return RedirectToAction(nameof(Detail), new { id });
     }
 
@@ -644,7 +513,9 @@ public class InvoiceController : Controller
                 return NotFound();
 
             var claim = await _context.TrxClaims
-                .FirstOrDefaultAsync(x => x.trx_invoice_id == invoiceId);
+                .Where(x => x.trx_invoice_id == invoiceId && x.status != "DELETED")
+                .OrderByDescending(x => x.created_date)
+                .FirstOrDefaultAsync();
 
             if (claim == null)
             {
@@ -664,11 +535,13 @@ public class InvoiceController : Controller
 
             if (invoice.Status != InvoiceInProgress ||
                 invoiceDetails.Any(x => x.Status != InvoiceDetailInProgress) ||
-                claim.status != ClaimPendingApproval)
+                (claim.status != ClaimUnderReview && claim.status != ClaimPendingApproval))
             {
-                TempData["Error"] = "Invoice belum berada pada tahap pending approval.";
+                TempData["Error"] = "Invoice belum berada pada tahap approval.";
                 return RedirectToAction(nameof(Detail), new { id = invoiceId });
             }
+
+            await EnsureFixedApprovalFlowAsync(invoiceId);
 
             var flowSteps = await _context.TrxInvoiceApprovalFlows
                 .Where(x => x.TrxInvoiceId == invoiceId)
@@ -677,14 +550,13 @@ public class InvoiceController : Controller
 
             if (flowSteps.Count == 0)
             {
-                TempData["Error"] = "Invoice belum memiliki approval flow. Hubungi Finance untuk penanganan data lama.";
+                TempData["Error"] = "Invoice belum memiliki approval flow fixed user.";
                 return RedirectToAction(nameof(Detail), new { id = invoiceId });
             }
 
             var pendingStep = flowSteps
                 .FirstOrDefault(x => x.Status == ApprovalFlowPending);
 
-            // Backward compatibility: old invoice without approval-flow remains single approval.
             string? currentUserId = null;
 
             if (flowSteps.Any())
@@ -705,8 +577,16 @@ public class InvoiceController : Controller
                 }
             }
 
-            // Financial amounts are frozen when Finance submits the approval chain.
-            // Approvers may approve/reject only; they cannot silently alter numbers.
+            // Mobile submit langsung ke approval. Nilai claim divalidasi dan
+            // fee audit/lumpsum diseed otomatis sebelum approver pertama bertindak.
+            var expenseValidationError = await ValidateExpenseClaimsAsync(claim.id);
+            if (expenseValidationError != null)
+            {
+                TempData["Error"] = expenseValidationError;
+                return RedirectToAction(nameof(Detail), new { id = invoiceId });
+            }
+
+            await SeedInvoiceFeesFromAuditsAsync(invoiceDetails);
 
             var now = DateTime.Now;
             var currentUser = GetCurrentUser();
@@ -741,7 +621,7 @@ public class InvoiceController : Controller
 
             if (flowSteps.Any() && hasNextPending)
             {
-                // Intermediate approval: invoice remains pending until final level.
+                // Intermediate approval: claim moves/stays PENDING_APPROVAL until final level.
                 invoice.Status = InvoiceInProgress;
                 invoice.UpdatedBy = currentUser;
                 invoice.UpdatedDate = now;
@@ -771,7 +651,7 @@ public class InvoiceController : Controller
                 return RedirectToAction(nameof(Detail), new { id = invoiceId });
             }
 
-            // Final approval (or legacy single approval).
+            // Final approval Level 3.
             invoice.Status = InvoiceCompleted;
             invoice.CompletedDate = now;
             invoice.UpdatedBy = currentUser;
@@ -784,7 +664,7 @@ public class InvoiceController : Controller
 
             foreach (var detail in invoiceDetails)
             {
-                // Final status is derived from Finance-locked amounts, never a new approver POST.
+                // Final status is derived from the auto-seeded invoice amounts.
                 var isDeleted = detail.AuditFee == 0m && (detail.LumpsumFee ?? 0m) == 0m;
 
                 detail.Status = isDeleted
@@ -798,9 +678,8 @@ public class InvoiceController : Controller
             NormalizeDateTimesForPostgres();
             await _context.SaveChangesAsync();
 
-            TempData["Success"] = flowSteps.Any()
-                ? "Seluruh level approval selesai. Invoice berhasil disetujui."
-                : "Invoice berhasil disetujui.";
+            TempData["Success"] =
+                "Seluruh level approval selesai. Invoice berhasil disetujui.";
 
             return RedirectToAction(nameof(Detail), new { id = invoiceId });
         }
@@ -839,7 +718,9 @@ public class InvoiceController : Controller
                 return NotFound();
 
             var claim = await _context.TrxClaims
-                .FirstOrDefaultAsync(x => x.trx_invoice_id == invoiceId);
+                .Where(x => x.trx_invoice_id == invoiceId && x.status != "DELETED")
+                .OrderByDescending(x => x.created_date)
+                .FirstOrDefaultAsync();
 
             if (claim == null)
             {
@@ -859,11 +740,13 @@ public class InvoiceController : Controller
 
             if (invoice.Status != InvoiceInProgress ||
                 invoiceDetails.Any(x => x.Status != InvoiceDetailInProgress) ||
-                claim.status != ClaimPendingApproval)
+                (claim.status != ClaimUnderReview && claim.status != ClaimPendingApproval))
             {
-                TempData["Error"] = "Invoice belum berada pada tahap pending approval.";
+                TempData["Error"] = "Invoice belum berada pada tahap approval.";
                 return RedirectToAction(nameof(Detail), new { id = invoiceId });
             }
+
+            await EnsureFixedApprovalFlowAsync(invoiceId);
 
             var flowSteps = await _context.TrxInvoiceApprovalFlows
                 .Where(x => x.TrxInvoiceId == invoiceId)
@@ -872,7 +755,7 @@ public class InvoiceController : Controller
 
             if (flowSteps.Count == 0)
             {
-                TempData["Error"] = "Invoice belum memiliki approval flow. Hubungi Finance untuk penanganan data lama.";
+                TempData["Error"] = "Invoice belum memiliki approval flow fixed user.";
                 return RedirectToAction(nameof(Detail), new { id = invoiceId });
             }
 
@@ -899,8 +782,8 @@ public class InvoiceController : Controller
                 }
             }
 
-            // Financial amounts are frozen when Finance submits the approval chain.
-            // Approvers may approve/reject only; they cannot silently alter numbers.
+            // Reject dapat dilakukan langsung sejak claim UNDER_REVIEW oleh
+            // user fixed yang sedang mendapat giliran approval.
 
             var now = DateTime.Now;
             var currentUser = GetCurrentUser();
@@ -979,6 +862,16 @@ public class InvoiceController : Controller
         if (string.IsNullOrWhiteSpace(id))
             return NotFound();
 
+        var exportClaimStatus = await _context.TrxClaims
+            .AsNoTracking()
+            .Where(x => x.trx_invoice_id == id && x.status != "DELETED")
+            .OrderByDescending(x => x.created_date)
+            .Select(x => x.status)
+            .FirstOrDefaultAsync();
+
+        if (exportClaimStatus == ClaimUnderReview || exportClaimStatus == ClaimPendingApproval)
+            await EnsureFixedApprovalFlowAsync(id);
+
         var vm = await BuildInvoiceDetailViewModel(id, setViewBag: true);
 
         if (vm == null)
@@ -987,76 +880,322 @@ public class InvoiceController : Controller
         var claimExpenseAmounts = ViewBag.ClaimExpenseAmounts as Dictionary<string, decimal>
             ?? new Dictionary<string, decimal>(StringComparer.OrdinalIgnoreCase);
 
-        decimal ExpenseAmount(string key)
+        decimal ExpenseAmount(string key) =>
+            claimExpenseAmounts.TryGetValue(key, out var amount) ? amount : 0m;
+
+        string ApprovalName(int level, string fallback)
         {
-            return claimExpenseAmounts.TryGetValue(key, out var amount) ? amount : 0m;
+            var step = vm.ApprovalSteps?.FirstOrDefault(x => x.ApprovalLevel == level);
+            if (step == null)
+                return fallback;
+
+            return string.IsNullOrWhiteSpace(step.ApproverName)
+                ? step.ApproverUsername
+                : step.ApproverName;
         }
 
-        var sb = new StringBuilder();
-        sb.AppendLine("Invoice No,Name,Period,Kind Of Job,Homebase,Claim Date,Status");
-        sb.AppendLine(string.Join(",", new[]
+        string ApprovalDate(int level)
         {
-            Csv(vm.InvoiceNo),
-            Csv(vm.EmployeeName),
-            Csv(vm.Period),
-            Csv(vm.Job),
-            Csv(vm.Homebase),
-            Csv(vm.ClaimDate.ToString("dd/MM/yyyy")),
-            Csv(vm.Status)
-        }));
+            var step = vm.ApprovalSteps?.FirstOrDefault(x => x.ApprovalLevel == level);
+            return step?.ActionDate?.ToString("dd/MM/yyyy") ?? "";
+        }
 
-        sb.AppendLine();
-        sb.AppendLine("No,Date,Details of Expense,Distance KM,Audit Fee,Lumpsum,Line Total");
-
-        if (vm.Items != null)
+        string ApprovalStatus(int level)
         {
-            for (var i = 0; i < vm.Items.Count; i++)
+            var step = vm.ApprovalSteps?.FirstOrDefault(x => x.ApprovalLevel == level);
+            return step?.Status ?? "PENDING";
+        }
+
+        using var workbook = new XLWorkbook();
+        var ws = workbook.Worksheets.Add("Invoice");
+
+        const int lastColumn = 17; // A:Q - sama dengan tabel Preview.
+        var yellow = XLColor.FromHtml("#FFF200");
+        var lightGray = XLColor.FromHtml("#F3F4F6");
+
+        ws.Style.Font.FontName = "Arial";
+        ws.Style.Font.FontSize = 9;
+        ws.Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
+
+        // ===== Header =====
+        ws.Range(1, 1, 2, 6).Merge();
+        ws.Cell(1, 1).Value = "PT Citrabuana Indoloka";
+        ws.Cell(1, 1).Style.Font.Bold = true;
+        ws.Cell(1, 1).Style.Font.FontSize = 16;
+        ws.Cell(1, 1).Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
+
+        ws.Range(3, 1, 3, 6).Merge();
+        ws.Cell(3, 1).Value = "In association with Intertek";
+        ws.Cell(3, 1).Style.Font.FontSize = 8;
+
+        ws.Range(1, 7, 3, 12).Merge();
+        ws.Cell(1, 7).Value = "INVOICE";
+        ws.Cell(1, 7).Style.Font.Bold = true;
+        ws.Cell(1, 7).Style.Font.FontSize = 20;
+        ws.Cell(1, 7).Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+        ws.Cell(1, 7).Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
+
+        ws.Range(1, 13, 3, 17).Merge();
+        ws.Cell(1, 13).Value = $"INVOICE NO. : {vm.InvoiceNo}";
+        ws.Cell(1, 13).Style.Fill.BackgroundColor = yellow;
+        ws.Cell(1, 13).Style.Font.Bold = true;
+        ws.Cell(1, 13).Style.Font.FontSize = 9;
+        ws.Cell(1, 13).Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+        ws.Cell(1, 13).Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
+
+        var info = new[]
+        {
+            ("Name (Auditor)", $"{vm.EmployeeName} (ID: {vm.AuditorCode})"),
+            ("Period", vm.Period),
+            ("Kind of Job", vm.Job),
+            ("Homebase", vm.Homebase)
+        };
+
+        for (var i = 0; i < info.Length; i++)
+        {
+            var row = 5 + i;
+            ws.Range(row, 1, row, 2).Merge();
+            ws.Cell(row, 1).Value = info[i].Item1;
+            ws.Cell(row, 1).Style.Font.Bold = true;
+
+            ws.Range(row, 3, row, 7).Merge();
+            ws.Cell(row, 3).Value = info[i].Item2 ?? "";
+            ws.Range(row, 3, row, 7).Style.Border.BottomBorder = XLBorderStyleValues.Thin;
+        }
+
+        ws.Range(5, 13, 5, 14).Merge();
+        ws.Cell(5, 13).Value = "Status";
+        ws.Cell(5, 13).Style.Font.Bold = true;
+        ws.Range(5, 15, 5, 17).Merge();
+        ws.Cell(5, 15).Value = ViewBag.ClaimStatusLabel?.ToString() ?? vm.Status;
+        ws.Cell(5, 15).Style.Font.Bold = true;
+
+        // ===== Main invoice table =====
+        const int header1 = 10;
+        const int header2 = 11;
+        ws.Range(header1, 1, header2, 1).Merge().Value = "Nomor";
+        ws.Range(header1, 2, header2, 2).Merge().Value = "Date";
+        ws.Range(header1, 3, header2, 5).Merge().Value = "Details of Expense (Purpose, staff or others present)";
+        ws.Range(header1, 6, header2, 6).Merge().Value = "Contract / Cost Centre";
+        ws.Range(header1, 7, header2, 8).Merge().Value = "TOTAL EXPENSE";
+        ws.Range(header1, 9, header1, 17).Merge().Value = "Descriptions";
+
+        ws.Cell(header2, 9).Value = "Audit Fee";
+        ws.Cell(header2, 10).Value = "Lumpsum";
+        ws.Range(header2, 11, header2, 12).Merge().Value = "BPJS Kesehatan";
+        ws.Range(header2, 13, header2, 14).Merge().Value = "BPJS Ketenagakerjaan";
+        ws.Cell(header2, 15).Value = "Vehicle Maintenance";
+        ws.Cell(header2, 16).Value = "Internet Data";
+        ws.Cell(header2, 17).Value = "Others";
+
+        var headerRange = ws.Range(header1, 1, header2, lastColumn);
+        headerRange.Style.Font.Bold = true;
+        headerRange.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+        headerRange.Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
+        headerRange.Style.Alignment.WrapText = true;
+        headerRange.Style.Fill.BackgroundColor = lightGray;
+        SetAllBorders(headerRange);
+
+        var lines = vm.PrintLines ?? new List<InvoicePrintLineVM>();
+        var displayRows = Math.Max(lines.Count, 12);
+        var firstDataRow = 12;
+
+        for (var i = 0; i < displayRows; i++)
+        {
+            var row = firstDataRow + i;
+            var line = i < lines.Count ? lines[i] : null;
+
+            if (line != null)
             {
-                var item = vm.Items[i];
-                sb.AppendLine(string.Join(",", new[]
-                {
-                    Csv((i + 1).ToString()),
-                    Csv(item.Date.ToString("dd/MM/yyyy")),
-                    Csv(item.Description),
-                    Csv(item.DistanceKm.ToString("0.##", CultureInfo.InvariantCulture)),
-                    Csv(item.AuditFee.ToString("0.##", CultureInfo.InvariantCulture)),
-                    Csv(item.Lumpsum.ToString("0.##", CultureInfo.InvariantCulture)),
-                    Csv((item.AuditFee + item.Lumpsum).ToString("0.##", CultureInfo.InvariantCulture))
-                }));
+                ws.Cell(row, 1).Value = i + 1;
+                ws.Cell(row, 2).Value = line.Date;
+                ws.Cell(row, 2).Style.DateFormat.Format = "dd/MM/yyyy";
+                ws.Range(row, 3, row, 5).Merge().Value = line.Description ?? "";
+                ws.Cell(row, 6).Value = "102";
+                ws.Range(row, 7, row, 8).Merge().Value = line.Total;
+                ws.Cell(row, 9).Value = line.AuditFee;
+                ws.Cell(row, 10).Value = line.Lumpsum;
+                ws.Range(row, 11, row, 12).Merge().Value = line.BpjsKesehatan;
+                ws.Range(row, 13, row, 14).Merge().Value = line.BpjsKetenagakerjaan;
+                ws.Cell(row, 15).Value = line.VehicleMaintenance;
+                ws.Cell(row, 16).Value = line.Internet;
+                ws.Cell(row, 17).Value = line.Other;
+
+                foreach (var col in new[] { 7, 9, 10, 11, 13, 15, 16, 17 })
+                    ws.Cell(row, col).Style.NumberFormat.Format = "#,##0";
             }
-        }
-
-        sb.AppendLine();
-        sb.AppendLine("Expense Date,Expense Category,Expense Description,Amount,Evidence Path");
-        foreach (var expense in vm.ClaimExpenses)
-        {
-            sb.AppendLine(string.Join(",", new[]
+            else
             {
-                Csv(expense.Date.ToString("dd/MM/yyyy")),
-                Csv(expense.Type),
-                Csv(expense.Description),
-                Csv(expense.Amount.ToString("0.##", CultureInfo.InvariantCulture)),
-                Csv(expense.EvidencePath ?? "")
-            }));
+                ws.Range(row, 3, row, 5).Merge();
+                ws.Range(row, 7, row, 8).Merge();
+                ws.Range(row, 11, row, 12).Merge();
+                ws.Range(row, 13, row, 14).Merge();
+            }
+
+            ws.Row(row).Height = 16;
+            var dataRange = ws.Range(row, 1, row, lastColumn);
+            dataRange.Style.Alignment.WrapText = true;
+            SetAllBorders(dataRange);
         }
 
-        sb.AppendLine();
-        sb.AppendLine("Summary,Amount");
-        sb.AppendLine($"{Csv("Claim Expense")},{vm.ClaimExpenseAmount.ToString("0.##", CultureInfo.InvariantCulture)}");
-        sb.AppendLine($"{Csv("Total Audit Fee")},{vm.TotalAuditFee.ToString("0.##", CultureInfo.InvariantCulture)}");
-        sb.AppendLine($"{Csv("Total Lumpsum")},{vm.TotalLumpsum.ToString("0.##", CultureInfo.InvariantCulture)}");
-        sb.AppendLine($"{Csv("BPJS Kesehatan")},{ExpenseAmount("BPJS_KESEHATAN").ToString("0.##", CultureInfo.InvariantCulture)}");
-        sb.AppendLine($"{Csv("BPJS Ketenagakerjaan")},{ExpenseAmount("BPJS_KETENAGAKERJAAN").ToString("0.##", CultureInfo.InvariantCulture)}");
-        sb.AppendLine($"{Csv("Vehicle Maintenance")},{ExpenseAmount("VEHICLE_MAINTENANCE").ToString("0.##", CultureInfo.InvariantCulture)}");
-        sb.AppendLine($"{Csv("Internet Data")},{ExpenseAmount("INTERNET").ToString("0.##", CultureInfo.InvariantCulture)}");
-        sb.AppendLine($"{Csv("Others")},{ExpenseAmount("OTHER").ToString("0.##", CultureInfo.InvariantCulture)}");
-        sb.AppendLine($"{Csv("Total Expense")},{vm.TotalExpense.ToString("0.##", CultureInfo.InvariantCulture)}");
+        var summaryRow = firstDataRow + displayRows;
 
-        var bytes = Encoding.UTF8.GetPreamble()
-            .Concat(Encoding.UTF8.GetBytes(sb.ToString()))
-            .ToArray();
+        // Brought forward
+        ws.Range(summaryRow, 3, summaryRow, 6).Merge().Value = "Brought forward from continuation sheet";
+        SetAllBorders(ws.Range(summaryRow, 1, summaryRow, lastColumn));
 
-        return File(bytes, "text/csv", $"invoice-{SanitizeFileName(vm.InvoiceNo)}.csv");
+        // Totals
+        summaryRow++;
+        ws.Range(summaryRow, 3, summaryRow, 6).Merge().Value = "TOTAL / CARRIED FORWARD";
+        ws.Range(summaryRow, 7, summaryRow, 8).Merge().Value = vm.TotalExpense;
+        ws.Cell(summaryRow, 9).Value = vm.TotalAuditFee;
+        ws.Cell(summaryRow, 10).Value = vm.TotalLumpsum;
+        ws.Range(summaryRow, 11, summaryRow, 12).Merge().Value = ExpenseAmount("BPJS_KESEHATAN");
+        ws.Range(summaryRow, 13, summaryRow, 14).Merge().Value = ExpenseAmount("BPJS_KETENAGAKERJAAN");
+        ws.Cell(summaryRow, 15).Value = ExpenseAmount("VEHICLE_MAINTENANCE");
+        ws.Cell(summaryRow, 16).Value = ExpenseAmount("INTERNET");
+        ws.Cell(summaryRow, 17).Value = ExpenseAmount("OTHER");
+        ws.Range(summaryRow, 1, summaryRow, lastColumn).Style.Font.Bold = true;
+        foreach (var col in new[] { 7, 9, 10, 11, 13, 15, 16, 17 })
+            ws.Cell(summaryRow, col).Style.NumberFormat.Format = "#,##0";
+        SetAllBorders(ws.Range(summaryRow, 1, summaryRow, lastColumn));
+
+        var amountDue = vm.TotalExpense - vm.LessDirectCharges - vm.LessAdvances;
+        foreach (var summary in new[]
+        {
+            ("LESS DIRECT CHARGES", vm.LessDirectCharges),
+            ("LESS ADVANCES", vm.LessAdvances),
+            ("AMOUNT DUE TO/FROM EMPLOYEE", amountDue)
+        })
+        {
+            summaryRow++;
+            ws.Range(summaryRow, 3, summaryRow, 6).Merge().Value = summary.Item1;
+            ws.Range(summaryRow, 7, summaryRow, 8).Merge().Value = summary.Item2;
+            ws.Range(summaryRow, 3, summaryRow, 8).Style.Font.Bold = true;
+            ws.Cell(summaryRow, 7).Style.NumberFormat.Format = "#,##0";
+            SetAllBorders(ws.Range(summaryRow, 1, summaryRow, lastColumn));
+        }
+
+        // ===== Statement / notes =====
+        var statementRow = summaryRow + 2;
+        ws.Range(statementRow, 10, statementRow, 17).Merge().Value = "Report Statement";
+        ws.Range(statementRow, 10, statementRow, 17).Style.Font.Bold = true;
+        ws.Range(statementRow + 1, 10, statementRow + 3, 17).Merge().Value =
+            "The expenses submitted herein are a true and accurate record of prudent costs necessarily incurred on behalf of Intertek. " +
+            "These costs are supported by original receipts wherever possible and have not previously been reimbursed.";
+        ws.Range(statementRow + 1, 10, statementRow + 3, 17).Style.Alignment.WrapText = true;
+        ws.Range(statementRow + 1, 10, statementRow + 3, 17).Style.Alignment.Vertical = XLAlignmentVerticalValues.Top;
+
+        var notesRow = statementRow + 5;
+        ws.Range(notesRow, 1, notesRow, 8).Merge().Value = "Claimant";
+        ws.Range(notesRow, 1, notesRow, 8).Style.Font.Bold = true;
+        ws.Range(notesRow + 1, 1, notesRow + 2, 8).Merge().Value =
+            "Receipts/invoices for the above are properly documented, attached and cross-referenced.";
+        ws.Range(notesRow + 1, 1, notesRow + 2, 8).Style.Alignment.WrapText = true;
+
+        ws.Range(notesRow + 3, 1, notesRow + 3, 8).Merge().Value = "Accountant / Authoriser";
+        ws.Range(notesRow + 3, 1, notesRow + 3, 8).Style.Font.Bold = true;
+        ws.Range(notesRow + 4, 1, notesRow + 5, 8).Merge().Value =
+            "Checked calculations, reasonableness, receipts, dates and supporting documents. Approver may approve or reject the claim.";
+        ws.Range(notesRow + 4, 1, notesRow + 5, 8).Style.Alignment.WrapText = true;
+
+        // ===== Bank detail =====
+        var bottomRow = notesRow + 7;
+        ws.Range(bottomRow, 1, bottomRow, 6).Merge().Value = "Please transfer to:";
+        ws.Range(bottomRow, 1, bottomRow, 6).Style.Font.Bold = true;
+        ws.Range(bottomRow, 1, bottomRow, 6).Style.Font.Underline = XLFontUnderlineValues.Single;
+
+        var bankRows = new[]
+        {
+            ("NAME", vm.BankOwner ?? ""),
+            ("Bank", vm.BankName ?? ""),
+            ("A/C No.", vm.BankAccount ?? "")
+        };
+        for (var i = 0; i < bankRows.Length; i++)
+        {
+            var row = bottomRow + 1 + i;
+            ws.Range(row, 1, row, 2).Merge().Value = bankRows[i].Item1;
+            ws.Range(row, 3, row, 6).Merge().Value = bankRows[i].Item2;
+            ws.Range(row, 1, row, 6).Style.Fill.BackgroundColor = yellow;
+            ws.Range(row, 1, row, 2).Style.Font.Bold = true;
+            SetAllBorders(ws.Range(row, 1, row, 6));
+        }
+
+        // ===== Signatures / approval =====
+        var signatureStart = bottomRow;
+        var signatureBlocks = new[]
+        {
+            (Name: vm.EmployeeName ?? "-", Role: "Requestor", Date: vm.ClaimDate.ToString("dd/MM/yyyy"), Status: "SUBMITTED"),
+            (Name: ApprovalName(1, "tri.handayani"), Role: "Approval Level 1", Date: ApprovalDate(1), Status: ApprovalStatus(1)),
+            (Name: ApprovalName(2, "rommy.irawan"), Role: "Approval Level 2", Date: ApprovalDate(2), Status: ApprovalStatus(2)),
+            (Name: ApprovalName(3, "sabar.kembaren"), Role: "Approval Level 3", Date: ApprovalDate(3), Status: ApprovalStatus(3))
+        };
+
+        for (var i = 0; i < signatureBlocks.Length; i++)
+        {
+            var block = signatureBlocks[i];
+            var isLeft = i % 2 == 0;
+            var pairRow = signatureStart + (i / 2) * 4;
+            var startCol = isLeft ? 9 : 14;
+            var endCol = isLeft ? 13 : 17;
+
+            ws.Range(pairRow, startCol, pairRow, endCol).Merge().Value = block.Name;
+            ws.Range(pairRow, startCol, pairRow, endCol).Style.Font.Bold = true;
+            ws.Range(pairRow, startCol, pairRow, endCol).Style.Border.BottomBorder = XLBorderStyleValues.Thin;
+            ws.Range(pairRow + 1, startCol, pairRow + 1, endCol).Merge().Value = block.Role;
+            ws.Range(pairRow + 2, startCol, pairRow + 2, endCol).Merge().Value =
+                string.IsNullOrWhiteSpace(block.Date) ? block.Status : $"{block.Status} · {block.Date}";
+            ws.Range(pairRow + 2, startCol, pairRow + 2, endCol).Style.Font.FontSize = 8;
+        }
+
+        // ===== Widths / print =====
+        ws.Column(1).Width = 6;
+        ws.Column(2).Width = 11;
+        ws.Column(3).Width = 15;
+        ws.Column(4).Width = 15;
+        ws.Column(5).Width = 15;
+        ws.Column(6).Width = 10;
+        ws.Column(7).Width = 5;
+        ws.Column(8).Width = 12;
+        ws.Column(9).Width = 12;
+        ws.Column(10).Width = 12;
+        ws.Column(11).Width = 8;
+        ws.Column(12).Width = 10;
+        ws.Column(13).Width = 8;
+        ws.Column(14).Width = 10;
+        ws.Column(15).Width = 14;
+        ws.Column(16).Width = 12;
+        ws.Column(17).Width = 12;
+
+        ws.Rows(1, 3).Height = 20;
+        ws.Row(1).Height = 26;
+        ws.Row(header1).Height = 24;
+        ws.Row(header2).Height = 30;
+
+        ws.ShowGridLines = false;
+        ws.PageSetup.PageOrientation = XLPageOrientation.Landscape;
+        ws.PageSetup.PaperSize = XLPaperSize.A4Paper;
+        ws.PageSetup.FitToPages(1, 1);
+        ws.PageSetup.Margins.Left = 0.25;
+        ws.PageSetup.Margins.Right = 0.25;
+        ws.PageSetup.Margins.Top = 0.30;
+        ws.PageSetup.Margins.Bottom = 0.30;
+        ws.PageSetup.CenterHorizontally = true;
+
+        using var stream = new MemoryStream();
+        workbook.SaveAs(stream);
+        var fileName = $"invoice-{SanitizeFileName(vm.InvoiceNo)}.xlsx";
+
+        return File(
+            stream.ToArray(),
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            fileName);
+    }
+
+    private static void SetAllBorders(IXLRange range)
+    {
+        range.Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
+        range.Style.Border.InsideBorder = XLBorderStyleValues.Thin;
     }
 
     public IActionResult DownloadPdf(string id)
@@ -1086,7 +1225,7 @@ public class InvoiceController : Controller
         return status switch
         {
             ClaimInProgressSubmit => "Submit Diproses",
-            ClaimUnderReview => "Sedang di Review",
+            ClaimUnderReview => "Menunggu Approval",
             ClaimPendingApproval => "Menunggu Approval",
             ClaimApproved => "Disetujui",
             ClaimRejected => "Ditolak",
@@ -1105,7 +1244,9 @@ public class InvoiceController : Controller
 
         var claim = await _context.TrxClaims
             .AsNoTracking()
-            .FirstOrDefaultAsync(x => x.trx_invoice_id == id);
+            .Where(x => x.trx_invoice_id == id && x.status != "DELETED")
+            .OrderByDescending(x => x.created_date)
+            .FirstOrDefaultAsync();
 
         if (claim == null)
             return null;
@@ -1235,9 +1376,10 @@ public class InvoiceController : Controller
 
         var approvalUserOptions = await _context.app_users
             .AsNoTracking()
-            .Where(x => x.status == "ACTIVE")
-            .OrderBy(x => x.name)
-            .ThenBy(x => x.username)
+            .Where(x =>
+                x.status == "ACTIVE" &&
+                FixedApprovalUsernames.Contains(x.username))
+            .OrderBy(x => x.username)
             .Select(x => new InvoiceApprovalUserOptionVM
             {
                 Id = x.id,
@@ -1246,14 +1388,13 @@ public class InvoiceController : Controller
             })
             .ToListAsync();
 
-        var requiredRoleUsers = await GetRequiredApprovalRoleUserIdsAsync();
-
+        // Backward ViewModel compatibility only; no role selection/filtering.
         var approvalLevel1UserOptions = approvalUserOptions
-            .Where(x => requiredRoleUsers.Level1Finance.Contains(x.Id))
+            .Where(x => string.Equals(x.Username, FixedApprovalUsernames[0], StringComparison.OrdinalIgnoreCase))
             .ToList();
 
         var approvalLevel2UserOptions = approvalUserOptions
-            .Where(x => requiredRoleUsers.Level2AuditReportLegacy.Contains(x.Id))
+            .Where(x => string.Equals(x.Username, FixedApprovalUsernames[1], StringComparison.OrdinalIgnoreCase))
             .ToList();
 
         var currentPendingApproval = approvalSteps
@@ -1262,18 +1403,13 @@ public class InvoiceController : Controller
         var currentAppUserId = await GetCurrentAppUserIdAsync();
 
         var canCurrentUserApprove =
-            claim.status == ClaimPendingApproval &&
-            (
-                approvalSteps.Count == 0 ||
-                (
-                    currentPendingApproval != null &&
-                    !string.IsNullOrWhiteSpace(currentAppUserId) &&
-                    string.Equals(
-                        currentPendingApproval.ApproverUserId,
-                        currentAppUserId,
-                        StringComparison.OrdinalIgnoreCase)
-                )
-            );
+            (claim.status == ClaimUnderReview || claim.status == ClaimPendingApproval) &&
+            currentPendingApproval != null &&
+            !string.IsNullOrWhiteSpace(currentAppUserId) &&
+            string.Equals(
+                currentPendingApproval.ApproverUserId,
+                currentAppUserId,
+                StringComparison.OrdinalIgnoreCase);
 
         var isProcessOrDone =
             claim.status == ClaimUnderReview ||
@@ -1385,7 +1521,6 @@ public class InvoiceController : Controller
             ViewBag.InvoiceStatusLabel = GetInvoiceStatusLabel(invoice.Status);
             ViewBag.ClaimStatus = claim.status;
             ViewBag.ClaimStatusLabel = GetClaimStatusLabel(claim.status);
-            ViewBag.CanProcessInvoice = User.HasPermission("FINANCE_INVOICE_PROCESS");
         }
 
         return vm;
@@ -1606,63 +1741,76 @@ public class InvoiceController : Controller
         };
     }
 
-    private async Task<(HashSet<string> Level1Finance, HashSet<string> Level2AuditReportLegacy)>
-        GetRequiredApprovalRoleUserIdsAsync()
+    private async Task EnsureFixedApprovalFlowAsync(string invoiceId)
     {
-        var assignments = await (
-            from ur in _context.app_user_roles.AsNoTracking()
-            join role in _context.app_roles.AsNoTracking()
-                on ur.app_role_id equals role.id
-            join user in _context.app_users.AsNoTracking()
-                on ur.app_user_id equals user.id
-            where user.status == "ACTIVE"
-                  && role.status == "ACTIVE"
-            select new
+        var users = await _context.app_users
+            .AsNoTracking()
+            .Where(x =>
+                x.status == "ACTIVE" &&
+                FixedApprovalUsernames.Contains(x.username))
+            .Select(x => new { x.id, x.username })
+            .ToListAsync();
+
+        var userByUsername = users.ToDictionary(
+            x => x.username,
+            StringComparer.OrdinalIgnoreCase);
+
+        var missing = FixedApprovalUsernames
+            .Where(username => !userByUsername.ContainsKey(username))
+            .ToList();
+
+        if (missing.Count > 0)
+        {
+            throw new InvalidOperationException(
+                "Approval user ACTIVE tidak ditemukan: " + string.Join(", ", missing));
+        }
+
+        var requiredUserIds = FixedApprovalUsernames
+            .Select(username => userByUsername[username].id)
+            .ToList();
+
+        var existingFlows = await _context.TrxInvoiceApprovalFlows
+            .Where(x => x.TrxInvoiceId == invoiceId)
+            .OrderBy(x => x.ApprovalLevel)
+            .ToListAsync();
+
+        var matches = existingFlows.Count == requiredUserIds.Count &&
+                      existingFlows.Select(x => x.ApproverUserId)
+                          .SequenceEqual(requiredUserIds, StringComparer.OrdinalIgnoreCase);
+
+        if (matches)
+            return;
+
+        if (existingFlows.Any(x => x.Status != ApprovalFlowPending))
+        {
+            throw new InvalidOperationException(
+                "Approval flow invoice sudah memiliki action dan tidak dapat diganti otomatis.");
+        }
+
+        if (existingFlows.Count > 0)
+            _context.TrxInvoiceApprovalFlows.RemoveRange(existingFlows);
+
+        var currentUser = GetCurrentUser();
+        var now = DateTime.Now;
+
+        for (var i = 0; i < requiredUserIds.Count; i++)
+        {
+            _context.TrxInvoiceApprovalFlows.Add(new TrxInvoiceApprovalFlow
             {
-                UserId = user.id,
-                RoleName = role.name
-            }
-        ).ToListAsync();
+                Id = Guid.NewGuid().ToString(),
+                TrxInvoiceId = invoiceId,
+                ApprovalLevel = i + 1,
+                ApproverUserId = requiredUserIds[i],
+                Status = ApprovalFlowPending,
+                CreatedBy = currentUser,
+                CreatedDate = now,
+                UpdatedBy = currentUser,
+                UpdatedDate = now
+            });
+        }
 
-        // =====================================================
-        // LEVEL 1 - FINANCE
-        // =====================================================
-        // Hanya berdasarkan app_role.name = "Finance".
-        // Tidak bergantung pada role ID maupun kolom app.
-        var level1 = assignments
-            .Where(x =>
-                string.Equals(
-                    x.RoleName?.Trim(),
-                    ApprovalLevel1RoleName,
-                    StringComparison.OrdinalIgnoreCase))
-            .Select(x => x.UserId)
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
-
-        // =====================================================
-        // LEVEL 2 - REPORT / LEGACY
-        // =====================================================
-        // Report dan Legacy adalah DUA role berbeda.
-        // Kandidat Level 2 adalah gabungan user ACTIVE yang punya:
-        // - app_role.name = "Report"
-        // ATAU
-        // - app_role.name = "Legacy"
-        //
-        // Tidak menggunakan app_role.id.
-        var level2 = assignments
-            .Where(x =>
-                string.Equals(
-                    x.RoleName?.Trim(),
-                    ApprovalLevel2ReportRoleName,
-                    StringComparison.OrdinalIgnoreCase)
-                ||
-                string.Equals(
-                    x.RoleName?.Trim(),
-                    ApprovalLevel2LegacyRoleName,
-                    StringComparison.OrdinalIgnoreCase))
-            .Select(x => x.UserId)
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
-
-        return (level1, level2);
+        NormalizeDateTimesForPostgres();
+        await _context.SaveChangesAsync();
     }
 
     private async Task<string?> GetCurrentAppUserIdAsync()

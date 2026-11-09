@@ -10,16 +10,14 @@
     var invoiceStatus = ViewBag.InvoiceStatus as string ?? "";
     var invoiceStatusLabel = ViewBag.InvoiceStatusLabel as string ?? "";
 
-    var isWait = claimStatus == "UNDER_REVIEW";
-    var isPendingApproval = claimStatus == "PENDING_APPROVAL";
+    // Final submit mobile langsung masuk approval; tidak ada lagi step Finance Proses.
+    var isWait = false;
+    var isPendingApproval = claimStatus == "UNDER_REVIEW" || claimStatus == "PENDING_APPROVAL";
     var isDone = claimStatus == "APPROVED";
     var isRejected = claimStatus == "REJECTED";
-    var canProcessInvoice = ViewBag.CanProcessInvoice is bool cpi && cpi;
 
-    // UNDER_REVIEW hanya editable untuk user yang memang punya permission PROCESS.
-    // Role Finance dengan VIEW saja tetap read-only; saat terpilih sebagai approver
-    // action Setuju/Tidak Setuju tetap mengikuti CanCurrentUserApprove.
-    var isEditableView = isWait && canProcessInvoice;
+    // Nilai otomatis/read-only. Approver fixed user hanya Setuju / Tidak Setuju.
+    var isEditableView = false;
 
     // Status raw tetap dipakai untuk business logic.
     // Yang ditampilkan pada Detail menggunakan label user-friendly.
@@ -27,7 +25,7 @@
     {
         return status switch
         {
-            "UNDER_REVIEW" => "Sedang di Review",
+            "UNDER_REVIEW" => "Menunggu Approval",
             "PENDING_APPROVAL" => "Menunggu Approval",
             "APPROVED" => "Disetujui",
             "REJECTED" => "Ditolak",
@@ -1320,8 +1318,8 @@
                     <a asp-action="Export"
                        asp-route-id="@Model.Id"
                        class="download-pdf-btn dark">
-                        <i class="bi bi-file-earmark-arrow-down-fill"></i>
-                        Export
+                        <i class="bi bi-file-earmark-excel-fill"></i>
+                        Download Excel
                     </a>
 
                     <a asp-action="Preview"
@@ -1745,109 +1743,6 @@
     <div class="invoice-card">
         <h2 class="section-title">Persetujuan</h2>
 
-        @if (isWait && canProcessInvoice)
-        {
-            <div class="finance-decision-card mb-4">
-                <div class="decision-title">Skema Approval Finance</div>
-                <div class="decision-subtitle mb-3">
-                    Audit Fee dan Lumpsum dapat disesuaikan selama status Sedang di Review.
-                    Level 1 Finance dan Level 2 Audit Report, Legacy wajib dipilih.
-                    Level 3 (final) wajib; total 3 approver + 1 auditor sebagai preparer.
-                </div>
-
-                <div id="approverRows" class="d-flex flex-column gap-2">
-                    <div class="approver-row approver-row-fixed d-flex gap-2 align-items-center"
-                         data-fixed-level="1">
-                        <span class="badge bg-dark approval-level-label">Level 1</span>
-
-                        <div class="approval-required-role">
-                            <strong>Finance</strong>
-                            <small>Wajib</small>
-                        </div>
-
-                        <div class="approver-picker">
-                            <select name="ApproverUserIds"
-                                    form="processForm"
-                                    class="form-select approver-select approver-native-select"
-                                    required>
-                                @if (Model.ApprovalLevel1UserOptions.Any())
-                                {
-                                    <option value="">-- Pilih user Finance --</option>
-                                    @foreach (var user in Model.ApprovalLevel1UserOptions)
-                                    {
-                                        <option value="@user.Id">@user.DisplayName</option>
-                                    }
-                                }
-                                else
-                                {
-                                    <option value="">-- Tidak ada user ACTIVE role Finance --</option>
-                                }
-                            </select>
-                        </div>
-                    </div>
-
-                    <div class="approver-row approver-row-fixed d-flex gap-2 align-items-center"
-                         data-fixed-level="2">
-                        <span class="badge bg-dark approval-level-label">Level 2</span>
-
-                        <div class="approval-required-role">
-                            <strong>Audit Report, Legacy</strong>
-                            <small>Wajib · Role Report/Management</small>
-                        </div>
-
-                        <div class="approver-picker">
-                            <select name="ApproverUserIds"
-                                    form="processForm"
-                                    class="form-select approver-select approver-native-select"
-                                    required>
-                                @if (Model.ApprovalLevel2UserOptions.Any())
-                                {
-                                    <option value="">-- Pilih user Audit Report, Legacy --</option>
-                                    @foreach (var user in Model.ApprovalLevel2UserOptions)
-                                    {
-                                        <option value="@user.Id">@user.DisplayName</option>
-                                    }
-                                }
-                                else
-                                {
-                                    <option value="">-- Tidak ada user ACTIVE role Audit Report, Legacy --</option>
-                                }
-                            </select>
-                        </div>
-                    </div>
-                </div>
-
-                <button type="button"
-                        class="btn btn-outline-primary btn-sm mt-3"
-                        onclick="addApproverRow()">
-                    <i class="bi bi-plus-circle"></i> Tambah Approver Level 3+
-                </button>
-
-                <template id="approverRowTemplate">
-                    <div class="approver-row d-flex gap-2 align-items-center">
-                        <span class="badge bg-secondary approval-level-label">Level</span>
-                        <div class="approver-picker">
-                            <select name="ApproverUserIds"
-                                    form="processForm"
-                                    class="form-select approver-select approver-native-select"
-                                    required>
-                                <option value="">-- Pilih Approver --</option>
-                                @foreach (var user in Model.ApprovalUserOptions)
-                                {
-                                    <option value="@user.Id">@user.DisplayName</option>
-                                }
-                            </select>
-                        </div>
-                        <button type="button"
-                                class="btn btn-outline-danger btn-sm remove-approver"
-                                onclick="removeApproverRow(this)">
-                            Hapus
-                        </button>
-                    </div>
-                </template>
-            </div>
-        }
-
         @if (Model.ApprovalSteps?.Any() == true)
         {
             <div class="finance-decision-card mb-4">
@@ -1954,7 +1849,7 @@
                 <div class="claimant-role">Requestor</div>
             </div>
             <div>
-                <label class="field-label">Finance Approval</label>
+                <label class="field-label">Approval Invoice</label>
 
                 @if (isPendingApproval)
                 {
@@ -1974,9 +1869,9 @@
                         <div class="finance-decision-card">
                             <div class="decision-header">
                                 <div>
-                                    <div class="decision-title">Keputusan Finance</div>
+                                    <div class="decision-title">Keputusan Approval</div>
                                     <div class="decision-subtitle">
-                                        Anda adalah approver aktif pada level ini. Audit Fee dan Lumpsum dapat disesuaikan sebelum approve/reject.
+                                        Anda adalah approver fixed user yang aktif pada level ini. Nilai invoice otomatis dan hanya dapat disetujui atau ditolak.
                                     </div>
                                 </div>
 
@@ -2063,34 +1958,18 @@
                     <div class="approval-signature-box">
                         <div class="approval-signature-placeholder">
                             <i class="bi bi-clock-history" style="font-size:22px;"></i>
-                            <div style="margin-top:8px;">Menunggu proses finance</div>
+                            <div style="margin-top:8px;">Menunggu submit mobile / approval</div>
                         </div>
                     </div>
 
-                    <div class="approval-wait">Menunggu proses finance</div>
+                    <div class="approval-wait">Menunggu submit mobile / approval</div>
                 }
             </div>
         </div>
     </div>
 </div>
 
-@if (isWait && canProcessInvoice)
-{
-    <form id="processForm"
-          method="post"
-          asp-action="StartProcess"
-          asp-route-id="@Model.Id"
-          class="bottom-action-bar">
-        @Html.AntiForgeryToken()
-        <input type="hidden" name="Id" value="@Model.Id" />
-        <button type="submit"
-                class="btn-process"
-                onclick="return confirmStartProcess();">
-            Proses
-        </button>
-    </form>
-}
-else if (isPendingApproval && Model.CanCurrentUserApprove)
+@if (isPendingApproval && Model.CanCurrentUserApprove)
 {
     <div class="bottom-action-bar">
         <button type="submit"
@@ -2127,415 +2006,6 @@ else if (isPendingApproval)
 
 @section Scripts {
     <script>
-        function filterApproverOptions(input) {
-            const picker = input.closest('.approver-picker');
-            if (!picker) return;
-
-            const select = picker.querySelector('select[name="ApproverUserIds"]');
-            if (!select) return;
-
-            const keyword = (input.value || '').trim().toLowerCase();
-            const selectedValue = select.value;
-
-            Array.from(select.options).forEach((option, index) => {
-                // Placeholder selalu ditampilkan.
-                if (index === 0 || !option.value) {
-                    option.hidden = false;
-                    option.disabled = false;
-                    return;
-                }
-
-                const text = (option.textContent || '').toLowerCase();
-                const matches = !keyword || text.includes(keyword);
-                const isSelected = option.value === selectedValue;
-
-                // Selected value tetap visible agar pilihan tidak hilang saat search.
-                option.hidden = !matches && !isSelected;
-                option.disabled = !matches && !isSelected;
-            });
-        }
-
-
-        function initApproverPicker(select) {
-            if (!select || select.dataset.approverPickerInitialized === '1') {
-                return;
-            }
-
-            select.dataset.approverPickerInitialized = '1';
-
-            const picker = document.createElement('div');
-            picker.className = 'approver-picker';
-
-            const toggle = document.createElement('button');
-            toggle.type = 'button';
-            toggle.className = 'approver-picker-toggle';
-            toggle.setAttribute('aria-haspopup', 'listbox');
-            toggle.setAttribute('aria-expanded', 'false');
-
-            const toggleText = document.createElement('span');
-            toggleText.className = 'approver-picker-toggle-text';
-
-            const chevron = document.createElement('span');
-            chevron.className = 'approver-picker-chevron';
-            chevron.textContent = '▼';
-
-            toggle.appendChild(toggleText);
-            toggle.appendChild(chevron);
-
-            const menu = document.createElement('div');
-            menu.className = 'approver-picker-menu';
-
-            const search = document.createElement('input');
-            search.type = 'text';
-            search.className = 'approver-picker-search';
-            search.placeholder = 'Cari approver...';
-            search.autocomplete = 'off';
-
-            const optionsBox = document.createElement('div');
-            optionsBox.className = 'approver-picker-options';
-            optionsBox.setAttribute('role', 'listbox');
-
-            menu.appendChild(search);
-            menu.appendChild(optionsBox);
-
-            // Let the original select stay in the DOM for normal MVC form binding.
-            select.parentNode.insertBefore(picker, select);
-            picker.appendChild(select);
-            picker.appendChild(toggle);
-            picker.appendChild(menu);
-
-            function getRealOptions() {
-                return Array.from(select.options).filter(option => option.value);
-            }
-
-            function updateToggle() {
-                const selected = select.options[select.selectedIndex];
-                const selectedText = selected && selected.value
-                    ? selected.textContent.trim()
-                    : (select.options[0]?.textContent.trim() || '-- Pilih Approver --');
-
-                toggleText.textContent = selectedText;
-                toggle.title = selectedText;
-            }
-
-            function renderOptions(keyword = '') {
-                const normalized = (keyword || '').trim().toLowerCase();
-                const options = getRealOptions().filter(option =>
-                    option.textContent.toLowerCase().includes(normalized)
-                );
-
-                optionsBox.innerHTML = '';
-
-                if (options.length === 0) {
-                    const empty = document.createElement('div');
-                    empty.className = 'approver-picker-empty';
-                    empty.textContent = 'Approver tidak ditemukan';
-                    optionsBox.appendChild(empty);
-                    return;
-                }
-
-                options.forEach(option => {
-                    const item = document.createElement('button');
-                    item.type = 'button';
-                    item.className = 'approver-picker-option';
-                    item.textContent = option.textContent.trim();
-                    item.dataset.value = option.value;
-
-                    if (select.value === option.value) {
-                        item.classList.add('selected');
-                    }
-
-                    item.addEventListener('click', () => {
-                        select.value = option.value;
-                        select.dispatchEvent(new Event('change', { bubbles: true }));
-                        updateToggle();
-                        closeApproverPicker(picker);
-                    });
-
-                    optionsBox.appendChild(item);
-                });
-            }
-
-            function openPicker() {
-                closeAllApproverPickers(picker);
-                picker.classList.add('open');
-                toggle.setAttribute('aria-expanded', 'true');
-
-                search.value = '';
-                renderOptions('');
-
-                window.setTimeout(() => {
-                    search.focus();
-
-                    const selectedItem = optionsBox.querySelector('.selected');
-                    if (selectedItem) {
-                        selectedItem.scrollIntoView({ block: 'nearest' });
-                    } else {
-                        optionsBox.scrollTop = 0;
-                    }
-                }, 0);
-            }
-
-            toggle.addEventListener('click', () => {
-                if (picker.classList.contains('open')) {
-                    closeApproverPicker(picker);
-                } else {
-                    openPicker();
-                }
-            });
-
-            search.addEventListener('input', () => {
-                renderOptions(search.value);
-                optionsBox.scrollTop = 0;
-            });
-
-            search.addEventListener('keydown', event => {
-                if (event.key === 'Escape') {
-                    closeApproverPicker(picker);
-                    toggle.focus();
-                    return;
-                }
-
-                if (event.key === 'Enter') {
-                    const first = optionsBox.querySelector('.approver-picker-option');
-                    if (first) {
-                        event.preventDefault();
-                        first.click();
-                    }
-                }
-            });
-
-            select.addEventListener('change', () => {
-                updateToggle();
-                renderOptions(search.value);
-            });
-
-            updateToggle();
-            renderOptions('');
-        }
-
-        function closeApproverPicker(picker) {
-            if (!picker) return;
-
-            picker.classList.remove('open');
-            const toggle = picker.querySelector('.approver-picker-toggle');
-            if (toggle) {
-                toggle.setAttribute('aria-expanded', 'false');
-            }
-        }
-
-        function closeAllApproverPickers(exceptPicker = null) {
-            document.querySelectorAll('.approver-picker.open').forEach(picker => {
-                if (picker !== exceptPicker) {
-                    closeApproverPicker(picker);
-                }
-            });
-        }
-
-        function initAllApproverPickers(root = document) {
-            root.querySelectorAll('select[name="ApproverUserIds"]').forEach(initApproverPicker);
-        }
-
-        document.addEventListener('click', event => {
-            if (!event.target.closest('.approver-picker')) {
-                closeAllApproverPickers();
-            }
-        });
-
-        function refreshApproverLevels() {
-            const rows = Array.from(document.querySelectorAll('#approverRows .approver-row'));
-
-            rows.forEach((row, index) => {
-                const label = row.querySelector('.approval-level-label');
-                if (label) label.textContent = `Level ${index + 1}`;
-
-                const removeButton = row.querySelector('.remove-approver');
-                if (removeButton) {
-                    // Level 1 dan 2 tidak punya tombol remove.
-                    // Row tambahan selalu Level 3+.
-                    removeButton.style.display = index >= 2 ? '' : 'none';
-                }
-            });
-        }
-
-        function addApproverRow() {
-            const template = document.getElementById('approverRowTemplate');
-            const container = document.getElementById('approverRows');
-
-            if (!template || !container) return;
-            if (container.querySelectorAll('.approver-row').length >= 3) {
-                alert('Sesuai flow baru: hanya 3 level approver (Finance, Report/Legacy, Final).');
-                return;
-            }
-
-            const fragment = template.content.cloneNode(true);
-            const newRow = fragment.querySelector('.approver-row');
-
-            container.appendChild(fragment);
-            refreshApproverLevels();
-
-            if (newRow) {
-                initAllApproverPickers(newRow);
-
-                const toggle = newRow.querySelector('.approver-picker-toggle');
-                if (toggle) {
-                    toggle.click();
-                }
-            }
-        }
-
-        function removeApproverRow(button) {
-            const row = button.closest('.approver-row');
-            if (row) row.remove();
-            refreshApproverLevels();
-        }
-
-        function validateApproverSelection() {
-            const selects = Array.from(document.querySelectorAll(
-                '#approverRows select[name="ApproverUserIds"]'
-            ));
-
-            if (selects.length !== 3) {
-                alert('Wajib pilih tepat 3 level: Finance, Report/Legacy, dan Final.');
-                return false;
-            }
-
-            if (!selects[0].value) {
-                alert('Approver Level 1 dengan role Finance wajib dipilih.');
-                selects[0].focus();
-                return false;
-            }
-
-            if (!selects[1].value) {
-                alert('Approver Level 2 dengan role Audit Report, Legacy wajib dipilih.');
-                selects[1].focus();
-                return false;
-            }
-
-            if (selects.slice(2).some(x => !x.value)) {
-                alert('Approver tambahan Level 3 dan seterusnya tidak boleh kosong.');
-                return false;
-            }
-
-            const values = selects.map(x => x.value);
-            if (new Set(values).size !== values.length) {
-                alert('Approver yang sama tidak boleh dipilih lebih dari satu level.');
-                return false;
-            }
-
-            return true;
-        }
-
-        document.addEventListener('DOMContentLoaded', () => {
-            refreshApproverLevels();
-            initAllApproverPickers();
-        });
-
-        function toNumber(value) {
-            if (value === null || value === undefined) return 0;
-
-            let raw = String(value).trim();
-
-            if (raw.length === 0) return 0;
-
-            raw = raw.replace(/\s/g, '');
-
-            const hasComma = raw.includes(',');
-            const hasDot = raw.includes('.');
-
-            if (hasComma && hasDot) {
-                raw = raw.replace(/\./g, '').replace(',', '.');
-            }
-            else if (hasComma && !hasDot) {
-                raw = raw.replace(',', '.');
-            }
-            else if (!hasComma && hasDot) {
-                const parts = raw.split('.');
-                const lastPart = parts[parts.length - 1];
-
-                if (parts.length > 1 && lastPart.length === 3) {
-                    raw = raw.replace(/\./g, '');
-                }
-            }
-
-            raw = raw.replace(/[^\d.-]/g, '');
-
-            return Number(raw) || 0;
-        }
-
-        function rupiah(value) {
-            return 'Rp ' + Number(value || 0).toLocaleString('id-ID');
-        }
-
-        function isRowDeleted(row) {
-            const deletedInput = row ? row.querySelector('.js-is-deleted') : null;
-            return deletedInput && deletedInput.value === 'true';
-        }
-
-        function recalcFinanceTotal() {
-            let totalAudit = 0;
-            let totalLumpsum = 0;
-
-            document.querySelectorAll('.invoice-detail-row').forEach(function(row) {
-                if (isRowDeleted(row)) return;
-
-                const auditInput = row.querySelector('.js-audit-fee');
-                const lumpsumInput = row.querySelector('.js-lumpsum-fee');
-
-                totalAudit += auditInput ? toNumber(auditInput.value) : 0;
-                totalLumpsum += lumpsumInput ? toNumber(lumpsumInput.value) : 0;
-            });
-
-            const totalExpenseEl = document.getElementById('totalExpenseText');
-            const claimExpense = totalExpenseEl ? toNumber(totalExpenseEl.dataset.claimExpense) : 0;
-            const grandTotal = claimExpense + totalAudit + totalLumpsum;
-
-            const totalAuditFeeText = document.getElementById('totalAuditFeeText');
-            const totalAuditFeeTextBottom = document.getElementById('totalAuditFeeTextBottom');
-            const totalLumpsumText = document.getElementById('totalLumpsumText');
-            const totalLumpsumTextBottom = document.getElementById('totalLumpsumTextBottom');
-            const lessDirectChargesText = document.getElementById('lessDirectChargesText');
-            const lessAdvancesText = document.getElementById('lessAdvancesText');
-            const amountDueText = document.getElementById('amountDueText');
-            const decisionTotalExpense = document.getElementById('decisionTotalExpense');
-
-            const lessDirectCharges = lessDirectChargesText ? grandTotal : 0;
-            const lessAdvances = lessAdvancesText ? toNumber(lessAdvancesText.dataset.lessAdvances) : 0;
-            const amountDue = grandTotal - lessDirectCharges - lessAdvances;
-
-            if (totalAuditFeeText) totalAuditFeeText.innerText = rupiah(totalAudit);
-            if (totalAuditFeeTextBottom) totalAuditFeeTextBottom.innerText = rupiah(totalAudit);
-            if (totalLumpsumText) totalLumpsumText.innerText = rupiah(totalLumpsum);
-            if (totalLumpsumTextBottom) totalLumpsumTextBottom.innerText = rupiah(totalLumpsum);
-            if (totalExpenseEl) totalExpenseEl.innerText = rupiah(grandTotal);
-            if (lessDirectChargesText) lessDirectChargesText.innerText = rupiah(lessDirectCharges);
-            if (amountDueText) amountDueText.innerText = rupiah(amountDue);
-            if (decisionTotalExpense) decisionTotalExpense.innerText = rupiah(grandTotal);
-
-            recalcLineTotals();
-        }
-
-        function recalcLineTotals() {
-            document.querySelectorAll('.invoice-detail-row').forEach(function(row) {
-                const auditInput = row.querySelector('.js-audit-fee');
-                const lumpsumInput = row.querySelector('.js-lumpsum-fee');
-                const lineTotalText = row.querySelector('.line-total-text');
-
-                if (!lineTotalText) return;
-
-                if (isRowDeleted(row)) {
-                    lineTotalText.innerText = rupiah(0);
-                    return;
-                }
-
-                const auditFee = auditInput ? toNumber(auditInput.value) : 0;
-                const lumpsumFee = lumpsumInput ? toNumber(lumpsumInput.value) : 0;
-                const lineTotal = auditFee + lumpsumFee;
-
-                lineTotalText.innerText = rupiah(lineTotal);
-            });
-        }
-
         function validateRejectReason() {
             const textarea = document.querySelector('textarea[name="RejectionReason"]');
 
@@ -2555,42 +2025,9 @@ else if (isPendingApproval)
         function confirmApprove() {
             return confirm('Yakin ingin menyetujui invoice ini?');
         }
-
-        function confirmStartProcess() {
-            if (!validateApproverSelection()) return false;
-            return confirm('Yakin ingin memproses invoice ini ke pending approval finance?');
-        }
-
-        document.addEventListener('DOMContentLoaded', function() {
-            document.querySelectorAll('.js-money').forEach(function(input) {
-                input.addEventListener('input', recalcFinanceTotal);
-            });
-
-            document.querySelectorAll('.js-delete-row').forEach(function(button) {
-                button.addEventListener('click', function() {
-                    const row = this.closest('.invoice-detail-row');
-                    if (!row) return;
-
-                    const deletedInput = row.querySelector('.js-is-deleted');
-                    if (!deletedInput) return;
-
-                    const isDeleted = deletedInput.value === 'true';
-
-                    deletedInput.value = isDeleted ? 'false' : 'true';
-                    row.classList.toggle('is-deleted', !isDeleted);
-
-                    this.innerHTML = isDeleted
-                        ? '<i class="bi bi-trash-fill"></i>'
-                        : '<i class="bi bi-arrow-counterclockwise"></i>';
-
-                    recalcFinanceTotal();
-                });
-            });
-
-            recalcFinanceTotal();
-        });
     </script>
 }
+
 <div class="container-fluid px-4 mt-3">
     <div class="card shadow-sm mb-3">
         <div class="card-header fw-bold">Rincian Expenses Auditor Berdasarkan Tanggal</div>

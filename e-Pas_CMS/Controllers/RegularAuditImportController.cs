@@ -16,6 +16,16 @@ public class RegularAuditImportController : Controller
     private readonly EpasDbContext _context;
     private readonly ILogger<RegularAuditImportController> _logger;
 
+    // Invoice approval is user-based, never role-based.
+    private static readonly string[] FixedInvoiceApprovalUsernames =
+    {
+        "tri.handayani",
+        "rommy.irawan",
+        "sabar.kembaren"
+    };
+
+    private const string ApprovalFlowPending = "PENDING";
+
     public RegularAuditImportController(
         EpasDbContext context,
         ILogger<RegularAuditImportController> logger)
@@ -737,31 +747,40 @@ public class RegularAuditImportController : Controller
                 await SaveStageAsync("CHECKLIST/QQ");
 
                 // =====================================================
-                // STAGE 4 - MOBILE INVOICE SEED
+                // STAGE 4 - MOBILE INVOICE SEED + FIXED APPROVAL FLOW
                 // =====================================================
-                // Import hanya menyiapkan invoice agar bisa diajukan dari mobile.
-                // Claim TIDAK dibuat di CMS. Setelah auditor submit claim di mobile,
-                // API existing akan mengubah status menjadi:
-                //   trx_invoice        = IN_PROGRESS
-                //   trx_invoice_detail = IN_PROGRESS
-                //   trx_claim          = UNDER_REVIEW
-                // Baru pada kondisi tersebut invoice masuk ke menu Finance CMS.
+                // Satu invoice = satu auditor + satu periode invoice.
+                // Semua SPBU auditor pada periode yang sama menjadi banyak
+                // trx_invoice_detail di invoice yang sama. Claim tetap dibuat
+                // oleh mobile, bukan saat import CMS.
+                //
+                // Approval flow sudah dibuat otomatis saat upload:
+                //   L1 tri.handayani -> L2 rommy.irawan -> L3 sabar.kembaren
+                // sehingga setelah final submit mobile (claim UNDER_REVIEW),
+                // invoice langsung siap approval tanpa langkah Finance "Proses".
 
                 var invoicePeriodStartDate = await GetInvoicePeriodStartDateAsync();
+                var fixedApprovers = await GetFixedInvoiceApproversAsync();
 
-                foreach (var item in auditRows)
-                {
-                    if (invoiceAuditIds.Contains(item.Audit.id))
-                        continue;
+                // Selain audit NEW/REPLACE, audit KEEP yang belum punya invoice juga
+                // ikut diseed. Ini mencegah hasil import lama sukses tetapi tidak
+                // pernah muncul sebagai invoice claimable.
+                var invoiceSeedItems = auditRows
+                    .Select(x => new InvoiceSeedItem(x.Audit, x.SpbuNo))
+                    .ToList();
 
-                    AddMobileSubmitInvoice(
-                        item.Audit,
-                        item.SpbuNo,
-                        currentUser,
-                        nowUtc,
-                        invoicePeriodStartDate);
-                    invoiceAuditIds.Add(item.Audit.id);
-                }
+                invoiceSeedItems.AddRange(
+                    validRows
+                        .Where(x => x.SkipImport && x.ExistingAudit != null)
+                        .Select(x => new InvoiceSeedItem(x.ExistingAudit!, x.SpbuNo.Trim())));
+
+                await SeedGroupedInvoicesAsync(
+                    invoiceSeedItems,
+                    invoiceAuditIds,
+                    fixedApprovers,
+                    invoicePeriodStartDate,
+                    currentUser,
+                    nowUtc);
 
                 await SaveStageAsync("MOBILE-INVOICE");
                 await dbTransaction.CommitAsync();
@@ -1192,59 +1211,283 @@ public class RegularAuditImportController : Controller
         return (periodStartUtc, periodEndUtc);
     }
 
-    private void AddMobileSubmitInvoice(
-        trx_audit audit,
-        string spbuNo,
+    private sealed record InvoiceSeedItem(trx_audit Audit, string SpbuNo);
+    private sealed record FixedApproverInfo(string Id, string Username);
+
+    private async Task<List<FixedApproverInfo>> GetFixedInvoiceApproversAsync()
+    {
+        var users = await _context.app_users
+            .AsNoTracking()
+            .Where(x =>
+                x.status == "ACTIVE" &&
+                FixedInvoiceApprovalUsernames.Contains(x.username))
+            .Select(x => new FixedApproverInfo(x.id, x.username))
+            .ToListAsync();
+
+        var byUsername = users.ToDictionary(
+            x => x.Username,
+            StringComparer.OrdinalIgnoreCase);
+
+        var missing = FixedInvoiceApprovalUsernames
+            .Where(username => !byUsername.ContainsKey(username))
+            .ToList();
+
+        if (missing.Count > 0)
+        {
+            throw new InvalidOperationException(
+                "Approval invoice gagal dibuat. User ACTIVE tidak ditemukan: " +
+                string.Join(", ", missing));
+        }
+
+        return FixedInvoiceApprovalUsernames
+            .Select(username => byUsername[username])
+            .ToList();
+    }
+
+    private async Task SeedGroupedInvoicesAsync(
+        List<InvoiceSeedItem> seedItems,
+        HashSet<string> invoiceAuditIds,
+        IReadOnlyList<FixedApproverInfo> fixedApprovers,
+        int invoicePeriodStartDate,
         string currentUser,
-        DateTime nowUtc,
-        int invoicePeriodStartDate)
+        DateTime nowUtc)
     {
         nowUtc = ToUtc(nowUtc);
 
-        var auditDateWithoutTimeZone = audit.audit_execution_time ?? audit.created_date;
-        var auditDateUtc = ToUtc(auditDateWithoutTimeZone);
+        var candidates = seedItems
+            .Where(x => !invoiceAuditIds.Contains(x.Audit.id))
+            .ToList();
 
-        // Samakan periode invoice import dengan API mobile.
-        // Parameter INVOICE_PERIODE_START_DATE default 16, sehingga contoh:
-        // audit 14 Oct -> period 16 Sep - 15 Oct
-        // audit 16 Oct -> period 16 Oct - 15 Nov
-        var (invoicePeriodStartUtc, invoicePeriodEndUtc) =
-            GetInvoicePeriod(auditDateWithoutTimeZone, invoicePeriodStartDate);
-        var invoiceId = Guid.NewGuid().ToString();
-        var invoiceNo = $"IMP-{auditDateWithoutTimeZone:yyyyMM}-{NormalizeForNumber(spbuNo)}-{audit.id[..8]}";
-
-        _context.TrxInvoices.Add(new TrxInvoice
+        foreach (var item in candidates)
         {
-            Id = invoiceId,
-            AppUserId = audit.app_user_id,
-            InvoicePrefix = "IMP",
-            InvoiceNo = invoiceNo,
-            InvoicePeriodStart = invoicePeriodStartUtc,
-            InvoicePeriodEnd = invoicePeriodEndUtc,
-            IssuedDate = auditDateUtc,
-            DueDate = auditDateUtc.AddDays(30),
-            Status = "NOT_CLAIMED",
-            CreatedBy = currentUser,
-            CreatedDate = nowUtc,
-            UpdatedBy = currentUser,
-            UpdatedDate = nowUtc
-        });
+            if (string.IsNullOrWhiteSpace(item.Audit.app_user_id))
+            {
+                throw new InvalidOperationException(
+                    $"Invoice tidak dapat dibuat untuk SPBU {item.SpbuNo}: auditor belum ter-mapping ke app_user.");
+            }
+        }
 
-        _context.TrxInvoiceDetails.Add(new TrxInvoiceDetail
+        if (candidates.Count == 0)
+            return;
+
+        var auditorIds = candidates
+            .Select(x => x.Audit.app_user_id!)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        var auditorUsers = await _context.app_users
+            .AsNoTracking()
+            .Where(x => auditorIds.Contains(x.id) && x.status == "ACTIVE")
+            .Select(x => new { x.id, x.username, x.name })
+            .ToListAsync();
+
+        var auditorById = auditorUsers.ToDictionary(
+            x => x.id,
+            StringComparer.OrdinalIgnoreCase);
+
+        var missingAuditorIds = auditorIds
+            .Where(id => !auditorById.ContainsKey(id))
+            .ToList();
+
+        if (missingAuditorIds.Count > 0)
         {
-            Id = Guid.NewGuid().ToString(),
-            TrxInvoiceId = invoiceId,
-            TrxAuditId = audit.id,
-            AuditFee = 150000m, // Invoice flow: automatic fee per imported SPBU
-            LumpsumFee = null,
-            Status = "NOT_CLAIMED",
-            CreatedBy = currentUser,
-            CreatedDate = nowUtc,
-            UpdatedBy = currentUser,
-            UpdatedDate = nowUtc
-        });
+            throw new InvalidOperationException(
+                "Invoice tidak dapat dibuat karena auditor tidak ACTIVE/tidak ditemukan: " +
+                string.Join(", ", missingAuditorIds));
+        }
 
-        // Claim sengaja belum dibuat di import. Claim dibuat oleh flow mobile submit.
+        var grouped = candidates
+            .Select(x =>
+            {
+                var auditDate = x.Audit.audit_execution_time ?? x.Audit.created_date;
+                var period = GetInvoicePeriod(auditDate, invoicePeriodStartDate);
+                return new
+                {
+                    Seed = x,
+                    AuditorId = x.Audit.app_user_id!,
+                    AuditDate = auditDate,
+                    PeriodStart = period.PeriodStartUtc,
+                    PeriodEnd = period.PeriodEndUtc
+                };
+            })
+            .GroupBy(x => new
+            {
+                x.AuditorId,
+                x.PeriodStart,
+                x.PeriodEnd
+            })
+            .OrderBy(x => x.Key.AuditorId)
+            .ThenBy(x => x.Key.PeriodStart)
+            .ToList();
+
+        foreach (var group in grouped)
+        {
+            var periodStart = group.Key.PeriodStart;
+            var periodEnd = group.Key.PeriodEnd;
+            var auditor = auditorById[group.Key.AuditorId];
+
+            // Reuse invoice NOT_CLAIMED untuk auditor + periode yang sama.
+            // Bila invoice periode tersebut sudah diproses mobile/approval, jangan
+            // diam-diam menambah SPBU ke transaksi yang sedang/selesai diproses.
+            var samePeriodInvoices = await _context.TrxInvoices
+                .Where(x =>
+                    x.AppUserId == group.Key.AuditorId &&
+                    x.InvoicePeriodStart == periodStart &&
+                    x.InvoicePeriodEnd == periodEnd &&
+                    x.Status != "DELETED")
+                .OrderBy(x => x.CreatedDate)
+                .ToListAsync();
+
+            var invoice = samePeriodInvoices
+                .FirstOrDefault(x => x.Status == "NOT_CLAIMED");
+
+            if (invoice == null && samePeriodInvoices.Count > 0)
+            {
+                throw new InvalidOperationException(
+                    $"Invoice auditor {auditor.username} periode {periodStart:dd/MM/yyyy} - {periodEnd:dd/MM/yyyy} " +
+                    "sudah masuk proses claim/approval. Audit terlambat tidak ditambahkan agar nilai invoice yang sedang diproses tidak berubah.");
+            }
+
+            if (invoice == null)
+            {
+                var firstAuditDate = group.Min(x => x.AuditDate);
+                var invoiceId = Guid.NewGuid().ToString();
+                var invoiceNo =
+                    $"IMP-{periodStart:yyyyMMdd}-{NormalizeForNumber(auditor.username)}-{invoiceId[..8]}";
+
+                invoice = new TrxInvoice
+                {
+                    Id = invoiceId,
+                    AppUserId = group.Key.AuditorId,
+                    InvoicePrefix = "IMP",
+                    InvoiceNo = invoiceNo,
+                    InvoicePeriodStart = periodStart,
+                    InvoicePeriodEnd = periodEnd,
+                    IssuedDate = ToUtc(firstAuditDate),
+                    DueDate = ToUtc(firstAuditDate).AddDays(30),
+                    Status = "NOT_CLAIMED",
+                    CreatedBy = currentUser,
+                    CreatedDate = nowUtc,
+                    UpdatedBy = currentUser,
+                    UpdatedDate = nowUtc
+                };
+
+                _context.TrxInvoices.Add(invoice);
+            }
+
+            await EnsureFixedApprovalFlowAsync(
+                invoice,
+                fixedApprovers,
+                currentUser,
+                nowUtc);
+
+            var existingDayStates = await (
+                from det in _context.TrxInvoiceDetails.AsNoTracking()
+                join aud in _context.trx_audits.AsNoTracking()
+                    on det.TrxAuditId equals aud.id
+                where det.TrxInvoiceId == invoice.Id
+                select new
+                {
+                    AuditDate = aud.audit_execution_time ?? aud.created_date,
+                    det.LumpsumFee,
+                    aud.km_range
+                })
+                .ToListAsync();
+
+            // Historical NULL lumpsum with an out-of-range audit is treated as
+            // already consuming the one-auto-lumpsum slot for that calendar day.
+            var daysWithLumpsum = existingDayStates
+                .Where(x =>
+                    (x.LumpsumFee ?? 0m) > 0m ||
+                    (!x.LumpsumFee.HasValue && x.km_range > 80m))
+                .Select(x => DateOnly.FromDateTime(x.AuditDate))
+                .ToHashSet();
+
+            foreach (var dayGroup in group
+                         .OrderBy(x => x.AuditDate)
+                         .ThenBy(x => x.Seed.SpbuNo)
+                         .GroupBy(x => DateOnly.FromDateTime(x.AuditDate)))
+            {
+                var lumpsumTaken = daysWithLumpsum.Contains(dayGroup.Key);
+
+                foreach (var item in dayGroup)
+                {
+                    if (invoiceAuditIds.Contains(item.Seed.Audit.id))
+                        continue;
+
+                    var lumpsum = 0m;
+                    if (!lumpsumTaken && item.Seed.Audit.km_range > 80m)
+                    {
+                        lumpsum = 400000m;
+                        lumpsumTaken = true;
+                        daysWithLumpsum.Add(dayGroup.Key);
+                    }
+
+                    _context.TrxInvoiceDetails.Add(new TrxInvoiceDetail
+                    {
+                        Id = Guid.NewGuid().ToString(),
+                        TrxInvoiceId = invoice.Id,
+                        TrxAuditId = item.Seed.Audit.id,
+                        AuditFee = 150000m,
+                        LumpsumFee = lumpsum,
+                        Status = "NOT_CLAIMED",
+                        CreatedBy = currentUser,
+                        CreatedDate = nowUtc,
+                        UpdatedBy = currentUser,
+                        UpdatedDate = nowUtc
+                    });
+
+                    invoiceAuditIds.Add(item.Seed.Audit.id);
+                }
+            }
+        }
+    }
+
+    private async Task EnsureFixedApprovalFlowAsync(
+        TrxInvoice invoice,
+        IReadOnlyList<FixedApproverInfo> fixedApprovers,
+        string currentUser,
+        DateTime nowUtc)
+    {
+        var existingFlows = await _context.TrxInvoiceApprovalFlows
+            .Where(x => x.TrxInvoiceId == invoice.Id)
+            .OrderBy(x => x.ApprovalLevel)
+            .ToListAsync();
+
+        var flowMatches = existingFlows.Count == fixedApprovers.Count &&
+                          existingFlows
+                              .Select(x => x.ApproverUserId)
+                              .SequenceEqual(
+                                  fixedApprovers.Select(x => x.Id),
+                                  StringComparer.OrdinalIgnoreCase);
+
+        if (flowMatches)
+            return;
+
+        if (invoice.Status != "NOT_CLAIMED")
+        {
+            throw new InvalidOperationException(
+                $"Approval flow invoice {invoice.InvoiceNo} tidak sesuai konfigurasi fixed user dan invoice sudah diproses.");
+        }
+
+        if (existingFlows.Count > 0)
+            _context.TrxInvoiceApprovalFlows.RemoveRange(existingFlows);
+
+        for (var i = 0; i < fixedApprovers.Count; i++)
+        {
+            _context.TrxInvoiceApprovalFlows.Add(new TrxInvoiceApprovalFlow
+            {
+                Id = Guid.NewGuid().ToString(),
+                TrxInvoiceId = invoice.Id,
+                ApprovalLevel = i + 1,
+                ApproverUserId = fixedApprovers[i].Id,
+                Status = ApprovalFlowPending,
+                CreatedBy = currentUser,
+                CreatedDate = nowUtc,
+                UpdatedBy = currentUser,
+                UpdatedDate = nowUtc
+            });
+        }
     }
 
     // =============================================================
