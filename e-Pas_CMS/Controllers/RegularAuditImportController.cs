@@ -1483,9 +1483,11 @@ public class RegularAuditImportController : Controller
                 ApproverUserId = fixedApprovers[i].Id,
                 Status = ApprovalFlowPending,
                 CreatedBy = currentUser,
-                CreatedDate = nowUtc,
+                // trx_invoice_approval_flow uses timestamp without time zone.
+                // Npgsql rejects DateTimeKind.Utc for that PostgreSQL type.
+                CreatedDate = AsUnspecified(nowUtc),
                 UpdatedBy = currentUser,
-                UpdatedDate = nowUtc
+                UpdatedDate = AsUnspecified(nowUtc)
             });
         }
     }
