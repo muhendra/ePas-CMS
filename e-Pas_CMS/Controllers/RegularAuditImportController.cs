@@ -319,6 +319,19 @@ public class RegularAuditImportController : Controller
 
                 if (existing != null && !replaceExisting)
                 {
+                    // KEEP must not silently retain a month/day-swapped old audit
+                    // (and hence reuse its invoice in the wrong billing period).
+                    if (existing.audit_execution_time.HasValue &&
+                        existing.audit_execution_time.Value.Date != row.AuditDate!.Value.Date)
+                    {
+                        throw new InvalidOperationException(
+                            $"SPBU {spbuNo}: audit_date CSV {row.AuditDate.Value:dd/MM/yyyy} " +
+                            $"berbeda dari tanggal audit tersimpan {existing.audit_execution_time.Value:dd/MM/yyyy} " +
+                            $"(audit ID {existing.id}). Mode KEEP tidak mengubah tanggal lama. " +
+                            "Periksa invoice terkait dan koreksi data lama sebelum upload ulang; " +
+                            "jangan langsung REPLACE jika sudah terhubung ke invoice.");
+                    }
+
                     row.SkipImport = true;
                     kept++;
                 }
@@ -438,7 +451,8 @@ public class RegularAuditImportController : Controller
                     var spbuNo = row.SpbuNo.Trim();
                     var spbu = spbuByNo[spbuNo];
                     var auditDate = AsUnspecified(row.AuditDate!.Value.Date);
-                    var sendDate = AsUnspecified((row.SendDate ?? row.AuditDate.Value).Date);
+                    // Keep the timestamp from sent_date; .Date previously discarded HH:mm:ss.
+                    var sendDate = AsUnspecified(row.SendDate ?? row.AuditDate.Value);
                     var normalizedAuditLevel = string.IsNullOrWhiteSpace(row.AuditLevel)
                         ? "-"
                         : row.AuditLevel.Trim();
@@ -1483,8 +1497,7 @@ public class RegularAuditImportController : Controller
                 ApproverUserId = fixedApprovers[i].Id,
                 Status = ApprovalFlowPending,
                 CreatedBy = currentUser,
-                // trx_invoice_approval_flow uses timestamp without time zone.
-                // Npgsql rejects DateTimeKind.Utc for that PostgreSQL type.
+                // Approval-flow timestamps use PostgreSQL timestamp WITHOUT time zone.
                 CreatedDate = AsUnspecified(nowUtc),
                 UpdatedBy = currentUser,
                 UpdatedDate = AsUnspecified(nowUtc)
@@ -1557,8 +1570,11 @@ public class RegularAuditImportController : Controller
                 // Support legacy Basic Operational export without requiring
                 // the business user to rename columns manually.
                 TrxAuditId = Get("trx_audit_id", "audit_id", "IdJadwalAudit_PK"),
-                SendDate = ParseDateTime(Get("send_date", "sent_date")),
-                AuditDate = ParseDateTime(Get("Audit Date", "audit_date", "audit_execution_time")),
+                // CSV row number includes the header (r=1 is CSV line 2).
+                // Mandatory date values are validated rather than silently being
+                // interpreted using an English/US month-first culture.
+                SendDate = ParseImportDateTime(Get("send_date", "sent_date"), "sent_date", r + 1),
+                AuditDate = ParseImportDateTime(Get("Audit Date", "audit_date", "audit_execution_time"), "audit_date", r + 1),
                 AuditScheduleDate = ParseDateTime(Get("audit_schedule_date")),
                 AuditCreatedDate = ParseDateTime(Get("audit_created_date", "SortValue")),
                 ApprovalDate = ParseDateTime(Get("approval_date")),
@@ -1810,39 +1826,55 @@ public class RegularAuditImportController : Controller
                 : null;
     }
 
+    // Explicit date formats: slash/dash DAY-FIRST is always day/month/year.
+    // ISO yyyy-MM-dd stays supported for existing CSV exports (tes_invoice.csv).
+    // Never fall back to DateTime.TryParse: InvariantCulture may interpret
+    // ambiguous inputs like 7/11/2026 as July 11 instead of November 7.
+    private static readonly string[] ImportDateFormats =
+    {
+        "dd/MM/yyyy", "d/M/yyyy",
+        "dd/MM/yyyy HH:mm", "d/M/yyyy H:mm",
+        "dd/MM/yyyy HH:mm:ss", "d/M/yyyy H:mm:ss",
+        "dd/MM/yyyy HH:mm:ss.FFFFFFF", "d/M/yyyy H:mm:ss.FFFFFFF",
+        "dd-MM-yyyy", "d-M-yyyy",
+        "dd-MM-yyyy HH:mm", "d-M-yyyy H:mm",
+        "dd-MM-yyyy HH:mm:ss", "d-M-yyyy H:mm:ss",
+        "yyyy-MM-dd", "yyyy-M-d",
+        "yyyy-MM-dd HH:mm", "yyyy-M-d H:mm",
+        "yyyy-MM-dd HH:mm:ss", "yyyy-M-d H:mm:ss",
+        "yyyy-MM-dd HH:mm:ss.FFFFFFF", "yyyy-M-d H:mm:ss.FFFFFFF",
+        "yyyy-MM-ddTHH:mm", "yyyy-MM-ddTH:mm:ss",
+        "yyyy-MM-ddTHH:mm:ss.FFFFFFF",
+        "yyyy/MM/dd", "yyyy/M/d",
+        "yyyy/MM/dd HH:mm", "yyyy/M/d H:mm",
+        "yyyy/MM/dd HH:mm:ss", "yyyy/M/d H:mm:ss"
+    };
+
     private static DateTime? ParseDateTime(string? value)
     {
         if (string.IsNullOrWhiteSpace(value))
             return null;
 
-        var formats = new[]
-        {
-            "yyyy-MM-dd",
-            "yyyy-MM-dd HH:mm:ss",
-            "yyyy-MM-ddTHH:mm:ss",
-            "dd/MM/yyyy",
-            "dd/MM/yyyy HH:mm:ss",
-            "dd-MM-yyyy",
-            "yyyy/MM/dd"
-        };
+        return DateTime.TryParseExact(
+            value.Trim(),
+            ImportDateFormats,
+            CultureInfo.InvariantCulture,
+            DateTimeStyles.None,
+            out var parsed)
+                ? DateTime.SpecifyKind(parsed, DateTimeKind.Unspecified)
+                : null;
+    }
 
-        foreach (var format in formats)
-        {
-            if (DateTime.TryParseExact(
-                value.Trim(),
-                format,
-                CultureInfo.InvariantCulture,
-                DateTimeStyles.None,
-                out var date))
-            {
-                return date;
-            }
-        }
-
-        if (DateTime.TryParse(value.Trim(), CultureInfo.InvariantCulture, DateTimeStyles.None, out var parsed))
+    private static DateTime? ParseImportDateTime(string? value, string column, int csvRow)
+    {
+        var parsed = ParseDateTime(value);
+        if (parsed.HasValue || string.IsNullOrWhiteSpace(value))
             return parsed;
 
-        return null;
+        throw new InvalidOperationException(
+            $"CSV baris {csvRow}, kolom {column}: tanggal '{value.Trim()}' tidak valid. " +
+            "Gunakan format dd/MM/yyyy [HH:mm:ss] (hari/bulan/tahun) " +
+            "atau ISO yyyy-MM-dd [HH:mm:ss].");
     }
 
     private static DateTime AsUnspecified(DateTime value) =>
