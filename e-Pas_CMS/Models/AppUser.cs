@@ -34,6 +34,14 @@ public partial class AppUser
     public string UpdatedBy { get; set; } = null!;
 
     public DateTime? UpdatedDate { get; set; }
+    // New invoice flow: place of departure and permanent auditor number.
+    public string? homebase { get; set; }
+
+    public string? auditor_code { get; set; }
+
+    // Nomor rekening auditor, dikelola hanya lewat User Management.
+    public string? bank_account_number { get; set; }
+    public string? bank_name { get; set; }
 
     public virtual ICollection<Notification> Notifications { get; set; } = new List<Notification>();
 

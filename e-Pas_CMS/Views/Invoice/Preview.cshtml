@@ -1,6 +1,7 @@
 ﻿@using e_Pas_CMS.ViewModels
 @using System.Globalization
 @using System.Collections.Generic
+@using System.Linq
 @model InvoiceDetailViewModel
 
 @{
@@ -20,13 +21,47 @@
     var internetData = ExpenseAmount("INTERNET");
     var others = ExpenseAmount("OTHER");
     var amountDue = Model.TotalExpense - Model.LessDirectCharges - Model.LessAdvances;
-    var rowCount = Math.Max(Model.PrintLines?.Count ?? 0, 12);
+    // Pertahankan desain template asli; hanya data baris yang dipaginasi.
+    // Maksimal 30 item/lembar. Lembar penutup disisakan ruang untuk bank dan tanda tangan.
+    var allPrintLines = (Model.PrintLines ?? new List<InvoicePrintLineVM>())
+        .OrderBy(x => x.Date)
+        .ThenBy(x => x.Description)
+        .ToList();
+    var printPages = new List<List<InvoicePrintLineVM>>();
+    const int maxRowsPerPage = 30;
+    const int preferredFinalRows = 18;
+    if (allPrintLines.Count <= maxRowsPerPage)
+    {
+        printPages.Add(allPrintLines);
+    }
+    else
+    {
+        var offset = 0;
+        while (allPrintLines.Count - offset > maxRowsPerPage)
+        {
+            var count = Math.Min(maxRowsPerPage, allPrintLines.Count - offset - preferredFinalRows);
+            printPages.Add(allPrintLines.GetRange(offset, count));
+            offset += count;
+        }
+        printPages.Add(allPrintLines.Skip(offset).ToList());
+    }
+
+    // Bank, homebase dan ID Auditor berasal dari app_user via InvoiceController.
+    // Tampilkan tanda '-' apabila rekening belum diinput.
+    var bankAccount = string.IsNullOrWhiteSpace(Model.BankAccount) ? "-" : Model.BankAccount.Trim();
+    var bankOwner = bankAccount == "-" ? "-" : (string.IsNullOrWhiteSpace(Model.BankOwner) ? "-" : Model.BankOwner.Trim());
+    var bankName = bankAccount == "-" ? "-" : (string.IsNullOrWhiteSpace(Model.BankName) ? "-" : Model.BankName.Trim());
     var autoPrint = ViewBag.AutoPrint is bool ap && ap;
     var claimStatusLabel = ViewBag.ClaimStatusLabel?.ToString() ?? Model.Status;
 
     string Money(decimal value)
     {
         return value == 0 ? "" : value.ToString("N0", new CultureInfo("id-ID"));
+    }
+
+    string Rupiah(decimal value)
+    {
+        return value == 0 ? "" : "Rp " + Money(value);
     }
 
     string DateText(DateTime value)
@@ -240,8 +275,8 @@
                 }
 
                 .invoice-table .currency {
-                    width: 18px;
-                    text-align: center;
+                    text-align: right;
+                    white-space: nowrap;
                 }
 
                 .invoice-table .summary-label {
@@ -373,12 +408,68 @@
                 .invoice-sheet {
                     width: 100%;
                     margin: 0;
-                    padding: 5mm;
+                    padding: 3mm;
                     box-shadow: none;
+                    page-break-after: always;
+                    break-after: page;
+                }
+
+                    .invoice-sheet:last-of-type {
+                        page-break-after: auto;
+                        break-after: auto;
+                    }
+
+                .invoice-footer,
+                .after-table,
+                .bottom-section,
+                .sign-card {
+                    page-break-inside: avoid;
+                    break-inside: avoid;
+                }
+                /* Biarkan ringkasan + 'Signed' tetap bersama pada halaman terakhir. */
+                .invoice-table th,
+                .invoice-table td {
+                    padding: 2px 3px;
+                    line-height: 1.08;
+                    font-size: 7px;
+                }
+
+                .invoice-table td {
+                    height: 13px;
+                }
+
+                .top-header {
+                    margin-bottom: 8px;
+                }
+
+                .info-block {
+                    margin-bottom: 8px;
+                }
+
+                .bottom-section {
+                    margin-top: 10px;
                 }
 
                 .sign-card {
-                    break-inside: avoid;
+                    min-height: 50px;
+                }
+
+                .invoice-sheet-dense .invoice-table th,
+                .invoice-sheet-dense .invoice-table td {
+                    font-size: 6.6px;
+                    padding: 1px 2px;
+                }
+
+                .invoice-sheet-dense .invoice-table td {
+                    height: 11px;
+                }
+
+                .invoice-sheet-dense .after-table {
+                    margin-top: 6px;
+                }
+
+                .invoice-sheet-dense .bottom-section {
+                    margin-top: 6px;
                 }
 
                 @@page {
@@ -395,194 +486,220 @@
         <button type="button" class="toolbar-btn" onclick="window.print()">Print</button>
     </div>
 
-    <div class="invoice-sheet">
-        <div class="top-header">
-            <div>
-                <div class="company-title">PT Citrabuana Indoloka</div>
-                <div class="company-subtitle">In association with <strong>intertek</strong></div>
-            </div>
+    @for (var pageIndex = 0; pageIndex < printPages.Count; pageIndex++)
+    {
+        var pageLines = printPages[pageIndex];
+        var isLastPage = pageIndex == printPages.Count - 1;
+        var previousLines = printPages.Take(pageIndex).Sum(p => p.Count);
+        var rowCount = Math.Max(pageLines.Count, isLastPage ? 12 : 0);
+        var sheetClass = isLastPage && pageLines.Count > 20 ? "invoice-sheet invoice-sheet-dense" : "invoice-sheet";
 
-            <div class="invoice-heading">INVOICE</div>
-
-            <div class="invoice-meta">
-                <div class="invoice-no-box">
-                    <div>INVOICE NO.</div>
-                    <div>: @Model.InvoiceNo</div>
+        <div class="@sheetClass">
+            <div class="top-header">
+                <div>
+                    <div class="company-title">PT Citrabuana Indoloka</div>
+                    <div class="company-subtitle">In association with <strong>intertek</strong></div>
                 </div>
-                <div class="status-box">
-                    <span>Status</span>
-                    <strong>@claimStatusLabel</strong>
+
+                <div class="invoice-heading">INVOICE</div>
+
+                <div class="invoice-meta">
+                    <div class="invoice-no-box">
+                        <div>INVOICE NO.</div>
+                        <div>: @Model.InvoiceNo</div>
+                    </div>
+                    <div class="status-box">
+                        <span>Status</span>
+                        <strong>@claimStatusLabel</strong>
+                    </div>
                 </div>
             </div>
-        </div>
 
-        <div class="info-block">
-            <div class="info-row">
-                <div>Name (Auditor)</div>
-                <div class="info-line">@Model.EmployeeName (ID: @Model.AuditorCode)</div>
+            <div class="info-block">
+                <div class="info-row">
+                    <div>Name (Auditor)</div>
+                    <div class="info-line">@Model.EmployeeName (ID: @Model.AuditorCode)</div>
+                </div>
+                <div class="info-row">
+                    <div>Period</div>
+                    <div class="info-line">@Model.Period</div>
+                </div>
+                <div class="info-row">
+                    <div>Kind of Job</div>
+                    <div class="info-line">@Model.Job</div>
+                </div>
+                <div class="info-row">
+                    <div>Homebase</div>
+                    <div class="info-line">@Model.Homebase</div>
+                </div>
             </div>
-            <div class="info-row">
-                <div>Period</div>
-                <div class="info-line">@Model.Period</div>
-            </div>
-            <div class="info-row">
-                <div>Kind of Job</div>
-                <div class="info-line">@Model.Job</div>
-            </div>
-            <div class="info-row">
-                <div>Homebase</div>
-                <div class="info-line">@Model.Homebase</div>
-            </div>
-        </div>
 
-        <table class="invoice-table">
-            <thead>
-                <tr>
-                    <th rowspan="2" style="width:40px;">No</th>
-                    <th rowspan="2" style="width:68px;">Date</th>
-                    <th rowspan="2" style="width:245px;">Details of Expense</th>
-                    <th rowspan="2" style="width:56px;">Cost<br />Centre</th>
-                    <th colspan="2" rowspan="2" style="width:90px;">TOTAL EXPENSE</th>
-                    <th colspan="11">Descriptions</th>
-                </tr>
-                <tr>
-                    <th colspan="2">Audit Fee</th>
-                    <th colspan="2">Lumpsum</th>
-                    <th colspan="2">BPJS Kesehatan</th>
-                    <th colspan="2">BPJS Ketenagakerjaan</th>
-                    <th>Vehicle<br />Maintenance</th>
-                    <th>Internet</th>
-                    <th>Others</th>
-                </tr>
-            </thead>
-            <tbody>
-                @for (var i = 0; i < rowCount; i++)
-                {
-                    var item = Model.PrintLines != null && i < Model.PrintLines.Count ? Model.PrintLines[i] : null;
+            <table class="invoice-table">
+                <thead>
                     <tr>
-                        <td class="center">@(item == null ? "" : (i + 1).ToString())</td>
-                        <td class="center">@(item == null ? "" : DateText(item.Date))</td>
-                        <td>@(item == null ? "" : item.Description)</td>
-                        <td class="center">@(item == null ? "" : "102")</td>
-                        <td class="currency">@(item == null ? "" : "Rp")</td>
-                        <td class="right">@(item == null ? "" : Money(item.Total))</td>
-                        <td class="currency">@(item == null ? "" : "Rp")</td>
-                        <td class="right">@(item == null ? "" : Money(item.AuditFee))</td>
-                        <td class="currency">@(item == null || item.Lumpsum == 0 ? "" : "Rp")</td>
-                        <td class="right">@(item == null ? "" : Money(item.Lumpsum))</td>
-                        <td class="currency">@(item == null || item.BpjsKesehatan == 0 ? "" : "Rp")</td>
-                        <td class="right">@(item == null ? "" : Money(item.BpjsKesehatan))</td>
-                        <td class="currency">@(item == null || item.BpjsKetenagakerjaan == 0 ? "" : "Rp")</td>
-                        <td class="right">@(item == null ? "" : Money(item.BpjsKetenagakerjaan))</td>
-                        <td class="right">@(item == null ? "" : Money(item.VehicleMaintenance))</td>
-                        <td class="right">@(item == null ? "" : Money(item.Internet))</td>
-                        <td class="right">@(item == null ? "" : Money(item.Other))</td>
+                        <th rowspan="2" style="width:40px;">No</th>
+                        <th rowspan="2" style="width:68px;">Date</th>
+                        <th rowspan="2" style="width:245px;">Details of Expense</th>
+                        <th rowspan="2" style="width:56px;">Cost<br />Centre</th>
+                        <th rowspan="2" style="width:96px;">TOTAL EXPENSE</th>
+                        <th colspan="7">Descriptions</th>
                     </tr>
-                }
+                    <tr>
+                        <th>Audit Fee</th>
+                        <th>Lumpsum</th>
+                        <th>BPJS Kesehatan</th>
+                        <th>BPJS Ketenagakerjaan</th>
+                        <th>Vehicle<br />Maintenance</th>
+                        <th>Internet</th>
+                        <th>Others</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @for (var i = 0; i < rowCount; i++)
+                    {
+                        var item = i < pageLines.Count ? pageLines[i] : null;
+                        <tr>
+                            <td class="center">@(item == null ? "" : (previousLines + i + 1).ToString())</td>
+                            <td class="center">@(item == null ? "" : DateText(item.Date))</td>
+                            <td>@(item == null ? "" : item.Description)</td>
+                            <td class="center">@(item == null ? "" : "102")</td>
+                            <td class="currency">@(item == null ? "" : Rupiah(item.Total))</td>
+                            <td class="currency">@(item == null ? "" : Rupiah(item.AuditFee))</td>
+                            <td class="currency">@(item == null ? "" : Rupiah(item.Lumpsum))</td>
+                            <td class="currency">@(item == null ? "" : Rupiah(item.BpjsKesehatan))</td>
+                            <td class="currency">@(item == null ? "" : Rupiah(item.BpjsKetenagakerjaan))</td>
+                            <td class="currency">@(item == null ? "" : Rupiah(item.VehicleMaintenance))</td>
+                            <td class="currency">@(item == null ? "" : Rupiah(item.Internet))</td>
+                            <td class="currency">@(item == null ? "" : Rupiah(item.Other))</td>
+                        </tr>
+                    }
 
-                <tr>
-                    <td colspan="2"></td>
-                    <td class="summary-label">Brought forward from continuation sheet</td>
-                    <td colspan="14"></td>
-                </tr>
-                <tr>
-                    <td colspan="2"></td>
-                    <td class="summary-label">TOTAL / CARRIED FORWARD</td>
-                    <td></td>
-                    <td class="currency">Rp</td>
-                    <td class="right bold">@Money(Model.TotalExpense)</td>
-                    <td class="currency">Rp</td>
-                    <td class="right bold">@Money(Model.TotalAuditFee)</td>
-                    <td class="currency">@(Model.TotalLumpsum == 0 ? "" : "Rp")</td>
-                    <td class="right bold">@Money(Model.TotalLumpsum)</td>
-                    <td class="currency">@(bpjsKesehatan == 0 ? "" : "Rp")</td>
-                    <td class="right bold">@Money(bpjsKesehatan)</td>
-                    <td class="currency">@(bpjsKetenagakerjaan == 0 ? "" : "Rp")</td>
-                    <td class="right bold">@Money(bpjsKetenagakerjaan)</td>
-                    <td class="right bold">@Money(vehicleMaintenance)</td>
-                    <td class="right bold">@Money(internetData)</td>
-                    <td class="right bold">@Money(others)</td>
-                </tr>
-                <tr>
-                    <td colspan="2"></td>
-                    <td class="summary-label">LESS DIRECT CHARGES</td>
-                    <td></td>
-                    <td class="currency">@(Model.LessDirectCharges == 0 ? "" : "Rp")</td>
-                    <td class="right bold">@Money(Model.LessDirectCharges)</td>
-                    <td colspan="11"></td>
-                </tr>
-                <tr>
-                    <td colspan="2"></td>
-                    <td class="summary-label">LESS ADVANCES</td>
-                    <td></td>
-                    <td class="currency">@(Model.LessAdvances == 0 ? "" : "Rp")</td>
-                    <td class="right bold">@Money(Model.LessAdvances)</td>
-                    <td colspan="11"></td>
-                </tr>
-                <tr>
-                    <td colspan="2"></td>
-                    <td class="summary-label">AMOUNT DUE TO/FROM EMPLOYEE</td>
-                    <td></td>
-                    <td class="currency">Rp</td>
-                    <td class="right bold">@Money(amountDue)</td>
-                    <td colspan="11"></td>
-                </tr>
-            </tbody>
-        </table>
+                    @if (!isLastPage)
+                    {
+                        <tr>
+                            <td colspan="3" class="summary-label">Continued on next page</td>
+                            <td colspan="9" class="right">Page @(pageIndex + 1) of @printPages.Count</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
 
-        <div class="after-table">
-            <div class="notes">
-                <div class="notes-block">
-                    <strong>Claimant</strong>
-                    Receipts/invoices for the above are properly documented, attached and cross-referenced.
+            @if (isLastPage)
+            {
+                <div class="invoice-footer">
+                    <table class="invoice-table invoice-summary-table">
+                        <colgroup>
+                            <col style="width:3.4%" />
+                            <col style="width:5.8%" />
+                            <col style="width:21%" />
+                            <col style="width:4.8%" />
+                            <col style="width:8.2%" />
+                            <col style="width:8.1%" />
+                            <col style="width:8.1%" />
+                            <col style="width:8.1%" />
+                            <col style="width:8.1%" />
+                            <col style="width:8.1%" />
+                            <col style="width:8.1%" />
+                            <col style="width:8.2%" />
+                        </colgroup>
+                        <tbody>
+                            <tr>
+                                <td colspan="2"></td>
+                                <td class="summary-label">Brought forward from continuation sheet</td>
+                                <td colspan="9"></td>
+                            </tr>
+                            <tr>
+                                <td colspan="2"></td>
+                                <td class="summary-label">TOTAL / CARRIED FORWARD</td>
+                                <td></td>
+                                <td class="currency bold">@Rupiah(Model.TotalExpense)</td>
+                                <td class="currency bold">@Rupiah(Model.TotalAuditFee)</td>
+                                <td class="currency bold">@Rupiah(Model.TotalLumpsum)</td>
+                                <td class="currency bold">@Rupiah(bpjsKesehatan)</td>
+                                <td class="currency bold">@Rupiah(bpjsKetenagakerjaan)</td>
+                                <td class="currency bold">@Rupiah(vehicleMaintenance)</td>
+                                <td class="currency bold">@Rupiah(internetData)</td>
+                                <td class="currency bold">@Rupiah(others)</td>
+                            </tr>
+                            <tr>
+                                <td colspan="2"></td>
+                                <td class="summary-label">LESS DIRECT CHARGES</td>
+                                <td></td>
+                                <td class="currency bold">@Rupiah(Model.LessDirectCharges)</td>
+                                <td colspan="7"></td>
+                            </tr>
+                            <tr>
+                                <td colspan="2"></td>
+                                <td class="summary-label">LESS ADVANCES</td>
+                                <td></td>
+                                <td class="currency bold">@Rupiah(Model.LessAdvances)</td>
+                                <td colspan="7"></td>
+                            </tr>
+                            <tr>
+                                <td colspan="2"></td>
+                                <td class="summary-label">AMOUNT DUE TO/FROM EMPLOYEE</td>
+                                <td></td>
+                                <td class="currency bold">@(amountDue == 0 ? "Rp 0" : Rupiah(amountDue))</td>
+                                <td colspan="7"></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <div class="after-table">
+                        <div class="notes">
+                            <div class="notes-block">
+                                <strong>Claimant</strong>
+                                Receipts/invoices for the above are properly documented, attached and cross-referenced.
+                            </div>
+                            <div class="notes-block">
+                                <strong>Accountant / Authoriser</strong>
+                                Checked calculations, reasonableness, receipts, dates and supporting documents. Approver may approve or reject the claim.
+                            </div>
+                        </div>
+
+                        <div class="report-statement">
+                            <div class="statement-title">Report Statement</div>
+                            The expenses submitted herein are a true and accurate record of prudent costs necessarily incurred on behalf of Intertek.
+                            These costs are supported by original receipts wherever possible and have not previously been reimbursed.
+                        </div>
+                    </div>
+
+                    <div class="bottom-section">
+                        <div>
+                            <div class="bank-title">Please transfer to:</div>
+                            <table class="bank-table">
+                                <tr><td class="label">NAME</td><td>@bankOwner</td></tr>
+                                <tr><td class="label">Bank</td><td>@bankName</td></tr>
+                                <tr><td class="label">A/C No.</td><td>@bankAccount</td></tr>
+                            </table>
+                        </div>
+
+                        <div class="sign-grid">
+                            <div class="sign-card">
+                                <div class="sign-role">Requestor</div>
+                                <div class="sign-name">@Model.EmployeeName</div>
+                                <div class="sign-meta"><span>SUBMITTED</span><span>@Model.ClaimDate.ToString("dd/MM/yyyy")</span></div>
+                            </div>
+                            <div class="sign-card">
+                                <div class="sign-role">Approval Level 1</div>
+                                <div class="sign-name">@ApprovalName(1, "tri.handayani")</div>
+                                <div class="sign-meta"><span>@ApprovalStatus(1)</span><span>@ApprovalDate(1)</span></div>
+                            </div>
+                            <div class="sign-card">
+                                <div class="sign-role">Approval Level 2</div>
+                                <div class="sign-name">@ApprovalName(2, "rommy.irawan")</div>
+                                <div class="sign-meta"><span>@ApprovalStatus(2)</span><span>@ApprovalDate(2)</span></div>
+                            </div>
+                            <div class="sign-card">
+                                <div class="sign-role">Approval Level 3</div>
+                                <div class="sign-name">@ApprovalName(3, "sabar.kembaren")</div>
+                                <div class="sign-meta"><span>@ApprovalStatus(3)</span><span>@ApprovalDate(3)</span></div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
-                <div class="notes-block">
-                    <strong>Accountant / Authoriser</strong>
-                    Checked calculations, reasonableness, receipts, dates and supporting documents. Approver may approve or reject the claim.
-                </div>
-            </div>
-
-            <div class="report-statement">
-                <div class="statement-title">Report Statement</div>
-                The expenses submitted herein are a true and accurate record of prudent costs necessarily incurred on behalf of Intertek.
-                These costs are supported by original receipts wherever possible and have not previously been reimbursed.
-            </div>
+            }
         </div>
-
-        <div class="bottom-section">
-            <div>
-                <div class="bank-title">Please transfer to:</div>
-                <table class="bank-table">
-                    <tr><td class="label">NAME</td><td>@Model.BankOwner</td></tr>
-                    <tr><td class="label">Bank</td><td>@Model.BankName</td></tr>
-                    <tr><td class="label">A/C No.</td><td>@Model.BankAccount</td></tr>
-                </table>
-            </div>
-
-            <div class="sign-grid">
-                <div class="sign-card">
-                    <div class="sign-role">Requestor</div>
-                    <div class="sign-name">@Model.EmployeeName</div>
-                    <div class="sign-meta"><span>SUBMITTED</span><span>@Model.ClaimDate.ToString("dd/MM/yyyy")</span></div>
-                </div>
-                <div class="sign-card">
-                    <div class="sign-role">Approval Level 1</div>
-                    <div class="sign-name">@ApprovalName(1, "tri.handayani")</div>
-                    <div class="sign-meta"><span>@ApprovalStatus(1)</span><span>@ApprovalDate(1)</span></div>
-                </div>
-                <div class="sign-card">
-                    <div class="sign-role">Approval Level 2</div>
-                    <div class="sign-name">@ApprovalName(2, "rommy.irawan")</div>
-                    <div class="sign-meta"><span>@ApprovalStatus(2)</span><span>@ApprovalDate(2)</span></div>
-                </div>
-                <div class="sign-card">
-                    <div class="sign-role">Approval Level 3</div>
-                    <div class="sign-name">@ApprovalName(3, "sabar.kembaren")</div>
-                    <div class="sign-meta"><span>@ApprovalStatus(3)</span><span>@ApprovalDate(3)</span></div>
-                </div>
-            </div>
-        </div>
-    </div>
+    }
 
     @if (autoPrint)
     {

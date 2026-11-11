@@ -7,9 +7,6 @@
         public string Name { get; set; }
         public string PhoneNumber { get; set; }
         public string Email { get; set; }
-        public string Homebase { get; set; }
-        // Optional for non-auditor users; when supplied it must be unique and <= 20 chars.
-        public string? AuditorCode { get; set; }
     }
 
     public class ChangePasswordViewModel

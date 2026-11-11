@@ -42,6 +42,11 @@ public partial class app_user
 
     public string? auditor_code { get; set; }
 
+    // Data rekening auditor, hanya dikelola lewat User Management (bukan Profile).
+    public string? bank_name { get; set; }
+
+    public string? bank_account_number { get; set; }
+
     public virtual ICollection<app_user_role> app_user_roles { get; set; } = new List<app_user_role>();
 
     public virtual ICollection<Notification> Notifications { get; set; } = new List<Notification>();

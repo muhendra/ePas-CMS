@@ -155,6 +155,8 @@ public partial class EpasDbContext : DbContext
             entity.Property(e => e.email).HasMaxLength(100);
             entity.Property(e => e.homebase).HasColumnName("homebase").HasMaxLength(250);
             entity.Property(e => e.auditor_code).HasColumnName("auditor_code").HasMaxLength(20);
+            entity.Property(e => e.bank_name).HasColumnName("bank_name").HasMaxLength(100);
+            entity.Property(e => e.bank_account_number).HasColumnName("bank_account_number").HasMaxLength(50);
             entity.Property(e => e.last_change_passwd_dt).HasColumnType("timestamp(3) without time zone");
             entity.Property(e => e.last_login_dt).HasColumnType("timestamp(3) without time zone");
             entity.Property(e => e.name).HasMaxLength(100);

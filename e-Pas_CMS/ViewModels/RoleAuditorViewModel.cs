@@ -23,6 +23,10 @@ namespace e_Pas_CMS.ViewModels
         public string Password { get; set; }
         public string Handphone { get; set; }
         public string Email { get; set; }
+        public string? Homebase { get; set; }
+        public string? AuditorCode { get; set; }
+        public string? BankName { get; set; }
+        public string? BankAccountNumber { get; set; }
 
         // Role & Region Selections (comma-separated IDs)
         public string SelectedRoleIds { get; set; }
@@ -46,6 +50,10 @@ namespace e_Pas_CMS.ViewModels
         public string AuditorName { get; set; }
         public string Handphone { get; set; }
         public string Email { get; set; }
+        public string? Homebase { get; set; }
+        public string? AuditorCode { get; set; }
+        public string? BankName { get; set; }
+        public string? BankAccountNumber { get; set; }
         public string Password { get; set; }
         public List<string> SelectedSbmIds { get; set; }
         public List<string> SelectedSbmNames { get; set; }

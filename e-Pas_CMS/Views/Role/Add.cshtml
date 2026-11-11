@@ -11,20 +11,20 @@
     <title>Add UserManagement</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
-        body {
-            background-color: #f8fafc;
-            padding: 40px;
-        }
+            body {
+                background-color: #f8fafc;
+                padding: 40px;
+            }
 
-        .form-label {
-            font-weight: 600;
-        }
+            .form-label {
+                font-weight: 600;
+            }
 
-        .selected-display {
-            font-weight: 500;
-            color: #0d6efd;
-            margin-top: 5px;
-        }
+            .selected-display {
+                font-weight: 500;
+                color: #0d6efd;
+                margin-top: 5px;
+            }
     </style>
 </head>
 <body>
@@ -68,6 +68,23 @@
                 </div>
 
                 <div class="col-md-6">
+                    <label class="form-label">ID Auditor (MMYYNo.Urut)</label>
+                    <input type="text" name="AuditorCode" class="form-control" maxlength="20" value="@Model.AuditorCode" placeholder="Contoh: 112601.001" />
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Homebase Auditor</label>
+                    <input type="text" name="Homebase" class="form-control" maxlength="250" value="@Model.Homebase" />
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Nama Bank Auditor</label>
+                    <input type="text" name="BankName" class="form-control" maxlength="100" value="@Model.BankName" placeholder="Contoh: BCA, BRI, BNI, Mandiri" autocomplete="off" />
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Nomor Rekening Auditor</label>
+                    <input type="text" name="BankAccountNumber" class="form-control" inputmode="numeric" maxlength="50" value="@Model.BankAccountNumber" autocomplete="off" placeholder="Isi nomor rekening tanpa menghilangkan angka nol di depan" />
+                </div>
+
+                <div class="col-md-6">
                     <label class="form-label">Pilih Role</label>
                     <button type="button" id="btnOpenRole" class="btn btn-outline-primary w-100 d-flex align-items-center justify-content-center gap-2 rounded-pill shadow-sm py-2 px-3">
                         <i class="bi bi-people"></i> Pilih Role
@@ -84,7 +101,7 @@
                     <div id="RegionBadgeContainer" class="selected-display mt-2 d-flex flex-wrap gap-2"></div>
                     <input type="hidden" id="SelectedRegionIds" name="SelectedRegionIds" />
                 </div>
-                
+
                 <div class="col-md-6">
                     <label class="form-label">Pilih SBM</label>
                     <button type="button" id="btnOpenSbm" class="btn btn-outline-warning w-100 d-flex align-items-center justify-content-center gap-2 rounded-pill shadow-sm py-2 px-3">
@@ -194,163 +211,163 @@
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
-        const spbuData = @Html.Raw(JsonConvert.SerializeObject(Model.SpbuList));
-        let filteredSpbu = [...spbuData];
-        let spbuCurrentPage = 1;
-        const spbuPerPage = 10;
+            const spbuData = @Html.Raw(JsonConvert.SerializeObject(Model.SpbuList));
+            let filteredSpbu = [...spbuData];
+            let spbuCurrentPage = 1;
+            const spbuPerPage = 10;
 
-        document.addEventListener('DOMContentLoaded', () => {
-            // === BIND OPEN MODALS ===
-            document.getElementById('btnOpenRole')?.addEventListener('click', () => {
-                new bootstrap.Modal(document.getElementById('roleModal')).show();
-            });
+            document.addEventListener('DOMContentLoaded', () => {
+                // === BIND OPEN MODALS ===
+                document.getElementById('btnOpenRole')?.addEventListener('click', () => {
+                    new bootstrap.Modal(document.getElementById('roleModal')).show();
+                });
 
-            document.getElementById('btnOpenRegion')?.addEventListener('click', () => {
-                new bootstrap.Modal(document.getElementById('regionModal')).show();
-            });
+                document.getElementById('btnOpenRegion')?.addEventListener('click', () => {
+                    new bootstrap.Modal(document.getElementById('regionModal')).show();
+                });
 
-            document.getElementById('btnOpenSbm')?.addEventListener('click', () => {
-                new bootstrap.Modal(document.getElementById('sbmModal')).show();
-            });
+                document.getElementById('btnOpenSbm')?.addEventListener('click', () => {
+                    new bootstrap.Modal(document.getElementById('sbmModal')).show();
+                });
 
-            document.getElementById('btnOpenSpbu')?.addEventListener('click', () => {
-                spbuCurrentPage = 1;
-                filteredSpbu = [...spbuData];
-                renderSpbuList();
-                new bootstrap.Modal(document.getElementById('spbuModal')).show();
-            });
+                document.getElementById('btnOpenSpbu')?.addEventListener('click', () => {
+                    spbuCurrentPage = 1;
+                    filteredSpbu = [...spbuData];
+                    renderSpbuList();
+                    new bootstrap.Modal(document.getElementById('spbuModal')).show();
+                });
 
-            // === ROLE ===
-            document.getElementById('btnPilihRole')?.addEventListener('click', () => {
-                const selected = Array.from(document.querySelectorAll('.role-checkbox:checked'));
-                const ids = selected.map(x => x.value);
-                const names = selected.map(x => x.getAttribute('data-name'));
-                document.getElementById('SelectedRoleIds').value = ids.join(',');
-                updateBadge('RoleBadgeContainer', names);
+                // === ROLE ===
+                document.getElementById('btnPilihRole')?.addEventListener('click', () => {
+                    const selected = Array.from(document.querySelectorAll('.role-checkbox:checked'));
+                    const ids = selected.map(x => x.value);
+                    const names = selected.map(x => x.getAttribute('data-name'));
+                    document.getElementById('SelectedRoleIds').value = ids.join(',');
+                    updateBadge('RoleBadgeContainer', names);
+                    checkDefaultSpbuRole();
+                    bootstrap.Modal.getInstance(document.getElementById('roleModal')).hide();
+                });
+
+                // === REGION ===
+                document.getElementById('btnPilihRegion')?.addEventListener('click', () => {
+                    const selected = Array.from(document.querySelectorAll('.region-checkbox:checked'));
+                    const ids = selected.map(x => x.value);
+                    const names = selected.map(x => x.getAttribute('data-name'));
+                    document.getElementById('SelectedRegionIds').value = ids.join(',');
+                    updateBadge('RegionBadgeContainer', names);
+                    bootstrap.Modal.getInstance(document.getElementById('regionModal')).hide();
+                });
+
+                // === SBM ===
+                document.getElementById('btnPilihSbm')?.addEventListener('click', () => {
+                    const selected = Array.from(document.querySelectorAll('.sbm-checkbox:checked'));
+                    const ids = selected.map(x => x.value);
+                    const names = selected.map(x => x.getAttribute('data-name'));
+                    document.getElementById('SelectedSbmIds').value = ids.join(',');
+                    updateBadge('SbmBadgeContainer', names);
+                    bootstrap.Modal.getInstance(document.getElementById('sbmModal')).hide();
+                });
+
+                // === SPBU ===
+                document.getElementById('btnPilihSpbu')?.addEventListener('click', () => {
+                    const selected = document.querySelector('.spbu-radio:checked');
+                    if (selected) {
+                        document.getElementById('SelectedSpbuId').value = selected.value;
+                        updateBadge('SpbuBadgeContainer', [selected.getAttribute('data-name')]);
+                    }
+                    bootstrap.Modal.getInstance(document.getElementById('spbuModal')).hide();
+                });
+
+                document.getElementById('spbuSearchInput')?.addEventListener('input', function() {
+                    const keyword = this.value.toLowerCase();
+                    filteredSpbu = spbuData.filter(x => (x.Text || '').toLowerCase().includes(keyword));
+                    spbuCurrentPage = 1;
+                    renderSpbuList();
+                });
+
+                // Initial role check
                 checkDefaultSpbuRole();
-                bootstrap.Modal.getInstance(document.getElementById('roleModal')).hide();
             });
 
-            // === REGION ===
-            document.getElementById('btnPilihRegion')?.addEventListener('click', () => {
-                const selected = Array.from(document.querySelectorAll('.region-checkbox:checked'));
-                const ids = selected.map(x => x.value);
-                const names = selected.map(x => x.getAttribute('data-name'));
-                document.getElementById('SelectedRegionIds').value = ids.join(',');
-                updateBadge('RegionBadgeContainer', names);
-                bootstrap.Modal.getInstance(document.getElementById('regionModal')).hide();
-            });
-
-            // === SBM ===
-            document.getElementById('btnPilihSbm')?.addEventListener('click', () => {
-                const selected = Array.from(document.querySelectorAll('.sbm-checkbox:checked'));
-                const ids = selected.map(x => x.value);
-                const names = selected.map(x => x.getAttribute('data-name'));
-                document.getElementById('SelectedSbmIds').value = ids.join(',');
-                updateBadge('SbmBadgeContainer', names);
-                bootstrap.Modal.getInstance(document.getElementById('sbmModal')).hide();
-            });
-
-            // === SPBU ===
-            document.getElementById('btnPilihSpbu')?.addEventListener('click', () => {
-                const selected = document.querySelector('.spbu-radio:checked');
-                if (selected) {
-                    document.getElementById('SelectedSpbuId').value = selected.value;
-                    updateBadge('SpbuBadgeContainer', [selected.getAttribute('data-name')]);
-                }
-                bootstrap.Modal.getInstance(document.getElementById('spbuModal')).hide();
-            });
-
-            document.getElementById('spbuSearchInput')?.addEventListener('input', function () {
-                const keyword = this.value.toLowerCase();
-                filteredSpbu = spbuData.filter(x => (x.Text || '').toLowerCase().includes(keyword));
-                spbuCurrentPage = 1;
-                renderSpbuList();
-            });
-
-            // Initial role check
-            checkDefaultSpbuRole();
-        });
-
-        function checkDefaultSpbuRole() {
-            const selected = Array.from(document.querySelectorAll('.role-checkbox:checked'));
-            const hasDefaultSpbu = selected.some(x => (x.getAttribute('data-name') || '').trim().toUpperCase() === 'DEFAULT_SPBU');
-            document.getElementById('spbuSection')?.classList.toggle('d-none', !hasDefaultSpbu);
-        }
-
-        function updateBadge(containerId, items) {
-            const container = document.getElementById(containerId);
-            container.innerHTML = '';
-            items.forEach(item => {
-                const badge = document.createElement('span');
-                badge.className = 'badge bg-primary me-1';
-                badge.innerText = item;
-                container.appendChild(badge);
-            });
-        }
-
-                function renderSpbuList() {
-            const listContainer = document.getElementById('spbuListContainer');
-            const pagination = document.getElementById('spbuPagination');
-            listContainer.innerHTML = '';
-            pagination.innerHTML = '';
-
-            const totalPages = Math.ceil(filteredSpbu.length / spbuPerPage);
-            const start = (spbuCurrentPage - 1) * spbuPerPage;
-            const end = start + spbuPerPage;
-            const pageItems = filteredSpbu.slice(start, end);
-
-            // Render SPBU radio list
-            pageItems.forEach(spbu => {
-                const div = document.createElement('div');
-                div.className = 'form-check';
-                div.innerHTML = `
-                    <input class="form-check-input spbu-radio" type="radio" name="spbuRadio" value="${spbu.Value}" data-name="${spbu.Text}">
-                    <label class="form-check-label">${spbu.Text}</label>
-                `;
-                listContainer.appendChild(div);
-            });
-
-            // Helper: render pagination item
-            const createPageItem = (text, page, isActive = false, isDisabled = false) => {
-                const li = document.createElement('li');
-                li.className = 'page-item' + (isActive ? ' active' : '') + (isDisabled ? ' disabled' : '');
-                li.innerHTML = `<a class="page-link" href="#">${text}</a>`;
-                if (!isDisabled) {
-                    li.addEventListener('click', (e) => {
-                        e.preventDefault();
-                        spbuCurrentPage = page;
-                        renderSpbuList();
-                    });
-                }
-                return li;
-            };
-
-            // Smart pagination range
-            let startPage = Math.max(1, spbuCurrentPage - 2);
-            let endPage = Math.min(totalPages, spbuCurrentPage + 2);
-
-            if (spbuCurrentPage <= 3) {
-                startPage = 1;
-                endPage = Math.min(5, totalPages);
-            } else if (spbuCurrentPage + 2 > totalPages) {
-                startPage = Math.max(1, totalPages - 4);
-                endPage = totalPages;
+            function checkDefaultSpbuRole() {
+                const selected = Array.from(document.querySelectorAll('.role-checkbox:checked'));
+                const hasDefaultSpbu = selected.some(x => (x.getAttribute('data-name') || '').trim().toUpperCase() === 'DEFAULT_SPBU');
+                document.getElementById('spbuSection')?.classList.toggle('d-none', !hasDefaultSpbu);
             }
 
-            // First & Prev
-            pagination.appendChild(createPageItem('«', 1, false, spbuCurrentPage === 1));
-            pagination.appendChild(createPageItem('‹', spbuCurrentPage - 1, false, spbuCurrentPage === 1));
-
-            // Numbered pages
-            for (let i = startPage; i <= endPage; i++) {
-                pagination.appendChild(createPageItem(i, i, i === spbuCurrentPage));
+            function updateBadge(containerId, items) {
+                const container = document.getElementById(containerId);
+                container.innerHTML = '';
+                items.forEach(item => {
+                    const badge = document.createElement('span');
+                    badge.className = 'badge bg-primary me-1';
+                    badge.innerText = item;
+                    container.appendChild(badge);
+                });
             }
 
-            // Next & Last
-            pagination.appendChild(createPageItem('›', spbuCurrentPage + 1, false, spbuCurrentPage === totalPages));
-            pagination.appendChild(createPageItem('»', totalPages, false, spbuCurrentPage === totalPages));
-        }
+            function renderSpbuList() {
+                const listContainer = document.getElementById('spbuListContainer');
+                const pagination = document.getElementById('spbuPagination');
+                listContainer.innerHTML = '';
+                pagination.innerHTML = '';
+
+                const totalPages = Math.ceil(filteredSpbu.length / spbuPerPage);
+                const start = (spbuCurrentPage - 1) * spbuPerPage;
+                const end = start + spbuPerPage;
+                const pageItems = filteredSpbu.slice(start, end);
+
+                // Render SPBU radio list
+                pageItems.forEach(spbu => {
+                    const div = document.createElement('div');
+                    div.className = 'form-check';
+                    div.innerHTML = `
+                                <input class="form-check-input spbu-radio" type="radio" name="spbuRadio" value="${spbu.Value}" data-name="${spbu.Text}">
+                                <label class="form-check-label">${spbu.Text}</label>
+                            `;
+                    listContainer.appendChild(div);
+                });
+
+                // Helper: render pagination item
+                const createPageItem = (text, page, isActive = false, isDisabled = false) => {
+                    const li = document.createElement('li');
+                    li.className = 'page-item' + (isActive ? ' active' : '') + (isDisabled ? ' disabled' : '');
+                    li.innerHTML = `<a class="page-link" href="#">${text}</a>`;
+                    if (!isDisabled) {
+                        li.addEventListener('click', (e) => {
+                            e.preventDefault();
+                            spbuCurrentPage = page;
+                            renderSpbuList();
+                        });
+                    }
+                    return li;
+                };
+
+                // Smart pagination range
+                let startPage = Math.max(1, spbuCurrentPage - 2);
+                let endPage = Math.min(totalPages, spbuCurrentPage + 2);
+
+                if (spbuCurrentPage <= 3) {
+                    startPage = 1;
+                    endPage = Math.min(5, totalPages);
+                } else if (spbuCurrentPage + 2 > totalPages) {
+                    startPage = Math.max(1, totalPages - 4);
+                    endPage = totalPages;
+                }
+
+                // First & Prev
+                pagination.appendChild(createPageItem('«', 1, false, spbuCurrentPage === 1));
+                pagination.appendChild(createPageItem('‹', spbuCurrentPage - 1, false, spbuCurrentPage === 1));
+
+                // Numbered pages
+                for (let i = startPage; i <= endPage; i++) {
+                    pagination.appendChild(createPageItem(i, i, i === spbuCurrentPage));
+                }
+
+                // Next & Last
+                pagination.appendChild(createPageItem('›', spbuCurrentPage + 1, false, spbuCurrentPage === totalPages));
+                pagination.appendChild(createPageItem('»', totalPages, false, spbuCurrentPage === totalPages));
+            }
     </script>
 
 

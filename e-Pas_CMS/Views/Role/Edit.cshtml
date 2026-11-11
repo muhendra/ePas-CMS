@@ -38,6 +38,25 @@
         </div>
 
         <div class="col-md-6">
+            <label class="form-label">ID Auditor (MMYYNo.Urut)</label>
+            <input type="text" name="AuditorCode" class="form-control" maxlength="20" value="@Model.AuditorCode" />
+        </div>
+        <div class="col-md-6">
+            <label class="form-label">Homebase Auditor</label>
+            <input type="text" name="Homebase" class="form-control" maxlength="250" value="@Model.Homebase" />
+        </div>
+        <div class="col-md-6">
+            <label class="form-label">Nama Bank Auditor</label>
+            <input type="text" name="BankName" class="form-control" maxlength="100" value="@Model.BankName" autocomplete="off" />
+            <small class="text-muted">Nama bank akan mengikuti data ini di Invoice; tidak ada default bank.</small>
+        </div>
+        <div class="col-md-6">
+            <label class="form-label">Nomor Rekening Auditor</label>
+            <input type="text" name="BankAccountNumber" class="form-control" inputmode="numeric" maxlength="50" value="@Model.BankAccountNumber" autocomplete="off" />
+            <small class="text-muted">Kosongkan untuk menampilkan '-' di invoice.</small>
+        </div>
+
+        <div class="col-md-6">
             <label class="form-label">Nama Role</label>
             <button type="button" id="btnOpenRole" class="btn btn-outline-primary w-100">Pilih Role</button>
             <div id="RoleBadgeContainer" class="selected-display mt-2 d-flex flex-wrap gap-2">
@@ -230,33 +249,33 @@
 
 @section Scripts {
     <script>
-        $(document).ready(function () {
+        $(document).ready(function() {
             // === Open modals ===
-            $('#btnOpenRole').click(function () {
-                var selectedIds = $('input[name="SelectedRoleIds"]').map(function () { return this.value; }).get();
-                $('.role-checkbox').each(function () {
+            $('#btnOpenRole').click(function() {
+                var selectedIds = $('input[name="SelectedRoleIds"]').map(function() { return this.value; }).get();
+                $('.role-checkbox').each(function() {
                     $(this).prop('checked', selectedIds.includes($(this).val()));
                 });
                 new bootstrap.Modal(document.getElementById('roleModal')).show();
             });
 
-            $('#btnOpenRegion').click(function () {
-                var selectedIds = $('input[name="SelectedRegionIds"]').map(function () { return this.value; }).get();
-                $('.region-checkbox').each(function () {
+            $('#btnOpenRegion').click(function() {
+                var selectedIds = $('input[name="SelectedRegionIds"]').map(function() { return this.value; }).get();
+                $('.region-checkbox').each(function() {
                     $(this).prop('checked', selectedIds.includes($(this).val()));
                 });
                 new bootstrap.Modal(document.getElementById('regionModal')).show();
             });
 
-            $('#btnOpenSbm').click(function () {
-                var selectedIds = $('input[name="SelectedSbmIds"]').map(function () { return this.value; }).get();
-                $('.sbm-checkbox').each(function () {
+            $('#btnOpenSbm').click(function() {
+                var selectedIds = $('input[name="SelectedSbmIds"]').map(function() { return this.value; }).get();
+                $('.sbm-checkbox').each(function() {
                     $(this).prop('checked', selectedIds.includes($(this).val()));
                 });
                 new bootstrap.Modal(document.getElementById('sbmModal')).show();
             });
 
-            $('#btnOpenSpbu').click(function () {
+            $('#btnOpenSpbu').click(function() {
                 // Pre-check from hidden value
                 var current = $('#SelectedSpbuId').val() || '';
                 if (current) {
@@ -265,14 +284,14 @@
                 new bootstrap.Modal(document.getElementById('spbuModal')).show();
 
                 // Fokus ke search ketika modal dibuka
-                setTimeout(function(){ $('#spbuSearch').trigger('focus'); }, 200);
+                setTimeout(function() { $('#spbuSearch').trigger('focus'); }, 200);
             });
 
             // === Confirm selections ===
-            $('#btnPilihRole').click(function () {
+            $('#btnPilihRole').click(function() {
                 var selected = $('.role-checkbox:checked');
-                var ids = selected.map(function () { return this.value; }).get();
-                var names = selected.map(function () { return $(this).data('name'); }).get();
+                var ids = selected.map(function() { return this.value; }).get();
+                var names = selected.map(function() { return $(this).data('name'); }).get();
 
                 // Reset hidden inputs
                 $('input[name="SelectedRoleIds"]').remove();
@@ -286,10 +305,10 @@
                 bootstrap.Modal.getInstance(document.getElementById('roleModal')).hide();
             });
 
-            $('#btnPilihRegion').click(function () {
+            $('#btnPilihRegion').click(function() {
                 var selected = $('.region-checkbox:checked');
-                var ids = selected.map(function () { return this.value; }).get();
-                var names = selected.map(function () { return $(this).data('name'); }).get();
+                var ids = selected.map(function() { return this.value; }).get();
+                var names = selected.map(function() { return $(this).data('name'); }).get();
 
                 $('input[name="SelectedRegionIds"]').remove();
                 ids.forEach(id => {
@@ -300,10 +319,10 @@
                 bootstrap.Modal.getInstance(document.getElementById('regionModal')).hide();
             });
 
-            $('#btnPilihSbm').click(function () {
+            $('#btnPilihSbm').click(function() {
                 var selected = $('.sbm-checkbox:checked');
-                var ids = selected.map(function () { return this.value; }).get();
-                var names = selected.map(function () { return $(this).data('name'); }).get();
+                var ids = selected.map(function() { return this.value; }).get();
+                var names = selected.map(function() { return $(this).data('name'); }).get();
 
                 $('input[name="SelectedSbmIds"]').remove();
                 ids.forEach(id => {
@@ -314,7 +333,7 @@
                 bootstrap.Modal.getInstance(document.getElementById('sbmModal')).hide();
             });
 
-            $('#btnPilihSpbu').click(function () {
+            $('#btnPilihSpbu').click(function() {
                 var selected = $('.spbu-radio:checked');
                 if (selected.length === 0) {
                     bootstrap.Modal.getInstance(document.getElementById('spbuModal')).hide();
@@ -329,7 +348,7 @@
                 bootstrap.Modal.getInstance(document.getElementById('spbuModal')).hide();
             });
 
-            $('#btnClearSpbu').click(function () {
+            $('#btnClearSpbu').click(function() {
                 $('#SelectedSpbuId').val('');
                 updateBadge('SpbuBadgeContainer', []);
                 $('.spbu-radio').prop('checked', false);
@@ -342,13 +361,13 @@
             const $spbuEmpty = $('#spbuEmptyState');
             const $info = $('#spbuResultInfo');
 
-            $('#spbuSearchClear').on('click', function () {
+            $('#spbuSearchClear').on('click', function() {
                 $spbuSearch.val('');
                 filterSpbu('');
                 $spbuSearch.trigger('focus');
             });
 
-            $spbuSearch.on('input', debounce(function () {
+            $spbuSearch.on('input', debounce(function() {
                 const q = ($spbuSearch.val() || '').toString().trim();
                 filterSpbu(q);
             }, 180));
@@ -358,7 +377,7 @@
                 let shown = 0;
 
                 if (q.length >= 2) {
-                    $spbuItems.each(function () {
+                    $spbuItems.each(function() {
                         const text = $(this).find('.spbu-text').text().toLowerCase();
                         const hit = text.includes(q);
                         $(this).toggleClass('d-none', !hit);
@@ -404,7 +423,7 @@
                 return function() {
                     clearTimeout(t);
                     const args = arguments, ctx = this;
-                    t = setTimeout(function(){ fn.apply(ctx, args); }, wait);
+                    t = setTimeout(function() { fn.apply(ctx, args); }, wait);
                 };
             }
 

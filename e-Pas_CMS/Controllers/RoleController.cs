@@ -146,6 +146,25 @@ namespace e_Pas_CMS.Controllers
                 return View(model);
             }
 
+            var homebase = (model.Homebase ?? "").Trim();
+            var auditorCode = (model.AuditorCode ?? "").Trim();
+            var bankName = (model.BankName ?? "").Trim();
+            var bankAccountNumber = (model.BankAccountNumber ?? "").Trim();
+
+            // Biarkan null untuk auditor yang belum melengkapi data.
+            if (homebase.Length > 250 || auditorCode.Length > 20 || bankName.Length > 100 || bankAccountNumber.Length > 50)
+            {
+                TempData["Error"] = "Homebase, ID Auditor, nama bank, atau nomor rekening melebihi batas panjang.";
+                return RedirectToAction(nameof(Add));
+            }
+            if (!string.IsNullOrWhiteSpace(auditorCode) &&
+                await _context.app_users.AnyAsync(u => u.auditor_code != null &&
+                    u.auditor_code.ToUpper() == auditorCode.ToUpper()))
+            {
+                TempData["Error"] = "ID Auditor sudah digunakan oleh user lain.";
+                return RedirectToAction(nameof(Add));
+            }
+
             var passwordHash = BCrypt.Net.BCrypt.HashPassword(model.Password);
 
             var newUser = new app_user
@@ -156,6 +175,10 @@ namespace e_Pas_CMS.Controllers
                 name = model.Name,
                 phone_number = model.Handphone,
                 email = model.Email,
+                homebase = string.IsNullOrEmpty(homebase) ? null : homebase,
+                auditor_code = string.IsNullOrEmpty(auditorCode) ? null : auditorCode,
+                bank_name = string.IsNullOrEmpty(bankName) ? null : bankName,
+                bank_account_number = string.IsNullOrEmpty(bankAccountNumber) ? null : bankAccountNumber,
                 status = "ACTIVE",
                 created_by = User.Identity.Name ?? "SYSTEM",
                 updated_by = User.Identity.Name ?? "SYSTEM",
@@ -336,6 +359,10 @@ namespace e_Pas_CMS.Controllers
                 AuditorName = auditor.name,
                 Handphone = auditor.phone_number,
                 Email = auditor.email,
+                Homebase = auditor.homebase,
+                AuditorCode = auditor.auditor_code,
+                BankName = auditor.bank_name,
+                BankAccountNumber = auditor.bank_account_number,
 
                 SelectedRoleIds = userRoles
                     .Select(x => x.app_role_id)
@@ -410,6 +437,22 @@ namespace e_Pas_CMS.Controllers
             var newName = (model.AuditorName ?? "").Trim();
             var newPhone = (model.Handphone ?? "").Trim();
             var newEmail = (model.Email ?? "").Trim();
+            var newHomebase = (model.Homebase ?? "").Trim();
+            var newAuditorCode = (model.AuditorCode ?? "").Trim();
+            var newBankName = (model.BankName ?? "").Trim();
+            var newBankAccountNumber = (model.BankAccountNumber ?? "").Trim();
+            if (newHomebase.Length > 250 || newAuditorCode.Length > 20 || newBankName.Length > 100 || newBankAccountNumber.Length > 50)
+            {
+                TempData["Error"] = "Homebase, ID Auditor, nama bank, atau nomor rekening melebihi batas panjang.";
+                return RedirectToAction(nameof(Edit), new { id = user.id });
+            }
+            if (!string.IsNullOrWhiteSpace(newAuditorCode) &&
+                await _context.app_users.AnyAsync(u => u.id != user.id && u.auditor_code != null &&
+                    u.auditor_code.ToUpper() == newAuditorCode.ToUpper()))
+            {
+                TempData["Error"] = "ID Auditor sudah digunakan oleh user lain.";
+                return RedirectToAction(nameof(Edit), new { id = user.id });
+            }
 
             // --- Cek unik username bila berubah ---
             var oldUsername = user.username?.Trim() ?? "";
@@ -443,6 +486,10 @@ namespace e_Pas_CMS.Controllers
                 user.name = newName;
                 user.phone_number = newPhone;
                 user.email = newEmail;
+                user.homebase = string.IsNullOrEmpty(newHomebase) ? null : newHomebase;
+                user.auditor_code = string.IsNullOrEmpty(newAuditorCode) ? null : newAuditorCode;
+                user.bank_name = string.IsNullOrEmpty(newBankName) ? null : newBankName;
+                user.bank_account_number = string.IsNullOrEmpty(newBankAccountNumber) ? null : newBankAccountNumber;
                 user.updated_by = User.Identity?.Name ?? "SYSTEM";
                 user.updated_date = DateTime.Now;
 
@@ -1019,7 +1066,7 @@ namespace e_Pas_CMS.Controllers
                 UPDATE {table}
                    SET {column} = @p0
                  WHERE lower(trim({column})) = lower(trim(@p1))";
-                
+
                 return await ctx.Database.ExecuteSqlRawAsync(sql, newU, oldU);
             }
 
@@ -1045,4 +1092,3 @@ namespace e_Pas_CMS.Controllers
         }
     }
 }
-

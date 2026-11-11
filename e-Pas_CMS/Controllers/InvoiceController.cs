@@ -1570,12 +1570,6 @@ public class InvoiceController : Controller
                 currentAppUserId,
                 StringComparison.OrdinalIgnoreCase);
 
-        var isProcessOrDone =
-            claim.status == ClaimUnderReview ||
-            claim.status == ClaimPendingApproval ||
-            claim.status == ClaimApproved ||
-            claim.status == ClaimRejected;
-
         var requestorUser = await GetRequestorUser(invoice.AppUserId, claim.app_user_id);
 
         var claimExpenses = claimExpenseDetails
@@ -1653,9 +1647,11 @@ public class InvoiceController : Controller
             Attachments = attachments,
             AttachmentGroups = attachmentGroups,
 
-            BankName = isProcessOrDone ? "Bank Mandiri" : "",
-            BankAccount = isProcessOrDone ? "129383481" : "",
-            BankOwner = string.IsNullOrWhiteSpace(requestorUser.Name) ? "-" : requestorUser.Name,
+            // Nama bank dan nomor rekening selalu berasal dari app_user pemilik invoice.
+            // Jika nomor rekening kosong, jangan tampilkan nama bank/pemilik secara misleading.
+            BankName = requestorUser.BankAccountNumber == "-" ? "-" : requestorUser.BankName,
+            BankAccount = requestorUser.BankAccountNumber,
+            BankOwner = requestorUser.BankAccountNumber == "-" ? "-" : requestorUser.Name,
 
             ApprovedBy = latestApproval != null
                 ? latestApproval.ApprovedBy
@@ -2060,7 +2056,7 @@ public class InvoiceController : Controller
             .FirstOrDefaultAsync();
     }
 
-    private async Task<(string Name, string SignaturePath, string Homebase, string AuditorCode)> GetRequestorUser(
+    private async Task<(string Name, string SignaturePath, string Homebase, string AuditorCode, string BankName, string BankAccountNumber)> GetRequestorUser(
         string invoiceAppUserId,
         string claimAppUserId)
     {
@@ -2069,7 +2065,7 @@ public class InvoiceController : Controller
             : claimAppUserId;
 
         if (string.IsNullOrWhiteSpace(userId))
-            return ("-", "", "-", "-");
+            return ("-", "", "-", "-", "-", "-");
 
         var user = await _context.app_users
             .AsNoTracking()
@@ -2079,18 +2075,22 @@ public class InvoiceController : Controller
                 x.name,
                 x.signature_path,
                 x.homebase,
-                x.auditor_code
+                x.auditor_code,
+                x.bank_name,
+                x.bank_account_number
             })
             .FirstOrDefaultAsync();
 
         if (user == null)
-            return ("-", "", "-", "-");
+            return ("-", "", "-", "-", "-", "-");
 
         return (
             string.IsNullOrWhiteSpace(user.name) ? "-" : user.name,
             user.signature_path ?? "",
             string.IsNullOrWhiteSpace(user.homebase) ? "-" : user.homebase,
-            string.IsNullOrWhiteSpace(user.auditor_code) ? "-" : user.auditor_code
+            string.IsNullOrWhiteSpace(user.auditor_code) ? "-" : user.auditor_code,
+            string.IsNullOrWhiteSpace(user.bank_name) ? "-" : user.bank_name.Trim(),
+            string.IsNullOrWhiteSpace(user.bank_account_number) ? "-" : user.bank_account_number.Trim()
         );
     }
 
