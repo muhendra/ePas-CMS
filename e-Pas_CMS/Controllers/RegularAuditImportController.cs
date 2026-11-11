@@ -1292,7 +1292,7 @@ public class RegularAuditImportController : Controller
         var auditorUsers = await _context.app_users
             .AsNoTracking()
             .Where(x => auditorIds.Contains(x.id) && x.status == "ACTIVE")
-            .Select(x => new { x.id, x.username, x.name })
+            .Select(x => new { x.id, x.username, x.name, x.auditor_code })
             .ToListAsync();
 
         var auditorById = auditorUsers.ToDictionary(
@@ -1366,14 +1366,45 @@ public class RegularAuditImportController : Controller
             {
                 var firstAuditDate = group.Min(x => x.AuditDate);
                 var invoiceId = Guid.NewGuid().ToString();
-                var invoiceNo =
-                    $"IMP-{periodStart:yyyyMMdd}-{NormalizeForNumber(auditor.username)}-{invoiceId[..8]}";
+                // Sequential invoice number per employee/year; serialized per employee by PostgreSQL
+                // transaction advisory lock to prevent two concurrent imports from sharing a number.
+                var codeDigits = new string((auditor.auditor_code ?? "").Where(char.IsDigit).ToArray());
+                if (codeDigits.Length == 0)
+                    throw new InvalidOperationException(
+                        $"Auditor {auditor.username} belum memiliki auditor_code numerik untuk nomor invoice.");
+                var employeeCode = codeDigits.PadLeft(3, '0');
+                employeeCode = employeeCode[^3..];
+                var sequenceLockKey = $"invoice:{auditor.id}:{periodStart.Year}";
+                await _context.Database.ExecuteSqlInterpolatedAsync(
+                    $"SELECT pg_advisory_xact_lock(hashtext({sequenceLockKey}));");
+                var invoicePrefix = $"INV/{employeeCode}-";
+                var invoiceSuffix = $"/{periodStart.Year}";
+                var existingNumbers = await _context.TrxInvoices.AsNoTracking()
+                    .Where(x => x.AppUserId == auditor.id &&
+                        x.InvoiceNo.StartsWith(invoicePrefix) && x.InvoiceNo.EndsWith(invoiceSuffix))
+                    .Select(x => x.InvoiceNo).ToListAsync();
+                // Newly added invoices in the same import have not been flushed yet.
+                var pendingNumbers = _context.TrxInvoices.Local
+                    .Where(x => x.AppUserId == auditor.id &&
+                        x.InvoiceNo.StartsWith(invoicePrefix) && x.InvoiceNo.EndsWith(invoiceSuffix))
+                    .Select(x => x.InvoiceNo);
+                var sequence = existingNumbers.Concat(pendingNumbers).Select(n =>
+                {
+                    var rest = n.Substring(invoicePrefix.Length);
+                    return rest.Length >= 4 && rest[3] == '-' && int.TryParse(rest[..3], out var v)
+                        ? v : 0;
+                }).DefaultIfEmpty(0).Max() + 1;
+                if (sequence > 999)
+                    throw new InvalidOperationException($"Nomor invoice {auditor.username} sudah melebihi 999 pada {periodStart.Year}.");
+                var spbuSegment = group.Select(x => x.Seed.SpbuNo).Distinct().Count() == 1
+                    ? group.First().Seed.SpbuNo : "MULTI";
+                var invoiceNo = $"INV/{employeeCode}-{sequence:000}/{spbuSegment}/{periodStart.Year}";
 
                 invoice = new TrxInvoice
                 {
                     Id = invoiceId,
                     AppUserId = group.Key.AuditorId,
-                    InvoicePrefix = "IMP",
+                    InvoicePrefix = "INV",
                     InvoiceNo = invoiceNo,
                     InvoicePeriodStart = periodStart,
                     InvoicePeriodEnd = periodEnd,

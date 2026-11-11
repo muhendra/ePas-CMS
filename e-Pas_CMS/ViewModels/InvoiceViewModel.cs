@@ -71,6 +71,9 @@ namespace e_Pas_CMS.ViewModels
 
         public List<InvoiceClaimExpenseVM> ClaimExpenses { get; set; } = new();
 
+        public List<string> ExpenseWarnings { get; set; } = new();
+        public bool CanFinanceEdit { get; set; }
+
         public List<InvoicePrintLineVM> PrintLines { get; set; } = new();
 
         public string Job { get; set; } = "Audit SPBU";
@@ -206,6 +209,7 @@ namespace e_Pas_CMS.ViewModels
         public decimal Lumpsum { get; set; }
 
         public decimal DistanceKm { get; set; }
+        public bool LumpsumEligible { get; set; }
         public bool IsDeleted { get; set; }
     }
 
@@ -268,6 +272,7 @@ namespace e_Pas_CMS.ViewModels
 {
     public class InvoiceClaimExpenseVM
     {
+        public string Id { get; set; } = "";
         public DateOnly Date { get; set; }
         public string Type { get; set; } = "";
         public string Description { get; set; } = "";

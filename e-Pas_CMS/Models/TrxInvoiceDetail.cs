@@ -15,6 +15,9 @@ public partial class TrxInvoiceDetail
 
     public decimal? LumpsumFee { get; set; }
 
+    // Finance removes the line from the claim without destroying its audit link.
+    public bool IsDeleted { get; set; }
+
     public string Status { get; set; } = null!;
 
     public string CreatedBy { get; set; } = null!;

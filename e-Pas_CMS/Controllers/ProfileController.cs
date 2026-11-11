@@ -55,12 +55,43 @@ public class ProfileController : Controller
         var user = await _context.app_users.FirstOrDefaultAsync(x => x.username == username);
         if (user == null) return NotFound();
 
+        // Auditor ID can only be changed for the currently authenticated user.
+        // Never use the posted vm.Id or vm.Username to select the DB record.
+        var auditorCode = vm.AuditorCode?.Trim();
+        if (auditorCode?.Length > 20)
+        {
+            ModelState.AddModelError(nameof(vm.AuditorCode),
+                "ID Auditor maksimal 20 karakter.");
+        }
+        else if (!string.IsNullOrEmpty(auditorCode))
+        {
+            // Prevent different users from sharing the same auditor identifier.
+            var normalizedCode = auditorCode.ToLowerInvariant();
+            var alreadyUsed = await _context.app_users.AsNoTracking().AnyAsync(x =>
+                x.id != user.id && x.auditor_code != null &&
+                x.auditor_code.ToLower() == normalizedCode);
+
+            if (alreadyUsed)
+            {
+                ModelState.AddModelError(nameof(vm.AuditorCode),
+                    "ID Auditor sudah digunakan oleh user lain.");
+            }
+        }
+
+        if (!ModelState.IsValid)
+        {
+            vm.Id = user.id;
+            vm.Username = user.username;
+            return View(vm);
+        }
+
         user.name = vm.Name;
         user.phone_number = vm.PhoneNumber;
         user.email = vm.Email;
         user.homebase = (vm.Homebase ?? "").Trim();
+        user.auditor_code = string.IsNullOrEmpty(auditorCode) ? null : auditorCode;
         user.updated_date = DateTime.Now;
-        user.updated_by = User.Identity.Name;
+        user.updated_by = user.username;
 
         await _context.SaveChangesAsync();
 

@@ -252,8 +252,10 @@
                                 <label class="form-label">ID Auditor (MMYYNo.Urut)</label>
                                 <div class="input-wrap">
                                     <i class="bi bi-person-vcard"></i>
-                                    <input asp-for="AuditorCode" class="form-control" readonly placeholder="Ditetapkan admin / sistem" />
+                                    <input asp-for="AuditorCode" class="form-control" maxlength="20" autocomplete="off" placeholder="Contoh: 1126001" />
                                 </div>
+                                <span asp-validation-for="AuditorCode" class="text-danger small"></span>
+                                <div class="form-hint">Dapat diubah oleh pemilik akun. Format MMYYNo.Urut, maksimal 20 karakter, dan tidak boleh sama dengan user lain.</div>
                             </div>
 
                             <button class="btn btn-classy w-100" type="submit">

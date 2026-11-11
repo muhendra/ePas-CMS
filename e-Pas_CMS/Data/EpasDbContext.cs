@@ -1159,6 +1159,10 @@ public partial class EpasDbContext : DbContext
                 .HasDefaultValue(0m)
                 .IsRequired();
 
+            entity.Property(e => e.IsDeleted)
+                .HasColumnName("is_deleted")
+                .HasDefaultValue(false);
+
             entity.Property(e => e.LumpsumFee)
                 .HasColumnName("lumpsum_fee")
                 .HasColumnType("numeric(18,2)")
